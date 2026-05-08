@@ -35,13 +35,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!cancelled) setIsLoading(false)
     }, 4000)
 
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
+    supabase.auth.getUser()
+      .then(({ data: { user } }) => {
         if (cancelled) return
-        setSession(session)
-        setUser(session?.user ?? null)
-        if (session?.user) fetchPerfil(session.user.id)
-        else setIsLoading(false)
+        setUser(user ?? null)
+        if (user) {
+          supabase.auth.getSession().then(({ data: { session } }) => {
+            if (!cancelled) setSession(session)
+          })
+          fetchPerfil(user.id)
+        } else {
+          setIsLoading(false)
+        }
       })
       .catch(() => {
         if (!cancelled) setIsLoading(false)
@@ -84,6 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut()
+    setUser(null)
+    setSession(null)
     setPerfil(null)
   }
 

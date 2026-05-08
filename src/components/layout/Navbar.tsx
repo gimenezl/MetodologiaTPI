@@ -145,11 +145,13 @@ export function Navbar() {
               <Link href="/inscripcion" onClick={() => setIsOpen(false)}>
                 <Button variant="accent" fullWidth>Inscribirse</Button>
               </Link>
-              <Link href={user ? '/dashboard' : '/login'} onClick={() => setIsOpen(false)}>
-                <Button variant="outline" fullWidth>
-                  {user ? 'Dashboard' : 'Ingresar'}
-                </Button>
-              </Link>
+              {!isLoading && (
+                <Link href={user ? '/dashboard' : '/login'} onClick={() => setIsOpen(false)}>
+                  <Button variant="outline" fullWidth>
+                    {user ? 'Dashboard' : 'Ingresar'}
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
         </div>
