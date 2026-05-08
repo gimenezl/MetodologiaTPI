@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import Link from 'next/link'
 import { ArrowRight, GraduationCap, Users, Trophy, BookOpen, Heart, Star } from '@phosphor-icons/react/dist/ssr'
 import { Button } from '@/components/ui/Button'
