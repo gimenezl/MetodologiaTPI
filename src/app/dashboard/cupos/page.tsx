@@ -60,6 +60,9 @@ export default function CuposPage() {
   const [nuevoCupo, setNuevoCupo] = useState<string>('')
   const [guardandoCupo, setGuardandoCupo] = useState(false)
   const [eliminandoId, setEliminandoId] = useState<number | null>(null)
+  const [showFormActividad, setShowFormActividad] = useState(false)
+  const [creandoActividad, setCreandoActividad] = useState(false)
+  const [formActividad, setFormActividad] = useState({ nombre: '', tipo: 'DEPORTE', cupo_maximo: '20', nivel_id: '' })
 
   const canManage = rol === 'DIRECTOR' || rol === 'DOCENTE'
   const isDirector = rol === 'DIRECTOR'
