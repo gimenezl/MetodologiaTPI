@@ -51,7 +51,7 @@ export default async function BienestarPage() {
         <div
           className="absolute inset-0 opacity-15"
           style={{
-            backgroundImage: 'url(https://picsum.photos/seed/bienestar-edu-v3/1400/700)',
+            backgroundImage: "url('/bienestar-hero.png')",
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
@@ -174,7 +174,7 @@ export default async function BienestarPage() {
             <div
               className="rounded-3xl overflow-hidden aspect-[4/3]"
               style={{
-                backgroundImage: 'url(https://picsum.photos/seed/menu-escolar-v2/700/525)',
+                backgroundImage: "url('/menu-escolar.png')",
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
               }}

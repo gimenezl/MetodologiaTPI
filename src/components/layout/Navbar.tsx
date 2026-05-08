@@ -44,8 +44,8 @@ export function Navbar() {
         'fixed top-0 left-0 right-0 z-50 transition-all duration-300',
         hidden ? '-translate-y-full' : 'translate-y-0',
         scrolled
-          ? 'glass border-b border-white/20 shadow-sm shadow-brand-900/5'
-          : 'bg-transparent'
+          ? 'bg-white shadow-sm border-b border-neutral-100'
+          : 'bg-white/98 border-b border-neutral-100'
       )}
     >
       <nav

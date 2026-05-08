@@ -4,12 +4,13 @@ import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import { MagnifyingGlass, Users } from '@phosphor-icons/react'
+import { MagnifyingGlass, Users, Trash, Warning } from '@phosphor-icons/react'
 import {
   obtenerPerfilesPaginados,
   buscarPerfilesPaginados,
   crearPerfil,
   actualizarPerfil,
+  eliminarPerfil,
 } from '@/services/perfiles.service'
 import { obtenerRoles } from '@/services/roles.service'
 import { formatFecha, ROLES } from '@/lib/utils'
@@ -54,6 +55,8 @@ export default function LegajosPage() {
   const [formMode, setFormMode] = useState<'create' | 'edit' | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [deleteConfirm, setDeleteConfirm] = useState<Perfil | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const pageSize = 10
 
   const {
@@ -159,6 +162,23 @@ export default function LegajosPage() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No se pudo guardar el legajo'
       toast.error(message)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteConfirm) return
+    setIsDeleting(true)
+    try {
+      await eliminarPerfil(deleteConfirm.id)
+      toast.success(`Legajo de ${deleteConfirm.nombre} ${deleteConfirm.apellido} eliminado`)
+      setDeleteConfirm(null)
+      setSelected(null)
+      await loadData(currentPage, search)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo eliminar el legajo'
+      toast.error(message)
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -346,7 +366,16 @@ export default function LegajosPage() {
             <h2 className="font-bold text-neutral-900">
               Legajo: {selected.apellido}, {selected.nombre}
             </h2>
-            <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3">
+              {rol === 'DIRECTOR' && (
+                <button
+                  onClick={() => setDeleteConfirm(selected)}
+                  className="flex items-center gap-1.5 text-sm font-semibold text-red-500 hover:text-red-700 transition-colors"
+                >
+                  <Trash size={15} weight="fill" />
+                  Eliminar
+                </button>
+              )}
               <button onClick={() => startEdit(selected)} className="text-sm font-semibold text-brand-600 hover:text-brand-800">
                 Editar
               </button>
@@ -369,6 +398,50 @@ export default function LegajosPage() {
                 <p className="text-neutral-800 font-medium">{val}</p>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmación de eliminación */}
+      {deleteConfirm && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirmar eliminación"
+        >
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5">
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center shrink-0">
+                <Warning size={20} weight="fill" className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-neutral-900 text-lg">Eliminar legajo</h3>
+                <p className="text-neutral-600 text-sm mt-1">
+                  ¿Estás seguro que querés eliminar el legajo de{' '}
+                  <strong>{deleteConfirm.nombre} {deleteConfirm.apellido}</strong>?
+                  Esta acción no se puede deshacer.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setDeleteConfirm(null)}
+                disabled={isDeleting}
+              >
+                Cancelar
+              </Button>
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors"
+              >
+                <Trash size={15} weight="fill" />
+                {isDeleting ? 'Eliminando...' : 'Sí, eliminar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -63,7 +63,7 @@ export default function EmpleoPage() {
     <>
       {/* Hero */}
       <section className="pt-24 pb-16 bg-gradient-to-br from-brand-900 to-indigo-900 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'url(https://picsum.photos/seed/empleo-edu/1400/600)', backgroundSize: 'cover' }} aria-hidden="true" />
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "url('/bienestar-hero.png')", backgroundSize: 'cover', backgroundPosition: 'center 60%' }} aria-hidden="true" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <div className="max-w-2xl">
             <div className="flex items-center gap-2 mb-6">
@@ -161,13 +161,8 @@ export default function EmpleoPage() {
                 ))}
               </ul>
             </div>
-
-            <div
-              className="rounded-2xl overflow-hidden aspect-[4/3]"
-              style={{ backgroundImage: 'url(https://picsum.photos/seed/empleo-team/700/525)', backgroundSize: 'cover', backgroundPosition: 'center' }}
-              aria-hidden="true"
-            />
           </div>
+
         </div>
       </div>
     </>

@@ -97,3 +97,12 @@ export async function buscarPerfilesPaginados(query: string, page = 1, pageSize 
   if (error) throw new Error(error.message)
   return { data, count: count ?? 0 }
 }
+
+export async function eliminarPerfil(id: string) {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('perfiles')
+    .delete()
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+}

@@ -167,20 +167,20 @@ export default function NivelesPage() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { nombre: 'Fútbol', tipo: 'DEPORTE', img: 'act-futbol' },
-              { nombre: 'Natación', tipo: 'DEPORTE', img: 'act-natacion' },
-              { nombre: 'Atletismo', tipo: 'DEPORTE', img: 'act-atletismo' },
-              { nombre: 'Artes Marciales', tipo: 'DEPORTE', img: 'act-artes' },
-              { nombre: 'Vóley', tipo: 'DEPORTE', img: 'act-voley' },
-              { nombre: 'Danza', tipo: 'TALLER', img: 'act-danza' },
-              { nombre: 'Básquet', tipo: 'DEPORTE', img: 'act-basquet' },
-              { nombre: 'Ajedrez', tipo: 'TALLER', img: 'act-ajedrez' },
+              { nombre: 'Fútbol', tipo: 'DEPORTE', img: '/act-futbol.png' },
+              { nombre: 'Natación', tipo: 'DEPORTE', img: '/act-natacion.png' },
+              { nombre: 'Atletismo', tipo: 'DEPORTE', img: '/act-atletismo.png' },
+              { nombre: 'Artes Marciales', tipo: 'DEPORTE', img: '/act-artes.png' },
+              { nombre: 'Vóley', tipo: 'DEPORTE', img: '/act-voley.png' },
+              { nombre: 'Danza', tipo: 'TALLER', img: '/act-danza.png' },
+              { nombre: 'Básquet', tipo: 'DEPORTE', img: '/act-basquet.png' },
+              { nombre: 'Ajedrez', tipo: 'TALLER', img: '/act-ajedrez.png' },
             ].map((act) => (
               <div
                 key={act.nombre}
                 className="relative rounded-2xl overflow-hidden aspect-square group cursor-pointer"
                 style={{
-                  backgroundImage: `url(https://picsum.photos/seed/${act.img}/400/400)`,
+                  backgroundImage: `url(${act.img})`,
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
                 }}

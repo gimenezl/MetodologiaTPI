@@ -45,7 +45,7 @@ export default async function NoticiaDetallePage({ params }: Props) {
       <div
         className="h-[50vh] min-h-[300px] w-full relative"
         style={{
-          backgroundImage: `url(${noticia.imagen_url ?? `https://picsum.photos/seed/noticia-${noticia.id}/1400/700`})`,
+          backgroundImage: `url(${noticia.imagen_url ?? (noticia.id <= 2 ? `/noticia-${noticia.id}.png` : '/noticia-fallback.png')})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
@@ -87,7 +87,7 @@ export default async function NoticiaDetallePage({ params }: Props) {
                   <div
                     className="h-32 rounded-xl mb-3"
                     style={{
-                      backgroundImage: `url(${n.imagen_url ?? `https://picsum.photos/seed/noticia-${n.id}/400/250`})`,
+                      backgroundImage: `url(${n.imagen_url ?? (n.id <= 2 ? `/noticia-${n.id}.png` : '/noticia-fallback.png')})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                     }}

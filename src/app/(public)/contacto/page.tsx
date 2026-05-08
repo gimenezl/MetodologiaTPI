@@ -17,7 +17,7 @@ export default function ContactoPage() {
   return (
     <>
       <section className="pt-24 pb-16 bg-brand-900 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'url(https://picsum.photos/seed/contacto-edu/1400/600)', backgroundSize: 'cover' }} aria-hidden="true" />
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "url('/bienestar-hero.png')", backgroundSize: 'cover', backgroundPosition: 'center 70%' }} aria-hidden="true" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <div className="max-w-xl">
             <p className="text-brand-400 font-semibold text-sm uppercase tracking-widest mb-4">Contacto</p>
@@ -67,7 +67,7 @@ export default function ContactoPage() {
             </div>
 
             <div className="rounded-2xl overflow-hidden aspect-[16/9] bg-neutral-100 border border-neutral-200 relative"
-              style={{ backgroundImage: 'url(https://picsum.photos/seed/mapa-resistencia/800/450)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
+              style={{ backgroundImage: "url('/mision-colegio.png')", backgroundSize: 'cover', backgroundPosition: 'center' }}>
               <div className="absolute inset-0 bg-brand-900/20 flex items-center justify-center">
                 <div className="bg-white/90 backdrop-blur-sm rounded-xl px-4 py-3 text-center">
                   <MapPin size={24} weight="fill" className="text-brand-500 mx-auto mb-1" />

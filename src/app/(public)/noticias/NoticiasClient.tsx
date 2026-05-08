@@ -76,7 +76,8 @@ export function NoticiasClient({ noticias, currentPage, totalPages }: NoticiasCl
                   <div
                     className="min-h-[280px] lg:min-h-[380px]"
                     style={{
-                      backgroundImage: `url(${destacada.imagen_url ?? `https://picsum.photos/seed/noticia-${destacada.id}/800/500`})`,
+                      backgroundImage: `url(${destacada.imagen_url ?? (destacada.id <= 2 ? `/noticia-${destacada.id}.png` : '/noticia-fallback.png')})`,
+
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                     }}
@@ -119,7 +120,8 @@ export function NoticiasClient({ noticias, currentPage, totalPages }: NoticiasCl
                       <div
                         className="h-48 transition-transform duration-500 group-hover:scale-105"
                         style={{
-                          backgroundImage: `url(${noticia.imagen_url ?? `https://picsum.photos/seed/noticia-${noticia.id}/600/400`})`,
+                          backgroundImage: `url(${noticia.imagen_url ?? (noticia.id <= 2 ? `/noticia-${noticia.id}.png` : '/noticia-fallback.png')})`,
+
                           backgroundSize: 'cover',
                           backgroundPosition: 'center',
                         }}

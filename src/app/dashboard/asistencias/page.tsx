@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { toast } from 'sonner'
@@ -43,6 +43,7 @@ export default function AsistenciasPage() {
   const [selectedEstudiante, setSelectedEstudiante] = useState<string>('')
   const [nuevoEstado, setNuevoEstado] = useState<'PRESENTE' | 'AUSENTE' | 'JUSTIFICADO'>('PRESENTE')
   const [registrando, setRegistrando] = useState(false)
+  const [historialCompleto, setHistorialCompleto] = useState<AsistenciaRow[]>([])
 
   const cargarAsistencias = useCallback(async () => {
     setLoading(true)
@@ -57,6 +58,20 @@ export default function AsistenciasPage() {
   }, [fechaFiltro])
 
   useEffect(() => { cargarAsistencias() }, [cargarAsistencias])
+
+  // Cargar historial completo (sin filtro de fecha) para calcular % real por alumno
+  useEffect(() => {
+    obtenerTodasAsistencias()
+      .then((data) => setHistorialCompleto((data ?? []) as AsistenciaRow[]))
+      .catch(() => {})
+  }, [])
+
+  // Cuando se registra una nueva asistencia, refrescar también el historial
+  const refrescarTodo = useCallback(async () => {
+    await cargarAsistencias()
+    const full = await obtenerTodasAsistencias()
+    setHistorialCompleto((full ?? []) as AsistenciaRow[])
+  }, [cargarAsistencias])
 
   useEffect(() => {
     if (rol !== 'DIRECTOR' && rol !== 'DOCENTE') return
@@ -103,8 +118,7 @@ export default function AsistenciasPage() {
         docente_id: perfil.id,
       })
       toast.success('Asistencia registrada')
-      setSelectedEstudiante('')
-      await cargarAsistencias()
+      await refrescarTodo()
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No se pudo registrar'
       toast.error(message)
@@ -113,18 +127,16 @@ export default function AsistenciasPage() {
     }
   }
 
-  // Group by student to calculate attendance %
-  const estudiantesStats = Object.values(
-    asistencias.reduce((acc, row) => {
+  // Agrupar historial COMPLETO por estudiante para calcular % real
+  const estudiantesStats = useMemo(() => Object.values(
+    historialCompleto.reduce((acc, row) => {
       if (!row.estudiante) return acc
       const id = row.estudiante.id
-      if (!acc[id]) {
-        acc[id] = { estudiante: row.estudiante, asistencias: [] }
-      }
+      if (!acc[id]) acc[id] = { estudiante: row.estudiante, asistencias: [] }
       acc[id].asistencias.push(row)
       return acc
     }, {} as Record<string, { estudiante: AsistenciaRow['estudiante']; asistencias: AsistenciaRow[] }>)
-  )
+  ), [historialCompleto])
 
   // Overall stats for the selected date
   const totalDate = asistencias.length
@@ -144,7 +156,16 @@ export default function AsistenciasPage() {
             Registrá y consultá la asistencia diaria de los alumnos
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const d = new Date(fechaFiltro + 'T12:00:00')
+              d.setDate(d.getDate() - 1)
+              setFechaFiltro(format(d, 'yyyy-MM-dd'))
+            }}
+            className="w-9 h-9 rounded-lg border border-neutral-200 bg-white flex items-center justify-center text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900 transition-colors text-base font-bold"
+            aria-label="Día anterior"
+          >‹</button>
           <Input
             type="date"
             value={fechaFiltro}
@@ -152,9 +173,16 @@ export default function AsistenciasPage() {
             aria-label="Filtrar por fecha"
             className="w-auto"
           />
-          <Button variant="secondary" onClick={cargarAsistencias} size="sm">
-            Actualizar
-          </Button>
+          <button
+            onClick={() => {
+              const d = new Date(fechaFiltro + 'T12:00:00')
+              d.setDate(d.getDate() + 1)
+              setFechaFiltro(format(d, 'yyyy-MM-dd'))
+            }}
+            className="w-9 h-9 rounded-lg border border-neutral-200 bg-white flex items-center justify-center text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900 transition-colors text-base font-bold"
+            aria-label="Día siguiente"
+          >›</button>
+          <Button variant="secondary" onClick={cargarAsistencias} size="sm">Actualizar</Button>
         </div>
       </div>
 

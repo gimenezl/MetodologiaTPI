@@ -35,18 +35,18 @@ export function GaleriaClient({ imagenes }: { imagenes: Imagen[] }) {
             <p className="text-neutral-500">No hay imágenes en la galería</p>
           </div>
         ) : (
-          <div className="columns-2 sm:columns-3 lg:columns-4 gap-4 space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {imagenes.map((img, i) => (
               <button
                 key={img.id}
                 onClick={() => setModalImg(img)}
-                className="block w-full break-inside-avoid group rounded-xl overflow-hidden relative"
+                className="block w-full group rounded-xl overflow-hidden relative aspect-[4/3]"
                 aria-label={`Ver imagen: ${img.descripcion ?? 'Sin descripción'}`}
               >
                 <img
                   src={img.url}
                   alt={img.descripcion ?? 'Imagen de galería'}
-                  className="w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   loading={i < 4 ? 'eager' : 'lazy'}
                 />
                 <div className="absolute inset-0 bg-brand-900/0 group-hover:bg-brand-900/40 transition-colors duration-300 flex items-end p-3">

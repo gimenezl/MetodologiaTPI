@@ -20,7 +20,7 @@ export default function LoginPage() {
         <div
           className="absolute inset-0 opacity-10"
           style={{
-            backgroundImage: `url(https://picsum.photos/seed/school-login/800/1200)`,
+            backgroundImage: `url('/mision-colegio.png')`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
