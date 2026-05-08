@@ -14,7 +14,7 @@ const niveles = [
     titulo: 'Nivel Inicial',
     subtitulo: 'Sala de 3, 4 y 5 años',
     horario: '8:00 a 12:00 hs',
-    img: 'school-inicial-2027',
+    img: '/nivel.inicial.jpeg',
     color: 'from-teal-400 to-emerald-500',
     bgColor: 'bg-emerald-50 border-emerald-200',
     textColor: 'text-emerald-700',
@@ -33,7 +33,7 @@ const niveles = [
     titulo: 'Nivel Primario',
     subtitulo: '1° a 6° grado · 6 a 12 años',
     horario: '7:30 a 13:00 hs',
-    img: 'school-primary-2027',
+    img: '/primario.jpeg',
     color: 'from-brand-400 to-brand-600',
     bgColor: 'bg-brand-50 border-brand-200',
     textColor: 'text-brand-700',
@@ -52,7 +52,7 @@ const niveles = [
     titulo: 'Nivel Secundario',
     subtitulo: '1° a 5° año · 13 a 17 años',
     horario: '7:30 a 17:00 hs (jornada extendida)',
-    img: 'school-secondary-2027',
+    img: '/secundaria.jpeg',
     color: 'from-indigo-500 to-purple-600',
     bgColor: 'bg-indigo-50 border-indigo-200',
     textColor: 'text-indigo-700',
@@ -102,7 +102,7 @@ export default function NivelesPage() {
                   <div
                     className="rounded-3xl overflow-hidden aspect-[16/10] relative"
                     style={{
-                      backgroundImage: `url(https://picsum.photos/seed/${nivel.img}/800/500)`,
+                      backgroundImage: `url(${nivel.img})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                     }}

@@ -70,7 +70,7 @@ export default async function HomePage() {
         <div
           className="absolute right-0 top-0 bottom-0 w-full lg:w-1/2 opacity-20 lg:opacity-40"
           style={{
-            backgroundImage: 'url(https://picsum.photos/seed/school-edu-2027/900/700)',
+            backgroundImage: "url('/educacion.jpeg')",
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
@@ -83,12 +83,6 @@ export default async function HomePage() {
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 lg:py-0 w-full">
           <div className="max-w-2xl">
-            {/* Label */}
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-brand-800/60 border border-brand-700 rounded-full text-brand-300 text-xs font-semibold mb-8 backdrop-blur-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-400 animate-pulse" />
-              Inscripciones abiertas — Ciclo 2027
-            </div>
-
             <h1
               id="hero-heading"
               className="text-5xl md:text-6xl lg:text-7xl font-extrabold text-white leading-[1.05] tracking-tight text-balance"
@@ -166,6 +160,47 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* Niveles educativos preview */}
+      <section className="py-24 bg-white" aria-labelledby="niveles-heading">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-14">
+            <p className="text-brand-600 font-semibold text-sm uppercase tracking-widest mb-3">Oferta educativa</p>
+            <h2 id="niveles-heading" className="text-4xl font-extrabold text-neutral-900 tracking-tight">
+              Tres niveles, una sola visión
+            </h2>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              { nivel: 'Inicial', age: '3 a 5 años', desc: 'Primera infancia con metodología lúdica y estimulación temprana integral.', color: 'from-green-400 to-teal-500', img: '/nivel.inicial.jpeg' },
+              { nivel: 'Primario', age: '6 a 12 años', desc: 'Formación sólida en competencias básicas con proyecto interdisciplinario.', color: 'from-brand-400 to-brand-600', img: '/primario.jpeg' },
+              { nivel: 'Secundario', age: '13 a 17 años', desc: 'Jornada extendida con orientación académica, deportiva y artística.', color: 'from-indigo-500 to-purple-600', img: '/secundaria.jpeg' },
+            ].map((item) => (
+              <Link
+                key={item.nivel}
+                href="/niveles"
+                className="group relative overflow-hidden rounded-3xl aspect-[3/4] block"
+              >
+                <div
+                  className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
+                  style={{ backgroundImage: `url(${item.img})` }}
+                  aria-hidden="true"
+                />
+                <div className={`absolute inset-0 bg-gradient-to-b ${item.color} opacity-60`} aria-hidden="true" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" aria-hidden="true" />
+                <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-white/70 mb-1">{item.age}</p>
+                  <h3 className="text-2xl font-extrabold">{item.nivel}</h3>
+                  <p className="text-sm text-white/80 mt-2 leading-relaxed">{item.desc}</p>
+                  <div className="flex items-center gap-1.5 mt-4 text-xs font-semibold text-white/90 group-hover:gap-2.5 transition-all duration-200">
+                    Ver más <ArrowRight size={14} />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Valores / Propuesta educativa */}
       <section className="py-24 bg-neutral-50" aria-labelledby="valores-heading">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -213,47 +248,6 @@ export default async function HomePage() {
                 )
               })}
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Niveles educativos preview */}
-      <section className="py-24 bg-white" aria-labelledby="niveles-heading">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-14">
-            <p className="text-brand-600 font-semibold text-sm uppercase tracking-widest mb-3">Oferta educativa</p>
-            <h2 id="niveles-heading" className="text-4xl font-extrabold text-neutral-900 tracking-tight">
-              Tres niveles, una sola visión
-            </h2>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              { nivel: 'Inicial', age: '3 a 5 años', desc: 'Primera infancia con metodología lúdica y estimulación temprana integral.', color: 'from-green-400 to-teal-500', img: 'school-inicial' },
-              { nivel: 'Primario', age: '6 a 12 años', desc: 'Formación sólida en competencias básicas con proyecto interdisciplinario.', color: 'from-brand-400 to-brand-600', img: 'school-primary' },
-              { nivel: 'Secundario', age: '13 a 17 años', desc: 'Jornada extendida con orientación académica, deportiva y artística.', color: 'from-indigo-500 to-purple-600', img: 'school-secondary' },
-            ].map((item) => (
-              <Link
-                key={item.nivel}
-                href="/niveles"
-                className="group relative overflow-hidden rounded-3xl aspect-[3/4] block"
-              >
-                <div
-                  className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
-                  style={{ backgroundImage: `url(https://picsum.photos/seed/${item.img}/600/800)` }}
-                  aria-hidden="true"
-                />
-                <div className={`absolute inset-0 bg-gradient-to-b ${item.color} opacity-60`} aria-hidden="true" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" aria-hidden="true" />
-                <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-white/70 mb-1">{item.age}</p>
-                  <h3 className="text-2xl font-extrabold">{item.nivel}</h3>
-                  <p className="text-sm text-white/80 mt-2 leading-relaxed">{item.desc}</p>
-                  <div className="flex items-center gap-1.5 mt-4 text-xs font-semibold text-white/90 group-hover:gap-2.5 transition-all duration-200">
-                    Ver más <ArrowRight size={14} />
-                  </div>
-                </div>
-              </Link>
-            ))}
           </div>
         </div>
       </section>

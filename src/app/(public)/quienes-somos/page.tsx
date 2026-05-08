@@ -42,10 +42,10 @@ const valores = [
 ]
 
 const equipo = [
-  { nombre: 'Valeria Mondragón', rol: 'Directora General', especialidad: 'Pedagogía Crítica', img: 'team1' },
-  { nombre: 'Esteban Quiroga', rol: 'Coord. Académico', especialidad: 'Matemáticas y Ciencias', img: 'team2' },
-  { nombre: 'Soledad Ibarra', rol: 'Coord. Bienestar', especialidad: 'Psicología Educacional', img: 'team3' },
-  { nombre: 'Rodrigo Ferreyra', rol: 'Coord. Deportivo', especialidad: 'Educación Física', img: 'team4' },
+  { nombre: 'Valeria Mondragón', rol: 'Directora General', especialidad: 'Pedagogía Crítica', img: '/team-valeria.png' },
+  { nombre: 'Esteban Quiroga', rol: 'Coord. Académico', especialidad: 'Matemáticas y Ciencias', img: '/team-esteban.png' },
+  { nombre: 'Soledad Ibarra', rol: 'Coord. Bienestar', especialidad: 'Psicología Educacional', img: '/team-soledad.png' },
+  { nombre: 'Rodrigo Ferreyra', rol: 'Coord. Deportivo', especialidad: 'Educación Física', img: '/team-rodrigo.png' },
 ]
 
 export default function QuienesSomosPage() {
@@ -56,7 +56,7 @@ export default function QuienesSomosPage() {
         <div
           className="absolute right-0 top-0 bottom-0 w-1/2 opacity-30"
           style={{
-            backgroundImage: 'url(https://picsum.photos/seed/quienes-somos-edu/900/700)',
+            backgroundImage: "url('/educacion.jpeg')",
             backgroundSize: 'cover',
             backgroundPosition: 'center left',
           }}
@@ -89,7 +89,7 @@ export default function QuienesSomosPage() {
             <div
               className="relative rounded-3xl overflow-hidden aspect-[4/3]"
               style={{
-                backgroundImage: 'url(https://picsum.photos/seed/mision-edu-v2/800/600)',
+                backgroundImage: "url('/mision-colegio.png')",
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
               }}
@@ -189,18 +189,17 @@ export default function QuienesSomosPage() {
                 <div
                   className="aspect-[3/4] rounded-2xl overflow-hidden mb-4 bg-neutral-100 relative"
                   style={{
-                    backgroundImage: `url(https://picsum.photos/seed/${persona.img}/400/500)`,
+                    backgroundImage: `url(${persona.img})`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center top',
                   }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-t from-brand-900/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   <div className="absolute bottom-0 left-0 right-0 p-4 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
-                    <p className="text-white text-xs font-semibold">{persona.especialidad}</p>
+                    <p className="text-white text-xs font-semibold">{persona.rol}</p>
                   </div>
                 </div>
                 <p className="font-bold text-neutral-900 text-sm">{persona.nombre}</p>
-                <p className="text-neutral-500 text-xs mt-0.5">{persona.rol}</p>
               </div>
             ))}
           </div>

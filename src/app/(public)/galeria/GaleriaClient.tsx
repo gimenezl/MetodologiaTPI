@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
 import { X, Images } from '@phosphor-icons/react'
 
 interface Imagen {
@@ -11,15 +10,8 @@ interface Imagen {
   categoria: string | null
 }
 
-const categorias = ['TODOS', 'INSTALACIONES', 'EVENTOS'] as const
-
 export function GaleriaClient({ imagenes }: { imagenes: Imagen[] }) {
-  const [filtro, setFiltro] = useState<string>('TODOS')
   const [modalImg, setModalImg] = useState<Imagen | null>(null)
-
-  const filtradas = filtro === 'TODOS'
-    ? imagenes
-    : imagenes.filter((i) => i.categoria === filtro)
 
   return (
     <>
@@ -31,36 +23,20 @@ export function GaleriaClient({ imagenes }: { imagenes: Imagen[] }) {
             <h1 className="text-4xl md:text-5xl font-extrabold text-neutral-900 tracking-tight">
               Galería fotográfica
             </h1>
-            {/* Filtros */}
-            <div className="flex gap-2">
-              {categorias.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setFiltro(cat)}
-                  className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all duration-150 ${
-                    filtro === cat
-                      ? 'bg-brand-500 text-white border-brand-500'
-                      : 'bg-white text-neutral-600 border-neutral-300 hover:border-brand-400'
-                  }`}
-                >
-                  {cat === 'TODOS' ? 'Todas' : cat.charAt(0) + cat.slice(1).toLowerCase()}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
       </section>
 
       {/* Grid masonry-like */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {filtradas.length === 0 ? (
+        {imagenes.length === 0 ? (
           <div className="py-24 text-center">
             <Images size={48} className="text-neutral-300 mx-auto mb-4" />
-            <p className="text-neutral-500">No hay imágenes en esta categoría</p>
+            <p className="text-neutral-500">No hay imágenes en la galería</p>
           </div>
         ) : (
           <div className="columns-2 sm:columns-3 lg:columns-4 gap-4 space-y-4">
-            {filtradas.map((img, i) => (
+            {imagenes.map((img, i) => (
               <button
                 key={img.id}
                 onClick={() => setModalImg(img)}
