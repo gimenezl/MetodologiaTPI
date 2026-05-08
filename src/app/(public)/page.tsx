@@ -107,6 +107,52 @@ export default async function HomePage() {
               <Link href="/quienes-somos">
                 <Button
                   size="lg"
+                  variant="ghost"
+                  className="text-white hover:bg-brand-800 border border-brand-700"
+                >
+                  Conocer más
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Scroll indicator */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-brand-400 text-xs" aria-hidden="true">
+          <span>Explorar</span>
+          <div className="w-px h-12 bg-gradient-to-b from-brand-400 to-transparent animate-pulse" />
+        </div>
+      </section>
+
+      {/* Stats */}
+      <section className="bg-white border-b border-neutral-100" aria-label="Datos del centro">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4">
+            {stats.map((stat, i) => {
+              const Icon = stat.icon
+              return (
+                <div
+                  key={stat.label}
+                  className={`py-10 px-6 text-center ${i < stats.length - 1 ? 'border-r border-neutral-100' : ''}`}
+                  style={{ animationDelay: `${i * 100}ms` }}
+                >
+                  <div className="w-10 h-10 bg-brand-50 rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <Icon size={22} weight="fill" className="text-brand-500" />
+                  </div>
+                  <p className="text-3xl font-extrabold text-brand-700 tracking-tight">{stat.value}</p>
+                  <p className="text-sm text-neutral-500 mt-1">{stat.label}</p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Marquee de actividades */}
+      <section className="py-6 bg-brand-50 border-y border-brand-100 overflow-hidden" aria-label="Actividades extracurriculares">
+        <div className="flex gap-8" style={{ animation: 'marquee 30s linear infinite' }}>
+          {actividades.map((act, i) => (
+            <span key={i} className="shrink-0 text-brand-600 font-semibold text-sm flex items-center gap-3">
               <span className="w-1.5 h-1.5 rounded-full bg-accent-500" aria-hidden="true" />
               {act}
             </span>
@@ -206,52 +252,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-<<<<<<< HEAD
-=======
-      {/* Niveles educativos preview */}
-      <section className="py-24 bg-white" aria-labelledby="niveles-heading">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-14">
-            <p className="text-brand-600 font-semibold text-sm uppercase tracking-widest mb-3">Oferta educativa</p>
-            <h2 id="niveles-heading" className="text-4xl font-extrabold text-neutral-900 tracking-tight">
-              Tres niveles, una sola visión
-            </h2>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              { nivel: 'Inicial', age: '3 a 5 años', desc: 'Primera infancia con metodología lúdica y estimulación temprana integral.', color: 'from-green-400 to-teal-500', img: 'nivel.inicial' },
-              { nivel: 'Primario', age: '6 a 12 años', desc: 'Formación sólida en competencias básicas con proyecto interdisciplinario.', color: 'from-brand-400 to-brand-600', img: 'primario' },
-              { nivel: 'Secundario', age: '13 a 17 años', desc: 'Jornada extendida con orientación académica, deportiva y artística.', color: 'from-indigo-500 to-purple-600', img: 'secundaria' },
-            ].map((item) => (
-              <Link
-                key={item.nivel}
-                href="/niveles"
-                className="group relative overflow-hidden rounded-3xl aspect-[3/4] block"
-              >
-                <div
-                  className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
-                  style={{ backgroundImage: `url(https://picsum.photos/seed/${item.img}/600/800)`,
-                 backgroundImage: `url('/${item.img}.jpeg')` }}
-
-                  aria-hidden="true"
-                />
-                <div className={`absolute inset-0 bg-gradient-to-b ${item.color} opacity-60`} aria-hidden="true" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" aria-hidden="true" />
-                <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-white/70 mb-1">{item.age}</p>
-                  <h3 className="text-2xl font-extrabold">{item.nivel}</h3>
-                  <p className="text-sm text-white/80 mt-2 leading-relaxed">{item.desc}</p>
-                  <div className="flex items-center gap-1.5 mt-4 text-xs font-semibold text-white/90 group-hover:gap-2.5 transition-all duration-200">
-                    Ver más <ArrowRight size={14} />
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
->>>>>>> ea752e6ccd87aac73716dbb55eb32818ab5cc31a
       {/* Opiniones / Testimonios */}
       <section className="py-24 bg-neutral-50" aria-labelledby="opiniones-heading">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
