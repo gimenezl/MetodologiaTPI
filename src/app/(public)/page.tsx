@@ -80,16 +80,16 @@ export default async function HomePage() {
           ))}
         </div>
 
-        {/* Línea de puntos verde inferior */}
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-3 pointer-events-none" aria-hidden="true">
+        {/* Línea de puntos verde inferior — separada del indicador */}
+        <div className="absolute bottom-32 left-1/2 -translate-x-1/2 flex gap-2.5 pointer-events-none" aria-hidden="true">
           {Array.from({ length: 14 }).map((_, i) => (
-            <div key={i} className="w-1.5 h-1.5 rounded-full bg-green-400 opacity-45" />
+            <div key={i} className="w-1.5 h-1.5 rounded-full bg-green-400 opacity-60" />
           ))}
         </div>
 
-        {/* Panel imagen derecha — sutil */}
+        {/* Panel imagen derecha — muy sutil, cubierto casi completamente */}
         <div
-          className="absolute right-0 top-0 bottom-0 w-full lg:w-[55%] opacity-[0.08] lg:opacity-[0.15]"
+          className="absolute right-0 top-0 bottom-0 w-full lg:w-[55%] opacity-[0.06]"
           style={{
             backgroundImage: "url('/educacion.jpeg')",
             backgroundSize: 'cover',
@@ -98,7 +98,7 @@ export default async function HomePage() {
           aria-hidden="true"
         />
         <div
-          className="absolute right-0 top-0 bottom-0 w-full lg:w-[55%] bg-gradient-to-r from-white via-white/70 to-transparent"
+          className="absolute right-0 top-0 bottom-0 w-full lg:w-[55%] bg-gradient-to-r from-white via-white/90 to-white/60"
           aria-hidden="true"
         />
 
