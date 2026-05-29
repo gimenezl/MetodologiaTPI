@@ -104,12 +104,6 @@ export default async function HomePage() {
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 lg:py-0 w-full">
           <div className="max-w-2xl">
-            {/* Badge de inscripciones */}
-            <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 rounded-full px-4 py-1.5 mb-8">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-green-700 text-xs font-semibold tracking-wide">Inscripciones 2027 abiertas</span>
-            </div>
-
             <h1
               id="hero-heading"
               className="text-5xl md:text-6xl lg:text-7xl font-extrabold text-neutral-900 leading-[1.05] tracking-tight text-balance"
@@ -216,26 +210,29 @@ export default async function HomePage() {
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              { nivel: 'Inicial', age: '3 a 5 años', desc: 'Primera infancia con metodología lúdica y estimulación temprana integral.', color: 'from-green-400 to-teal-500', img: '/nivel.inicial.jpeg' },
-              { nivel: 'Primario', age: '6 a 12 años', desc: 'Formación sólida en competencias básicas con proyecto interdisciplinario.', color: 'from-brand-400 to-brand-600', img: '/primario.jpeg' },
-              { nivel: 'Secundario', age: '13 a 17 años', desc: 'Jornada extendida con orientación académica, deportiva y artística.', color: 'from-indigo-500 to-purple-600', img: '/secundaria.jpeg' },
+              { nivel: 'Inicial', age: '3 a 5 años', desc: 'Primera infancia con metodología lúdica y estimulación temprana integral.', accent: 'oklch(0.55 0.17 148)', img: '/nivel.inicial.jpeg' },
+              { nivel: 'Primario', age: '6 a 12 años', desc: 'Formación sólida en competencias básicas con proyecto interdisciplinario.', accent: 'oklch(0.50 0.270 258)', img: '/primario.jpeg' },
+              { nivel: 'Secundario', age: '13 a 17 años', desc: 'Jornada extendida con orientación académica, deportiva y artística.', accent: 'oklch(0.68 0.230 43)', img: '/secundaria.jpeg' },
             ].map((item) => (
               <Link
                 key={item.nivel}
                 href="/niveles"
                 className="group relative overflow-hidden rounded-3xl aspect-[3/4] block"
               >
+                {/* Foto sin filtro de color */}
                 <div
-                  className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
+                  className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
                   style={{ backgroundImage: `url(${item.img})` }}
                   aria-hidden="true"
                 />
-                <div className={`absolute inset-0 bg-gradient-to-b ${item.color} opacity-60`} aria-hidden="true" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" aria-hidden="true" />
+                {/* Solo oscurecimiento natural desde abajo para legibilidad */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" aria-hidden="true" />
+                {/* Borde de acento en la parte inferior */}
+                <div className="absolute bottom-0 left-0 right-0 h-1" style={{ background: item.accent }} aria-hidden="true" />
                 <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-white/70 mb-1">{item.age}</p>
-                  <h3 className="text-2xl font-extrabold">{item.nivel}</h3>
-                  <p className="text-sm text-white/80 mt-2 leading-relaxed">{item.desc}</p>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-white/60 mb-1">{item.age}</p>
+                  <h3 className="text-2xl font-extrabold drop-shadow-sm">{item.nivel}</h3>
+                  <p className="text-sm text-white/85 mt-2 leading-relaxed">{item.desc}</p>
                   <div className="flex items-center gap-1.5 mt-4 text-xs font-semibold text-white/90 group-hover:gap-2.5 transition-all duration-200">
                     Ver más <ArrowRight size={14} />
                   </div>
@@ -337,10 +334,10 @@ export default async function HomePage() {
           </p>
           <div className="mt-10 flex flex-wrap gap-4 justify-center">
             <Link href="/inscripcion">
-              <Button size="lg" variant="primary" className="bg-white text-brand-700 hover:bg-neutral-100 shadow-xl shadow-black/20">
+              <button className="btn inline-flex items-center gap-2.5 h-12 px-7 text-base font-bold bg-white text-brand-700 rounded-xl hover:bg-neutral-50 shadow-xl shadow-black/20 transition-all">
                 Comenzar pre-inscripción
                 <ArrowRight size={18} />
-              </Button>
+              </button>
             </Link>
             <Link href="/contacto">
               <Button size="lg" variant="ghost" className="text-white border-2 border-white/40 hover:bg-white/15 hover:border-white/70">
