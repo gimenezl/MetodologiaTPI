@@ -52,7 +52,7 @@ export default async function NoticiaDetallePage({ params }: Props) {
       >
         <div className="absolute inset-0 bg-brand-900/60" />
         <div className="absolute bottom-8 left-0 right-0 max-w-3xl mx-auto px-4">
-          <div className="flex items-center gap-2 text-brand-300 text-sm mb-3">
+          <div className="flex items-center gap-2 text-white/70 text-sm mb-3">
             <CalendarBlank size={14} />
             {format(new Date(noticia.fecha_publicacion), "d 'de' MMMM 'de' yyyy", { locale: es })}
           </div>

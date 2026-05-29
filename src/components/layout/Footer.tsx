@@ -6,6 +6,8 @@ export function Footer() {
 
   return (
     <footer className="bg-brand-900 text-white">
+      {/* Franja de colores institucionales */}
+      <div className="h-1.5 bg-gradient-to-r from-accent-500 via-brand-500 via-green-500 to-accent-500" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
           {/* Brand */}
@@ -19,7 +21,7 @@ export function Footer() {
                 <p className="font-bold text-brand-300 leading-tight text-sm">Transformar</p>
               </div>
             </div>
-            <p className="text-brand-300 text-sm leading-relaxed max-w-[260px]">
+            <p className="text-neutral-300 text-sm leading-relaxed max-w-[260px]">
               Centro educativo de excelencia. Formando ciudadanos críticos, comprometidos y preparados para el futuro.
             </p>
             <div className="flex items-center gap-3 mt-6">
@@ -67,7 +69,7 @@ export function Footer() {
                 <li key={href}>
                   <Link
                     href={href}
-                    className="text-brand-300 hover:text-white text-sm transition-colors duration-150"
+                    className="text-neutral-300 hover:text-white text-sm transition-colors duration-150"
                   >
                     {label}
                   </Link>
@@ -84,7 +86,7 @@ export function Footer() {
                 <li key={item}>
                   <Link
                     href="/niveles"
-                    className="text-brand-300 hover:text-white text-sm transition-colors duration-150"
+                    className="text-neutral-300 hover:text-white text-sm transition-colors duration-150"
                   >
                     {item}
                   </Link>
@@ -97,18 +99,18 @@ export function Footer() {
           <div>
             <h3 className="font-semibold text-white mb-4 text-sm tracking-wide uppercase">Contacto</h3>
             <ul className="space-y-3">
-              <li className="flex items-start gap-2.5 text-brand-300 text-sm">
-                <MapPin size={16} className="mt-0.5 shrink-0 text-brand-400" weight="fill" />
+              <li className="flex items-start gap-2.5 text-neutral-300 text-sm">
+                <MapPin size={16} className="mt-0.5 shrink-0 text-accent-400" weight="fill" />
                 <span>Resistencia, Chaco, Argentina</span>
               </li>
-              <li className="flex items-center gap-2.5 text-brand-300 text-sm">
-                <Phone size={16} className="shrink-0 text-brand-400" weight="fill" />
+              <li className="flex items-center gap-2.5 text-neutral-300 text-sm">
+                <Phone size={16} className="shrink-0 text-accent-400" weight="fill" />
                 <a href="tel:+5491112345678" className="hover:text-white transition-colors">
                   +54 9 362 412-3456
                 </a>
               </li>
-              <li className="flex items-center gap-2.5 text-brand-300 text-sm">
-                <Envelope size={16} className="shrink-0 text-brand-400" weight="fill" />
+              <li className="flex items-center gap-2.5 text-neutral-300 text-sm">
+                <Envelope size={16} className="shrink-0 text-accent-400" weight="fill" />
                 <a href="mailto:info@educarparatransformar.edu.ar" className="hover:text-white transition-colors">
                   info@educarparatransformar.edu.ar
                 </a>
@@ -125,11 +127,11 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="border-t border-brand-800 mt-12 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <p className="text-brand-400 text-xs">
+        <div className="border-t border-white/10 mt-12 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <p className="text-neutral-400 text-xs">
             {year} Educar para Transformar. Todos los derechos reservados.
           </p>
-          <p className="text-brand-500 text-xs">
+          <p className="text-neutral-400 text-xs">
             Desarrollado por el equipo LAMA — UTN FRRE
           </p>
         </div>

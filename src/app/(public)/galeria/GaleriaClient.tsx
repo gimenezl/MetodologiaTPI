@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { X, Images } from '@phosphor-icons/react'
+import { cn } from '@/lib/utils'
 
 interface Imagen {
   id: number
@@ -12,6 +13,20 @@ interface Imagen {
 
 export function GaleriaClient({ imagenes }: { imagenes: Imagen[] }) {
   const [modalImg, setModalImg] = useState<Imagen | null>(null)
+  const [filtroCategoria, setFiltroCategoria] = useState<string>('TODAS')
+
+  const categorias = [
+    'TODAS',
+    ...Array.from(new Set(imagenes.map((img) => img.categoria).filter(Boolean))) as string[],
+  ]
+
+  const imagenesFiltradas =
+    filtroCategoria === 'TODAS'
+      ? imagenes
+      : imagenes.filter((img) => img.categoria === filtroCategoria)
+
+  const labelCategoria = (cat: string) =>
+    cat === 'TODAS' ? 'Todas' : cat.charAt(0) + cat.slice(1).toLowerCase()
 
   return (
     <>
@@ -24,19 +39,38 @@ export function GaleriaClient({ imagenes }: { imagenes: Imagen[] }) {
               Galería fotográfica
             </h1>
           </div>
+          {/* Filtros por categoría */}
+          {categorias.length > 1 && (
+            <div className="flex gap-2 flex-wrap mt-6">
+              {categorias.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setFiltroCategoria(cat)}
+                  className={cn(
+                    'px-4 py-2 rounded-full text-sm font-semibold border transition-all duration-150',
+                    filtroCategoria === cat
+                      ? 'bg-brand-500 text-white border-brand-500'
+                      : 'bg-white text-neutral-600 border-neutral-300 hover:border-brand-400 hover:text-brand-600'
+                  )}
+                >
+                  {labelCategoria(cat)}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
       {/* Grid masonry-like */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {imagenes.length === 0 ? (
+        {imagenesFiltradas.length === 0 ? (
           <div className="py-24 text-center">
             <Images size={48} className="text-neutral-300 mx-auto mb-4" />
-            <p className="text-neutral-500">No hay imágenes en la galería</p>
+            <p className="text-neutral-500">No hay imágenes en esta categoría</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {imagenes.map((img, i) => (
+            {imagenesFiltradas.map((img, i) => (
               <button
                 key={img.id}
                 onClick={() => setModalImg(img)}

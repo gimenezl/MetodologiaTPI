@@ -49,6 +49,7 @@ export default function CuposPage() {
   const [actividades, setActividades] = useState<ActividadConCupo[]>([])
   const [loading, setLoading] = useState(true)
   const [filtroTipo, setFiltroTipo] = useState<string>('TODOS')
+  const [filtroNivel, setFiltroNivel] = useState<string>('TODOS')
   const [inscribiendoId, setInscribiendoId] = useState<number | null>(null)
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([])
   const [selectedEstudiante, setSelectedEstudiante] = useState<string>('')
@@ -225,7 +226,16 @@ export default function CuposPage() {
     }
   }
 
-  const filtradas = actividades.filter((a) => filtroTipo === 'TODOS' || a.tipo === filtroTipo)
+  const nivelesDisponibles = [
+    'TODOS',
+    ...Array.from(new Set(actividades.map((a) => a.nivel?.nombre).filter(Boolean))) as string[],
+  ]
+
+  const filtradas = actividades.filter(
+    (a) =>
+      (filtroTipo === 'TODOS' || a.tipo === filtroTipo) &&
+      (filtroNivel === 'TODOS' || a.nivel?.nombre === filtroNivel)
+  )
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -259,23 +269,49 @@ export default function CuposPage() {
         </div>
       )}
 
-      {/* Filtros */}
-      <div className="flex gap-2 flex-wrap">
-        {['TODOS', 'DEPORTE', 'CURRICULAR', 'TALLER'].map((tipo) => (
-          <button
-            key={tipo}
-            onClick={() => setFiltroTipo(tipo)}
-            className={cn(
-              'px-4 py-2 rounded-full text-sm font-semibold border transition-all duration-150',
-              filtroTipo === tipo
-                ? 'bg-brand-500 text-white border-brand-500'
-                : 'bg-white text-neutral-600 border-neutral-300 hover:border-brand-400 hover:text-brand-600'
-            )}
-          >
-            {tipo === 'TODOS' ? 'Todas' : tipo.charAt(0) + tipo.slice(1).toLowerCase()}
-          </button>
-        ))}
+      {/* Filtros por tipo */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Tipo</p>
+        <div className="flex gap-2 flex-wrap">
+          {['TODOS', 'DEPORTE', 'CURRICULAR', 'TALLER'].map((tipo) => (
+            <button
+              key={tipo}
+              onClick={() => setFiltroTipo(tipo)}
+              className={cn(
+                'px-4 py-2 rounded-full text-sm font-semibold border transition-all duration-150',
+                filtroTipo === tipo
+                  ? 'bg-brand-500 text-white border-brand-500'
+                  : 'bg-white text-neutral-600 border-neutral-300 hover:border-brand-400 hover:text-brand-600'
+              )}
+            >
+              {tipo === 'TODOS' ? 'Todas' : tipo.charAt(0) + tipo.slice(1).toLowerCase()}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Filtros por nivel */}
+      {nivelesDisponibles.length > 1 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Nivel</p>
+          <div className="flex gap-2 flex-wrap">
+            {nivelesDisponibles.map((nivel) => (
+              <button
+                key={nivel}
+                onClick={() => setFiltroNivel(nivel)}
+                className={cn(
+                  'px-4 py-2 rounded-full text-sm font-semibold border transition-all duration-150',
+                  filtroNivel === nivel
+                    ? 'bg-brand-700 text-white border-brand-700'
+                    : 'bg-white text-neutral-600 border-neutral-300 hover:border-brand-400 hover:text-brand-600'
+                )}
+              >
+                {nivel === 'TODOS' ? 'Todos los niveles' : nivel.charAt(0) + nivel.slice(1).toLowerCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Grid */}
       <div className="space-y-3">

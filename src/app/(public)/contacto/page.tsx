@@ -20,9 +20,9 @@ export default function ContactoPage() {
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "url('/bienestar-hero.png')", backgroundSize: 'cover', backgroundPosition: 'center 70%' }} aria-hidden="true" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <div className="max-w-xl">
-            <p className="text-brand-400 font-semibold text-sm uppercase tracking-widest mb-4">Contacto</p>
+            <p className="text-accent-400 font-semibold text-sm uppercase tracking-widest mb-4">Contacto</p>
             <h1 className="text-5xl font-extrabold text-white tracking-tight text-balance">Hablemos, estamos para ayudarte</h1>
-            <p className="mt-4 text-brand-200 leading-relaxed">¿Tenés dudas sobre la inscripción, los niveles o el programa? Escribinos o llamanos.</p>
+            <p className="mt-4 text-white/80 leading-relaxed">¿Tenés dudas sobre la inscripción, los niveles o el programa? Escribinos o llamanos.</p>
           </div>
         </div>
       </section>

@@ -66,14 +66,14 @@ export default function QuienesSomosPage() {
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 w-full">
           <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-brand-800/60 border border-brand-700 rounded-full text-brand-300 text-xs font-semibold mb-8">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 border border-white/20 rounded-full text-white/80 text-xs font-semibold mb-8">
               <GraduationCap size={14} weight="fill" />
               Nuestra historia y propósito
             </div>
             <h1 className="text-5xl md:text-6xl font-extrabold text-white leading-tight tracking-tight text-balance">
               Educamos para que los alumnos cambien el mundo
             </h1>
-            <p className="mt-6 text-brand-200 text-lg leading-relaxed max-w-[52ch]">
+            <p className="mt-6 text-white/80 text-lg leading-relaxed max-w-[52ch]">
               Nacemos como respuesta a la necesidad de un modelo educativo que priorice la formación
               humana integral sobre la mera acumulación de contenidos. Somos un centro que cree que
               la educación es el motor más poderoso de transformación social.
@@ -100,7 +100,7 @@ export default function QuienesSomosPage() {
                 <blockquote className="text-white text-xl font-semibold leading-snug">
                   "La educación es el arma más poderosa para cambiar el mundo."
                 </blockquote>
-                <p className="text-brand-300 text-sm mt-2">— Nelson Mandela</p>
+                <p className="text-white/60 text-sm mt-2">— Nelson Mandela</p>
               </div>
             </div>
 

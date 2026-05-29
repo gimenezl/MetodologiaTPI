@@ -54,23 +54,42 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* Hero — Asimétrico, texto izquierda / imagen derecha */}
+      {/* Hero — Fondo claro, texto degradado colorido */}
       <section
-        className="relative min-h-[100dvh] flex items-center overflow-hidden bg-brand-900"
+        className="relative min-h-[100dvh] flex items-center overflow-hidden bg-white"
         aria-labelledby="hero-heading"
       >
-        {/* Background pattern */}
+        {/* Degradado radial de fondo — lavanda + naranja suave */}
         <div
-          className="absolute inset-0 opacity-10"
+          className="absolute inset-0"
           style={{
-            backgroundImage: `radial-gradient(circle at 20% 50%, oklch(0.6 0.14 250) 0%, transparent 50%),
-                              radial-gradient(circle at 80% 20%, oklch(0.5 0.12 200) 0%, transparent 40%)`,
+            backgroundImage: `radial-gradient(ellipse 70% 60% at 65% 50%, oklch(0.93 0.022 275) 0%, transparent 70%),
+                              radial-gradient(ellipse 35% 35% at 88% 18%, oklch(0.95 0.018 43) 0%, transparent 60%)`,
           }}
           aria-hidden="true"
         />
-        {/* Right image panel */}
+
+        {/* Cuadrícula de puntos — decoración */}
+        <div className="absolute left-6 top-1/4 pointer-events-none hidden md:block" aria-hidden="true">
+          {Array.from({ length: 6 }).map((_, row) => (
+            <div key={row} className="flex gap-4 mb-4">
+              {Array.from({ length: 6 }).map((_, col) => (
+                <div key={col} className="w-1.5 h-1.5 rounded-full bg-brand-400 opacity-25" />
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* Línea de puntos verde inferior */}
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-3 pointer-events-none" aria-hidden="true">
+          {Array.from({ length: 14 }).map((_, i) => (
+            <div key={i} className="w-1.5 h-1.5 rounded-full bg-green-400 opacity-45" />
+          ))}
+        </div>
+
+        {/* Panel imagen derecha — sutil */}
         <div
-          className="absolute right-0 top-0 bottom-0 w-full lg:w-1/2 opacity-20 lg:opacity-40"
+          className="absolute right-0 top-0 bottom-0 w-full lg:w-[55%] opacity-[0.08] lg:opacity-[0.15]"
           style={{
             backgroundImage: "url('/educacion.jpeg')",
             backgroundSize: 'cover',
@@ -79,29 +98,53 @@ export default async function HomePage() {
           aria-hidden="true"
         />
         <div
-          className="absolute right-0 top-0 bottom-0 w-full lg:w-1/2 bg-gradient-to-r from-brand-900 via-brand-900/70 to-transparent"
+          className="absolute right-0 top-0 bottom-0 w-full lg:w-[55%] bg-gradient-to-r from-white via-white/70 to-transparent"
           aria-hidden="true"
         />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 lg:py-0 w-full">
           <div className="max-w-2xl">
+            {/* Badge de inscripciones */}
+            <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 rounded-full px-4 py-1.5 mb-8">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-green-700 text-xs font-semibold tracking-wide">Inscripciones 2027 abiertas</span>
+            </div>
+
             <h1
               id="hero-heading"
-              className="text-5xl md:text-6xl lg:text-7xl font-extrabold text-white leading-[1.05] tracking-tight text-balance"
+              className="text-5xl md:text-6xl lg:text-7xl font-extrabold text-neutral-900 leading-[1.05] tracking-tight text-balance"
             >
               Educación que{' '}
-              <span className="text-accent-400">transforma</span>{' '}
-              vidas
+              <span
+                style={{
+                  background: 'linear-gradient(135deg, oklch(0.68 0.230 43) 0%, oklch(0.75 0.200 43) 50%, oklch(0.57 0.225 258) 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}
+              >
+                transforma
+              </span>{' '}
+              <span
+                style={{
+                  background: 'linear-gradient(135deg, oklch(0.57 0.225 258) 0%, oklch(0.50 0.270 258) 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}
+              >
+                vidas
+              </span>
             </h1>
 
-            <p className="mt-6 text-brand-200 text-lg leading-relaxed max-w-[52ch] text-pretty">
+            <p className="mt-6 text-neutral-500 text-lg leading-relaxed max-w-[52ch] text-pretty">
               Centro educativo de vanguardia en los niveles Inicial, Primario y Secundario.
               Jornada extendida, actividades deportivas y bienestar estudiantil integral.
             </p>
 
             <div className="mt-10 flex flex-wrap gap-4">
               <Link href="/inscripcion">
-                <Button size="lg" variant="accent" className="shadow-lg shadow-accent-500/30">
+                <Button size="lg" variant="accent" className="shadow-lg shadow-accent-500/25">
                   Iniciar pre-inscripción
                   <ArrowRight size={18} />
                 </Button>
@@ -110,7 +153,7 @@ export default async function HomePage() {
                 <Button
                   size="lg"
                   variant="ghost"
-                  className="text-white hover:bg-brand-800 border border-brand-700"
+                  className="text-neutral-700 border border-neutral-300 hover:bg-neutral-100"
                 >
                   Conocer más
                 </Button>
@@ -120,14 +163,14 @@ export default async function HomePage() {
         </div>
 
         {/* Scroll indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-brand-400 text-xs" aria-hidden="true">
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-neutral-400 text-xs" aria-hidden="true">
           <span>Explorar</span>
           <div className="w-px h-12 bg-gradient-to-b from-brand-400 to-transparent animate-pulse" />
         </div>
       </section>
 
       {/* Stats */}
-      <section className="bg-white border-b border-neutral-100" aria-label="Datos del centro">
+      <section className="bg-brand-600" aria-label="Datos del centro">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 lg:grid-cols-4">
             {stats.map((stat, i) => {
@@ -135,14 +178,14 @@ export default async function HomePage() {
               return (
                 <div
                   key={stat.label}
-                  className={`py-10 px-6 text-center ${i < stats.length - 1 ? 'border-r border-neutral-100' : ''}`}
+                  className={`py-10 px-6 text-center ${i < stats.length - 1 ? 'border-r border-brand-500/50' : ''}`}
                   style={{ animationDelay: `${i * 100}ms` }}
                 >
-                  <div className="w-10 h-10 bg-brand-50 rounded-xl flex items-center justify-center mx-auto mb-3">
-                    <Icon size={22} weight="fill" className="text-brand-500" />
+                  <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <Icon size={22} weight="fill" className="text-white" />
                   </div>
-                  <p className="text-3xl font-extrabold text-brand-700 tracking-tight">{stat.value}</p>
-                  <p className="text-sm text-neutral-500 mt-1">{stat.label}</p>
+                  <p className="text-3xl font-extrabold text-white tracking-tight">{stat.value}</p>
+                  <p className="text-sm text-brand-100 mt-1 font-medium">{stat.label}</p>
                 </div>
               )
             })}
@@ -151,11 +194,11 @@ export default async function HomePage() {
       </section>
 
       {/* Marquee de actividades */}
-      <section className="py-6 bg-brand-50 border-y border-brand-100 overflow-hidden" aria-label="Actividades extracurriculares">
+      <section className="py-5 bg-accent-500 overflow-hidden" aria-label="Actividades extracurriculares">
         <div className="flex gap-8" style={{ animation: 'marquee 30s linear infinite' }}>
           {actividades.map((act, i) => (
-            <span key={i} className="shrink-0 text-brand-600 font-semibold text-sm flex items-center gap-3">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-500" aria-hidden="true" />
+            <span key={i} className="shrink-0 text-white font-bold text-sm flex items-center gap-3">
+              <span className="w-2 h-2 rounded-full bg-white/70" aria-hidden="true" />
               {act}
             </span>
           ))}
@@ -204,26 +247,29 @@ export default async function HomePage() {
       </section>
 
       {/* Valores / Propuesta educativa */}
-      <section className="py-24 bg-neutral-50" aria-labelledby="valores-heading">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="py-24 bg-brand-800 relative overflow-hidden" aria-labelledby="valores-heading">
+        {/* Decorative blobs */}
+        <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full opacity-20" style={{ background: 'oklch(0.68 0.230 43)' }} aria-hidden="true" />
+        <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full opacity-10" style={{ background: 'oklch(0.70 0.165 258)' }} aria-hidden="true" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div>
-              <p className="text-brand-600 font-semibold text-sm uppercase tracking-widest mb-4">
+              <p className="text-accent-400 font-bold text-sm uppercase tracking-widest mb-4">
                 Nuestra propuesta
               </p>
               <h2
                 id="valores-heading"
-                className="text-4xl md:text-5xl font-extrabold text-neutral-900 leading-tight tracking-tight text-balance"
+                className="text-4xl md:text-5xl font-extrabold text-white leading-tight tracking-tight text-balance"
               >
                 Formamos personas,<br />no solo estudiantes
               </h2>
-              <p className="mt-5 text-neutral-600 leading-relaxed max-w-[50ch]">
+              <p className="mt-5 text-white/80 leading-relaxed max-w-[50ch]">
                 Nuestra visión ética coloca al alumno en el centro del proceso educativo.
                 Fomentamos el pensamiento crítico, la solidaridad y la responsabilidad cívica
                 desde los primeros años de escolaridad.
               </p>
               <Link href="/quienes-somos" className="inline-block mt-8">
-                <Button variant="primary">
+                <Button variant="accent" className="shadow-lg shadow-accent-500/30">
                   Conocer nuestra visión
                   <ArrowRight size={16} />
                 </Button>
@@ -233,18 +279,20 @@ export default async function HomePage() {
             <div className="space-y-4">
               {values.map((val, i) => {
                 const Icon = val.icon
+                const iconColors = ['text-accent-400', 'text-green-400', 'text-pink-400']
+                const bgColors = ['bg-accent-500/20', 'bg-green-500/20', 'bg-pink-500/20']
                 return (
                   <div
                     key={val.title}
-                    className="flex gap-4 p-5 bg-white rounded-2xl border border-neutral-200 hover:border-brand-300 hover:shadow-sm transition-all duration-200"
+                    className="flex gap-4 p-5 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 hover:bg-white/15 transition-all duration-200"
                     style={{ animationDelay: `${i * 100}ms` }}
                   >
-                    <div className="w-11 h-11 bg-brand-50 rounded-xl flex items-center justify-center shrink-0">
-                      <Icon size={22} weight="fill" className="text-brand-500" />
+                    <div className={`w-11 h-11 ${bgColors[i]} rounded-xl flex items-center justify-center shrink-0`}>
+                      <Icon size={22} weight="fill" className={iconColors[i]} />
                     </div>
                     <div>
-                      <h3 className="font-bold text-neutral-900 text-sm">{val.title}</h3>
-                      <p className="text-neutral-600 text-sm mt-1 leading-relaxed">{val.description}</p>
+                      <h3 className="font-bold text-white text-sm">{val.title}</h3>
+                      <p className="text-white/75 text-sm mt-1 leading-relaxed">{val.description}</p>
                     </div>
                   </div>
                 )
@@ -255,7 +303,7 @@ export default async function HomePage() {
       </section>
 
       {/* Opiniones / Testimonios */}
-      <section className="py-24 bg-neutral-50" aria-labelledby="opiniones-heading">
+      <section className="py-24 bg-white" aria-labelledby="opiniones-heading">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6 mb-12">
             <div>
@@ -270,24 +318,32 @@ export default async function HomePage() {
       </section>
 
       {/* CTA Inscripción */}
-      <section className="py-24 bg-brand-900" aria-labelledby="cta-heading">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <section
+        className="py-24 relative overflow-hidden"
+        style={{ background: 'linear-gradient(135deg, oklch(0.50 0.270 258) 0%, oklch(0.41 0.250 258) 40%, oklch(0.57 0.230 43) 100%)' }}
+        aria-labelledby="cta-heading"
+      >
+        {/* Decorative circles */}
+        <div className="absolute top-0 right-0 w-96 h-96 rounded-full -translate-y-1/2 translate-x-1/3 bg-white/5" aria-hidden="true" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 rounded-full translate-y-1/2 -translate-x-1/4 bg-white/5" aria-hidden="true" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative">
+          <p className="text-white/70 font-semibold text-sm uppercase tracking-widest mb-4">Inscripciones 2027 abiertas</p>
           <h2 id="cta-heading" className="text-4xl md:text-5xl font-extrabold text-white tracking-tight text-balance">
             El futuro de tu hijo comienza aquí
           </h2>
-          <p className="mt-5 text-brand-300 max-w-[50ch] mx-auto leading-relaxed">
+          <p className="mt-5 text-white/80 max-w-[50ch] mx-auto leading-relaxed">
             Completá el formulario de pre-inscripción en línea. El proceso es simple y seguro.
             Nuestro equipo te contactará para confirmar la vacante.
           </p>
           <div className="mt-10 flex flex-wrap gap-4 justify-center">
             <Link href="/inscripcion">
-              <Button size="lg" variant="accent" className="shadow-lg shadow-accent-500/30">
+              <Button size="lg" variant="primary" className="bg-white text-brand-700 hover:bg-neutral-100 shadow-xl shadow-black/20">
                 Comenzar pre-inscripción
                 <ArrowRight size={18} />
               </Button>
             </Link>
             <Link href="/contacto">
-              <Button size="lg" variant="ghost" className="text-white border border-brand-700 hover:bg-brand-800">
+              <Button size="lg" variant="ghost" className="text-white border-2 border-white/40 hover:bg-white/15 hover:border-white/70">
                 Consultar vacantes
               </Button>
             </Link>

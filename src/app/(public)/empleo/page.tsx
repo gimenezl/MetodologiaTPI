@@ -68,15 +68,15 @@ export default function EmpleoPage() {
           <div className="max-w-2xl">
             <div className="flex items-center gap-2 mb-6">
               <Briefcase size={20} weight="fill" className="text-accent-400" />
-              <span className="text-brand-300 text-sm font-semibold uppercase tracking-widest">Sumate al equipo</span>
+              <span className="text-white/80 text-sm font-semibold uppercase tracking-widest">Sumate al equipo</span>
             </div>
             <h1 className="text-5xl font-extrabold text-white tracking-tight text-balance">Trabajá con nosotros y transformá vidas</h1>
-            <p className="mt-6 text-brand-200 leading-relaxed max-w-[52ch]">
+            <p className="mt-6 text-white/80 leading-relaxed max-w-[52ch]">
               Buscamos docentes y profesionales comprometidos con un proyecto educativo único. Abrimos convocatoria para el ciclo 2027.
             </p>
-            <div className="flex items-center gap-2 mt-6 px-4 py-2.5 bg-brand-800/50 border border-brand-700 rounded-full w-fit">
+            <div className="flex items-center gap-2 mt-6 px-4 py-2.5 bg-white/10 border border-white/20 rounded-full w-fit">
               <Clock size={14} className="text-accent-400" />
-              <span className="text-brand-300 text-xs font-semibold">Convocatoria abierta — Inicio de clases Marzo 2027</span>
+              <span className="text-white/80 text-xs font-semibold">Convocatoria abierta — Inicio de clases Marzo 2027</span>
             </div>
           </div>
         </div>

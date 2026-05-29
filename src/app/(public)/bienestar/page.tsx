@@ -61,12 +61,12 @@ export default async function BienestarPage() {
           <div className="max-w-2xl">
             <div className="flex items-center gap-2 mb-6">
               <Heart size={20} weight="fill" className="text-red-400" />
-              <span className="text-brand-300 text-sm font-semibold uppercase tracking-widest">Cuidado integral</span>
+              <span className="text-white/80 text-sm font-semibold uppercase tracking-widest">Cuidado integral</span>
             </div>
             <h1 className="text-5xl md:text-6xl font-extrabold text-white tracking-tight text-balance">
               El bienestar de tu hijo es nuestra prioridad
             </h1>
-            <p className="mt-6 text-brand-200 text-lg leading-relaxed max-w-[52ch]">
+            <p className="mt-6 text-white/80 text-lg leading-relaxed max-w-[52ch]">
               Un alumno sano, feliz y emocionalmente equilibrado aprende mejor. Por eso diseñamos un programa de bienestar que va mucho más allá del aula.
             </p>
           </div>
@@ -187,11 +187,11 @@ export default async function BienestarPage() {
       {/* CTA */}
       <section className="py-20 bg-brand-900">
         <div className="max-w-3xl mx-auto px-4 text-center">
-          <Users size={40} weight="fill" className="text-brand-400 mx-auto mb-6" />
+          <Users size={40} weight="fill" className="text-accent-400 mx-auto mb-6" />
           <h2 className="text-3xl font-extrabold text-white tracking-tight mb-4">
             Más consultas sobre bienestar
           </h2>
-          <p className="text-brand-300 mb-8">
+          <p className="text-white/75 mb-8">
             Nuestro equipo de bienestar está disponible para responder dudas antes de la inscripción.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
@@ -199,7 +199,7 @@ export default async function BienestarPage() {
               <Button size="lg" variant="accent">Consultar <ArrowRight size={18} /></Button>
             </Link>
             <Link href="/inscripcion">
-              <Button size="lg" variant="ghost" className="text-white border border-brand-700 hover:bg-brand-800">Inscribirme</Button>
+              <Button size="lg" variant="ghost" className="text-white border border-white/30 hover:bg-white/10">Inscribirme</Button>
             </Link>
           </div>
         </div>

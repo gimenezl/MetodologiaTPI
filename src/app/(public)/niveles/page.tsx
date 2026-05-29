@@ -157,11 +157,11 @@ export default function NivelesPage() {
       <section className="py-24 bg-brand-900" aria-labelledby="actividades-heading">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
-            <p className="text-brand-400 font-semibold text-sm uppercase tracking-widest mb-3">Más allá del aula</p>
+            <p className="text-accent-400 font-semibold text-sm uppercase tracking-widest mb-3">Más allá del aula</p>
             <h2 id="actividades-heading" className="text-4xl font-extrabold text-white tracking-tight">
               Actividades deportivas y talleres
             </h2>
-            <p className="mt-4 text-brand-300 max-w-[50ch] mx-auto">
+            <p className="mt-4 text-white/75 max-w-[50ch] mx-auto">
               Cupos limitados — inscripción separada disponible al momento de matriculación
             </p>
           </div>
@@ -188,7 +188,7 @@ export default function NivelesPage() {
                 <div className="absolute inset-0 bg-brand-900/50 group-hover:bg-brand-900/30 transition-colors duration-300" />
                 <div className="absolute inset-0 flex flex-col items-center justify-end p-4 text-white">
                   <p className="font-bold text-sm text-center">{act.nombre}</p>
-                  <span className="text-xs text-brand-300 mt-0.5">{act.tipo}</span>
+                  <span className="text-xs text-white/65 mt-0.5">{act.tipo}</span>
                 </div>
               </div>
             ))}

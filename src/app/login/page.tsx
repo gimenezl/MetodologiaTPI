@@ -33,7 +33,7 @@ export default function LoginPage() {
             </div>
             <div>
               <p className="text-white font-bold text-sm">Educar para Transformar</p>
-              <p className="text-brand-400 text-xs">Sistema de gestión educativa</p>
+              <p className="text-white/60 text-xs">Sistema de gestión educativa</p>
             </div>
           </div>
         </div>
@@ -42,7 +42,7 @@ export default function LoginPage() {
             <p className="text-white text-xl font-medium leading-relaxed">
               "La educación es el arma más poderosa que puedes usar para cambiar el mundo."
             </p>
-            <footer className="text-brand-400 text-sm mt-3">— Nelson Mandela</footer>
+            <footer className="text-white/60 text-sm mt-3">— Nelson Mandela</footer>
           </blockquote>
           <div className="flex gap-4">
             {[
@@ -52,7 +52,7 @@ export default function LoginPage() {
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <p className="text-2xl font-extrabold text-white">{stat.label}</p>
-                <p className="text-xs text-brand-400 mt-0.5">{stat.desc}</p>
+                <p className="text-xs text-white/60 mt-0.5">{stat.desc}</p>
               </div>
             ))}
           </div>
