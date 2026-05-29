@@ -15,28 +15,28 @@
 
   /* ---- Color Tokens (OKLCH — institutional palette) ---- */
   /* Primary: Azul Cobalto Institucional */
-  --color-primary-50:  oklch(0.97 0.018 250);
-  --color-primary-100: oklch(0.93 0.035 250);
-  --color-primary-200: oklch(0.85 0.065 250);
-  --color-primary-300: oklch(0.73 0.095 250);
-  --color-primary-400: oklch(0.60 0.120 250);
-  --color-primary-500: oklch(0.48 0.140 250);  /* Main brand */
-  --color-primary-600: oklch(0.40 0.135 250);
-  --color-primary-700: oklch(0.32 0.120 250);
-  --color-primary-800: oklch(0.25 0.100 250);
-  --color-primary-900: oklch(0.18 0.075 250);
+  --color-primary-50:  oklch(0.97 0.018 300);
+  --color-primary-100: oklch(0.93 0.035 300);
+  --color-primary-200: oklch(0.85 0.065 300);
+  --color-primary-300: oklch(0.73 0.095 300);
+  --color-primary-400: oklch(0.60 0.120 300);
+  --color-primary-500: oklch(0.48 0.140 300);  /* Main brand */
+  --color-primary-600: oklch(0.40 0.135 300);
+  --color-primary-700: oklch(0.32 0.120 300);
+  --color-primary-800: oklch(0.25 0.100 300);
+  --color-primary-900: oklch(0.18 0.075 300);
 
   /* Neutral: Gris Profesional (tinted warm-blue) */
-  --color-neutral-50:  oklch(0.985 0.006 250);
-  --color-neutral-100: oklch(0.965 0.008 250);
-  --color-neutral-200: oklch(0.92 0.010 250);
-  --color-neutral-300: oklch(0.82 0.012 250);
-  --color-neutral-400: oklch(0.65 0.014 250);
-  --color-neutral-500: oklch(0.52 0.014 250);
-  --color-neutral-600: oklch(0.41 0.012 250);
-  --color-neutral-700: oklch(0.32 0.010 250);
-  --color-neutral-800: oklch(0.22 0.008 250);
-  --color-neutral-900: oklch(0.15 0.006 250);
+  --color-neutral-50:  oklch(0.985 0.006 300);
+  --color-neutral-100: oklch(0.965 0.008 300);
+  --color-neutral-200: oklch(0.92 0.010 300);
+  --color-neutral-300: oklch(0.82 0.012 300);
+  --color-neutral-400: oklch(0.65 0.014 300);
+  --color-neutral-500: oklch(0.52 0.014 300);
+  --color-neutral-600: oklch(0.41 0.012 300);
+  --color-neutral-700: oklch(0.32 0.010 300);
+  --color-neutral-800: oklch(0.22 0.008 300);
+  --color-neutral-900: oklch(0.15 0.006 300);
 
   /* Accent: Dorado cálido para CTAs */
   --color-accent-400: oklch(0.80 0.120 85);
