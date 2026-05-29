@@ -124,7 +124,7 @@ h1, h2, h3, h4, h5, h6 {
   --color-brand-600: oklch(0.40 0.135 300);
   --color-brand-700: oklch(0.32 0.120 300);
   --color-brand-800: oklch(0.25 0.100 300);
-  --color-brand-300: oklch(0.75 0.05 300);
+  --color-brand-300: oklch(0.75 0.05 300); /* ---- Fondo Morado Claro ---- */
 
 
   --color-accent-400: oklch(0.80 0.120 85);
