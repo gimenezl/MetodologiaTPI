@@ -60,6 +60,23 @@ export default async function HomePage() {
         aria-labelledby="hero-heading"
       >
         {/* Background pattern */}
+         {/* Cuadrícula de puntos izquierda */}
+        <div className="absolute left-8 top-1/4 pointer-events-none" aria-hidden="true">
+          {Array.from({ length: 6 }).map((_, row) => (
+            <div key={row} className="flex gap-4 mb-4">
+              {Array.from({ length: 6 }).map((_, col) => (
+                <div key={col} className="w-1.5 h-1.5 rounded-full bg-brand-400 opacity-40" />
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* Línea de puntos verde inferior */}
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-3 pointer-events-none" aria-hidden="true">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="w-1.5 h-1.5 rounded-full bg-green-400 opacity-60" />
+          ))}
+        </div>
         <div
           className="absolute inset-0 opacity-10"
           style={{
