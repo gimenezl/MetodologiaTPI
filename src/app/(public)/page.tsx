@@ -59,50 +59,50 @@ export default async function HomePage() {
         className="relative min-h-[100dvh] flex items-center overflow-hidden bg-white"
         aria-labelledby="hero-heading"
       >
-        {/* Degradado radial de fondo — lavanda + naranja suave */}
+        {/* === CAPA 1: Imagen derecha === */}
+        <div
+          className="absolute right-0 top-0 bottom-0 w-full lg:w-[60%] opacity-70"
+          style={{
+            backgroundImage: "url('/educacion.jpeg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: 'saturate(0.9)',
+          }}
+          aria-hidden="true"
+        />
+        {/* === CAPA 2: Fundido full-width — blanco sólido en zona de texto, transparente a la derecha === */}
+        <div
+          className="absolute inset-0 bg-gradient-to-r from-white from-30% via-white/75 to-transparent"
+          aria-hidden="true"
+        />
+        {/* === CAPA 3: Acento de color radial sutil === */}
         <div
           className="absolute inset-0"
           style={{
-            backgroundImage: `radial-gradient(ellipse 70% 60% at 65% 50%, oklch(0.93 0.022 275) 0%, transparent 70%),
-                              radial-gradient(ellipse 35% 35% at 88% 18%, oklch(0.95 0.018 43) 0%, transparent 60%)`,
+            backgroundImage: `radial-gradient(ellipse 30% 35% at 90% 20%, oklch(0.95 0.020 43) 0%, transparent 60%)`,
           }}
           aria-hidden="true"
         />
 
-        {/* Cuadrícula de puntos — decoración */}
-        <div className="absolute left-6 top-1/4 pointer-events-none hidden md:block" aria-hidden="true">
+        {/* === CAPA 4 (encima del fundido): Cuadrícula de puntos === */}
+        <div className="absolute left-6 top-1/4 pointer-events-none hidden md:block z-10" aria-hidden="true">
           {Array.from({ length: 6 }).map((_, row) => (
             <div key={row} className="flex gap-4 mb-4">
               {Array.from({ length: 6 }).map((_, col) => (
-                <div key={col} className="w-1.5 h-1.5 rounded-full bg-brand-400 opacity-25" />
+                <div key={col} className="w-1.5 h-1.5 rounded-full bg-brand-400 opacity-30" />
               ))}
             </div>
           ))}
         </div>
 
-        {/* Línea de puntos verde inferior — separada del indicador */}
-        <div className="absolute bottom-32 left-1/2 -translate-x-1/2 flex gap-2.5 pointer-events-none" aria-hidden="true">
+        {/* === CAPA 5: Línea de puntos verde inferior, centrada === */}
+        <div className="absolute bottom-28 inset-x-0 flex justify-center gap-2.5 pointer-events-none z-10" aria-hidden="true">
           {Array.from({ length: 14 }).map((_, i) => (
-            <div key={i} className="w-1.5 h-1.5 rounded-full bg-green-400 opacity-60" />
+            <div key={i} className="w-2 h-2 rounded-full bg-green-400 opacity-70" />
           ))}
         </div>
 
-        {/* Panel imagen derecha — muy sutil, cubierto casi completamente */}
-        <div
-          className="absolute right-0 top-0 bottom-0 w-full lg:w-[55%] opacity-[0.06]"
-          style={{
-            backgroundImage: "url('/educacion.jpeg')",
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-          aria-hidden="true"
-        />
-        <div
-          className="absolute right-0 top-0 bottom-0 w-full lg:w-[55%] bg-gradient-to-r from-white via-white/90 to-white/60"
-          aria-hidden="true"
-        />
-
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 lg:py-0 w-full">
+        <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 lg:py-0 w-full">
           <div className="max-w-2xl">
             <h1
               id="hero-heading"
