@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import {
   House, Users, CalendarCheck, Pulse, FileText,
-  GraduationCap, SignOut, List, X, Briefcase, ChatCenteredText
+  SignOut, List, X, Briefcase, ChatCenteredText, UserPlus
 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
@@ -20,6 +20,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Inicio', icon: House, roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE'] },
+  { href: '/dashboard/usuarios', label: 'Usuarios', icon: UserPlus, roles: ['DIRECTOR'] },
   { href: '/dashboard/legajos', label: 'Legajos', icon: Users, roles: ['DIRECTOR'] },
   { href: '/dashboard/asistencias', label: 'Asistencias', icon: CalendarCheck, roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE'] },
   { href: '/dashboard/cupos', label: 'Cupos', icon: Pulse, roles: ['DIRECTOR', 'DOCENTE'] },
@@ -40,9 +41,8 @@ function SidebarContent({ onClose, onSignOut }: { onClose?: () => void; onSignOu
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-neutral-100">
-        <div className="w-9 h-9 bg-brand-500 rounded-xl flex items-center justify-center shrink-0">
-          <GraduationCap size={20} weight="fill" className="text-white" />
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo-emblema.png" alt="Educar para Transformar" className="w-10 h-10 object-contain shrink-0" />
         <div className="min-w-0">
           <p className="text-xs font-semibold text-neutral-500 truncate">Educar para</p>
           <p className="text-sm font-bold text-brand-700 truncate">Transformar</p>

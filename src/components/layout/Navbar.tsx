@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { List, X, GraduationCap, UserCircle } from '@phosphor-icons/react'
+import { List, X, UserCircle } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
@@ -58,9 +58,8 @@ export function Navbar() {
           className="flex items-center gap-2.5 font-bold text-brand-700 hover:text-brand-800 transition-colors"
           aria-label="Educar para Transformar — Inicio"
         >
-          <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center shadow-sm">
-            <GraduationCap size={18} weight="fill" className="text-white" />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-emblema.png" alt="Educar para Transformar" className="h-12 w-auto" />
           <span className="hidden sm:block text-sm leading-tight">
             Educar para<br />
             <strong>Transformar</strong>

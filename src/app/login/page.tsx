@@ -1,6 +1,5 @@
 import { Suspense } from 'react'
 import { LoginForm } from './LoginForm'
-import { GraduationCap } from '@phosphor-icons/react/dist/ssr'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 
@@ -28,8 +27,9 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-gradient-to-br from-brand-900 via-brand-800/90 to-brand-900/80" />
         <div className="relative">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center">
-              <GraduationCap size={22} weight="fill" className="text-white" />
+            <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center p-1 shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo-emblema.png" alt="Educar para Transformar" className="w-full h-full object-contain" />
             </div>
             <div>
               <p className="text-white font-bold text-sm">Educar para Transformar</p>
@@ -63,9 +63,8 @@ export default function LoginPage() {
       <div className="flex items-center justify-center px-6 py-12 bg-white">
         <div className="w-full max-w-sm">
           <div className="lg:hidden flex items-center gap-2.5 mb-8">
-            <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center">
-              <GraduationCap size={18} weight="fill" className="text-white" />
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-emblema.png" alt="Educar para Transformar" className="h-10 w-auto" />
             <span className="font-bold text-brand-700 text-sm">Educar para Transformar</span>
           </div>
 

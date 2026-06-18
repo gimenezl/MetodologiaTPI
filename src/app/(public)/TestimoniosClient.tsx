@@ -22,28 +22,30 @@ interface TestimoniosClientProps {
 }
 
 export function TestimoniosClient({ initialOpiniones }: TestimoniosClientProps) {
-  const [opiniones, setOpiniones] = useState<Opinion[]>(initialOpiniones)
+  const [opiniones] = useState<Opinion[]>(initialOpiniones)
   const [open, setOpen] = useState(false)
 
   const {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<OpinionFormData>({
     resolver: zodResolver(opinionSchema),
     mode: 'onTouched',
   })
 
+  const comentarioLen = (watch('comentario') ?? '').length
+
   const onSubmit = async (data: OpinionFormData) => {
     try {
-      const created = await crearOpinion(data.nombre_usuario ?? '', data.comentario)
-      setOpiniones((prev) => [created as Opinion, ...prev].slice(0, 6))
+      await crearOpinion(data.nombre_usuario ?? '', data.comentario)
       reset()
       setOpen(false)
-      toast.success('Testimonio publicado')
+      toast.success('¡Gracias! Tu testimonio será revisado por el equipo antes de publicarse.')
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'No pudimos publicar tu testimonio'
+      const message = error instanceof Error ? error.message : 'No pudimos enviar tu testimonio'
       toast.error(message)
     }
   }
@@ -90,7 +92,7 @@ export function TestimoniosClient({ initialOpiniones }: TestimoniosClientProps) 
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h3 className="text-lg font-bold text-neutral-900">Agregar testimonio</h3>
-                <p className="text-sm text-neutral-500">Tu comentario se publica en la home.</p>
+                <p className="text-sm text-neutral-500">Será revisado por el equipo antes de publicarse.</p>
               </div>
               <button
                 type="button"
@@ -107,13 +109,19 @@ export function TestimoniosClient({ initialOpiniones }: TestimoniosClientProps) 
                 {...register('nombre_usuario')}
                 error={errors.nombre_usuario?.message}
               />
-              <Textarea
-                label="Comentario"
-                rows={5}
-                placeholder="Contanos tu experiencia..."
-                {...register('comentario')}
-                error={errors.comentario?.message}
-              />
+              <div>
+                <Textarea
+                  label="Comentario"
+                  rows={5}
+                  maxLength={500}
+                  placeholder="Contanos tu experiencia..."
+                  {...register('comentario')}
+                  error={errors.comentario?.message}
+                />
+                <p className={`text-xs mt-1 text-right ${comentarioLen < 10 || comentarioLen > 500 ? 'text-red-500' : 'text-neutral-400'}`}>
+                  {comentarioLen}/500
+                </p>
+              </div>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                   Cancelar

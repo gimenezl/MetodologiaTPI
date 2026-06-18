@@ -25,19 +25,29 @@ const nombreSchema = z
   .max(100, 'Máximo 100 caracteres')
   .regex(/^[a-zA-ZÀ-ÿ\s'-]+$/, 'Solo se permiten letras y espacios')
 
-// ---- Date not in future ----
+// ---- Edad en años a partir de una fecha ISO ----
+function edadEnAnios(val: string): number {
+  const nacimiento = new Date(val)
+  const diffMs = Date.now() - nacimiento.getTime()
+  return diffMs / (1000 * 60 * 60 * 24 * 365.25)
+}
+
+// ---- Fecha genérica: no futura y dentro de un rango razonable (≤ 100 años) ----
 const fechaNacimientoSchema = z
   .string()
   .min(1, 'La fecha de nacimiento es requerida')
+  .refine((val) => new Date(val) < new Date(), 'La fecha no puede ser en el futuro')
+  .refine((val) => edadEnAnios(val) <= 100, 'Ingresá una fecha de nacimiento válida')
+
+// ---- Fecha del aspirante: debe corresponder a edad escolar (2 a 20 años) ----
+const fechaNacimientoAspiranteSchema = z
+  .string()
+  .min(1, 'La fecha de nacimiento es requerida')
+  .refine((val) => new Date(val) < new Date(), 'La fecha no puede ser en el futuro')
   .refine((val) => {
-    const date = new Date(val)
-    return date < new Date()
-  }, 'La fecha no puede ser en el futuro')
-  .refine((val) => {
-    const date = new Date(val)
-    const minDate = new Date('1900-01-01')
-    return date > minDate
-  }, 'Fecha inválida')
+    const edad = edadEnAnios(val)
+    return edad >= 2 && edad <= 20
+  }, 'La edad del aspirante debe estar entre 2 y 20 años')
 
 // ---- Enrollment Form Schema (multi-step) ----
 export const inscripcionSchema = z.object({
@@ -45,7 +55,7 @@ export const inscripcionSchema = z.object({
   nombre: nombreSchema,
   apellido: nombreSchema,
   dni: dniSchema,
-  fecha_nacimiento: fechaNacimientoSchema,
+  fecha_nacimiento: fechaNacimientoAspiranteSchema,
   nivel: z.enum(['INICIAL', 'PRIMARIO', 'SECUNDARIO'] as const, {
     message: 'Seleccioná un nivel educativo',
   }),

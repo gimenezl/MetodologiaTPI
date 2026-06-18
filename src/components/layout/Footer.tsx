@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { GraduationCap, WhatsappLogo, InstagramLogo, FacebookLogo, MapPin, Phone, Envelope } from '@phosphor-icons/react/dist/ssr'
+import { WhatsappLogo, InstagramLogo, FacebookLogo, MapPin, Phone, Envelope } from '@phosphor-icons/react/dist/ssr'
 
 export function Footer() {
   const year = new Date().getFullYear()
@@ -13,8 +13,9 @@ export function Footer() {
           {/* Brand */}
           <div className="lg:col-span-1">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center">
-                <GraduationCap size={22} weight="fill" />
+              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center p-1 shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo-emblema.png" alt="Educar para Transformar" className="w-full h-full object-contain" />
               </div>
               <div>
                 <p className="font-bold text-white leading-tight text-sm">Educar para</p>

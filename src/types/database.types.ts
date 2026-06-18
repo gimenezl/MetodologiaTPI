@@ -198,18 +198,21 @@ export type Database = {
           nombre_usuario: string
           comentario: string
           fecha: string
+          aprobado: boolean
         }
         Insert: {
           id?: number
           nombre_usuario?: string
           comentario: string
           fecha?: string
+          aprobado?: boolean
         }
         Update: {
           id?: number
           nombre_usuario?: string
           comentario?: string
           fecha?: string
+          aprobado?: boolean
         }
       }
       galeria: {

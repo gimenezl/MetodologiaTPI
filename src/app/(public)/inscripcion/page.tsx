@@ -32,6 +32,14 @@ export default function InscripcionPage() {
   })
 
   const actividadesInteres = watch('actividades_interes') ?? []
+  const infoAdicional = watch('informacion_adicional') ?? ''
+
+  // Rango de fechas válidas para el aspirante (entre 2 y 20 años)
+  const hoy = new Date()
+  const maxFechaNac = new Date(hoy.getFullYear() - 2, hoy.getMonth(), hoy.getDate())
+    .toISOString().split('T')[0]
+  const minFechaNac = new Date(hoy.getFullYear() - 20, hoy.getMonth(), hoy.getDate())
+    .toISOString().split('T')[0]
 
   const stepFields: (keyof InscripcionFormData)[][] = [
     ['nombre', 'apellido', 'dni', 'fecha_nacimiento', 'nivel'],
@@ -181,8 +189,11 @@ export default function InscripcionPage() {
                     label="Fecha de nacimiento"
                     type="date"
                     required
+                    min={minFechaNac}
+                    max={maxFechaNac}
                     {...register('fecha_nacimiento')}
                     error={errors.fecha_nacimiento?.message}
+                    helperText="El aspirante debe tener entre 2 y 20 años"
                   />
                 </div>
                 <Select
@@ -303,12 +314,22 @@ export default function InscripcionPage() {
                   {...register('relacion_responsable')}
                   error={errors.relacion_responsable?.message}
                 />
-                <Textarea
-                  label="Información adicional (opcional)"
-                  placeholder="Necesidades especiales, condiciones médicas relevantes, etc."
-                  rows={3}
-                  {...register('informacion_adicional')}
-                />
+                <div>
+                  <Textarea
+                    label="Información adicional (opcional)"
+                    placeholder="Necesidades especiales, condiciones médicas relevantes, etc."
+                    rows={3}
+                    maxLength={500}
+                    {...register('informacion_adicional')}
+                    error={errors.informacion_adicional?.message}
+                  />
+                  <p className={cn(
+                    'text-xs mt-1 text-right',
+                    infoAdicional.length > 500 ? 'text-red-600 font-semibold' : 'text-neutral-400'
+                  )}>
+                    {infoAdicional.length}/500 caracteres
+                  </p>
+                </div>
 
                 {/* Términos */}
                 <label className="flex items-start gap-3 cursor-pointer group">

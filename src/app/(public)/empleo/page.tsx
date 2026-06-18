@@ -10,13 +10,26 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { crearPostulacion } from '@/services/postulaciones.service'
 
+const soloLetras = /^[a-zA-ZÀ-ÿ\s'-]+$/
+const telefonoRegex = /^[\d\s\-\+\(\)]{8,20}$/
+
 const empleoSchema = z.object({
-  nombre: z.string().min(2, 'Campo requerido'),
-  apellido: z.string().min(2, 'Campo requerido'),
-  email: z.string().email('Email inválido'),
-  telefono: z.string().min(8, 'Teléfono inválido'),
+  nombre: z.string()
+    .min(2, 'Mínimo 2 caracteres')
+    .max(100, 'Máximo 100 caracteres')
+    .regex(soloLetras, 'Solo se permiten letras y espacios'),
+  apellido: z.string()
+    .min(2, 'Mínimo 2 caracteres')
+    .max(100, 'Máximo 100 caracteres')
+    .regex(soloLetras, 'Solo se permiten letras y espacios'),
+  email: z.string().min(1, 'El email es requerido').email('Ingresá un email válido'),
+  telefono: z.string()
+    .min(1, 'El teléfono es requerido')
+    .regex(telefonoRegex, 'Ingresá un teléfono válido (ej: 0362 4123456)'),
   puesto: z.string().min(1, 'Seleccioná un puesto'),
-  mensaje: z.string().min(20, 'Mínimo 20 caracteres').max(800),
+  mensaje: z.string()
+    .min(20, 'Mínimo 20 caracteres')
+    .max(800, 'Máximo 800 caracteres'),
 })
 type EmpleoForm = z.infer<typeof empleoSchema>
 
@@ -44,8 +57,9 @@ const beneficios = [
 
 export default function EmpleoPage() {
   const [enviado, setEnviado] = useState(false)
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } =
+  const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } =
     useForm<EmpleoForm>({ resolver: zodResolver(empleoSchema), mode: 'onTouched' })
+  const mensajeLen = (watch('mensaje') ?? '').length
 
   const onSubmit = async (data: EmpleoForm) => {
     try {
@@ -134,10 +148,17 @@ export default function EmpleoPage() {
 
                 <div className="space-y-1.5">
                   <label className="block text-sm font-semibold text-neutral-700">Presentación y experiencia <span className="text-red-500 ml-0.5">*</span></label>
-                  <textarea rows={5} placeholder="Contanos sobre tu experiencia docente, formación y motivación..." {...register('mensaje')}
+                  <textarea rows={5} maxLength={800} placeholder="Contanos sobre tu experiencia docente, formación y motivación..." {...register('mensaje')}
                     className={`w-full px-3.5 py-2.5 rounded-lg border text-sm focus:outline-none focus:ring-2 transition-all resize-none
                       ${errors.mensaje ? 'border-red-300 focus:ring-red-500/20' : 'border-neutral-200 focus:ring-brand-500/20 focus:border-brand-400'}`} />
-                  {errors.mensaje && <p className="text-xs text-red-500">{errors.mensaje.message}</p>}
+                  <div className="flex items-center justify-between">
+                    {errors.mensaje
+                      ? <p className="text-xs text-red-500">{errors.mensaje.message}</p>
+                      : <span />}
+                    <p className={`text-xs ${mensajeLen < 20 || mensajeLen > 800 ? 'text-red-500' : 'text-neutral-400'}`}>
+                      {mensajeLen}/800
+                    </p>
+                  </div>
                 </div>
 
                 <Button type="submit" fullWidth loading={isSubmitting}>

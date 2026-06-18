@@ -89,15 +89,16 @@ export async function obtenerMenuSemana() {
 
 export async function crearOpinion(nombre: string, comentario: string) {
   const supabase = createClient()
-  const { data, error } = await (supabase
+  // Sin .select(): los testimonios nuevos quedan pendientes (aprobado=false) y
+  // la política RLS no permitiría leer de vuelta una fila no aprobada al usuario anónimo.
+  const { error } = await (supabase
     .from('opiniones')
-    .insert({ nombre_usuario: nombre || 'Anónimo', comentario } as any)
-    .select()
-    .single() as any)
+    .insert({ nombre_usuario: nombre || 'Anónimo', comentario } as any) as any)
   if (error) throw new Error(error.message)
-  return data
+  return true
 }
 
+// Público: por RLS el anónimo solo recibe las aprobadas; el director recibe todas.
 export async function obtenerOpiniones() {
   const supabase = createClient()
   const { data, error } = await (supabase
@@ -107,6 +108,17 @@ export async function obtenerOpiniones() {
     .limit(20) as any)
   if (error) throw new Error(error.message)
   return data
+}
+
+export async function aprobarOpinion(id: number) {
+  const supabase = createClient()
+  const { data, error } = await (supabase
+    .from('opiniones')
+    .update({ aprobado: true } as any)
+    .eq('id', id)
+    .select('id') as any)
+  if (error) throw new Error(error.message)
+  if (!data || data.length === 0) throw new Error('No se pudo aprobar el testimonio')
 }
 
 export async function eliminarOpinion(id: number) {
