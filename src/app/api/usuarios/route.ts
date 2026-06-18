@@ -60,9 +60,10 @@ export async function POST(request: Request) {
   const { data: rolRow } = await admin.from('roles').select('nombre').eq('id', rol_id).single()
   const rolElegido = (rolRow as { nombre: string } | null)?.nombre
 
-  if (rolElegido === 'PADRE' && (!hijos_ids || hijos_ids.length === 0)) {
+  // Un alumno SIEMPRE debe tener un tutor asignado
+  if (rolElegido === 'ESTUDIANTE' && !tutor_id) {
     return NextResponse.json(
-      { error: 'Una cuenta de padre/tutor debe tener al menos un hijo asignado.' },
+      { error: 'Un alumno debe tener un padre/tutor asignado. Creá primero al padre/tutor.' },
       { status: 400 }
     )
   }

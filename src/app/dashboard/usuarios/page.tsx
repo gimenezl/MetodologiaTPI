@@ -115,8 +115,8 @@ export default function UsuariosPage() {
 
   const onSubmit = async (data: UsuarioForm) => {
     // Validación de vínculos según el rol
-    if (rolNombreSel === 'PADRE' && hijosSeleccionados.length === 0) {
-      toast.error('Una cuenta de padre/tutor debe tener al menos un hijo asignado.')
+    if (rolNombreSel === 'ESTUDIANTE' && !tutorSeleccionado) {
+      toast.error('Un alumno debe tener un padre/tutor asignado.')
       return
     }
     try {
@@ -195,18 +195,18 @@ export default function UsuariosPage() {
             <Input label="Legajo (opcional)" placeholder="2027-0001" {...register('legajo_nro')} error={errors.legajo_nro?.message} />
           </div>
 
-          {/* PADRE: asignar hijos (obligatorio ≥1) */}
+          {/* PADRE: asignar hijos (opcional, se pueden completar al crear cada alumno) */}
           {rolNombreSel === 'PADRE' && (
             <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
               <p className="text-sm font-semibold text-brand-800 mb-1">
-                Hijos a cargo <span className="text-red-500">*</span>
+                Hijos a cargo <span className="text-neutral-400 font-normal">(opcional)</span>
               </p>
               <p className="text-xs text-brand-600 mb-3">
-                Una cuenta de padre/tutor debe tener al menos un hijo. Seleccioná uno o más alumnos ya creados.
+                Podés asignar hijos ahora, o dejarlo vacío y asignarlos después al crear cada alumno.
               </p>
               {estudiantes.length === 0 ? (
                 <p className="text-xs text-neutral-500">
-                  No hay alumnos creados todavía. Creá primero las cuentas de los alumnos.
+                  Todavía no hay alumnos creados. Vas a poder vincularlos al crear cada alumno (eligiendo a este padre/tutor).
                 </p>
               ) : (
                 <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
@@ -244,19 +244,32 @@ export default function UsuariosPage() {
             </div>
           )}
 
-          {/* ESTUDIANTE: asignar tutor (recomendado) */}
+          {/* ESTUDIANTE: asignar tutor (obligatorio) */}
           {rolNombreSel === 'ESTUDIANTE' && (
-            <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
-              <Select
-                label="Padre / tutor (recomendado)"
-                placeholder={padres.length ? 'Seleccionar padre/tutor...' : 'No hay padres/tutores creados aún'}
-                options={padres.map((p) => ({ value: p.id, label: `${p.apellido}, ${p.nombre}` }))}
-                value={tutorSeleccionado}
-                onChange={(e) => setTutorSeleccionado(e.target.value)}
-              />
-              <p className="text-xs text-neutral-500 mt-2">
-                Si todavía no creaste al padre/tutor, podés dejarlo vacío y asignarlo al crear esa cuenta.
-              </p>
+            <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
+              {padres.length === 0 ? (
+                <div className="flex items-start gap-2 text-sm text-amber-700">
+                  <Warning size={16} weight="fill" className="mt-0.5 shrink-0" />
+                  <p>
+                    Todavía no hay padres/tutores creados. Para crear un alumno primero tenés que
+                    crear al menos una cuenta de <strong>padre/tutor</strong>.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <Select
+                    label="Padre / tutor"
+                    required
+                    placeholder="Seleccionar padre/tutor..."
+                    options={padres.map((p) => ({ value: p.id, label: `${p.apellido}, ${p.nombre}` }))}
+                    value={tutorSeleccionado}
+                    onChange={(e) => setTutorSeleccionado(e.target.value)}
+                  />
+                  <p className="text-xs text-brand-600 mt-2">
+                    Todo alumno debe tener un padre/tutor a cargo.
+                  </p>
+                </>
+              )}
             </div>
           )}
 
