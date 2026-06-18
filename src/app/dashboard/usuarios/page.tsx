@@ -5,10 +5,13 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { UserPlus, Users, Warning } from '@phosphor-icons/react'
+import { UserPlus, Users, Warning, PencilSimple, X } from '@phosphor-icons/react'
 import { obtenerRoles } from '@/services/roles.service'
-import { obtenerPerfiles } from '@/services/perfiles.service'
-import { crearUsuario, obtenerRelacionesFamiliares, type RelacionFamiliar } from '@/services/usuarios.service'
+import { obtenerPerfiles, actualizarPerfil } from '@/services/perfiles.service'
+import {
+  crearUsuario, obtenerRelacionesFamiliares, setHijosDePadre, setTutorDeHijo,
+  type RelacionFamiliar,
+} from '@/services/usuarios.service'
 import { Input, Select } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { Badge, Skeleton } from '@/components/ui/Badge'
@@ -37,7 +40,10 @@ type PerfilRow = {
   apellido: string
   dni: string
   legajo_nro: string | null
+  telefono: string | null
+  direccion: string | null
   user_id: string | null
+  rol_id: number | null
   rol: { nombre: string } | null
 }
 
@@ -57,6 +63,14 @@ export default function UsuariosPage() {
   const [loading, setLoading] = useState(true)
   const [hijosSeleccionados, setHijosSeleccionados] = useState<string[]>([])
   const [tutorSeleccionado, setTutorSeleccionado] = useState<string>('')
+
+  // --- Estado del modal de edición ---
+  const [editando, setEditando] = useState<PerfilRow | null>(null)
+  const [editForm, setEditForm] = useState({ nombre: '', apellido: '', dni: '', telefono: '', direccion: '', legajo_nro: '' })
+  const [editRolId, setEditRolId] = useState<string>('')
+  const [editHijos, setEditHijos] = useState<string[]>([])
+  const [editTutor, setEditTutor] = useState<string>('')
+  const [guardando, setGuardando] = useState(false)
 
   const {
     register, handleSubmit, reset, watch,
@@ -95,7 +109,6 @@ export default function UsuariosPage() {
     return m
   }, [perfiles])
 
-  // Mapas de vínculos para mostrar en el listado
   const hijosDeUnPadre = useMemo(() => {
     const m: Record<string, string[]> = {}
     relaciones.forEach((rel) => { (m[rel.padre_id] ??= []).push(rel.hijo_id) })
@@ -107,14 +120,17 @@ export default function UsuariosPage() {
     return m
   }, [relaciones])
 
+  // Solo alumnos SIN tutor están disponibles para asignar a un padre nuevo
+  const estudiantesSinTutor = useMemo(
+    () => estudiantes.filter((e) => (tutoresDeUnHijo[e.id]?.length ?? 0) === 0),
+    [estudiantes, tutoresDeUnHijo]
+  )
+
   const toggleHijo = (id: string) => {
-    setHijosSeleccionados((prev) =>
-      prev.includes(id) ? prev.filter((h) => h !== id) : [...prev, id]
-    )
+    setHijosSeleccionados((prev) => prev.includes(id) ? prev.filter((h) => h !== id) : [...prev, id])
   }
 
   const onSubmit = async (data: UsuarioForm) => {
-    // Validación de vínculos según el rol
     if (rolNombreSel === 'ESTUDIANTE' && !tutorSeleccionado) {
       toast.error('Un alumno debe tener un padre/tutor asignado.')
       return
@@ -144,6 +160,67 @@ export default function UsuariosPage() {
     }
   }
 
+  // --- Edición ---
+  const abrirEdicion = (p: PerfilRow) => {
+    setEditando(p)
+    setEditForm({
+      nombre: p.nombre, apellido: p.apellido, dni: p.dni,
+      telefono: p.telefono ?? '', direccion: p.direccion ?? '', legajo_nro: p.legajo_nro ?? '',
+    })
+    setEditRolId(p.rol_id ? String(p.rol_id) : '')
+    setEditHijos(hijosDeUnPadre[p.id] ?? [])
+    setEditTutor(tutoresDeUnHijo[p.id]?.[0] ?? '')
+  }
+
+  const editRolNombre = roles.find((r) => String(r.id) === editRolId)?.nombre
+
+  const toggleEditHijo = (id: string) => {
+    setEditHijos((prev) => prev.includes(id) ? prev.filter((h) => h !== id) : [...prev, id])
+  }
+
+  const guardarEdicion = async () => {
+    if (!editando) return
+    if (!soloLetras.test(editForm.nombre) || editForm.nombre.trim().length < 2) { toast.error('Nombre inválido'); return }
+    if (!soloLetras.test(editForm.apellido) || editForm.apellido.trim().length < 2) { toast.error('Apellido inválido'); return }
+    if (!/^\d{7,8}$/.test(editForm.dni)) { toast.error('DNI de 7 u 8 dígitos'); return }
+    if (!editRolId) { toast.error('Seleccioná un rol'); return }
+    if (editRolNombre === 'ESTUDIANTE' && !editTutor) { toast.error('Un alumno debe tener un padre/tutor asignado.'); return }
+
+    setGuardando(true)
+    try {
+      await actualizarPerfil(editando.id, {
+        nombre: editForm.nombre.trim(),
+        apellido: editForm.apellido.trim(),
+        dni: editForm.dni.trim(),
+        telefono: editForm.telefono.trim() || null,
+        direccion: editForm.direccion.trim() || null,
+        legajo_nro: editForm.legajo_nro.trim() || null,
+        rol_id: Number(editRolId),
+      })
+
+      // Sincronizar vínculos según el rol resultante
+      if (editRolNombre === 'PADRE') {
+        await setHijosDePadre(editando.id, editHijos)
+        await setTutorDeHijo(editando.id, null) // por si antes era hijo
+      } else if (editRolNombre === 'ESTUDIANTE') {
+        await setTutorDeHijo(editando.id, editTutor)
+        await setHijosDePadre(editando.id, []) // por si antes era padre
+      } else {
+        await setHijosDePadre(editando.id, [])
+        await setTutorDeHijo(editando.id, null)
+      }
+
+      toast.success('Usuario actualizado')
+      setEditando(null)
+      await cargar()
+    } catch (error) {
+      const m = error instanceof Error ? error.message : ''
+      toast.error(m.includes('perfiles_dni') ? 'Ya existe una persona con ese DNI.' : (m || 'No se pudo actualizar'))
+    } finally {
+      setGuardando(false)
+    }
+  }
+
   if (rol && rol !== 'DIRECTOR') {
     return (
       <div className="max-w-6xl mx-auto">
@@ -154,12 +231,17 @@ export default function UsuariosPage() {
     )
   }
 
+  // Alumnos elegibles como hijos al editar un padre: los que ya son sus hijos + los que no tienen tutor
+  const estudiantesEditables = editando
+    ? estudiantes.filter((e) => editHijos.includes(e.id) || (tutoresDeUnHijo[e.id]?.length ?? 0) === 0)
+    : []
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">Gestión de usuarios</h1>
         <p className="text-neutral-500 text-sm mt-0.5">
-          Creá cuentas de acceso (docentes, padres, alumnos, personal) y asignales su rol.
+          Creá cuentas de acceso (docentes, padres, alumnos, personal), asignales su rol y editá sus vínculos.
         </p>
       </div>
 
@@ -195,51 +277,45 @@ export default function UsuariosPage() {
             <Input label="Legajo (opcional)" placeholder="2027-0001" {...register('legajo_nro')} error={errors.legajo_nro?.message} />
           </div>
 
-          {/* PADRE: asignar hijos (opcional, se pueden completar al crear cada alumno) */}
+          {/* PADRE: asignar hijos (opcional). Solo alumnos sin tutor. */}
           {rolNombreSel === 'PADRE' && (
             <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
               <p className="text-sm font-semibold text-brand-800 mb-1">
                 Hijos a cargo <span className="text-neutral-400 font-normal">(opcional)</span>
               </p>
               <p className="text-xs text-brand-600 mb-3">
-                Podés asignar hijos ahora, o dejarlo vacío y asignarlos después al crear cada alumno.
+                Solo aparecen los alumnos que todavía no tienen tutor. Podés dejarlo vacío y asignarlos al crear cada alumno.
               </p>
-              {estudiantes.length === 0 ? (
+              {estudiantesSinTutor.length === 0 ? (
                 <p className="text-xs text-neutral-500">
-                  Todavía no hay alumnos creados. Vas a poder vincularlos al crear cada alumno (eligiendo a este padre/tutor).
+                  No hay alumnos sin tutor disponibles.
                 </p>
               ) : (
                 <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
-                  {estudiantes.map((e) => {
-                    const yaTieneTutor = (tutoresDeUnHijo[e.id]?.length ?? 0) > 0
-                    return (
-                      <label
-                        key={e.id}
-                        className={cn(
-                          'flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors bg-white',
-                          hijosSeleccionados.includes(e.id) ? 'border-brand-400 ring-1 ring-brand-300' : 'border-neutral-200 hover:border-neutral-300'
-                        )}
-                      >
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 rounded border-neutral-300 accent-brand-500"
-                          checked={hijosSeleccionados.includes(e.id)}
-                          onChange={() => toggleHijo(e.id)}
-                        />
-                        <span className="text-sm text-neutral-800 flex-1">
-                          {e.apellido}, {e.nombre}
-                          {e.legajo_nro && <span className="text-neutral-400 font-mono text-xs ml-1.5">Leg. {e.legajo_nro}</span>}
-                        </span>
-                        {yaTieneTutor && <span className="text-[11px] text-neutral-400">ya tiene tutor</span>}
-                      </label>
-                    )
-                  })}
+                  {estudiantesSinTutor.map((e) => (
+                    <label
+                      key={e.id}
+                      className={cn(
+                        'flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors bg-white',
+                        hijosSeleccionados.includes(e.id) ? 'border-brand-400 ring-1 ring-brand-300' : 'border-neutral-200 hover:border-neutral-300'
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 rounded border-neutral-300 accent-brand-500"
+                        checked={hijosSeleccionados.includes(e.id)}
+                        onChange={() => toggleHijo(e.id)}
+                      />
+                      <span className="text-sm text-neutral-800 flex-1">
+                        {e.apellido}, {e.nombre}
+                        {e.legajo_nro && <span className="text-neutral-400 font-mono text-xs ml-1.5">Leg. {e.legajo_nro}</span>}
+                      </span>
+                    </label>
+                  ))}
                 </div>
               )}
               {hijosSeleccionados.length > 0 && (
-                <p className="text-xs text-brand-700 font-medium mt-2">
-                  {hijosSeleccionados.length} hijo(s) seleccionado(s)
-                </p>
+                <p className="text-xs text-brand-700 font-medium mt-2">{hijosSeleccionados.length} hijo(s) seleccionado(s)</p>
               )}
             </div>
           )}
@@ -265,9 +341,7 @@ export default function UsuariosPage() {
                     value={tutorSeleccionado}
                     onChange={(e) => setTutorSeleccionado(e.target.value)}
                   />
-                  <p className="text-xs text-brand-600 mt-2">
-                    Todo alumno debe tener un padre/tutor a cargo.
-                  </p>
+                  <p className="text-xs text-brand-600 mt-2">Todo alumno debe tener un padre/tutor a cargo.</p>
                 </>
               )}
             </div>
@@ -294,8 +368,8 @@ export default function UsuariosPage() {
           <table className="w-full text-sm" aria-label="Usuarios registrados">
             <thead>
               <tr className="bg-neutral-50 border-b border-neutral-100">
-                {['Nombre', 'DNI', 'Rol', 'Vínculo familiar', 'Acceso'].map((col) => (
-                  <th key={col} className="text-left px-5 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
+                {['Nombre', 'DNI', 'Rol', 'Vínculo familiar', 'Acceso', ''].map((col, i) => (
+                  <th key={i} className="text-left px-5 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
                     {col}
                   </th>
                 ))}
@@ -305,7 +379,7 @@ export default function UsuariosPage() {
               {loading
                 ? Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 5 }).map((_, j) => (
+                      {Array.from({ length: 6 }).map((_, j) => (
                         <td key={j} className="px-5 py-3"><Skeleton className="h-4 w-full" /></td>
                       ))}
                     </tr>
@@ -313,7 +387,7 @@ export default function UsuariosPage() {
                 : perfiles.length === 0
                   ? (
                     <tr>
-                      <td colSpan={5} className="px-5 py-12 text-center text-neutral-400 text-sm">
+                      <td colSpan={6} className="px-5 py-12 text-center text-neutral-400 text-sm">
                         No hay usuarios registrados
                       </td>
                     </tr>
@@ -328,19 +402,17 @@ export default function UsuariosPage() {
                         <td className="px-5 py-3 font-medium text-neutral-900">{p.apellido}, {p.nombre}</td>
                         <td className="px-5 py-3 text-neutral-500 font-mono text-xs">{p.dni}</td>
                         <td className="px-5 py-3">
-                          <Badge variant={rolBadge[p.rol?.nombre ?? ''] ?? 'default'}>
-                            {p.rol?.nombre ?? '—'}
-                          </Badge>
+                          <Badge variant={rolBadge[p.rol?.nombre ?? ''] ?? 'default'}>{p.rol?.nombre ?? '—'}</Badge>
                         </td>
                         <td className="px-5 py-3 text-xs">
                           {esPadre && (
                             hijos.length > 0
-                              ? <span className="text-neutral-600">{hijos.map((h) => `${h.nombre}`).join(', ')}</span>
+                              ? <span className="text-neutral-600">{hijos.map((h) => h.nombre).join(', ')}</span>
                               : <span className="inline-flex items-center gap-1 text-red-500"><Warning size={12} weight="fill" />Sin hijos</span>
                           )}
                           {esEstudiante && (
                             tutores.length > 0
-                              ? <span className="text-neutral-600">Tutor: {tutores.map((t) => `${t.nombre}`).join(', ')}</span>
+                              ? <span className="text-neutral-600">Tutor: {tutores.map((t) => t.nombre).join(', ')}</span>
                               : <span className="inline-flex items-center gap-1 text-amber-600"><Warning size={12} weight="fill" />Sin tutor</span>
                           )}
                           {!esPadre && !esEstudiante && <span className="text-neutral-300">—</span>}
@@ -350,6 +422,15 @@ export default function UsuariosPage() {
                             ? <span className="text-xs text-green-600 font-semibold">Con acceso</span>
                             : <span className="text-xs text-neutral-400">Sin acceso</span>}
                         </td>
+                        <td className="px-5 py-3 text-right">
+                          <button
+                            onClick={() => abrirEdicion(p)}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-800 hover:bg-brand-50 px-2.5 py-1.5 rounded-lg transition-colors"
+                          >
+                            <PencilSimple size={14} />
+                            Editar
+                          </button>
+                        </td>
                       </tr>
                     )
                   })
@@ -358,6 +439,85 @@ export default function UsuariosPage() {
           </table>
         </div>
       </div>
+
+      {/* Modal de edición */}
+      {editando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8 overflow-y-auto">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setEditando(null)} aria-hidden="true" />
+          <div className="relative w-full max-w-lg bg-white rounded-2xl border border-neutral-200 shadow-xl my-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+              <h3 className="font-bold text-neutral-900">Editar usuario</h3>
+              <button onClick={() => setEditando(null)} className="text-neutral-400 hover:text-neutral-600 p-1 rounded-lg hover:bg-neutral-100">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Input label="Nombre" value={editForm.nombre} onChange={(e) => setEditForm((f) => ({ ...f, nombre: e.target.value }))} />
+                <Input label="Apellido" value={editForm.apellido} onChange={(e) => setEditForm((f) => ({ ...f, apellido: e.target.value }))} />
+              </div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Input label="DNI" maxLength={8} value={editForm.dni} onChange={(e) => setEditForm((f) => ({ ...f, dni: e.target.value }))} />
+                <Select
+                  label="Rol"
+                  placeholder="Seleccionar rol..."
+                  options={roles.map((r) => ({ value: r.id, label: r.nombre }))}
+                  value={editRolId}
+                  onChange={(e) => setEditRolId(e.target.value)}
+                />
+              </div>
+              <div className="grid sm:grid-cols-3 gap-4">
+                <Input label="Teléfono" value={editForm.telefono} onChange={(e) => setEditForm((f) => ({ ...f, telefono: e.target.value }))} />
+                <Input label="Dirección" value={editForm.direccion} onChange={(e) => setEditForm((f) => ({ ...f, direccion: e.target.value }))} />
+                <Input label="Legajo" value={editForm.legajo_nro} onChange={(e) => setEditForm((f) => ({ ...f, legajo_nro: e.target.value }))} />
+              </div>
+
+              {/* Vínculos según el rol elegido */}
+              {editRolNombre === 'PADRE' && (
+                <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
+                  <p className="text-sm font-semibold text-brand-800 mb-2">Hijos a cargo</p>
+                  {estudiantesEditables.length === 0 ? (
+                    <p className="text-xs text-neutral-500">No hay alumnos disponibles para asignar.</p>
+                  ) : (
+                    <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
+                      {estudiantesEditables.map((e) => (
+                        <label key={e.id} className={cn(
+                          'flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors bg-white',
+                          editHijos.includes(e.id) ? 'border-brand-400 ring-1 ring-brand-300' : 'border-neutral-200 hover:border-neutral-300'
+                        )}>
+                          <input type="checkbox" className="w-4 h-4 rounded border-neutral-300 accent-brand-500"
+                            checked={editHijos.includes(e.id)} onChange={() => toggleEditHijo(e.id)} />
+                          <span className="text-sm text-neutral-800 flex-1">{e.apellido}, {e.nombre}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {editRolNombre === 'ESTUDIANTE' && (
+                <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
+                  <Select
+                    label="Padre / tutor"
+                    required
+                    placeholder={padres.length ? 'Seleccionar padre/tutor...' : 'No hay padres/tutores creados'}
+                    options={padres.map((p) => ({ value: p.id, label: `${p.apellido}, ${p.nombre}` }))}
+                    value={editTutor}
+                    onChange={(e) => setEditTutor(e.target.value)}
+                  />
+                  <p className="text-xs text-brand-600 mt-2">Todo alumno debe tener un padre/tutor a cargo.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-100">
+              <Button variant="ghost" onClick={() => setEditando(null)}>Cancelar</Button>
+              <Button onClick={guardarEdicion} loading={guardando}>Guardar cambios</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -38,3 +38,27 @@ export async function obtenerRelacionesFamiliares(): Promise<RelacionFamiliar[]>
   if (error) throw new Error(error.message)
   return data ?? []
 }
+
+// Reemplaza el conjunto de hijos de un padre/tutor
+export async function setHijosDePadre(padreId: string, hijosIds: string[]) {
+  const supabase = createClient()
+  await supabase.from('padres_hijos').delete().eq('padre_id', padreId)
+  if (hijosIds.length > 0) {
+    const { error } = await supabase
+      .from('padres_hijos')
+      .insert(hijosIds.map((hijoId) => ({ padre_id: padreId, hijo_id: hijoId })))
+    if (error) throw new Error(error.message)
+  }
+}
+
+// Asigna (o quita) el tutor de un alumno
+export async function setTutorDeHijo(hijoId: string, tutorId: string | null) {
+  const supabase = createClient()
+  await supabase.from('padres_hijos').delete().eq('hijo_id', hijoId)
+  if (tutorId) {
+    const { error } = await supabase
+      .from('padres_hijos')
+      .insert({ padre_id: tutorId, hijo_id: hijoId })
+    if (error) throw new Error(error.message)
+  }
+}
