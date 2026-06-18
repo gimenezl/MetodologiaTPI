@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import {
   House, Users, CalendarCheck, Pulse, FileText,
-  SignOut, List, X, Briefcase, ChatCenteredText, UserPlus
+  SignOut, List, X, Briefcase, ChatCenteredText, UserPlus, Lock
 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
@@ -28,6 +28,17 @@ const navItems: NavItem[] = [
   { href: '/dashboard/postulaciones', label: 'Postulaciones', icon: Briefcase, roles: ['DIRECTOR'] },
   { href: '/dashboard/testimonios', label: 'Testimonios', icon: ChatCenteredText, roles: ['DIRECTOR'] },
 ]
+
+// Determina si el rol actual puede ver la ruta del dashboard.
+// Si la ruta está restringida y el rol no corresponde, la página ni se monta.
+function rutaPermitida(pathname: string, rol: string | null): boolean {
+  if (pathname === '/dashboard') return true // el índice es para todos los roles
+  const match = navItems
+    .filter((it) => it.href !== '/dashboard' && (pathname === it.href || pathname.startsWith(it.href + '/')))
+    .sort((a, b) => b.href.length - a.href.length)[0]
+  if (!match) return true // ruta sin restricción conocida
+  return rol ? match.roles.includes(rol) : false
+}
 
 function SidebarContent({ onClose, onSignOut }: { onClose?: () => void; onSignOut: () => void }) {
   const pathname = usePathname()
@@ -103,10 +114,12 @@ function SidebarContent({ onClose, onSignOut }: { onClose?: () => void; onSignOu
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { perfil, isLoading, user, signOut } = useAuth()
+  const { perfil, rol, isLoading, user, signOut } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const [headerHidden, setHeaderHidden] = useState(false)
+
+  const permitido = rutaPermitida(pathname, rol)
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -196,7 +209,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         <main className="flex-1 p-4 lg:p-8">
-          {children}
+          {permitido ? children : (
+            <div className="max-w-md mx-auto mt-12 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4">
+                <Lock size={32} weight="fill" className="text-red-500" />
+              </div>
+              <h1 className="text-xl font-extrabold text-neutral-900 tracking-tight">Acceso restringido</h1>
+              <p className="text-neutral-500 text-sm mt-2">
+                No tenés permisos para ver esta sección del panel.
+              </p>
+              <Link href="/dashboard" className="inline-block mt-6">
+                <Button>Volver al panel</Button>
+              </Link>
+            </div>
+          )}
         </main>
       </div>
     </div>

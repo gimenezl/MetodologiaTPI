@@ -153,7 +153,20 @@ export default function InscripcionPage() {
 
         {/* Form card */}
         <div className="bg-white rounded-2xl border border-neutral-200 p-6 md:p-8 shadow-sm">
-          <form onSubmit={handleSubmit(onSubmit)} noValidate>
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            noValidate
+            onKeyDown={(e) => {
+              // Evitar que Enter envíe el formulario entero (y marque pasos no completados).
+              // En pasos intermedios avanza al siguiente; en textareas deja el salto de línea normal.
+              if (e.key !== 'Enter') return
+              if ((e.target as HTMLElement).tagName === 'TEXTAREA') return
+              if (step < STEPS.length - 1) {
+                e.preventDefault()
+                handleNext()
+              }
+            }}
+          >
 
             {/* STEP 1 */}
             {step === 0 && (
