@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarCheck, Users, Pulse, FileText, ArrowRight, Briefcase, ChatCenteredText } from '@phosphor-icons/react'
+import { CalendarCheck, Users, Pulse, FileText, ArrowRight, Briefcase, ChatCenteredText, UserPlus } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 
 const quickLinks = [
@@ -12,6 +12,14 @@ const quickLinks = [
     icon: CalendarCheck,
     color: 'bg-brand-50 text-brand-600',
     roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE'],
+  },
+  {
+    href: '/dashboard/usuarios',
+    label: 'Usuarios',
+    desc: 'Crear cuentas y asignar roles',
+    icon: UserPlus,
+    color: 'bg-brand-50 text-brand-600',
+    roles: ['DIRECTOR'],
   },
   {
     href: '/dashboard/legajos',
@@ -92,12 +100,6 @@ export default function DashboardPage() {
         })}
       </div>
 
-      <div className="p-5 bg-brand-50 border border-brand-200 rounded-2xl">
-        <p className="text-brand-700 text-sm font-semibold mb-1">Sistema en preparación</p>
-        <p className="text-brand-600 text-sm">
-          El sistema inicia operaciones en el ciclo lectivo 2027. Podés comenzar a cargar datos de prueba desde ahora.
-        </p>
-      </div>
     </div>
   )
 }

@@ -270,6 +270,23 @@ export type Database = {
           fecha_postulacion?: string
         }
       }
+      padres_hijos: {
+        Row: {
+          padre_id: string
+          hijo_id: string
+          fecha_creacion: string
+        }
+        Insert: {
+          padre_id: string
+          hijo_id: string
+          fecha_creacion?: string
+        }
+        Update: {
+          padre_id?: string
+          hijo_id?: string
+          fecha_creacion?: string
+        }
+      }
     }
     Functions: {
       calcular_porcentaje_asistencia: {

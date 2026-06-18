@@ -1,18 +1,19 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { UserPlus, Users } from '@phosphor-icons/react'
+import { UserPlus, Users, Warning } from '@phosphor-icons/react'
 import { obtenerRoles } from '@/services/roles.service'
 import { obtenerPerfiles } from '@/services/perfiles.service'
-import { crearUsuario } from '@/services/usuarios.service'
+import { crearUsuario, obtenerRelacionesFamiliares, type RelacionFamiliar } from '@/services/usuarios.service'
 import { Input, Select } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { Badge, Skeleton } from '@/components/ui/Badge'
 import { useAuth } from '@/context/AuthContext'
+import { cn } from '@/lib/utils'
 
 const soloLetras = /^[a-zA-ZÀ-ÿ\s'-]+$/
 
@@ -52,19 +53,28 @@ export default function UsuariosPage() {
   const { rol } = useAuth()
   const [roles, setRoles] = useState<Rol[]>([])
   const [perfiles, setPerfiles] = useState<PerfilRow[]>([])
+  const [relaciones, setRelaciones] = useState<RelacionFamiliar[]>([])
   const [loading, setLoading] = useState(true)
+  const [hijosSeleccionados, setHijosSeleccionados] = useState<string[]>([])
+  const [tutorSeleccionado, setTutorSeleccionado] = useState<string>('')
 
   const {
-    register, handleSubmit, reset,
+    register, handleSubmit, reset, watch,
     formState: { errors, isSubmitting },
   } = useForm<UsuarioForm>({ resolver: zodResolver(usuarioSchema), mode: 'onTouched' })
+
+  const rolIdSel = watch('rol_id')
+  const rolNombreSel = roles.find((r) => String(r.id) === rolIdSel)?.nombre
 
   const cargar = useCallback(async () => {
     setLoading(true)
     try {
-      const [rolesData, perfilesData] = await Promise.all([obtenerRoles(), obtenerPerfiles()])
+      const [rolesData, perfilesData, relacionesData] = await Promise.all([
+        obtenerRoles(), obtenerPerfiles(), obtenerRelacionesFamiliares(),
+      ])
       setRoles((rolesData ?? []) as Rol[])
       setPerfiles((perfilesData ?? []) as PerfilRow[])
+      setRelaciones(relacionesData)
     } catch {
       toast.error('Error al cargar los datos')
     } finally {
@@ -77,7 +87,38 @@ export default function UsuariosPage() {
     cargar()
   }, [rol, cargar])
 
+  const estudiantes = useMemo(() => perfiles.filter((p) => p.rol?.nombre === 'ESTUDIANTE'), [perfiles])
+  const padres = useMemo(() => perfiles.filter((p) => p.rol?.nombre === 'PADRE'), [perfiles])
+  const perfilesById = useMemo(() => {
+    const m: Record<string, PerfilRow> = {}
+    perfiles.forEach((p) => { m[p.id] = p })
+    return m
+  }, [perfiles])
+
+  // Mapas de vínculos para mostrar en el listado
+  const hijosDeUnPadre = useMemo(() => {
+    const m: Record<string, string[]> = {}
+    relaciones.forEach((rel) => { (m[rel.padre_id] ??= []).push(rel.hijo_id) })
+    return m
+  }, [relaciones])
+  const tutoresDeUnHijo = useMemo(() => {
+    const m: Record<string, string[]> = {}
+    relaciones.forEach((rel) => { (m[rel.hijo_id] ??= []).push(rel.padre_id) })
+    return m
+  }, [relaciones])
+
+  const toggleHijo = (id: string) => {
+    setHijosSeleccionados((prev) =>
+      prev.includes(id) ? prev.filter((h) => h !== id) : [...prev, id]
+    )
+  }
+
   const onSubmit = async (data: UsuarioForm) => {
+    // Validación de vínculos según el rol
+    if (rolNombreSel === 'PADRE' && hijosSeleccionados.length === 0) {
+      toast.error('Una cuenta de padre/tutor debe tener al menos un hijo asignado.')
+      return
+    }
     try {
       await crearUsuario({
         email: data.email,
@@ -89,9 +130,13 @@ export default function UsuariosPage() {
         telefono: data.telefono,
         direccion: data.direccion,
         legajo_nro: data.legajo_nro,
+        hijos_ids: rolNombreSel === 'PADRE' ? hijosSeleccionados : undefined,
+        tutor_id: rolNombreSel === 'ESTUDIANTE' ? (tutorSeleccionado || undefined) : undefined,
       })
       toast.success(`Usuario creado: ${data.email}`)
       reset()
+      setHijosSeleccionados([])
+      setTutorSeleccionado('')
       await cargar()
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No se pudo crear el usuario'
@@ -149,6 +194,72 @@ export default function UsuariosPage() {
             <Input label="Dirección (opcional)" placeholder="Av. Belgrano 1234" {...register('direccion')} error={errors.direccion?.message} />
             <Input label="Legajo (opcional)" placeholder="2027-0001" {...register('legajo_nro')} error={errors.legajo_nro?.message} />
           </div>
+
+          {/* PADRE: asignar hijos (obligatorio ≥1) */}
+          {rolNombreSel === 'PADRE' && (
+            <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
+              <p className="text-sm font-semibold text-brand-800 mb-1">
+                Hijos a cargo <span className="text-red-500">*</span>
+              </p>
+              <p className="text-xs text-brand-600 mb-3">
+                Una cuenta de padre/tutor debe tener al menos un hijo. Seleccioná uno o más alumnos ya creados.
+              </p>
+              {estudiantes.length === 0 ? (
+                <p className="text-xs text-neutral-500">
+                  No hay alumnos creados todavía. Creá primero las cuentas de los alumnos.
+                </p>
+              ) : (
+                <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                  {estudiantes.map((e) => {
+                    const yaTieneTutor = (tutoresDeUnHijo[e.id]?.length ?? 0) > 0
+                    return (
+                      <label
+                        key={e.id}
+                        className={cn(
+                          'flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors bg-white',
+                          hijosSeleccionados.includes(e.id) ? 'border-brand-400 ring-1 ring-brand-300' : 'border-neutral-200 hover:border-neutral-300'
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded border-neutral-300 accent-brand-500"
+                          checked={hijosSeleccionados.includes(e.id)}
+                          onChange={() => toggleHijo(e.id)}
+                        />
+                        <span className="text-sm text-neutral-800 flex-1">
+                          {e.apellido}, {e.nombre}
+                          {e.legajo_nro && <span className="text-neutral-400 font-mono text-xs ml-1.5">Leg. {e.legajo_nro}</span>}
+                        </span>
+                        {yaTieneTutor && <span className="text-[11px] text-neutral-400">ya tiene tutor</span>}
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
+              {hijosSeleccionados.length > 0 && (
+                <p className="text-xs text-brand-700 font-medium mt-2">
+                  {hijosSeleccionados.length} hijo(s) seleccionado(s)
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ESTUDIANTE: asignar tutor (recomendado) */}
+          {rolNombreSel === 'ESTUDIANTE' && (
+            <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
+              <Select
+                label="Padre / tutor (recomendado)"
+                placeholder={padres.length ? 'Seleccionar padre/tutor...' : 'No hay padres/tutores creados aún'}
+                options={padres.map((p) => ({ value: p.id, label: `${p.apellido}, ${p.nombre}` }))}
+                value={tutorSeleccionado}
+                onChange={(e) => setTutorSeleccionado(e.target.value)}
+              />
+              <p className="text-xs text-neutral-500 mt-2">
+                Si todavía no creaste al padre/tutor, podés dejarlo vacío y asignarlo al crear esa cuenta.
+              </p>
+            </div>
+          )}
+
           <div className="flex justify-end pt-2">
             <Button type="submit" loading={isSubmitting}>
               <UserPlus size={16} weight="fill" />
@@ -170,7 +281,7 @@ export default function UsuariosPage() {
           <table className="w-full text-sm" aria-label="Usuarios registrados">
             <thead>
               <tr className="bg-neutral-50 border-b border-neutral-100">
-                {['Nombre', 'DNI', 'Rol', 'Legajo', 'Acceso'].map((col) => (
+                {['Nombre', 'DNI', 'Rol', 'Vínculo familiar', 'Acceso'].map((col) => (
                   <th key={col} className="text-left px-5 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
                     {col}
                   </th>
@@ -194,23 +305,41 @@ export default function UsuariosPage() {
                       </td>
                     </tr>
                   )
-                  : perfiles.map((p) => (
-                    <tr key={p.id} className="hover:bg-neutral-50 transition-colors">
-                      <td className="px-5 py-3 font-medium text-neutral-900">{p.apellido}, {p.nombre}</td>
-                      <td className="px-5 py-3 text-neutral-500 font-mono text-xs">{p.dni}</td>
-                      <td className="px-5 py-3">
-                        <Badge variant={rolBadge[p.rol?.nombre ?? ''] ?? 'default'}>
-                          {p.rol?.nombre ?? '—'}
-                        </Badge>
-                      </td>
-                      <td className="px-5 py-3 text-neutral-500 font-mono text-xs">{p.legajo_nro ?? '—'}</td>
-                      <td className="px-5 py-3">
-                        {p.user_id
-                          ? <span className="text-xs text-green-600 font-semibold">Con acceso</span>
-                          : <span className="text-xs text-neutral-400">Sin acceso</span>}
-                      </td>
-                    </tr>
-                  ))
+                  : perfiles.map((p) => {
+                    const esEstudiante = p.rol?.nombre === 'ESTUDIANTE'
+                    const esPadre = p.rol?.nombre === 'PADRE'
+                    const tutores = (tutoresDeUnHijo[p.id] ?? []).map((id) => perfilesById[id]).filter(Boolean)
+                    const hijos = (hijosDeUnPadre[p.id] ?? []).map((id) => perfilesById[id]).filter(Boolean)
+                    return (
+                      <tr key={p.id} className="hover:bg-neutral-50 transition-colors">
+                        <td className="px-5 py-3 font-medium text-neutral-900">{p.apellido}, {p.nombre}</td>
+                        <td className="px-5 py-3 text-neutral-500 font-mono text-xs">{p.dni}</td>
+                        <td className="px-5 py-3">
+                          <Badge variant={rolBadge[p.rol?.nombre ?? ''] ?? 'default'}>
+                            {p.rol?.nombre ?? '—'}
+                          </Badge>
+                        </td>
+                        <td className="px-5 py-3 text-xs">
+                          {esPadre && (
+                            hijos.length > 0
+                              ? <span className="text-neutral-600">{hijos.map((h) => `${h.nombre}`).join(', ')}</span>
+                              : <span className="inline-flex items-center gap-1 text-red-500"><Warning size={12} weight="fill" />Sin hijos</span>
+                          )}
+                          {esEstudiante && (
+                            tutores.length > 0
+                              ? <span className="text-neutral-600">Tutor: {tutores.map((t) => `${t.nombre}`).join(', ')}</span>
+                              : <span className="inline-flex items-center gap-1 text-amber-600"><Warning size={12} weight="fill" />Sin tutor</span>
+                          )}
+                          {!esPadre && !esEstudiante && <span className="text-neutral-300">—</span>}
+                        </td>
+                        <td className="px-5 py-3">
+                          {p.user_id
+                            ? <span className="text-xs text-green-600 font-semibold">Con acceso</span>
+                            : <span className="text-xs text-neutral-400">Sin acceso</span>}
+                        </td>
+                      </tr>
+                    )
+                  })
               }
             </tbody>
           </table>

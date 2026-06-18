@@ -29,16 +29,43 @@ export async function obtenerActividadesConCupos() {
   return actividadesConConteo
 }
 
+// Traduce errores crudos de Postgres a mensajes claros para el usuario
+function traducirErrorInscripcion(error: { message?: string; code?: string }): string {
+  const msg = error?.message ?? ''
+  if (error?.code === '23505' || msg.includes('inscripciones_estudiante_id_actividad_id_key')) {
+    return 'Este alumno ya está inscripto en esta actividad.'
+  }
+  if (msg.toLowerCase().includes('cupo')) {
+    return 'El cupo para esta actividad está completo.'
+  }
+  return 'No se pudo inscribir al alumno. Intentá nuevamente.'
+}
+
 export async function inscribirAlumno(estudianteId: string, actividadId: number) {
   const supabase = createClient()
+
+  // ¿Ya existe una inscripción (activa o dada de baja) de este alumno en esta actividad?
+  const { data: existente } = await (supabase
+    .from('inscripciones')
+    .select('id, estado')
+    .eq('estudiante_id', estudianteId)
+    .eq('actividad_id', actividadId)
+    .maybeSingle() as any)
+
+  if (existente?.estado === 'ACTIVO') {
+    throw new Error('Este alumno ya está inscripto en esta actividad.')
+  }
+
+  // Si había una baja previa la quitamos para poder reinscribir y que el trigger revalide el cupo
+  if (existente) {
+    await (supabase.from('inscripciones').delete().eq('id', existente.id) as any)
+  }
+
   const { error } = await (supabase
     .from('inscripciones')
     .insert({ estudiante_id: estudianteId, actividad_id: actividadId, estado: 'ACTIVO' } as any) as any)
   if (error) {
-    throw new Error(error.message.includes('Cupo máximo')
-      ? 'El cupo para esta actividad está completo.'
-      : error.message
-    )
+    throw new Error(traducirErrorInscripcion(error))
   }
   return true
 }

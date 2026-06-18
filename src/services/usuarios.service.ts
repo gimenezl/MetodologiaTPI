@@ -1,3 +1,5 @@
+import { createClient } from '@/services/supabase'
+
 export type CrearUsuarioPayload = {
   email: string
   password: string
@@ -8,6 +10,8 @@ export type CrearUsuarioPayload = {
   telefono?: string
   direccion?: string
   legajo_nro?: string
+  hijos_ids?: string[]
+  tutor_id?: string
 }
 
 export async function crearUsuario(payload: CrearUsuarioPayload) {
@@ -21,4 +25,16 @@ export async function crearUsuario(payload: CrearUsuarioPayload) {
     throw new Error(data?.error ?? 'No se pudo crear el usuario')
   }
   return data as { ok: true; user_id: string }
+}
+
+export type RelacionFamiliar = { padre_id: string; hijo_id: string }
+
+// Devuelve todos los vínculos padre/tutor <-> hijo (el director ve todos por RLS)
+export async function obtenerRelacionesFamiliares(): Promise<RelacionFamiliar[]> {
+  const supabase = createClient()
+  const { data, error } = await (supabase
+    .from('padres_hijos')
+    .select('padre_id, hijo_id') as unknown as Promise<{ data: RelacionFamiliar[] | null; error: { message: string } | null }>)
+  if (error) throw new Error(error.message)
+  return data ?? []
 }
