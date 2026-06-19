@@ -29,18 +29,4 @@ npm run lint
 npm run test:e2e
 ```
 
-## Deploy en Vercel (checklist)
-
-1. Crear proyecto en Vercel e importar el repo.
-2. Configurar variables de entorno:
-	- `NEXT_PUBLIC_SUPABASE_URL`
-	- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-3. Build command: `npm run build`.
-4. Output: Next.js default.
-5. Verificar rutas protegidas (`/dashboard`) y formularios publicos.
-6. Ejecutar `npm run test:e2e` antes del deploy si es posible.
-
-## Base de datos
-
-Migraciones en `supabase/migrations/`.
-Se debe ejecutar la migracion de Postulaciones si no esta aplicada.
+Alojado en: https://metodologia-tpi.vercel.app/
