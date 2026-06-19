@@ -24,7 +24,7 @@ const navItems: NavItem[] = [
   { href: '/dashboard/usuarios', label: 'Usuarios', icon: UserPlus, roles: ['DIRECTOR'] },
   { href: '/dashboard/legajos', label: 'Legajos', icon: Users, roles: ['DIRECTOR'] },
   { href: '/dashboard/asistencias', label: 'Asistencias', icon: CalendarCheck, roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE'] },
-  { href: '/dashboard/cupos', label: 'Actividades', icon: Pulse, roles: ['DIRECTOR', 'DOCENTE', 'ESTUDIANTE'] },
+  { href: '/dashboard/cupos', label: 'Actividades', icon: Pulse, roles: ['DIRECTOR', 'DOCENTE', 'ESTUDIANTE', 'PADRE'] },
   { href: '/dashboard/solicitudes', label: 'Solicitudes', icon: FileText, roles: ['DIRECTOR'] },
   { href: '/dashboard/postulaciones', label: 'Postulaciones', icon: Briefcase, roles: ['DIRECTOR'] },
   { href: '/dashboard/testimonios', label: 'Testimonios', icon: ChatCenteredText, roles: ['DIRECTOR'] },

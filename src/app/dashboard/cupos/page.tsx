@@ -48,12 +48,17 @@ const tipoBadge: Record<string, 'info' | 'success' | 'warning'> = {
 export default function CuposPage() {
   const { rol, perfil } = useAuth()
   const isStudent = rol === 'ESTUDIANTE'
+  const isPadre = rol === 'PADRE'
   const [actividades, setActividades] = useState<ActividadConCupo[]>([])
   const [loading, setLoading] = useState(true)
   const [filtroTipo, setFiltroTipo] = useState<string>('TODOS')
   const [filtroNivel, setFiltroNivel] = useState<string>('TODOS')
   const [misActividades, setMisActividades] = useState<number[]>([])
   const [procesandoAct, setProcesandoAct] = useState<number | null>(null)
+  // Padre: sus hijos y la inscripción del hijo elegido
+  const [misHijos, setMisHijos] = useState<Estudiante[]>([])
+  const [hijoSeleccionado, setHijoSeleccionado] = useState<string>('')
+  const [actividadesDelHijo, setActividadesDelHijo] = useState<number[]>([])
   const [inscribiendoId, setInscribiendoId] = useState<number | null>(null)
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([])
   const [selectedEstudiante, setSelectedEstudiante] = useState<string>('')
@@ -178,6 +183,64 @@ export default function CuposPage() {
       await desinscribirAlumnoDeActividad(perfil.id, actId)
       toast.success('Te diste de baja de la actividad')
       await Promise.all([cargarActividades(), cargarMisActividades()])
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo dar de baja')
+    } finally {
+      setProcesandoAct(null)
+    }
+  }
+
+  // --- Padre: cargar sus hijos ---
+  const cargarMisHijos = useCallback(async () => {
+    if (!isPadre) return
+    try {
+      const rolesData = await obtenerRoles()
+      const rolEstudiante = (rolesData as Rol[]).find((r) => r.nombre === 'ESTUDIANTE')
+      if (!rolEstudiante) return
+      // RLS limita los perfiles visibles del padre a sus propios hijos
+      const data = await obtenerPerfiles(rolEstudiante.id)
+      setMisHijos((data ?? []) as Estudiante[])
+    } catch {
+      setMisHijos([])
+    }
+  }, [isPadre])
+
+  useEffect(() => { cargarMisHijos() }, [cargarMisHijos])
+
+  // Cargar en qué actividades está inscripto el hijo elegido
+  const cargarActividadesDelHijo = useCallback(async () => {
+    if (!hijoSeleccionado) { setActividadesDelHijo([]); return }
+    try {
+      const data = await obtenerInscripcionesDeAlumno(hijoSeleccionado)
+      setActividadesDelHijo(((data ?? []) as { actividad_id: number }[]).map((i) => i.actividad_id))
+    } catch {
+      setActividadesDelHijo([])
+    }
+  }, [hijoSeleccionado])
+
+  useEffect(() => { cargarActividadesDelHijo() }, [cargarActividadesDelHijo])
+
+  const handleInscribirHijo = async (actId: number) => {
+    if (!hijoSeleccionado) { toast.error('Elegí primero a un hijo'); return }
+    setProcesandoAct(actId)
+    try {
+      await inscribirAlumno(hijoSeleccionado, actId)
+      toast.success('Hijo inscripto a la actividad')
+      await Promise.all([cargarActividades(), cargarActividadesDelHijo()])
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo inscribir')
+    } finally {
+      setProcesandoAct(null)
+    }
+  }
+
+  const handleDesinscribirHijo = async (actId: number) => {
+    if (!hijoSeleccionado) return
+    setProcesandoAct(actId)
+    try {
+      await desinscribirAlumnoDeActividad(hijoSeleccionado, actId)
+      toast.success('Hijo dado de baja de la actividad')
+      await Promise.all([cargarActividades(), cargarActividadesDelHijo()])
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo dar de baja')
     } finally {
@@ -367,6 +430,118 @@ export default function CuposPage() {
                 })
           }
         </div>
+      </div>
+    )
+  }
+
+  // ---------- VISTA PADRE (inscribe a sus hijos) ----------
+  if (isPadre) {
+    const sinHijos = !loading && misHijos.length === 0
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">Actividades de mis hijos</h1>
+          <p className="text-neutral-500 text-sm mt-0.5">Elegí a un hijo y anotalo (o dalo de baja) en las actividades con cupo.</p>
+        </div>
+
+        {sinHijos ? (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-6 text-sm text-yellow-800">
+            No tenés hijos asignados a tu cuenta. Contactá a la administración.
+          </div>
+        ) : (
+          <>
+            {/* Selector de hijo */}
+            <div className="bg-brand-50 border border-brand-200 rounded-2xl p-5">
+              <Select
+                label="Hijo/a a inscribir"
+                placeholder="Seleccioná a tu hijo/a..."
+                options={misHijos.map((h) => ({
+                  value: h.id,
+                  label: `${h.apellido}, ${h.nombre}${h.legajo_nro ? ` (Leg. ${h.legajo_nro})` : ''}`,
+                }))}
+                value={hijoSeleccionado}
+                onChange={(e) => setHijoSeleccionado(e.target.value)}
+              />
+              {hijoSeleccionado && (
+                <p className="text-xs text-brand-600 mt-2 font-medium">
+                  ✓ Inscribí o dá de baja a tu hijo/a en las actividades de abajo.
+                </p>
+              )}
+            </div>
+
+            {/* Filtros por tipo */}
+            <div className="flex gap-2 flex-wrap">
+              {['TODOS', 'DEPORTE', 'CURRICULAR', 'TALLER'].map((tipo) => (
+                <button
+                  key={tipo}
+                  onClick={() => setFiltroTipo(tipo)}
+                  className={cn(
+                    'px-4 py-2 rounded-full text-sm font-semibold border transition-all duration-150',
+                    filtroTipo === tipo ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-neutral-600 border-neutral-300 hover:border-brand-400 hover:text-brand-600'
+                  )}
+                >
+                  {tipo === 'TODOS' ? 'Todas' : tipo.charAt(0) + tipo.slice(1).toLowerCase()}
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-3">
+              {loading
+                ? Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="bg-white rounded-2xl border border-neutral-200 p-5 space-y-3">
+                      <Skeleton className="h-5 w-36" />
+                      <Skeleton className="h-2 w-full rounded-full" />
+                    </div>
+                  ))
+                : filtradas.map((act) => {
+                    const inscripto = actividadesDelHijo.includes(act.id)
+                    const lleno = act.cupo_disponible <= 0
+                    const colorBar = getCupoColor(act.porcentaje_ocupacion)
+                    return (
+                      <div key={act.id} className={cn('bg-white rounded-2xl border p-5', inscripto ? 'border-brand-300' : 'border-neutral-200')}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="font-bold text-neutral-900">{act.nombre}</h3>
+                              {act.tipo && <Badge variant={tipoBadge[act.tipo] ?? 'info'}>{act.tipo}</Badge>}
+                              {inscripto && <Badge variant="success" dot>Inscripto</Badge>}
+                              {lleno && !inscripto && <Badge variant="danger">Completo</Badge>}
+                            </div>
+                            {act.nivel && <p className="text-xs text-neutral-400 mt-0.5">{act.nivel.nombre}</p>}
+                          </div>
+                          <div className="shrink-0">
+                            {!hijoSeleccionado ? (
+                              <span className="text-xs text-neutral-400">Elegí un hijo/a</span>
+                            ) : inscripto ? (
+                              <Button variant="ghost" size="sm" loading={procesandoAct === act.id} onClick={() => handleDesinscribirHijo(act.id)}>
+                                Dar de baja
+                              </Button>
+                            ) : (
+                              <Button variant={lleno ? 'secondary' : 'accent'} size="sm" disabled={lleno || procesandoAct === act.id} loading={procesandoAct === act.id} onClick={() => handleInscribirHijo(act.id)}>
+                                <UserPlus size={14} />
+                                {lleno ? 'Sin cupo' : 'Inscribir'}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-4">
+                          <div className="flex justify-between items-center mb-1.5">
+                            <span className="text-xs text-neutral-500 font-medium">{act.inscriptos} / {act.cupo_maximo} inscriptos</span>
+                            <span className={cn('text-xs font-bold font-mono', lleno ? 'text-red-600' : 'text-green-600')}>
+                              {act.cupo_disponible > 0 ? `${act.cupo_disponible} disponibles` : 'Sin cupo'}
+                            </span>
+                          </div>
+                          <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
+                            <div className={cn('h-full rounded-full transition-all duration-700', colorBar)} style={{ width: `${Math.min(act.porcentaje_ocupacion, 100)}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+              }
+            </div>
+          </>
+        )}
       </div>
     )
   }

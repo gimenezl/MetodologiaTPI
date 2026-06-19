@@ -43,7 +43,7 @@ const quickLinks = [
     desc: 'Inscripción y cupos de actividades',
     icon: Pulse,
     color: 'bg-amber-50 text-amber-600',
-    roles: ['DIRECTOR', 'DOCENTE', 'ESTUDIANTE'],
+    roles: ['DIRECTOR', 'DOCENTE', 'ESTUDIANTE', 'PADRE'],
   },
   {
     href: '/dashboard/solicitudes',
