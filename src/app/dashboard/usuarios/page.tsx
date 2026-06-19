@@ -63,6 +63,7 @@ export default function UsuariosPage() {
   const [loading, setLoading] = useState(true)
   const [hijosSeleccionados, setHijosSeleccionados] = useState<string[]>([])
   const [tutorSeleccionado, setTutorSeleccionado] = useState<string>('')
+  const [mostrarPass, setMostrarPass] = useState(false)
 
   // --- Estado del modal de edición ---
   const [editando, setEditando] = useState<PerfilRow | null>(null)
@@ -269,7 +270,20 @@ export default function UsuariosPage() {
           </div>
           <div className="grid sm:grid-cols-2 gap-4">
             <Input label="Email" type="email" required placeholder="usuario@ejemplo.com" {...register('email')} error={errors.email?.message} />
-            <Input label="Contraseña" type="text" required placeholder="Mínimo 6 caracteres" {...register('password')} error={errors.password?.message} helperText="El usuario podrá cambiarla luego" />
+            <div>
+              <Input
+                label="Contraseña"
+                type={mostrarPass ? 'text' : 'password'}
+                required
+                placeholder="Mínimo 6 caracteres"
+                {...register('password')}
+                error={errors.password?.message}
+              />
+              <label className="flex items-center gap-1.5 mt-1.5 text-xs text-neutral-500 cursor-pointer w-fit">
+                <input type="checkbox" checked={mostrarPass} onChange={(e) => setMostrarPass(e.target.checked)} className="w-3.5 h-3.5 accent-brand-500" />
+                Mostrar contraseña
+              </label>
+            </div>
           </div>
           <div className="grid sm:grid-cols-3 gap-4">
             <Input label="Teléfono (opcional)" placeholder="0362 4123456" {...register('telefono')} error={errors.telefono?.message} />

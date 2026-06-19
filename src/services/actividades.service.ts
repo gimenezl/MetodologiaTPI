@@ -70,6 +70,18 @@ export async function inscribirAlumno(estudianteId: string, actividadId: number)
   return true
 }
 
+// El alumno se da de baja él mismo de una actividad (elimina su inscripción)
+export async function desinscribirAlumnoDeActividad(estudianteId: string, actividadId: number) {
+  const supabase = createClient()
+  const { error } = await (supabase
+    .from('inscripciones')
+    .delete()
+    .eq('estudiante_id', estudianteId)
+    .eq('actividad_id', actividadId) as any)
+  if (error) throw new Error(error.message)
+  return true
+}
+
 export async function darBajaInscripcion(inscripcionId: string) {
   const supabase = createClient()
   const { error } = await (supabase as any)

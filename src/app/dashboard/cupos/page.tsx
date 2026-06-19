@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import { Pulse, UserPlus, Warning, CaretDown, CaretUp, PencilSimple, Check, X, Trash } from '@phosphor-icons/react'
 import {
@@ -8,6 +8,7 @@ import {
   inscribirAlumno,
   darBajaInscripcion,
   obtenerInscripcionesDeAlumno,
+  desinscribirAlumnoDeActividad,
 } from '@/services/actividades.service'
 import { obtenerRoles } from '@/services/roles.service'
 import { obtenerPerfiles } from '@/services/perfiles.service'
@@ -45,11 +46,14 @@ const tipoBadge: Record<string, 'info' | 'success' | 'warning'> = {
 }
 
 export default function CuposPage() {
-  const { rol } = useAuth()
+  const { rol, perfil } = useAuth()
+  const isStudent = rol === 'ESTUDIANTE'
   const [actividades, setActividades] = useState<ActividadConCupo[]>([])
   const [loading, setLoading] = useState(true)
   const [filtroTipo, setFiltroTipo] = useState<string>('TODOS')
   const [filtroNivel, setFiltroNivel] = useState<string>('TODOS')
+  const [misActividades, setMisActividades] = useState<number[]>([])
+  const [procesandoAct, setProcesandoAct] = useState<number | null>(null)
   const [inscribiendoId, setInscribiendoId] = useState<number | null>(null)
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([])
   const [selectedEstudiante, setSelectedEstudiante] = useState<string>('')
@@ -137,6 +141,47 @@ export default function CuposPage() {
       toast.error(message)
     } finally {
       setBajandoId(null)
+    }
+  }
+
+  // Cargar las actividades en las que el alumno ya está inscripto
+  const cargarMisActividades = useCallback(async () => {
+    if (!isStudent || !perfil?.id) return
+    try {
+      const data = await obtenerInscripcionesDeAlumno(perfil.id)
+      setMisActividades(((data ?? []) as { actividad_id: number }[]).map((i) => i.actividad_id))
+    } catch {
+      setMisActividades([])
+    }
+  }, [isStudent, perfil?.id])
+
+  useEffect(() => { cargarMisActividades() }, [cargarMisActividades])
+
+  const handleInscribirme = async (actId: number) => {
+    if (!perfil?.id) return
+    setProcesandoAct(actId)
+    try {
+      await inscribirAlumno(perfil.id, actId)
+      toast.success('¡Te inscribiste a la actividad!')
+      await Promise.all([cargarActividades(), cargarMisActividades()])
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo inscribir')
+    } finally {
+      setProcesandoAct(null)
+    }
+  }
+
+  const handleDesinscribirme = async (actId: number) => {
+    if (!perfil?.id) return
+    setProcesandoAct(actId)
+    try {
+      await desinscribirAlumnoDeActividad(perfil.id, actId)
+      toast.success('Te diste de baja de la actividad')
+      await Promise.all([cargarActividades(), cargarMisActividades()])
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo dar de baja')
+    } finally {
+      setProcesandoAct(null)
     }
   }
 
@@ -236,6 +281,95 @@ export default function CuposPage() {
       (filtroTipo === 'TODOS' || a.tipo === filtroTipo) &&
       (filtroNivel === 'TODOS' || a.nivel?.nombre === filtroNivel)
   )
+
+  // ---------- VISTA ESTUDIANTE (auto-inscripción) ----------
+  if (isStudent) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">Actividades y talleres</h1>
+          <p className="text-neutral-500 text-sm mt-0.5">Inscribite a las actividades deportivas y talleres con cupo disponible.</p>
+        </div>
+
+        {/* Filtros por tipo */}
+        <div className="flex gap-2 flex-wrap">
+          {['TODOS', 'DEPORTE', 'CURRICULAR', 'TALLER'].map((tipo) => (
+            <button
+              key={tipo}
+              onClick={() => setFiltroTipo(tipo)}
+              className={cn(
+                'px-4 py-2 rounded-full text-sm font-semibold border transition-all duration-150',
+                filtroTipo === tipo ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-neutral-600 border-neutral-300 hover:border-brand-400 hover:text-brand-600'
+              )}
+            >
+              {tipo === 'TODOS' ? 'Todas' : tipo.charAt(0) + tipo.slice(1).toLowerCase()}
+            </button>
+          ))}
+        </div>
+
+        <div className="space-y-3">
+          {loading
+            ? Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="bg-white rounded-2xl border border-neutral-200 p-5 space-y-3">
+                  <Skeleton className="h-5 w-36" />
+                  <Skeleton className="h-2 w-full rounded-full" />
+                </div>
+              ))
+            : filtradas.length === 0
+              ? (
+                <div className="py-16 text-center">
+                  <Pulse size={40} className="text-neutral-300 mx-auto mb-3" />
+                  <p className="text-neutral-400 text-sm">No hay actividades para este filtro</p>
+                </div>
+              )
+              : filtradas.map((act) => {
+                  const inscripto = misActividades.includes(act.id)
+                  const lleno = act.cupo_disponible <= 0
+                  const colorBar = getCupoColor(act.porcentaje_ocupacion)
+                  return (
+                    <div key={act.id} className={cn('bg-white rounded-2xl border p-5', inscripto ? 'border-brand-300' : 'border-neutral-200')}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-bold text-neutral-900">{act.nombre}</h3>
+                            {act.tipo && <Badge variant={tipoBadge[act.tipo] ?? 'info'}>{act.tipo}</Badge>}
+                            {inscripto && <Badge variant="success" dot>Inscripto</Badge>}
+                            {lleno && !inscripto && <Badge variant="danger">Completo</Badge>}
+                          </div>
+                          {act.nivel && <p className="text-xs text-neutral-400 mt-0.5">{act.nivel.nombre}</p>}
+                        </div>
+                        <div className="shrink-0">
+                          {inscripto ? (
+                            <Button variant="ghost" size="sm" loading={procesandoAct === act.id} onClick={() => handleDesinscribirme(act.id)}>
+                              Darme de baja
+                            </Button>
+                          ) : (
+                            <Button variant={lleno ? 'secondary' : 'accent'} size="sm" disabled={lleno || procesandoAct === act.id} loading={procesandoAct === act.id} onClick={() => handleInscribirme(act.id)}>
+                              <UserPlus size={14} />
+                              {lleno ? 'Sin cupo' : 'Inscribirme'}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-4">
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="text-xs text-neutral-500 font-medium">{act.inscriptos} / {act.cupo_maximo} inscriptos</span>
+                          <span className={cn('text-xs font-bold font-mono', lleno ? 'text-red-600' : 'text-green-600')}>
+                            {act.cupo_disponible > 0 ? `${act.cupo_disponible} disponibles` : 'Sin cupo'}
+                          </span>
+                        </div>
+                        <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
+                          <div className={cn('h-full rounded-full transition-all duration-700', colorBar)} style={{ width: `${Math.min(act.porcentaje_ocupacion, 100)}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+          }
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -371,10 +505,12 @@ export default function CuposPage() {
                                 onKeyDown={(e) => { if (e.key === 'Enter') handleGuardarCupo(act.id); if (e.key === 'Escape') setEditandoCupoId(null) }}
                               />
                               <button onClick={() => handleGuardarCupo(act.id)} disabled={guardandoCupo}
+                                aria-label="Guardar cupo"
                                 className="w-7 h-7 bg-green-500 hover:bg-green-600 text-white rounded-lg flex items-center justify-center transition-colors">
                                 <Check size={13} weight="bold" />
                               </button>
                               <button onClick={() => setEditandoCupoId(null)}
+                                aria-label="Cancelar edición de cupo"
                                 className="w-7 h-7 bg-neutral-200 hover:bg-neutral-300 text-neutral-600 rounded-lg flex items-center justify-center transition-colors">
                                 <X size={13} weight="bold" />
                               </button>
@@ -413,6 +549,7 @@ export default function CuposPage() {
                               disabled={eliminandoId === act.id}
                               className="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
                               title="Eliminar actividad"
+                              aria-label="Eliminar actividad"
                             >
                               <Trash size={15} weight="fill" />
                             </button>

@@ -1,16 +1,24 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarCheck, Users, Pulse, FileText, ArrowRight, Briefcase, ChatCenteredText, UserPlus } from '@phosphor-icons/react'
+import { CalendarCheck, Users, Pulse, FileText, ArrowRight, Briefcase, ChatCenteredText, UserPlus, UserCircle } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 
 const quickLinks = [
   {
     href: '/dashboard/asistencias',
     label: 'Asistencias',
-    desc: 'Registrar asistencia del día',
+    desc: 'Consultá o registrá la asistencia',
     icon: CalendarCheck,
     color: 'bg-brand-50 text-brand-600',
+    roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE'],
+  },
+  {
+    href: '/dashboard/perfil',
+    label: 'Mi perfil',
+    desc: 'Ver tus datos personales',
+    icon: UserCircle,
+    color: 'bg-green-50 text-green-600',
     roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE'],
   },
   {
@@ -31,11 +39,11 @@ const quickLinks = [
   },
   {
     href: '/dashboard/cupos',
-    label: 'Cupos',
-    desc: 'Disponibilidad de actividades',
+    label: 'Actividades',
+    desc: 'Inscripción y cupos de actividades',
     icon: Pulse,
     color: 'bg-amber-50 text-amber-600',
-    roles: ['DIRECTOR', 'DOCENTE'],
+    roles: ['DIRECTOR', 'DOCENTE', 'ESTUDIANTE'],
   },
   {
     href: '/dashboard/solicitudes',

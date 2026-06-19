@@ -5,7 +5,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import {
   House, Users, CalendarCheck, Pulse, FileText,
-  SignOut, List, X, Briefcase, ChatCenteredText, UserPlus, Lock
+  SignOut, List, X, Briefcase, ChatCenteredText, UserPlus, Lock,
+  Newspaper, UserCircle
 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
@@ -23,10 +24,18 @@ const navItems: NavItem[] = [
   { href: '/dashboard/usuarios', label: 'Usuarios', icon: UserPlus, roles: ['DIRECTOR'] },
   { href: '/dashboard/legajos', label: 'Legajos', icon: Users, roles: ['DIRECTOR'] },
   { href: '/dashboard/asistencias', label: 'Asistencias', icon: CalendarCheck, roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE'] },
-  { href: '/dashboard/cupos', label: 'Cupos', icon: Pulse, roles: ['DIRECTOR', 'DOCENTE'] },
+  { href: '/dashboard/cupos', label: 'Actividades', icon: Pulse, roles: ['DIRECTOR', 'DOCENTE', 'ESTUDIANTE'] },
   { href: '/dashboard/solicitudes', label: 'Solicitudes', icon: FileText, roles: ['DIRECTOR'] },
   { href: '/dashboard/postulaciones', label: 'Postulaciones', icon: Briefcase, roles: ['DIRECTOR'] },
   { href: '/dashboard/testimonios', label: 'Testimonios', icon: ChatCenteredText, roles: ['DIRECTOR'] },
+  { href: '/dashboard/perfil', label: 'Mi perfil', icon: UserCircle, roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE'] },
+]
+
+// Barra de navegación inferior (móvil): Asistencias, Noticias, Perfil
+const bottomNavItems = [
+  { href: '/dashboard/asistencias', label: 'Asistencias', icon: CalendarCheck },
+  { href: '/noticias', label: 'Noticias', icon: Newspaper },
+  { href: '/dashboard/perfil', label: 'Perfil', icon: UserCircle },
 ]
 
 // Determina si el rol actual puede ver la ruta del dashboard.
@@ -208,7 +217,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <main className="flex-1 p-4 lg:p-8">
+        <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8">
           {permitido ? children : (
             <div className="max-w-md mx-auto mt-12 text-center">
               <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4">
@@ -225,6 +234,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           )}
         </main>
       </div>
+
+      {/* Bottom Navigation Bar (solo móvil) */}
+      <nav
+        className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-neutral-200 flex"
+        aria-label="Navegación rápida"
+      >
+        {bottomNavItems.map((item) => {
+          const Icon = item.icon
+          const active = pathname === item.href
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-medium transition-colors',
+                active ? 'text-brand-600' : 'text-neutral-500 hover:text-neutral-800'
+              )}
+              aria-current={active ? 'page' : undefined}
+            >
+              <Icon size={22} weight={active ? 'fill' : 'regular'} />
+              {item.label}
+            </Link>
+          )
+        })}
+      </nav>
     </div>
   )
 }

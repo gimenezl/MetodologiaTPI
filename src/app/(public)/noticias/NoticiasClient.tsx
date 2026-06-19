@@ -73,16 +73,11 @@ export function NoticiasClient({ noticias, currentPage, totalPages }: NoticiasCl
             {destacada && (
               <article className="mb-12">
                 <div className="grid lg:grid-cols-2 gap-8 bg-white rounded-3xl border border-neutral-200 overflow-hidden hover:shadow-sm transition-all duration-200 group">
-                  <div
-                    className="min-h-[280px] lg:min-h-[380px]"
-                    style={{
-                      backgroundImage: `url(${destacada.imagen_url ?? (destacada.id <= 2 ? `/noticia-${destacada.id}.png` : '/noticia-fallback.png')})`,
-
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center',
-                    }}
-                    role="img"
-                    aria-label={destacada.titulo}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={destacada.imagen_url ?? (destacada.id <= 2 ? `/noticia-${destacada.id}.png` : '/noticia-fallback.png')}
+                    alt={destacada.titulo}
+                    className="w-full h-full min-h-[280px] lg:min-h-[380px] object-cover"
                   />
                   <div className="p-8 flex flex-col justify-center">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-accent-50 text-accent-600 border border-accent-200 rounded-full text-xs font-bold mb-4 w-fit">
@@ -117,17 +112,14 @@ export function NoticiasClient({ noticias, currentPage, totalPages }: NoticiasCl
                     className="group bg-white rounded-2xl border border-neutral-200 overflow-hidden hover:border-brand-300 hover:shadow-sm transition-all duration-200"
                   >
                     <Link href={`/noticias/${noticia.id}`}>
-                      <div
-                        className="h-48 transition-transform duration-500 group-hover:scale-105"
-                        style={{
-                          backgroundImage: `url(${noticia.imagen_url ?? (noticia.id <= 2 ? `/noticia-${noticia.id}.png` : '/noticia-fallback.png')})`,
-
-                          backgroundSize: 'cover',
-                          backgroundPosition: 'center',
-                        }}
-                        role="img"
-                        aria-label={noticia.titulo}
-                      />
+                      <div className="h-48 overflow-hidden">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={noticia.imagen_url ?? (noticia.id <= 2 ? `/noticia-${noticia.id}.png` : '/noticia-fallback.png')}
+                          alt={noticia.titulo}
+                          className="h-48 w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                      </div>
                       <div className="p-5">
                         <time className="text-xs text-neutral-400 font-medium">
                           {format(new Date(noticia.fecha_publicacion), "d 'de' MMMM yyyy", { locale: es })}
