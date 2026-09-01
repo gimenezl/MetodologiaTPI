@@ -9,7 +9,7 @@ Stack principal: Next.js (App Router) + Tailwind v4 + Supabase.
 - Variables de entorno en `.env.local`:
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=https://ycvrpmrogvjnntnoosbh.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=tu_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_anon_key
 ```
 
