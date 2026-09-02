@@ -29,4 +29,17 @@ npm run lint
 npm run test:e2e
 ```
 
+## Funcionalidades principales
+
+- Sitio institucional, galeria, noticias y formularios publicos.
+- Gestion de usuarios, roles y vinculos familiares.
+- Gestion de legajos, actividades, cupos e inscripciones.
+- Registro y consulta de asistencias.
+- Gestion de solicitudes, postulaciones y testimonios.
+
+## Integrantes
+
+- Lucas Benjamin Gimenez
+- Milagros Gonzalez
+
 Alojado en: https://metodologia-tpi.vercel.app/
