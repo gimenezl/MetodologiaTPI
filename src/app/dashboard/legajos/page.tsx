@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
@@ -36,6 +36,7 @@ type Perfil = {
 
 type Rol = { id: number; nombre: string }
 const rolesAlternativos: Rol[] = ROLES.map((nombre, indice) => ({ id: indice + 1, nombre }))
+const elementosPorPagina = 10
 
 const variantePorRol: Record<string, 'info' | 'success' | 'warning' | 'default'> = {
   DIRECTOR: 'danger' as any,
@@ -50,6 +51,7 @@ export default function LegajosPage() {
   const [perfiles, setPerfiles] = useState<Perfil[]>([])
   const [cargando, setCargando] = useState(true)
   const [busqueda, setBusqueda] = useState('')
+  const [busquedaAplicada, setBusquedaAplicada] = useState('')
   const [perfilSeleccionado, setPerfilSeleccionado] = useState<Perfil | null>(null)
   const [roles, setRoles] = useState<Rol[]>([])
   const [modoFormulario, setModoFormulario] = useState<'crear' | 'editar' | null>(null)
@@ -57,8 +59,6 @@ export default function LegajosPage() {
   const [totalPaginas, setTotalPaginas] = useState(1)
   const [perfilAEliminar, setPerfilAEliminar] = useState<Perfil | null>(null)
   const [eliminando, setEliminando] = useState(false)
-  const elementosPorPagina = 10
-
   const {
     register: registrarCampo,
     handleSubmit: procesarEnvio,
@@ -66,27 +66,7 @@ export default function LegajosPage() {
     formState: { errors: errores, isSubmitting: enviando },
   } = useForm<PerfilFormData>({ resolver: zodResolver(perfilSchema), mode: 'onTouched' })
 
-  useEffect(() => {
-    if (rol && rol !== 'DIRECTOR') return
-    cargarDatos(1, busqueda)
-    cargarRoles()
-  }, [rol])
-
-  useEffect(() => {
-    if (rol && rol !== 'DIRECTOR') return
-    const timer = setTimeout(() => {
-      setPaginaActual(1)
-      cargarDatos(1, busqueda)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [busqueda, rol])
-
-  useEffect(() => {
-    if (rol && rol !== 'DIRECTOR') return
-    cargarDatos(paginaActual, busqueda)
-  }, [paginaActual, busqueda, rol])
-
-  const cargarDatos = async (pagina: number, consulta: string) => {
+  const cargarDatos = useCallback(async (pagina: number, consulta: string) => {
     setCargando(true)
     try {
       if (consulta.length >= 2) {
@@ -100,9 +80,9 @@ export default function LegajosPage() {
       }
     } catch { toast.error('Error al cargar legajos') }
     finally { setCargando(false) }
-  }
+  }, [])
 
-  const cargarRoles = async () => {
+  const cargarRoles = useCallback(async () => {
     try {
       const datos = await obtenerRoles()
       const rolesObtenidos = (datos as Rol[]) ?? []
@@ -115,7 +95,30 @@ export default function LegajosPage() {
       toast.error(mensaje)
       setRoles(rolesAlternativos)
     }
-  }
+  }, [])
+
+  // Los roles se cargan una sola vez cuando se confirma el permiso de dirección.
+  useEffect(() => {
+    if (rol !== 'DIRECTOR') return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    cargarRoles()
+  }, [rol, cargarRoles])
+
+  // La búsqueda espera 300 ms de inactividad y vuelve a la primera página.
+  useEffect(() => {
+    const temporizador = setTimeout(() => {
+      setPaginaActual(1)
+      setBusquedaAplicada(busqueda)
+    }, 300)
+    return () => clearTimeout(temporizador)
+  }, [busqueda])
+
+  // Este es el único efecto que carga perfiles: responde a paginación y búsqueda aplicada.
+  useEffect(() => {
+    if (rol !== 'DIRECTOR') return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    cargarDatos(paginaActual, busquedaAplicada)
+  }, [paginaActual, busquedaAplicada, rol, cargarDatos])
 
   const iniciarCreacion = () => {
     setPerfilSeleccionado(null)
@@ -158,7 +161,7 @@ export default function LegajosPage() {
       }
       setModoFormulario(null)
       setPerfilSeleccionado(null)
-      await cargarDatos(paginaActual, busqueda)
+      await cargarDatos(paginaActual, busquedaAplicada)
     } catch (error) {
       const mensaje = error instanceof Error ? error.message : 'No se pudo guardar el legajo'
       toast.error(mensaje)
@@ -173,7 +176,7 @@ export default function LegajosPage() {
       toast.success(`Legajo de ${perfilAEliminar.nombre} ${perfilAEliminar.apellido} eliminado`)
       setPerfilAEliminar(null)
       setPerfilSeleccionado(null)
-      await cargarDatos(paginaActual, busqueda)
+      await cargarDatos(paginaActual, busquedaAplicada)
     } catch (error) {
       const mensaje = error instanceof Error ? error.message : 'No se pudo eliminar el legajo'
       toast.error(mensaje)
