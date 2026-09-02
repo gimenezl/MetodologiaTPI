@@ -8,7 +8,7 @@ import {
   inscribirAlumno,
   darBajaInscripcion,
   obtenerInscripcionesDeAlumno,
-  desinscribirAlumnoDeActividad,
+  eliminarInscripcionDeAlumnoEnActividad,
 } from '@/services/actividades.service'
 import { obtenerRoles } from '@/services/roles.service'
 import { obtenerPerfiles } from '@/services/perfiles.service'
@@ -180,7 +180,7 @@ export default function CuposPage() {
     if (!perfil?.id) return
     setProcesandoAct(actId)
     try {
-      await desinscribirAlumnoDeActividad(perfil.id, actId)
+      await eliminarInscripcionDeAlumnoEnActividad(perfil.id, actId)
       toast.success('Te diste de baja de la actividad')
       await Promise.all([cargarActividades(), cargarMisActividades()])
     } catch (error) {
@@ -238,7 +238,7 @@ export default function CuposPage() {
     if (!hijoSeleccionado) return
     setProcesandoAct(actId)
     try {
-      await desinscribirAlumnoDeActividad(hijoSeleccionado, actId)
+      await eliminarInscripcionDeAlumnoEnActividad(hijoSeleccionado, actId)
       toast.success('Hijo dado de baja de la actividad')
       await Promise.all([cargarActividades(), cargarActividadesDelHijo()])
     } catch (error) {
