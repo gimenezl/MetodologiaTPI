@@ -120,6 +120,11 @@ export default function LegajosPage() {
     cargarDatos(paginaActual, busquedaAplicada)
   }, [paginaActual, busquedaAplicada, rol, cargarDatos])
 
+  // Sin permiso de dirección nunca se pide nada, así que `cargando` se queda en true para
+  // siempre. El esqueleto solo tiene sentido mientras la sesión resuelve (rol null) o
+  // cuando el director sí está esperando datos.
+  const mostrandoEsqueleto = cargando && (rol === null || rol === 'DIRECTOR')
+
   const iniciarCreacion = () => {
     setPerfilSeleccionado(null)
     setModoFormulario('crear')
@@ -281,7 +286,7 @@ export default function LegajosPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
-              {cargando
+              {mostrandoEsqueleto
                 ? Array.from({ length: 6 }).map((_, indiceFila) => (
                     <tr key={indiceFila}>
                       {Array.from({ length: 6 }).map((_, indiceColumna) => (

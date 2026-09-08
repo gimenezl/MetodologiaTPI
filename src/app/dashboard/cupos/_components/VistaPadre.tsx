@@ -25,6 +25,7 @@ export function VistaPadre({
   const [hijoSeleccionado, setHijoSeleccionado] = useState('')
   const [actividadesDelHijo, setActividadesDelHijo] = useState<number[]>([])
   const [procesandoActividad, setProcesandoActividad] = useState<number | null>(null)
+  const [cargandoHijos, setCargandoHijos] = useState(true)
 
   const cargarHijos = useCallback(async () => {
     try {
@@ -37,6 +38,8 @@ export function VistaPadre({
       setHijos((datos ?? []) as Estudiante[])
     } catch {
       setHijos([])
+    } finally {
+      setCargandoHijos(false)
     }
   }, [])
 
@@ -99,7 +102,9 @@ export function VistaPadre({
   const actividadesFiltradas = actividades.filter(
     (actividad) => filtroTipo === 'TODOS' || actividad.tipo === filtroTipo
   )
-  const sinHijos = !cargando && hijos.length === 0
+  // El aviso depende de la carga de hijos, no de la de actividades: si mirara `cargando`
+  // el cartel aparecería mientras los hijos todavía se están pidiendo.
+  const sinHijos = !cargandoHijos && hijos.length === 0
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
