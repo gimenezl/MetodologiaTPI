@@ -19,11 +19,15 @@ import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
 
 const soloLetras = /^[a-zA-ZÀ-ÿ\s'-]+$/
+const longitudMinimaNombre = 2
+const longitudMaximaNombre = 100
+const patronDni = /^\d{7,8}$/
+const mensajeDniInvalido = 'DNI de 7 u 8 dígitos'
 
 const usuarioSchema = z.object({
-  nombre: z.string().min(2, 'Mínimo 2 caracteres').max(100).regex(soloLetras, 'Solo letras y espacios'),
-  apellido: z.string().min(2, 'Mínimo 2 caracteres').max(100).regex(soloLetras, 'Solo letras y espacios'),
-  dni: z.string().regex(/^\d{7,8}$/, 'DNI de 7 u 8 dígitos'),
+  nombre: z.string().min(longitudMinimaNombre, 'Mínimo 2 caracteres').max(longitudMaximaNombre).regex(soloLetras, 'Solo letras y espacios'),
+  apellido: z.string().min(longitudMinimaNombre, 'Mínimo 2 caracteres').max(longitudMaximaNombre).regex(soloLetras, 'Solo letras y espacios'),
+  dni: z.string().regex(patronDni, mensajeDniInvalido),
   email: z.string().min(1, 'El email es requerido').email('Email inválido'),
   password: z.string().min(6, 'Mínimo 6 caracteres'),
   rol_id: z.string().min(1, 'Seleccioná un rol'),
@@ -181,9 +185,9 @@ export default function UsuariosPage() {
 
   const guardarEdicion = async () => {
     if (!editando) return
-    if (!soloLetras.test(editForm.nombre) || editForm.nombre.trim().length < 2) { toast.error('Nombre inválido'); return }
-    if (!soloLetras.test(editForm.apellido) || editForm.apellido.trim().length < 2) { toast.error('Apellido inválido'); return }
-    if (!/^\d{7,8}$/.test(editForm.dni)) { toast.error('DNI de 7 u 8 dígitos'); return }
+    if (!soloLetras.test(editForm.nombre) || editForm.nombre.trim().length < longitudMinimaNombre) { toast.error('Nombre inválido'); return }
+    if (!soloLetras.test(editForm.apellido) || editForm.apellido.trim().length < longitudMinimaNombre) { toast.error('Apellido inválido'); return }
+    if (!patronDni.test(editForm.dni)) { toast.error(mensajeDniInvalido); return }
     if (!editRolId) { toast.error('Seleccioná un rol'); return }
     if (editRolNombre === 'ESTUDIANTE' && !editTutor) { toast.error('Un alumno debe tener un padre/tutor asignado.'); return }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
@@ -35,9 +35,10 @@ type Perfil = {
 }
 
 type Rol = { id: number; nombre: string }
-const fallbackRoles: Rol[] = ROLES.map((nombre, index) => ({ id: index + 1, nombre }))
+const rolesAlternativos: Rol[] = ROLES.map((nombre, indice) => ({ id: indice + 1, nombre }))
+const elementosPorPagina = 10
 
-const rolVariant: Record<string, 'info' | 'success' | 'warning' | 'default'> = {
+const variantePorRol: Record<string, 'info' | 'success' | 'warning' | 'default'> = {
   DIRECTOR: 'danger' as any,
   DOCENTE: 'info',
   ESTUDIANTE: 'success',
@@ -48,79 +49,86 @@ const rolVariant: Record<string, 'info' | 'success' | 'warning' | 'default'> = {
 export default function LegajosPage() {
   const { rol } = useAuth()
   const [perfiles, setPerfiles] = useState<Perfil[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState<Perfil | null>(null)
+  const [cargando, setCargando] = useState(true)
+  const [busqueda, setBusqueda] = useState('')
+  const [busquedaAplicada, setBusquedaAplicada] = useState('')
+  const [perfilSeleccionado, setPerfilSeleccionado] = useState<Perfil | null>(null)
   const [roles, setRoles] = useState<Rol[]>([])
-  const [formMode, setFormMode] = useState<'create' | 'edit' | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [deleteConfirm, setDeleteConfirm] = useState<Perfil | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const pageSize = 10
-
+  const [modoFormulario, setModoFormulario] = useState<'crear' | 'editar' | null>(null)
+  const [paginaActual, setPaginaActual] = useState(1)
+  const [totalPaginas, setTotalPaginas] = useState(1)
+  const [perfilAEliminar, setPerfilAEliminar] = useState<Perfil | null>(null)
+  const [eliminando, setEliminando] = useState(false)
   const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
+    register: registrarCampo,
+    handleSubmit: procesarEnvio,
+    reset: reiniciarFormulario,
+    formState: { errors: errores, isSubmitting: enviando },
   } = useForm<PerfilFormData>({ resolver: zodResolver(perfilSchema), mode: 'onTouched' })
 
-  useEffect(() => {
-    if (rol && rol !== 'DIRECTOR') return
-    loadData(1, search)
-    cargarRoles()
-  }, [rol])
-
-  useEffect(() => {
-    if (rol && rol !== 'DIRECTOR') return
-    const timer = setTimeout(() => {
-      setCurrentPage(1)
-      loadData(1, search)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [search, rol])
-
-  useEffect(() => {
-    if (rol && rol !== 'DIRECTOR') return
-    loadData(currentPage, search)
-  }, [currentPage, search, rol])
-
-  const loadData = async (page: number, query: string) => {
-    setLoading(true)
+  const cargarDatos = useCallback(async (pagina: number, consulta: string) => {
+    setCargando(true)
     try {
-      if (query.length >= 2) {
-        const { data, count } = await buscarPerfilesPaginados(query, page, pageSize)
-        setPerfiles(data as Perfil[])
-        setTotalPages(Math.max(1, Math.ceil(count / pageSize)))
+      if (consulta.length >= 2) {
+        const { data: datos, count: cantidad } = await buscarPerfilesPaginados(consulta, pagina, elementosPorPagina)
+        setPerfiles(datos as Perfil[])
+        setTotalPaginas(Math.max(1, Math.ceil(cantidad / elementosPorPagina)))
       } else {
-        const { data, count } = await obtenerPerfilesPaginados(page, pageSize)
-        setPerfiles(data as Perfil[])
-        setTotalPages(Math.max(1, Math.ceil(count / pageSize)))
+        const { data: datos, count: cantidad } = await obtenerPerfilesPaginados(pagina, elementosPorPagina)
+        setPerfiles(datos as Perfil[])
+        setTotalPaginas(Math.max(1, Math.ceil(cantidad / elementosPorPagina)))
       }
     } catch { toast.error('Error al cargar legajos') }
-    finally { setLoading(false) }
-  }
+    finally { setCargando(false) }
+  }, [])
 
-  const cargarRoles = async () => {
+  const cargarRoles = useCallback(async () => {
     try {
-      const data = await obtenerRoles()
-      const parsed = (data as Rol[]) ?? []
-      setRoles(parsed.length > 0 ? parsed : fallbackRoles)
-      if (parsed.length === 0) {
+      const datos = await obtenerRoles()
+      const rolesObtenidos = (datos as Rol[]) ?? []
+      setRoles(rolesObtenidos.length > 0 ? rolesObtenidos : rolesAlternativos)
+      if (rolesObtenidos.length === 0) {
         toast.error('No se encontraron roles, usando valores por defecto')
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Error al cargar roles'
-      toast.error(message)
-      setRoles(fallbackRoles)
+      const mensaje = error instanceof Error ? error.message : 'Error al cargar roles'
+      toast.error(mensaje)
+      setRoles(rolesAlternativos)
     }
-  }
+  }, [])
 
-  const startCreate = () => {
-    setSelected(null)
-    setFormMode('create')
-    reset({
+  // Los roles se cargan una sola vez cuando se confirma el permiso de dirección.
+  useEffect(() => {
+    if (rol !== 'DIRECTOR') return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    cargarRoles()
+  }, [rol, cargarRoles])
+
+  // La búsqueda espera 300 ms de inactividad y vuelve a la primera página.
+  useEffect(() => {
+    const temporizador = setTimeout(() => {
+      setPaginaActual(1)
+      setBusquedaAplicada(busqueda)
+    }, 300)
+    return () => clearTimeout(temporizador)
+  }, [busqueda])
+
+  // Este es el único efecto que carga perfiles: responde a paginación y búsqueda aplicada.
+  useEffect(() => {
+    if (rol !== 'DIRECTOR') return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    cargarDatos(paginaActual, busquedaAplicada)
+  }, [paginaActual, busquedaAplicada, rol, cargarDatos])
+
+  // Sin permiso de dirección nunca se pide nada, así que `cargando` se queda en true para
+  // siempre. El esqueleto solo tiene sentido mientras la sesión resuelve (rol null) o
+  // cuando el director sí está esperando datos.
+  const mostrandoEsqueleto = cargando && (rol === null || rol === 'DIRECTOR')
+
+  const iniciarCreacion = () => {
+    setPerfilSeleccionado(null)
+    setModoFormulario('crear')
+    reiniciarFormulario({
       nombre: '',
       apellido: '',
       dni: '',
@@ -132,10 +140,10 @@ export default function LegajosPage() {
     })
   }
 
-  const startEdit = (perfil: Perfil) => {
-    setSelected(perfil)
-    setFormMode('edit')
-    reset({
+  const iniciarEdicion = (perfil: Perfil) => {
+    setPerfilSeleccionado(perfil)
+    setModoFormulario('editar')
+    reiniciarFormulario({
       nombre: perfil.nombre,
       apellido: perfil.apellido,
       dni: perfil.dni,
@@ -147,38 +155,38 @@ export default function LegajosPage() {
     })
   }
 
-  const onSubmit = async (data: PerfilFormData) => {
+  const guardarPerfil = async (datos: PerfilFormData) => {
     try {
-      if (formMode === 'create') {
-        await crearPerfil(data)
+      if (modoFormulario === 'crear') {
+        await crearPerfil(datos)
         toast.success('Legajo creado')
-      } else if (formMode === 'edit' && selected) {
-        await actualizarPerfil(selected.id, data)
+      } else if (modoFormulario === 'editar' && perfilSeleccionado) {
+        await actualizarPerfil(perfilSeleccionado.id, datos)
         toast.success('Legajo actualizado')
       }
-      setFormMode(null)
-      setSelected(null)
-      await loadData(currentPage, search)
+      setModoFormulario(null)
+      setPerfilSeleccionado(null)
+      await cargarDatos(paginaActual, busquedaAplicada)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'No se pudo guardar el legajo'
-      toast.error(message)
+      const mensaje = error instanceof Error ? error.message : 'No se pudo guardar el legajo'
+      toast.error(mensaje)
     }
   }
 
-  const handleDelete = async () => {
-    if (!deleteConfirm) return
-    setIsDeleting(true)
+  const confirmarEliminacion = async () => {
+    if (!perfilAEliminar) return
+    setEliminando(true)
     try {
-      await eliminarPerfil(deleteConfirm.id)
-      toast.success(`Legajo de ${deleteConfirm.nombre} ${deleteConfirm.apellido} eliminado`)
-      setDeleteConfirm(null)
-      setSelected(null)
-      await loadData(currentPage, search)
+      await eliminarPerfil(perfilAEliminar.id)
+      toast.success(`Legajo de ${perfilAEliminar.nombre} ${perfilAEliminar.apellido} eliminado`)
+      setPerfilAEliminar(null)
+      setPerfilSeleccionado(null)
+      await cargarDatos(paginaActual, busquedaAplicada)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'No se pudo eliminar el legajo'
-      toast.error(message)
+      const mensaje = error instanceof Error ? error.message : 'No se pudo eliminar el legajo'
+      toast.error(mensaje)
     } finally {
-      setIsDeleting(false)
+      setEliminando(false)
     }
   }
 
@@ -201,64 +209,64 @@ export default function LegajosPage() {
           <input
             type="search"
             placeholder="Buscar por nombre, apellido o DNI..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={busqueda}
+            onChange={(evento) => setBusqueda(evento.target.value)}
             className="w-full pl-9 h-10 pr-3 rounded-lg border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 bg-white"
             aria-label="Buscar legajos"
           />
         </div>
-        <Button type="button" variant="accent" onClick={startCreate}>Nuevo legajo</Button>
+        <Button type="button" variant="accent" onClick={iniciarCreacion}>Nuevo legajo</Button>
       </div>
 
-      {formMode && (
+      {modoFormulario && (
         <div className="bg-white rounded-2xl border border-brand-200 p-6 space-y-4">
           <div className="flex items-start justify-between">
             <h2 className="font-bold text-neutral-900">
-              {formMode === 'create' ? 'Crear legajo' : 'Editar legajo'}
+              {modoFormulario === 'crear' ? 'Crear legajo' : 'Editar legajo'}
             </h2>
-            <button onClick={() => setFormMode(null)} className="text-neutral-400 hover:text-neutral-600 text-sm">
+            <button onClick={() => setModoFormulario(null)} className="text-neutral-400 hover:text-neutral-600 text-sm">
               Cerrar
             </button>
           </div>
-          <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+          <form onSubmit={procesarEnvio(guardarPerfil)} noValidate className="space-y-5">
             <div className="grid sm:grid-cols-2 gap-4">
-              <Input label="Nombre" required {...register('nombre')} error={errors.nombre?.message} />
-              <Input label="Apellido" required {...register('apellido')} error={errors.apellido?.message} />
+              <Input label="Nombre" required {...registrarCampo('nombre')} error={errores.nombre?.message} />
+              <Input label="Apellido" required {...registrarCampo('apellido')} error={errores.apellido?.message} />
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
-              <Input label="DNI" required {...register('dni')} error={errors.dni?.message} />
+              <Input label="DNI" required {...registrarCampo('dni')} error={errores.dni?.message} />
               <Select
                 label="Rol"
                 required
                 placeholder="Seleccionar rol"
                 options={roles.map((rol) => ({ value: rol.id, label: rol.nombre }))}
-                {...register('rol_id', { valueAsNumber: true })}
-                error={errors.rol_id?.message}
+                {...registrarCampo('rol_id', { valueAsNumber: true })}
+                error={errores.rol_id?.message}
               />
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <Input
                 label="Fecha de nacimiento"
                 type="date"
-                {...register('fecha_nacimiento', { setValueAs: (value) => (value ? value : undefined) })}
-                error={errors.fecha_nacimiento?.message}
+                {...registrarCampo('fecha_nacimiento', { setValueAs: (valor) => (valor ? valor : undefined) })}
+                error={errores.fecha_nacimiento?.message}
               />
               <Input
                 label="Teléfono"
-                {...register('telefono', { setValueAs: (value) => (value ? value : undefined) })}
-                error={errors.telefono?.message}
+                {...registrarCampo('telefono', { setValueAs: (valor) => (valor ? valor : undefined) })}
+                error={errores.telefono?.message}
               />
             </div>
-            <Input label="Dirección" {...register('direccion')} error={errors.direccion?.message} />
+            <Input label="Dirección" {...registrarCampo('direccion')} error={errores.direccion?.message} />
             <Input
               label="Legajo N°"
-              {...register('legajo_nro', { setValueAs: (value) => (value ? value : undefined) })}
-              error={errors.legajo_nro?.message}
+              {...registrarCampo('legajo_nro', { setValueAs: (valor) => (valor ? valor : undefined) })}
+              error={errores.legajo_nro?.message}
             />
             <div className="flex gap-3 justify-end">
-              <Button type="button" variant="ghost" onClick={() => setFormMode(null)}>Cancelar</Button>
-              <Button type="submit" loading={isSubmitting}>
-                {formMode === 'create' ? 'Crear legajo' : 'Guardar cambios'}
+              <Button type="button" variant="ghost" onClick={() => setModoFormulario(null)}>Cancelar</Button>
+              <Button type="submit" loading={enviando}>
+                {modoFormulario === 'crear' ? 'Crear legajo' : 'Guardar cambios'}
               </Button>
             </div>
           </form>
@@ -270,19 +278,19 @@ export default function LegajosPage() {
           <table className="w-full text-sm" aria-label="Tabla de legajos">
             <thead>
               <tr className="bg-neutral-50 border-b border-neutral-100">
-                {['Persona', 'DNI', 'Legajo', 'Rol', 'Teléfono', 'Alta'].map((col) => (
-                  <th key={col} className="text-left px-5 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
-                    {col}
+                {['Persona', 'DNI', 'Legajo', 'Rol', 'Teléfono', 'Alta'].map((columna) => (
+                  <th key={columna} className="text-left px-5 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
+                    {columna}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
-              {loading
-                ? Array.from({ length: 6 }).map((_, i) => (
-                    <tr key={i}>
-                      {Array.from({ length: 6 }).map((_, j) => (
-                        <td key={j} className="px-5 py-3"><Skeleton className="h-4 w-full" /></td>
+              {mostrandoEsqueleto
+                ? Array.from({ length: 6 }).map((_, indiceFila) => (
+                    <tr key={indiceFila}>
+                      {Array.from({ length: 6 }).map((_, indiceColumna) => (
+                        <td key={indiceColumna} className="px-5 py-3"><Skeleton className="h-4 w-full" /></td>
                       ))}
                     </tr>
                   ))
@@ -299,8 +307,8 @@ export default function LegajosPage() {
                     <tr
                       key={p.id}
                       className="hover:bg-neutral-50 cursor-pointer transition-colors"
-                      onClick={() => setSelected(p === selected ? null : p)}
-                      aria-selected={selected?.id === p.id}
+                      onClick={() => setPerfilSeleccionado(p === perfilSeleccionado ? null : p)}
+                      aria-selected={perfilSeleccionado?.id === p.id}
                     >
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2.5">
@@ -316,7 +324,7 @@ export default function LegajosPage() {
                       <td className="px-5 py-3 font-mono text-xs text-neutral-500">{p.legajo_nro ?? '—'}</td>
                       <td className="px-5 py-3">
                         {p.rol && (
-                          <Badge variant={rolVariant[p.rol.nombre] ?? 'default'}>
+                          <Badge variant={variantePorRol[p.rol.nombre] ?? 'default'}>
                             {p.rol.nombre}
                           </Badge>
                         )}
@@ -331,18 +339,18 @@ export default function LegajosPage() {
         </div>
       </div>
 
-      {totalPages > 1 && (
+      {totalPaginas > 1 && (
         <div className="flex items-center justify-between">
           <span className="text-sm text-neutral-500">
-            Página {currentPage} de {totalPages}
+            Página {paginaActual} de {totalPaginas}
           </span>
           <div className="flex items-center gap-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={paginaActual === 1}
+              onClick={() => setPaginaActual((paginaAnterior) => Math.max(1, paginaAnterior - 1))}
             >
               Anterior
             </Button>
@@ -350,8 +358,8 @@ export default function LegajosPage() {
               type="button"
               variant="outline"
               size="sm"
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={paginaActual === totalPaginas}
+              onClick={() => setPaginaActual((paginaAnterior) => Math.min(totalPaginas, paginaAnterior + 1))}
             >
               Siguiente
             </Button>
@@ -359,43 +367,43 @@ export default function LegajosPage() {
         </div>
       )}
 
-      {/* Selected profile detail drawer-like */}
-      {selected && (
+      {/* Detalle del perfil seleccionado */}
+      {perfilSeleccionado && (
         <div className="bg-white rounded-2xl border border-brand-200 p-6 space-y-4">
           <div className="flex items-start justify-between">
             <h2 className="font-bold text-neutral-900">
-              Legajo: {selected.apellido}, {selected.nombre}
+              Legajo: {perfilSeleccionado.apellido}, {perfilSeleccionado.nombre}
             </h2>
           <div className="flex items-center gap-3">
               {rol === 'DIRECTOR' && (
                 <button
-                  onClick={() => setDeleteConfirm(selected)}
+                  onClick={() => setPerfilAEliminar(perfilSeleccionado)}
                   className="flex items-center gap-1.5 text-sm font-semibold text-red-500 hover:text-red-700 transition-colors"
                 >
                   <Trash size={15} weight="fill" />
                   Eliminar
                 </button>
               )}
-              <button onClick={() => startEdit(selected)} className="text-sm font-semibold text-brand-600 hover:text-brand-800">
+              <button onClick={() => iniciarEdicion(perfilSeleccionado)} className="text-sm font-semibold text-brand-600 hover:text-brand-800">
                 Editar
               </button>
-              <button onClick={() => setSelected(null)} className="text-neutral-400 hover:text-neutral-600 text-sm">
+              <button onClick={() => setPerfilSeleccionado(null)} className="text-neutral-400 hover:text-neutral-600 text-sm">
                 Cerrar
               </button>
             </div>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
             {[
-              ['DNI', selected.dni],
-              ['Legajo N°', selected.legajo_nro ?? 'No asignado'],
-              ['Rol', selected.rol?.nombre ?? '—'],
-              ['Teléfono', selected.telefono ?? '—'],
-              ['Dirección', selected.direccion ?? '—'],
-              ['Fecha de nacimiento', selected.fecha_nacimiento ? formatFecha(selected.fecha_nacimiento) : '—'],
-            ].map(([label, val]) => (
-              <div key={label} className="space-y-1">
-                <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">{label}</p>
-                <p className="text-neutral-800 font-medium">{val}</p>
+              ['DNI', perfilSeleccionado.dni],
+              ['Legajo N°', perfilSeleccionado.legajo_nro ?? 'No asignado'],
+              ['Rol', perfilSeleccionado.rol?.nombre ?? '—'],
+              ['Teléfono', perfilSeleccionado.telefono ?? '—'],
+              ['Dirección', perfilSeleccionado.direccion ?? '—'],
+              ['Fecha de nacimiento', perfilSeleccionado.fecha_nacimiento ? formatFecha(perfilSeleccionado.fecha_nacimiento) : '—'],
+            ].map(([etiqueta, valor]) => (
+              <div key={etiqueta} className="space-y-1">
+                <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">{etiqueta}</p>
+                <p className="text-neutral-800 font-medium">{valor}</p>
               </div>
             ))}
           </div>
@@ -403,7 +411,7 @@ export default function LegajosPage() {
       )}
 
       {/* Modal de confirmación de eliminación */}
-      {deleteConfirm && (
+      {perfilAEliminar && (
         <div
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
           role="dialog"
@@ -419,7 +427,7 @@ export default function LegajosPage() {
                 <h3 className="font-bold text-neutral-900 text-lg">Eliminar legajo</h3>
                 <p className="text-neutral-600 text-sm mt-1">
                   ¿Estás seguro que querés eliminar el legajo de{' '}
-                  <strong>{deleteConfirm.nombre} {deleteConfirm.apellido}</strong>?
+                  <strong>{perfilAEliminar.nombre} {perfilAEliminar.apellido}</strong>?
                   Esta acción no se puede deshacer.
                 </p>
               </div>
@@ -428,18 +436,18 @@ export default function LegajosPage() {
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setDeleteConfirm(null)}
-                disabled={isDeleting}
+                onClick={() => setPerfilAEliminar(null)}
+                disabled={eliminando}
               >
                 Cancelar
               </Button>
               <button
-                onClick={handleDelete}
-                disabled={isDeleting}
+                onClick={confirmarEliminacion}
+                disabled={eliminando}
                 className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors"
               >
                 <Trash size={15} weight="fill" />
-                {isDeleting ? 'Eliminando...' : 'Sí, eliminar'}
+                {eliminando ? 'Eliminando...' : 'Sí, eliminar'}
               </button>
             </div>
           </div>
