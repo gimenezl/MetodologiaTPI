@@ -16,15 +16,19 @@ export default function LoginPage() {
         className="hidden lg:flex flex-col justify-between p-12 bg-brand-900 relative overflow-hidden"
         aria-hidden="true"
       >
+        {/* Blurred campus photo. Scaled up so the blur does not expose the edges. */}
         <div
-          className="absolute inset-0 opacity-10"
+          className="absolute inset-0 scale-110 blur-[3px]"
           style={{
             backgroundImage: `url('/mision-colegio.png')`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-brand-900 via-brand-800/90 to-brand-900/80" />
+        {/* Brand tint: semi-transparent on every stop so the photo stays visible. */}
+        <div className="absolute inset-0 bg-gradient-to-br from-brand-900/90 via-brand-900/75 to-brand-800/70" />
+        {/* Bottom scrim: keeps the quote readable over bright areas of the photo. */}
+        <div className="absolute inset-0 bg-gradient-to-t from-brand-900/85 via-transparent to-transparent" />
         <div className="relative">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center p-1 shrink-0">
