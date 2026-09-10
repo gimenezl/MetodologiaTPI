@@ -60,6 +60,32 @@ export type Database = {
         Insert: { id?: number; nombre: string }
         Update: { id?: number; nombre?: string }
       }
+      cursos: {
+        Row: {
+          id: string
+          nivel_id: number
+          denominacion: string
+          division: string
+          activo: boolean
+          fecha_creacion: string
+        }
+        Insert: {
+          id?: string
+          nivel_id: number
+          denominacion: string
+          division: string
+          activo?: boolean
+          fecha_creacion?: string
+        }
+        Update: {
+          id?: string
+          nivel_id?: number
+          denominacion?: string
+          division?: string
+          activo?: boolean
+          fecha_creacion?: string
+        }
+      }
       actividades: {
         Row: {
           id: number
@@ -293,6 +319,10 @@ export type Database = {
         Args: { p_estudiante_id: string }
         Returns: number
       }
+      es_director_actual: {
+        Args: Record<string, never>
+        Returns: boolean
+      }
     }
   }
 }
@@ -309,4 +339,5 @@ export type Solicitud = Tables<'solicitudes_inscripcion'>
 export type Galeria = Tables<'galeria'>
 export type Rol = Tables<'roles'>
 export type Nivel = Tables<'niveles'>
+export type Curso = Tables<'cursos'>
 export type Postulacion = Tables<'postulaciones'>
