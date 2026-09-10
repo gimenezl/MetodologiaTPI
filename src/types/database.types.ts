@@ -1,3 +1,25 @@
+/**
+ * Tipos de base de datos escritos a mano.
+ *
+ * ESTE ARCHIVO NO ES GENERADO. `database.generated.ts`, en esta misma carpeta,
+ * sí lo es: sale de `supabase gen types typescript --local` contra una base
+ * reconstruida desde cero con la cadena completa de migraciones. Se conserva
+ * como artefacto de referencia para poder comparar.
+ *
+ * Diferencias verificadas entre este archivo y el esquema real (EPT-8):
+ *
+ * - `cursos` y la función `es_director_actual` coinciden exactamente con el
+ *   esquema generado.
+ * - `padres_hijos` existe solo acá. No hay ninguna migración que lo cree, pero
+ *   `usuarios.service.ts` y `api/usuarios/route.ts` lo usan.
+ * - `opiniones.aprobado` existe solo acá. Tampoco hay migración que lo cree, y
+ *   `noticias.service.ts` lo usa.
+ *
+ * Esas dos últimas son deriva preexistente entre las migraciones y la base que
+ * la aplicación asume. No se borran acá a propósito: quitarlas rompería la
+ * compilación y escondería el problema. Corresponde a EPT-66 decidir si la
+ * deriva se documenta en migraciones nuevas o si el código se corrige.
+ */
 export type Json =
   | string
   | number

@@ -179,12 +179,12 @@ BEGIN
 
     -- Criterio de aceptación 1: alta con denominación, división y nivel existente.
     INSERT INTO public.cursos (nivel_id, denominacion, division)
-    VALUES (nivel, '1er Grado', 'A')
+    VALUES (nivel, 'Prueba RLS', 'A')
     RETURNING id INTO creado;
     RAISE NOTICE 'OK 2.1: la directora creó un curso';
 
     -- Criterio de aceptación 2: modificación sin perder relaciones.
-    UPDATE public.cursos SET denominacion = '1er Grado Bis' WHERE id = creado;
+    UPDATE public.cursos SET denominacion = 'Prueba RLS Bis' WHERE id = creado;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'FALLO 2.2: la directora no pudo modificar el curso';
     END IF;
@@ -202,10 +202,10 @@ DECLARE
     nivel INTEGER := (SELECT id FROM public.niveles WHERE UPPER(BTRIM(nombre)) = 'PRIMARIO');
     variante TEXT;
     variantes TEXT[][] := ARRAY[
-        ARRAY['1er Grado Bis', 'A'],      -- idéntico
-        ARRAY['1ER GRADO BIS', 'a'],      -- distinto uso de mayúsculas
-        ARRAY['1er grado bis', 'A'],      -- minúsculas
-        ARRAY['1ER GRADO BIS', 'A']       -- mayúsculas completas
+        ARRAY['Prueba RLS Bis', 'A'],      -- idéntico
+        ARRAY['PRUEBA RLS BIS', 'a'],      -- distinto uso de mayúsculas
+        ARRAY['prueba rls bis', 'A'],      -- minúsculas
+        ARRAY['PRUEBA RLS BIS', 'A']       -- mayúsculas completas
     ];
     par TEXT[];
 BEGIN
@@ -225,7 +225,7 @@ BEGIN
     -- exige valores ya recortados, así que la fila ni siquiera llega al índice.
     BEGIN
         INSERT INTO public.cursos (nivel_id, denominacion, division)
-        VALUES (nivel, '  1er Grado Bis  ', 'A');
+        VALUES (nivel, '  Prueba RLS Bis  ', 'A');
         RAISE EXCEPTION 'FALLO 3.5: se aceptó una denominación con espacios laterales';
     EXCEPTION
         WHEN check_violation THEN
@@ -234,7 +234,7 @@ BEGIN
 
     -- La misma denominación en OTRO nivel sí es válida.
     INSERT INTO public.cursos (nivel_id, denominacion, division)
-    VALUES ((SELECT id FROM public.niveles WHERE UPPER(BTRIM(nombre)) = 'INICIAL'), '1er Grado Bis', 'A');
+    VALUES ((SELECT id FROM public.niveles WHERE UPPER(BTRIM(nombre)) = 'INICIAL'), 'Prueba RLS Bis', 'A');
     RAISE NOTICE 'OK 3.6: la misma denominación se admite en otro nivel';
 END $$;
 
@@ -263,7 +263,7 @@ DECLARE
     nivel_despues INTEGER;
 BEGIN
     SELECT id, nivel_id INTO objetivo, nivel_antes
-    FROM public.cursos WHERE denominacion = '1er Grado Bis' AND division = 'A'
+    FROM public.cursos WHERE denominacion = 'Prueba RLS Bis' AND division = 'A'
     ORDER BY fecha_creacion LIMIT 1;
 
     UPDATE public.cursos SET activo = FALSE WHERE id = objetivo;
