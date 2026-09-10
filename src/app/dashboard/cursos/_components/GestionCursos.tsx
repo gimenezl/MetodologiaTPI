@@ -168,8 +168,10 @@ export function GestionCursos({ cursos, niveles }: GestionCursosProps) {
         </div>
       )}
 
-      {/* Región de estado: anuncia los fallos a los lectores de pantalla. */}
-      <div aria-live="polite">
+      {/* Región de estado: anuncia los fallos a los lectores de pantalla. Lleva
+          nombre propio para distinguirla de otras regiones vivas de la página,
+          como el contenedor de notificaciones. */}
+      <div aria-live="polite" aria-label="Estado de la administración de cursos">
         {errorGeneral && (
           <div
             role="alert"
@@ -421,9 +423,17 @@ function AccionesCurso({
   )
 }
 
+const SELECTOR_ENFOCABLES =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 /**
- * Diálogo de edición. Mueve el foco al abrirse, lo devuelve al cerrarse y se
- * cierra con Escape, para que la edición sea usable solo con teclado.
+ * Diálogo de edición. Mueve el foco al abrirse, lo retiene mientras está
+ * abierto, lo devuelve al cerrarse y se cierra con Escape, para que la edición
+ * sea usable solo con teclado.
+ *
+ * La retención del foco no es opcional: el diálogo declara `aria-modal="true"`,
+ * así que un lector de pantalla anuncia que el resto de la página quedó
+ * inactivo. Si el tabulador pudiera salir, ese anuncio sería mentira.
  */
 function ModalEdicion({
   titulo,
@@ -447,7 +457,30 @@ function ModalEdicion({
     primerCampo?.focus()
 
     const alPresionarTecla = (evento: KeyboardEvent) => {
-      if (evento.key === 'Escape') onCerrar()
+      if (evento.key === 'Escape') {
+        onCerrar()
+        return
+      }
+      if (evento.key !== 'Tab') return
+
+      const enfocables = Array.from(
+        contenedor.current?.querySelectorAll<HTMLElement>(SELECTOR_ENFOCABLES) ?? []
+      )
+      if (enfocables.length === 0) return
+
+      const primero = enfocables[0]
+      const ultimo = enfocables[enfocables.length - 1]
+      const activo = document.activeElement
+
+      // Se cierra el ciclo en los dos extremos, y también si el foco ya se
+      // había escapado del diálogo por cualquier motivo.
+      if (evento.shiftKey && (activo === primero || !contenedor.current?.contains(activo))) {
+        evento.preventDefault()
+        ultimo.focus()
+      } else if (!evento.shiftKey && (activo === ultimo || !contenedor.current?.contains(activo))) {
+        evento.preventDefault()
+        primero.focus()
+      }
     }
     document.addEventListener('keydown', alPresionarTecla)
 

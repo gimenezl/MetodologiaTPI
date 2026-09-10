@@ -96,17 +96,68 @@ BEGIN
     END IF;
     RAISE NOTICE 'OK 1.5: no hay ninguna política DELETE sobre cursos';
 
-    -- Privilegios mínimos: sin DELETE ni TRUNCATE para los roles de aplicación.
-    IF has_table_privilege('authenticated', 'public.cursos', 'DELETE') THEN
-        RAISE EXCEPTION 'FALLO 1.6: authenticated conserva el privilegio DELETE sobre cursos';
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_class
+        WHERE oid = 'public.roles'::regclass AND relrowsecurity
+    ) THEN
+        RAISE EXCEPTION 'FALLO 1.6: roles no tiene RLS habilitado';
     END IF;
+    RAISE NOTICE 'OK 1.6: roles tiene RLS habilitado';
+END $$;
+
+-- ================================================================
+-- 1bis. PRIVILEGIOS RESIDUALES
+-- ================================================================
+-- `GRANT ALL` de la migración 001 incluye SELECT, INSERT, UPDATE, DELETE,
+-- TRUNCATE, REFERENCES y TRIGGER. Revocar solo las escrituras habituales deja
+-- REFERENCES y TRIGGER en pie, así que se comprueban todos explícitamente.
+DO $$
+DECLARE
+    prohibidos TEXT[] := ARRAY['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'];
+    tablas TEXT[] := ARRAY['public.roles', 'public.niveles'];
+    tabla TEXT;
+    privilegio TEXT;
+BEGIN
+    FOREACH tabla IN ARRAY tablas LOOP
+        FOREACH privilegio IN ARRAY prohibidos LOOP
+            IF has_table_privilege('authenticated', tabla, privilegio) THEN
+                RAISE EXCEPTION 'FALLO 1bis: authenticated conserva % sobre %', privilegio, tabla;
+            END IF;
+            IF has_table_privilege('anon', tabla, privilegio) THEN
+                RAISE EXCEPTION 'FALLO 1bis: anon conserva % sobre %', privilegio, tabla;
+            END IF;
+        END LOOP;
+
+        -- La lectura sí tiene que seguir funcionando para la aplicación.
+        IF NOT has_table_privilege('authenticated', tabla, 'SELECT') THEN
+            RAISE EXCEPTION 'FALLO 1bis: authenticated perdió SELECT sobre %, lo que rompería la aplicación', tabla;
+        END IF;
+        IF has_table_privilege('anon', tabla, 'SELECT') THEN
+            RAISE EXCEPTION 'FALLO 1bis: anon puede leer %', tabla;
+        END IF;
+
+        RAISE NOTICE 'OK 1bis: % queda de solo lectura para authenticated y cerrada para anon', tabla;
+    END LOOP;
+
+    -- Cursos: además de las escrituras prohibidas, se permiten INSERT y UPDATE
+    -- porque el director los necesita; el filtro por rol lo hace RLS.
+    FOREACH privilegio IN ARRAY ARRAY['DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'] LOOP
+        IF has_table_privilege('authenticated', 'public.cursos', privilegio) THEN
+            RAISE EXCEPTION 'FALLO 1bis: authenticated conserva % sobre public.cursos', privilegio;
+        END IF;
+    END LOOP;
     IF has_table_privilege('anon', 'public.cursos', 'SELECT') THEN
-        RAISE EXCEPTION 'FALLO 1.7: anon puede leer cursos';
+        RAISE EXCEPTION 'FALLO 1bis: anon puede leer cursos';
     END IF;
-    IF has_table_privilege('authenticated', 'public.niveles', 'DELETE') THEN
-        RAISE EXCEPTION 'FALLO 1.8: authenticated conserva el privilegio DELETE sobre niveles';
+    RAISE NOTICE 'OK 1bis: public.cursos sin DELETE, TRUNCATE, REFERENCES ni TRIGGER, y cerrada para anon';
+
+    -- Las secuencias acompañan a las tablas: sin ellas no se puede insertar
+    -- aunque alguien reotorgara INSERT por error.
+    IF has_sequence_privilege('authenticated', 'public.roles_id_seq', 'USAGE')
+       OR has_sequence_privilege('authenticated', 'public.niveles_id_seq', 'USAGE') THEN
+        RAISE EXCEPTION 'FALLO 1bis: authenticated conserva USAGE sobre las secuencias de roles o niveles';
     END IF;
-    RAISE NOTICE 'OK 1.6-1.8: privilegios mínimos aplicados sobre cursos y niveles';
+    RAISE NOTICE 'OK 1bis: secuencias de roles y niveles cerradas para authenticated';
 END $$;
 
 -- ================================================================
@@ -337,6 +388,66 @@ END $$;
 -- ================================================================
 -- 9. ROL FORJADO: un usuario no puede ascenderse a DIRECTOR
 -- ================================================================
+-- Una denegación solo cuenta si ocurre por el motivo correcto. La política
+-- recursiva de `perfiles` que trae la migración 001 puede provocar SQLSTATE
+-- 42P17, y un error interno inesperado NO es una autorización correcta: se
+-- clasifica aparte y se marca como FALLO.
+DO $$
+DECLARE
+    filas INTEGER;
+    id_director INTEGER := (SELECT id FROM public.roles WHERE nombre = 'DIRECTOR');
+BEGIN
+    EXECUTE 'SET LOCAL ROLE authenticated';
+    PERFORM set_config('request.jwt.claims',
+                       '{"sub":"33333333-3333-4333-8333-333333333333"}', true);
+
+    -- 9.1 Reasignarse el rol en su propio perfil.
+    BEGIN
+        UPDATE public.perfiles
+        SET rol_id = id_director
+        WHERE user_id = '33333333-3333-4333-8333-333333333333';
+        GET DIAGNOSTICS filas = ROW_COUNT;
+
+        IF filas <> 0 THEN
+            RAISE EXCEPTION 'FALLO 9.1: un estudiante modificó su propio rol (% filas)', filas;
+        END IF;
+        RAISE NOTICE 'OK 9.1: RLS impide que el estudiante cambie su rol (0 filas afectadas)';
+    EXCEPTION
+        WHEN insufficient_privilege THEN
+            RAISE NOTICE 'OK 9.1: el estudiante no puede cambiar su rol (42501)';
+        WHEN OTHERS THEN
+            IF SQLSTATE = '42P17' THEN
+                RAISE EXCEPTION 'FALLO 9.1: la denegación llegó por recursión de políticas (42P17), no por autorización. Arreglar las políticas de perfiles de la migración 001 antes de aceptar esta prueba.';
+            END IF;
+            RAISE EXCEPTION 'FALLO 9.1: denegación por un motivo inesperado % (%)', SQLSTATE, SQLERRM;
+    END;
+
+    -- 9.2 Insertarse un perfil nuevo con rol de director.
+    BEGIN
+        INSERT INTO public.perfiles (user_id, rol_id, nombre, apellido, dni)
+        VALUES ('33333333-3333-4333-8333-333333333333', id_director, 'Falso', 'Director', 'T90000099');
+        RAISE EXCEPTION 'FALLO 9.2: un estudiante se creó un perfil de director';
+    EXCEPTION
+        WHEN insufficient_privilege THEN
+            RAISE NOTICE 'OK 9.2: el estudiante no puede insertarse un perfil de director (42501)';
+        WHEN OTHERS THEN
+            IF SQLSTATE = '42P17' THEN
+                RAISE EXCEPTION 'FALLO 9.2: la denegación llegó por recursión de políticas (42P17), no por autorización.';
+            END IF;
+            RAISE EXCEPTION 'FALLO 9.2: denegación por un motivo inesperado % (%)', SQLSTATE, SQLERRM;
+    END;
+END $$;
+
+-- ================================================================
+-- 9bis. ESCALADA POR LA TABLA DE ROLES
+-- ================================================================
+-- Éste es el ataque que cierra la migración 004. La autorización de cursos
+-- deriva el rol de `roles.nombre = 'DIRECTOR'`. Si un usuario autenticado puede
+-- escribir en `public.roles`, le alcanza con renombrar su propio rol para que
+-- `es_director_actual()` lo acepte, sin tocar nunca su perfil.
+--
+-- Antes de 004: `GRANT ALL ON ALL TABLES ... TO authenticated` (001:312) y
+-- ninguna RLS sobre `roles` hacían que este bloque fallara.
 DO $$
 DECLARE
     filas INTEGER;
@@ -345,19 +456,80 @@ BEGIN
     PERFORM set_config('request.jwt.claims',
                        '{"sub":"33333333-3333-4333-8333-333333333333"}', true);
 
-    BEGIN
-        UPDATE public.perfiles
-        SET rol_id = (SELECT id FROM public.roles WHERE nombre = 'DIRECTOR')
-        WHERE user_id = '33333333-3333-4333-8333-333333333333';
-        GET DIAGNOSTICS filas = ROW_COUNT;
+    IF public.es_director_actual() THEN
+        RAISE EXCEPTION 'FALLO 9bis.0: el estudiante ya era director antes del ataque';
+    END IF;
 
+    -- 9bis.1 Renombrar el rol propio como DIRECTOR.
+    BEGIN
+        UPDATE public.roles SET nombre = 'DIRECTOR' WHERE nombre = 'ESTUDIANTE';
+        GET DIAGNOSTICS filas = ROW_COUNT;
         IF filas <> 0 THEN
-            RAISE EXCEPTION 'FALLO 9: un estudiante modificó su propio rol';
+            RAISE EXCEPTION 'FALLO 9bis.1: un estudiante renombró % fila(s) de public.roles', filas;
         END IF;
-        RAISE NOTICE 'OK 9: el estudiante no puede cambiar su rol (0 filas afectadas)';
+        RAISE NOTICE 'OK 9bis.1: RLS impide renombrar roles (0 filas afectadas)';
     EXCEPTION
         WHEN insufficient_privilege THEN
-            RAISE NOTICE 'OK 9: el estudiante no puede cambiar su rol (42501)';
+            RAISE NOTICE 'OK 9bis.1: el estudiante no puede renombrar roles (42501)';
+    END;
+
+    -- 9bis.2 Insertar un rol nuevo.
+    BEGIN
+        INSERT INTO public.roles (nombre) VALUES ('SUPERDIRECTOR');
+        RAISE EXCEPTION 'FALLO 9bis.2: un estudiante insertó una fila en public.roles';
+    EXCEPTION
+        WHEN insufficient_privilege THEN
+            RAISE NOTICE 'OK 9bis.2: el estudiante no puede insertar roles (42501)';
+    END;
+
+    -- 9bis.3 Borrar un rol.
+    BEGIN
+        DELETE FROM public.roles WHERE nombre = 'DOCENTE';
+        GET DIAGNOSTICS filas = ROW_COUNT;
+        IF filas <> 0 THEN
+            RAISE EXCEPTION 'FALLO 9bis.3: un estudiante borró % fila(s) de public.roles', filas;
+        END IF;
+        RAISE NOTICE 'OK 9bis.3: RLS impide borrar roles (0 filas afectadas)';
+    EXCEPTION
+        WHEN insufficient_privilege THEN
+            RAISE NOTICE 'OK 9bis.3: el estudiante no puede borrar roles (42501)';
+    END;
+
+    -- 9bis.4 Vaciar la tabla.
+    BEGIN
+        TRUNCATE public.roles CASCADE;
+        RAISE EXCEPTION 'FALLO 9bis.4: un estudiante truncó public.roles';
+    EXCEPTION
+        WHEN insufficient_privilege THEN
+            RAISE NOTICE 'OK 9bis.4: el estudiante no puede truncar roles (42501)';
+    END;
+
+    -- 9bis.5 Lo mismo sobre niveles, que es la otra tabla de catálogo.
+    BEGIN
+        UPDATE public.niveles SET nombre = 'HACKEADO' WHERE TRUE;
+        GET DIAGNOSTICS filas = ROW_COUNT;
+        IF filas <> 0 THEN
+            RAISE EXCEPTION 'FALLO 9bis.5: un estudiante modificó % nivel(es)', filas;
+        END IF;
+        RAISE NOTICE 'OK 9bis.5: RLS impide modificar niveles (0 filas afectadas)';
+    EXCEPTION
+        WHEN insufficient_privilege THEN
+            RAISE NOTICE 'OK 9bis.5: el estudiante no puede modificar niveles (42501)';
+    END;
+
+    -- 9bis.6 Después de todos los intentos, sigue sin ser director y sigue sin
+    -- poder crear cursos.
+    IF public.es_director_actual() THEN
+        RAISE EXCEPTION 'FALLO 9bis.6: el ataque logró que es_director_actual() acepte al estudiante';
+    END IF;
+
+    BEGIN
+        INSERT INTO public.cursos (nivel_id, denominacion, division)
+        VALUES ((SELECT id FROM public.niveles WHERE UPPER(BTRIM(nombre)) = 'PRIMARIO'), 'Escalada', 'Z');
+        RAISE EXCEPTION 'FALLO 9bis.6: el estudiante creó un curso después del intento de escalada';
+    EXCEPTION
+        WHEN insufficient_privilege THEN
+            RAISE NOTICE 'OK 9bis.6: tras el ataque, el estudiante sigue sin ser director y sin poder crear cursos';
     END;
 END $$;
 
