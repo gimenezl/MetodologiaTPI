@@ -61,6 +61,8 @@ next-env.d.ts
 # ===========================
 coverage/
 .nyc_output/
+test-results/
+playwright-report/
 
 # ===========================
 # CACHE

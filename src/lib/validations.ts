@@ -114,3 +114,64 @@ export const perfilSchema = z.object({
 })
 
 export type PerfilFormData = z.infer<typeof perfilSchema>
+
+// ---- Cursos (EPT-8) ----
+/**
+ * Normalización canónica de los textos de un curso.
+ *
+ * Debe coincidir exactamente con la expresión del índice único de la base
+ * (`UPPER(BTRIM(...))` en `idx_cursos_nivel_denominacion_division`). Se usa
+ * solo para comparar; lo que se guarda es el valor recortado tal como lo
+ * escribió el director, para no alterar su forma de nombrar los cursos.
+ *
+ * La base sigue siendo la única autoridad ante concurrencia: esta función
+ * mejora los mensajes, no reemplaza la restricción única.
+ */
+export function normalizarTextoCurso(valor: string): string {
+  return valor.trim().toUpperCase()
+}
+
+const denominacionSchema = z
+  .string()
+  .trim()
+  .min(1, 'La denominación es requerida')
+  .max(100, 'Máximo 100 caracteres')
+
+const divisionSchema = z
+  .string()
+  .trim()
+  .min(1, 'La división es requerida')
+  .max(20, 'Máximo 20 caracteres')
+
+const nivelIdSchema = z
+  .number({ message: 'Seleccioná un nivel educativo' })
+  .int('Nivel inválido')
+  .positive('Seleccioná un nivel educativo')
+
+export const crearCursoSchema = z.object({
+  denominacion: denominacionSchema,
+  division: divisionSchema,
+  nivel_id: nivelIdSchema,
+})
+
+export type CrearCursoData = z.infer<typeof crearCursoSchema>
+
+/**
+ * Modificación parcial. `activo` cubre la baja y el alta lógica; no existe
+ * ninguna operación de borrado físico.
+ */
+export const actualizarCursoSchema = z
+  .object({
+    denominacion: denominacionSchema.optional(),
+    division: divisionSchema.optional(),
+    nivel_id: nivelIdSchema.optional(),
+    activo: z.boolean().optional(),
+  })
+  .refine(
+    (datos) => Object.values(datos).some((valor) => valor !== undefined),
+    { message: 'No hay cambios para aplicar' }
+  )
+
+export type ActualizarCursoData = z.infer<typeof actualizarCursoSchema>
+
+export const cursoIdSchema = z.string().uuid('Identificador de curso inválido')
