@@ -67,6 +67,10 @@ export default defineConfig({
   testDir: './tests',
   timeout: 30000,
   retries: 1,
+  // Las suites autenticadas comparten el catálogo local descartable. Un único
+  // worker evita que las altas reales de Niveles alteren mientras tanto las
+  // aserciones históricas de Cursos; sin base local se conserva el paralelismo.
+  workers: conBaseLocal ? 1 : undefined,
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',

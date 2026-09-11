@@ -322,8 +322,10 @@ test.describe('DIRECTOR autenticado — niveles', () => {
     await expect(filas.nth(2)).toContainText('PRIMARIO')
     await expect(filas.nth(3)).toContainText('30')
     await expect(filas.nth(3)).toContainText('SECUNDARIO')
+    await expect(page.getByRole('button', { name: /eliminar|borrar/i })).toHaveCount(0)
 
     await capturar(page, 'escritorio-listado-autenticado')
+    await capturar(page, 'escritorio-sin-eliminacion')
   })
 
   test('crea, renombra, inactiva y reactiva desde la interfaz real', async ({
@@ -394,6 +396,7 @@ test.describe('DIRECTOR autenticado — niveles', () => {
         .filter({ hasText: 'Ya existe un nivel educativo con ese nombre.' })
         .first()
     ).toBeVisible({ timeout: 15_000 })
+    await capturar(page, 'escritorio-duplicado-desde-postgresql')
   })
 })
 

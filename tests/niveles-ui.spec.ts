@@ -46,6 +46,7 @@ test.describe('interfaz administrativa de niveles', () => {
     await expect(page.getByRole('button', { name: /eliminar|borrar/i })).toHaveCount(0)
 
     await capturar(page, 'escritorio-listado')
+    await capturar(page, 'escritorio-nivel-inactivo')
   })
 
   test('abre el alta con foco inicial y valida antes de llamar a la API', async ({
@@ -61,6 +62,7 @@ test.describe('interfaz administrativa de niveles', () => {
     await page.getByRole('button', { name: 'Nuevo nivel' }).click()
     const nombre = page.getByLabel('Nombre del nivel').first()
     await expect(nombre).toBeFocused()
+    await capturar(page, 'escritorio-formulario-alta')
     await nombre.fill(' NIVEL INVÁLIDO ')
     await page.getByRole('button', { name: 'Crear nivel' }).click()
 
@@ -71,8 +73,12 @@ test.describe('interfaz administrativa de niveles', () => {
   })
 
   test('expone el estado de envío y confirma un alta correcta', async ({ page }) => {
+    let liberarRespuesta!: () => void
+    const respuestaPendiente = new Promise<void>((resolve) => {
+      liberarRespuesta = resolve
+    })
     await page.route('**/api/niveles', async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 700))
+      await respuestaPendiente
       await route.fulfill({
         status: 201,
         contentType: 'application/json',
@@ -85,6 +91,8 @@ test.describe('interfaz administrativa de niveles', () => {
 
     await page.getByRole('button', { name: 'Crear nivel' }).click()
     await expect(page.getByRole('button', { name: 'Cargando...' })).toBeDisabled()
+    await capturar(page, 'escritorio-enviando')
+    liberarRespuesta()
     await expect(
       page.getByRole('status').filter({ hasText: 'Nivel NIVEL DE PRUEBA creado correctamente.' })
     ).toBeVisible()
@@ -124,6 +132,7 @@ test.describe('interfaz administrativa de niveles', () => {
         hasText: 'Ya existe un nivel educativo con ese nombre.',
       }).first()
     ).toBeVisible()
+    await capturar(page, 'escritorio-error-duplicado')
 
     await nombre.fill('NIVEL CORREGIDO')
     await page.getByRole('button', { name: 'Crear nivel' }).click()
@@ -153,6 +162,7 @@ test.describe('interfaz administrativa de niveles', () => {
     })
     await expect(dialogo).toBeVisible()
     await expect(page.locator('#renombrar-nivel-nombre')).toBeFocused()
+    await capturar(page, 'escritorio-edicion')
     await page.locator('#renombrar-nivel-nombre').fill('TRAYECTO PROFESIONAL')
     await dialogo.getByRole('button', { name: 'Guardar nombre' }).click()
 
@@ -222,19 +232,23 @@ test.describe('interfaz administrativa de niveles', () => {
   test('muestra estados difíciles de carga, vacío, error y éxito', async ({ page }) => {
     await page.goto('/pruebas-ui/niveles?estado=carga')
     await expect(page.getByText('Cargando los niveles educativos…')).toBeAttached()
+    await capturar(page, 'escritorio-carga')
 
     await page.goto('/pruebas-ui/niveles?vacio=1')
     await expect(page.getByText('No hay niveles educativos registrados')).toBeVisible()
+    await capturar(page, 'escritorio-vacio')
 
     await page.goto('/pruebas-ui/niveles?estado=error')
     await expect(
       page.getByLabel(REGION_ESTADO).getByRole('alert')
     ).toContainText('No pudimos guardar el cambio. Revisá los datos y volvé a intentarlo.')
+    await capturar(page, 'escritorio-error')
 
     await page.goto('/pruebas-ui/niveles?estado=exito')
     await expect(page.getByRole('status')).toContainText(
       'Nivel actualizado correctamente.'
     )
+    await capturar(page, 'escritorio-exito')
   })
 
   test('nombra en español controles, regiones y contenido visible', async ({ page }) => {
@@ -294,7 +308,17 @@ test.describe('interfaz administrativa de niveles en pantalla angosta', () => {
     await page.goto('/pruebas-ui/niveles')
     await page.getByRole('button', { name: 'Nuevo nivel' }).click()
     await expect(page.getByRole('heading', { name: 'Nuevo nivel educativo' })).toBeVisible()
+    await capturar(page, 'movil-formulario')
     await page.getByRole('button', { name: 'Cerrar formulario' }).click()
+
+    await page
+      .getByRole('button', { name: 'Inactivar el nivel FORMACIÓN PROFESIONAL' })
+      .click()
+    await expect(
+      page.getByRole('dialog', { name: 'Inactivar FORMACIÓN PROFESIONAL' })
+    ).toBeVisible()
+    await capturar(page, 'movil-confirmacion-estado')
+    await page.keyboard.press('Escape')
 
     await page
       .getByRole('button', { name: 'Renombrar el nivel FORMACIÓN PROFESIONAL' })
