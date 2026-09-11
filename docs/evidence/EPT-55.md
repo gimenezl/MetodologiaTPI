@@ -108,7 +108,7 @@ preinscripción sigue limitada a los tres niveles institucionales.
 | Teclado y foco | diálogo propio con focus trap/retorno | UI focalizada | aserciones Playwright | **Demostrada** |
 | Idioma español | copy y nombres accesibles | guard sobre contenido visible | capturas + prueba UI | **Demostrada** |
 | Página pública desacoplada | no consulta tabla; copy atemporal | build marca `/niveles` estática | salida de build | **Demostrada** |
-| Preinscripción institucional | selector existente sin modificación | prueba general de página | inspección de diff | **Parcialmente demostrada** |
+| Preinscripción institucional | selector estático sin acoplarse al catálogo administrativo | caso E2E focalizado enumera texto y valor exactos | prueba automatizada | **Demostrada** |
 | Jira con trazabilidad | comentarios 10032–10034 | lectura y escritura final mediante Jira MCP | comentario 10034 con candidato y resultados | **Demostrada** |
 
 ## 8. Cambios por archivo
@@ -252,10 +252,11 @@ de Inicial, Primario y Secundario.
 
 ## 20. Relación con preinscripción
 
-**Parcialmente demostrada.** No existe diff en el formulario de preinscripción y
-la prueba E2E general confirma que `/inscripcion` renderiza. El selector conserva
-la implementación previa con Inicial, Primario y Secundario; este work unit no
-añadió un caso focalizado que enumere sus opciones.
+**Demostrada.** No existe diff en el formulario de preinscripción. El caso
+focalizado de `tests/e2e.spec.ts` localiza el selector por su etiqueta visible y
+comprueba exactamente el placeholder más Inicial, Primario y Secundario, tanto
+por texto dirigido al usuario como por valor. La lista no admite ninguna opción
+administrativa.
 
 ## 21. Pruebas SQL
 
@@ -281,6 +282,10 @@ protección, inexistente, error inesperado seguro y 403.
 autenticada de Niveles obtuvo **17 passed** contando 3 casos de setup. La suite
 completa sin base obtuvo **48 passed, 1 fallo preexistente**; la final con base
 obtuvo **79 passed, 1 fallo preexistente**.
+
+**Demostrada.** El caso focalizado de preinscripción obtuvo **1 passed**. Se
+fortaleció una prueba existente, por lo que los totales de las suites completas
+no aumentaron.
 
 **Demostrada.** Las pruebas reales usan el formulario de login y storage state;
 no fabrican tokens. La suite destructiva se omite salvo
@@ -322,6 +327,7 @@ docker exec supabase_db_educar-para-transformar psql -U postgres -d postgres -v 
 npx.cmd tsc --noEmit --incremental false
 npx.cmd eslint --no-cache -- <archivos TypeScript modificados desde la base>
 npm.cmd run build
+npx.cmd playwright test tests/e2e.spec.ts --project=chromium --grep "inscripción muestra exactamente los tres niveles institucionales"
 npx.cmd playwright test tests/niveles.spec.ts tests/niveles-ui.spec.ts --project=chromium
 $env:EPT_SUPABASE_LOCAL='1'; npx.cmd playwright test tests/niveles-auth.spec.ts
 npm.cmd run test:e2e
@@ -340,6 +346,7 @@ git diff --check
 | reset final / lista de migraciones | 0 / 0 |
 | SQL Niveles / SQL Cursos | 0 / 0 |
 | TypeScript / ESLint focalizado / build | 0 / 0 / 0 |
+| preinscripción focalizada | 0 |
 | Niveles HTTP+UI / Niveles autenticado | 0 / 0 |
 | E2E completo sin base | 1, por el único fallo preexistente |
 | E2E completo con base | 1, por el único fallo preexistente |
@@ -358,6 +365,7 @@ git diff --check
 | TypeScript | sin salida; código 0 |
 | ESLint focalizado | 0 errores, 2 advertencias preexistentes |
 | Build | compilación, tipos y 20 páginas generadas; código 0 |
+| Preinscripción focalizada | 1 passed |
 | Niveles HTTP/UI | 20 passed |
 | Niveles auth | 17 passed |
 | E2E sin DB | 48 passed, 1 failed |
@@ -373,6 +381,10 @@ y lint **125 (16/109)**. El candidato registra **48/49**, **79/80** y exactament
 `tests/e2e.spec.ts:8`: esperaba `/login?redirect=/dashboard` y recibió
 `/login?redirect=%2Fdashboard`. Las 20 pruebas sin DB y 35 pruebas con DB
 agregadas/ampliadas por EPT-55 pasan.
+
+**Demostrada.** La comprobación exacta de preinscripción amplía un caso ya
+existente: por eso mantiene los totales **48/49** y **79/80**, en lugar de sumar
+un caso nuevo a cada suite.
 
 **Demostrada.** Una primera corrida autenticada completa obtuvo 78/80 por una
 carrera adicional: Cursos y Niveles mutaban simultáneamente el catálogo local.
@@ -431,7 +443,7 @@ crear/limpiar datos del stack local descartable, detrás de variable explícita 
 hostname exacto `localhost`, `127.0.0.1` o `::1`.
 
 **Demostrada.** El escaneo del parche de trazabilidad obtuvo
-`SECRET_VALUE_MATCHES=0` y `ATTRIBUTION_PATCH_MATCHES=0`; los cinco commits
+`SECRET_VALUE_MATCHES=0` y `ATTRIBUTION_PATCH_MATCHES=0`; los seis commits
 anteriores obtuvieron `ATTRIBUTION_COMMIT_MATCHES=0`. La inspección binaria
 acotada de los veinte PNG obtuvo `PNG_SECRET_MARKERS=0`.
 
@@ -473,29 +485,34 @@ convención ya versionada (UTF-8 BOM y LF final); hash antes/después
 2. Ejecutar `npx.cmd supabase db reset --local`.
 3. Copiar y ejecutar ambas pruebas SQL con los comandos de la sección 27.
 4. Ejecutar `npx.cmd tsc --noEmit --incremental false` y `npm.cmd run build`.
-5. Ejecutar la prueba focalizada de 20 casos y luego
+5. Ejecutar el caso focalizado de preinscripción con el comando de la sección
+   27 y confirmar `1 passed`.
+6. Ejecutar la prueba focalizada de 20 casos y luego
    `$env:EPT_SUPABASE_LOCAL='1'; npx.cmd playwright test tests/niveles-auth.spec.ts`.
-6. Para regenerar evidencia, agregar `$env:EPT_CAPTURAS='1'`; las capturas se
+7. Para regenerar evidencia, agregar `$env:EPT_CAPTURAS='1'`; las capturas se
    escriben en `docs/evidence/EPT-55/`.
-7. Ejecutar ambas suites completas y comparar contra 48/49 y 79/80.
+8. Ejecutar ambas suites completas y comparar contra 48/49 y 79/80.
 
 ## 37. Límite de reversión
 
 **Demostrada.** Revertir de adelante hacia atrás:
 
-1. `docs(niveles): registrar trazabilidad final en Jira` — revierte únicamente
+1. `test(inscripcion): comprobar niveles institucionales` — revierte la
+   aserción focalizada y su documentación; no cambia producción. Se identifica
+   por mensaje porque un commit no puede auto-incrustar su propio SHA.
+2. `docs(niveles): registrar trazabilidad final en Jira` — revierte únicamente
    la actualización documental posterior al comentario final.
-2. `321fa13358dc3d60519e0b6647c1f3349fa66901` — documentación, capturas y
+3. `321fa13358dc3d60519e0b6647c1f3349fa66901` — documentación, capturas y
    ajustes finales de evidencia/aislamiento; no cambia producción.
-3. `372b5aba247e9d0e475d0b6810590f7d75bd81a1` — interfaz, navegación,
+4. `372b5aba247e9d0e475d0b6810590f7d75bd81a1` — interfaz, navegación,
    harness y copy público.
-4. `cf8d438acd3d4924851e42ab3a0600648107f4ad` — integración activa/histórica
+5. `cf8d438acd3d4924851e42ab3a0600648107f4ad` — integración activa/histórica
    de Cursos.
-5. `c39b4bbd0f5b0046e022179b39688bfbe47cc547` — API, servicios y validación.
-6. `7ab799a4a955bff0c305999e6a97166358f4f275` — migración 006 y tipos.
+6. `c39b4bbd0f5b0046e022179b39688bfbe47cc547` — API, servicios y validación.
+7. `7ab799a4a955bff0c305999e6a97166358f4f275` — migración 006 y tipos.
 
 **Demostrada.** Revertir el archivo de migración no deshace un esquema ya
 aplicado. Fuera de un entorno descartable debe crearse una migración posterior;
 no se edita ni elimina una migración aplicada y la reversión no debe reabrir
-privilegios inseguros. El commit documental de trazabilidad se identifica por su
-mensaje porque no puede auto-incrustar su propio SHA.
+privilegios inseguros. Los commits documentados sin SHA propio se identifican
+por mensaje porque no pueden auto-incrustarlo.
