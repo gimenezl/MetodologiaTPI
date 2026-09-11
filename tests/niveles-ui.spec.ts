@@ -4,7 +4,6 @@ import path from 'node:path'
 /** Interfaz real con datos deterministas y API interceptada, sin base remota. */
 
 const ESCRITORIO = { width: 1280, height: 900 }
-const MOVIL = { width: 375, height: 812 }
 const REGION_ESTADO = 'Estado de la administración de niveles'
 const CAPTURAR = process.env.EPT_CAPTURAS === '1'
 
@@ -67,7 +66,9 @@ test.describe('interfaz administrativa de niveles', () => {
     await page.getByRole('button', { name: 'Crear nivel' }).click()
 
     await expect(
-      page.getByText('El nombre del nivel no puede tener espacios al inicio o al final')
+      page.getByText(
+        'El nombre del nivel no puede tener caracteres en blanco al inicio o al final'
+      )
     ).toBeVisible()
     expect(huboLlamada).toBe(false)
   })
@@ -284,52 +285,5 @@ test.describe('interfaz administrativa de niveles', () => {
     ]) {
       expect(new RegExp(`\\b${palabra}\\b`, 'i').test(texto)).toBe(false)
     }
-  })
-})
-
-test.describe('interfaz administrativa de niveles en pantalla angosta', () => {
-  test.use({ viewport: MOVIL })
-
-  test('usa tarjetas y no genera desplazamiento horizontal', async ({ page }) => {
-    await page.goto('/pruebas-ui/niveles')
-
-    await expect(page.getByRole('list', { name: 'Niveles educativos ordenados' })).toBeVisible()
-    await expect(page.getByRole('table', { name: 'Tabla de niveles educativos' })).toBeHidden()
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1
-      )
-    ).toBe(false)
-
-    await capturar(page, 'movil-listado')
-  })
-
-  test('permite abrir el alta y el diálogo sin desbordar', async ({ page }) => {
-    await page.goto('/pruebas-ui/niveles')
-    await page.getByRole('button', { name: 'Nuevo nivel' }).click()
-    await expect(page.getByRole('heading', { name: 'Nuevo nivel educativo' })).toBeVisible()
-    await capturar(page, 'movil-formulario')
-    await page.getByRole('button', { name: 'Cerrar formulario' }).click()
-
-    await page
-      .getByRole('button', { name: 'Inactivar el nivel FORMACIÓN PROFESIONAL' })
-      .click()
-    await expect(
-      page.getByRole('dialog', { name: 'Inactivar FORMACIÓN PROFESIONAL' })
-    ).toBeVisible()
-    await capturar(page, 'movil-confirmacion-estado')
-    await page.keyboard.press('Escape')
-
-    await page
-      .getByRole('button', { name: 'Renombrar el nivel FORMACIÓN PROFESIONAL' })
-      .click()
-    await expect(page.getByRole('dialog')).toBeVisible()
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1
-      )
-    ).toBe(false)
-
-    await capturar(page, 'movil-renombrado')
   })
 })

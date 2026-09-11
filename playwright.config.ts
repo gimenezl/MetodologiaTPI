@@ -33,13 +33,27 @@ const conBaseLocal = process.env.EPT_SUPABASE_LOCAL === '1'
 
 const PRUEBAS_AUTENTICADAS = /(?:cursos|niveles)-auth\.spec\.ts/
 const PRUEBAS_SETUP = /auth\.setup\.ts/
+const PRUEBAS_RESPONSIVE_NIVELES = /niveles-responsive\.spec\.ts/
 
 const proyectoBase: Project = {
   name: 'chromium',
   use: { ...devices['Desktop Chrome'] },
   // Estas pruebas asumen que NO hay sesión: se excluyen las autenticadas.
-  testIgnore: [PRUEBAS_AUTENTICADAS, PRUEBAS_SETUP],
+  testIgnore: [PRUEBAS_AUTENTICADAS, PRUEBAS_SETUP, PRUEBAS_RESPONSIVE_NIVELES],
 }
+
+const proyectosResponsive: Project[] = [
+  {
+    name: 'pixel-5-chromium',
+    use: { ...devices['Pixel 5'] },
+    testMatch: PRUEBAS_RESPONSIVE_NIVELES,
+  },
+  {
+    name: 'iphone-13-webkit',
+    use: { ...devices['iPhone 13'] },
+    testMatch: PRUEBAS_RESPONSIVE_NIVELES,
+  },
+]
 
 const proyectosAutenticados: Project[] = [
   {
@@ -81,5 +95,7 @@ export default defineConfig({
     reuseExistingServer: true,
     env: entornoServidor,
   },
-  projects: conBaseLocal ? [...proyectosAutenticados, proyectoBase] : [proyectoBase],
+  projects: conBaseLocal
+    ? [...proyectosAutenticados, proyectoBase, ...proyectosResponsive]
+    : [proyectoBase, ...proyectosResponsive],
 })
