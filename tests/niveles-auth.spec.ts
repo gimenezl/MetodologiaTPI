@@ -4,8 +4,10 @@ import {
   test,
   type APIRequestContext,
   type APIResponse,
+  type Page,
 } from '@playwright/test'
 import fs from 'node:fs'
+import path from 'node:path'
 
 /**
  * API de niveles con sesiones reales creadas por `tests/auth.setup.ts`.
@@ -24,6 +26,15 @@ const SESION_DIRECTORA = 'tests/.auth/directora.json'
 const SESION_ESTUDIANTE = 'tests/.auth/estudiante.json'
 const BASE_URL = 'http://localhost:3000'
 const contextosActivos: APIRequestContext[] = []
+const CAPTURAR = process.env.EPT_CAPTURAS === '1'
+
+async function capturar(page: Page, nombre: string) {
+  if (!CAPTURAR) return
+  await page.screenshot({
+    path: path.join('docs/evidence/EPT-55', `real-${nombre}.png`),
+    fullPage: true,
+  })
+}
 
 test.afterEach(async () => {
   await Promise.all(contextosActivos.splice(0).map((contexto) => contexto.dispose()))
@@ -100,7 +111,7 @@ async function pedirConSesion(
   throw new Error(`No se encontró la sesión local ${archivoSesion}. Ejecutá auth.setup.ts primero.`)
 }
 
-test.describe('DIRECTOR autenticado — API de niveles', () => {
+test.describe('DIRECTOR autenticado — niveles', () => {
   test('crea, renombra, inactiva y reactiva conservando la identidad', async () => {
     const nombre = nombreUnico('NIVEL API')
     const alta = await pedirConSesion(SESION_DIRECTORA, '/api/niveles', {
@@ -287,9 +298,125 @@ test.describe('DIRECTOR autenticado — API de niveles', () => {
       ).status()
     ).toBe(405)
   })
+
+  test('ve la navegación y el catálogo real en el orden persistido', async ({
+    page,
+  }) => {
+    await page.goto('/dashboard')
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Menú del dashboard' })
+        .getByRole('link', { name: 'Niveles' })
+    ).toBeVisible()
+
+    await page.goto('/dashboard/niveles')
+    await expect(
+      page.getByRole('heading', { name: 'Niveles educativos', level: 1 })
+    ).toBeVisible()
+    const filas = page
+      .getByRole('table', { name: 'Tabla de niveles educativos' })
+      .getByRole('row')
+    await expect(filas.nth(1)).toContainText('10')
+    await expect(filas.nth(1)).toContainText('INICIAL')
+    await expect(filas.nth(2)).toContainText('20')
+    await expect(filas.nth(2)).toContainText('PRIMARIO')
+    await expect(filas.nth(3)).toContainText('30')
+    await expect(filas.nth(3)).toContainText('SECUNDARIO')
+
+    await capturar(page, 'escritorio-listado-autenticado')
+  })
+
+  test('crea, renombra, inactiva y reactiva desde la interfaz real', async ({
+    page,
+  }) => {
+    const nombre = nombreUnico('NIVEL INTERFAZ')
+    const nombreNuevo = nombreUnico('NIVEL EDITADO')
+    await page.goto('/dashboard/niveles')
+
+    await page.getByRole('button', { name: 'Nuevo nivel' }).click()
+    await page.getByLabel('Nombre del nivel').first().fill(nombre)
+    await page.getByRole('button', { name: 'Crear nivel' }).click()
+    await expect(
+      page.getByRole('button', { name: `Renombrar el nivel ${nombre}` })
+    ).toBeVisible({ timeout: 15_000 })
+
+    await page.reload()
+    await page.getByRole('button', { name: `Renombrar el nivel ${nombre}` }).click()
+    await page.locator('#renombrar-nivel-nombre').fill(nombreNuevo)
+    await page.getByRole('button', { name: 'Guardar nombre' }).click()
+    const inactivar = page.getByRole('button', {
+      name: `Inactivar el nivel ${nombreNuevo}`,
+    })
+    await expect(inactivar).toBeVisible({ timeout: 15_000 })
+
+    await inactivar.click()
+    const dialogoInactivar = page.getByRole('dialog', {
+      name: `Inactivar ${nombreNuevo}`,
+    })
+    await expect(dialogoInactivar).toBeVisible()
+    await dialogoInactivar
+      .getByRole('button', { name: 'Confirmar inactivación' })
+      .click()
+    const reactivar = page.getByRole('button', {
+      name: `Reactivar el nivel ${nombreNuevo}`,
+    })
+    await expect(reactivar).toBeVisible({ timeout: 15_000 })
+
+    await page.reload()
+    await expect(reactivar).toBeVisible()
+    await reactivar.click()
+    await page
+      .getByRole('dialog', { name: `Reactivar ${nombreNuevo}` })
+      .getByRole('button', { name: 'Confirmar reactivación' })
+      .click()
+    await expect(inactivar).toBeVisible({ timeout: 15_000 })
+
+    await capturar(page, 'escritorio-ciclo-completo')
+  })
+
+  test('muestra el duplicado real y no permite renombrar institucionales', async ({
+    page,
+  }) => {
+    await page.goto('/dashboard/niveles')
+    await expect(
+      page.getByRole('button', { name: 'Renombrar el nivel INICIAL' })
+    ).toHaveCount(0)
+    await expect(
+      page.getByRole('button', { name: 'Inactivar el nivel INICIAL' })
+    ).toBeVisible()
+
+    await page.getByRole('button', { name: 'Nuevo nivel' }).click()
+    await page.getByLabel('Nombre del nivel').first().fill('inicial')
+    await page.getByRole('button', { name: 'Crear nivel' }).click()
+    await expect(
+      page
+        .getByRole('alert')
+        .filter({ hasText: 'Ya existe un nivel educativo con ese nombre.' })
+        .first()
+    ).toBeVisible({ timeout: 15_000 })
+  })
 })
 
-test.describe('ESTUDIANTE autenticado — API de niveles', () => {
+test.describe('ESTUDIANTE autenticado — niveles', () => {
+  test('no ve Niveles en la navegación ni accede al catálogo', async ({ page }) => {
+    await page.goto('/dashboard')
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Menú del dashboard' })
+        .getByRole('link', { name: 'Niveles' })
+    ).toHaveCount(0)
+
+    await page.goto('/dashboard/niveles')
+    await expect(
+      page.getByRole('heading', { name: 'Acceso restringido' })
+    ).toBeVisible()
+    await expect(
+      page.getByRole('table', { name: 'Tabla de niveles educativos' })
+    ).toHaveCount(0)
+
+    await capturar(page, 'escritorio-estudiante-restringido')
+  })
+
   test('recibe 403 antes de que se valide un cuerpo inválido', async () => {
     const respuesta = await pedirConSesion(SESION_ESTUDIANTE, '/api/niveles', {
       method: 'POST',

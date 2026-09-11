@@ -7,7 +7,8 @@ import { loadEnvConfig } from '@next/env'
 // variables. Sin esto, el setup autenticado no encuentra la base local.
 loadEnvConfig(process.cwd())
 
-// El banco de pruebas de interfaz (`/pruebas-ui/cursos`) solo se habilita para
+// Los bancos de pruebas de interfaz (`/pruebas-ui/cursos` y
+// `/pruebas-ui/niveles`) solo se habilitan para
 // esta corrida. Las credenciales de Supabase se completan con valores de relleno
 // únicamente cuando el entorno no trae unas propias, para que la suite arranque
 // sin configuración previa y sin pisar la configuración real de nadie.
@@ -30,7 +31,7 @@ const entornoServidor: Record<string, string> = {
  */
 const conBaseLocal = process.env.EPT_SUPABASE_LOCAL === '1'
 
-const PRUEBAS_AUTENTICADAS = /cursos-auth\.spec\.ts/
+const PRUEBAS_AUTENTICADAS = /(?:cursos|niveles)-auth\.spec\.ts/
 const PRUEBAS_SETUP = /auth\.setup\.ts/
 
 const proyectoBase: Project = {
