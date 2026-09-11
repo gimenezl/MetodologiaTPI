@@ -21,9 +21,9 @@ regresión de Cursos, tipos, build, TypeScript, pruebas focalizadas y todas las
 pruebas nuevas. Las dos ejecuciones completas conservan como único fallo final
 el caso preexistente `tests/e2e.spec.ts:8` por la codificación `%2Fdashboard`.
 
-**Parcialmente demostrada.** El código queda preparado para revisión humana;
-la actualización final de Jira y la revisión por el otro integrante se realizan
-fuera de este documento.
+**Parcialmente demostrada.** El código queda preparado para revisión humana y
+la trazabilidad final se publicó en Jira. La revisión por el otro integrante
+continúa pendiente.
 
 ## 2. Alcance exacto
 
@@ -36,15 +36,14 @@ EPT-66. No se cambió el comportamiento de actividades ni de preinscripción.
 
 ## 3. Estado Jira
 
-**Parcialmente demostrada.** El contrato aprobado identifica EPT-55 como **En
-curso**, responsable **Lucas Gimenez**, padre **EPT-2 — Administración
-académica** y sin subtareas. Este work unit no ejecutó una lectura ni una
-mutación de Jira, por lo que esos datos provienen del prompt aprobado y deben
-refrescarse antes de publicar la trazabilidad final.
+**Demostrada.** La lectura final de Jira confirmó EPT-55 **En curso**, responsable
+**Lucas Gimenez**, padre **EPT-2 — Administración académica** y sin subtareas.
+Los comentarios `10032`, `10033` y `10034` registran respectivamente la línea
+base aislada, la migración y seguridad, y el candidato preparado con sus
+resultados exactos.
 
-**No demostrada.** No se registra aquí un comentario final de Jira. Tampoco se
-afirma transición a Listo: EPT-55 debe permanecer En curso hasta revisión e
-integración comprobable.
+**Demostrada.** No se realizó transición a Listo. EPT-55 permanece En curso hasta
+la revisión por el otro integrante y la integración comprobable en `main`.
 
 ## 4. Línea base y aislamiento
 
@@ -85,7 +84,7 @@ preinscripción sigue limitada a los tres niveles institucionales.
 | Ausencia de eliminación | **Demostrada** | Sin función, handler, control, policy ni grant DELETE; intentos rechazados |
 | Otros actores | **Demostrada** | Anónimo, ESTUDIANTE, DOCENTE, PADRE, PERSONAL y usuario sin perfil sin escritura |
 | Responsive y accesibilidad | **Demostrada** | Aserciones a 1280/375, foco, teclado, alertas, live region y ausencia de overflow |
-| Jira actualizado | **No demostrada** | Requiere operación posterior del orquestador |
+| Jira actualizado | **Demostrada** | Comentarios 10032, 10033 y 10034; estado En curso confirmado |
 | Revisión humana | **No demostrada** | Es el próximo paso, no una acción de esta implementación |
 
 ## 7. Matriz criterio → implementación → prueba → evidencia
@@ -110,7 +109,7 @@ preinscripción sigue limitada a los tres niveles institucionales.
 | Idioma español | copy y nombres accesibles | guard sobre contenido visible | capturas + prueba UI | **Demostrada** |
 | Página pública desacoplada | no consulta tabla; copy atemporal | build marca `/niveles` estática | salida de build | **Demostrada** |
 | Preinscripción institucional | selector existente sin modificación | prueba general de página | inspección de diff | **Parcialmente demostrada** |
-| Jira con trazabilidad | comentario final | no ejecutada aquí | ninguna | **No demostrada** |
+| Jira con trazabilidad | comentarios 10032–10034 | lectura y escritura final mediante Jira MCP | comentario 10034 con candidato y resultados | **Demostrada** |
 
 ## 8. Cambios por archivo
 
@@ -431,10 +430,10 @@ tokens ni valores de configuración. El CRUD de producción no usa
 crear/limpiar datos del stack local descartable, detrás de variable explícita y
 hostname exacto `localhost`, `127.0.0.1` o `::1`.
 
-**Demostrada.** El escaneo del parche staged obtuvo `SECRET_VALUE_MATCHES=0` y
-`ATTRIBUTION_PATCH_MATCHES=0`; los cuatro commits previos obtuvieron
-`ATTRIBUTION_COMMIT_MATCHES=0`. La inspección binaria acotada de los veinte PNG
-obtuvo `PNG_SECRET_MARKERS=0`.
+**Demostrada.** El escaneo del parche de trazabilidad obtuvo
+`SECRET_VALUE_MATCHES=0` y `ATTRIBUTION_PATCH_MATCHES=0`; los cinco commits
+anteriores obtuvieron `ATTRIBUTION_COMMIT_MATCHES=0`. La inspección binaria
+acotada de los veinte PNG obtuvo `PNG_SECRET_MARKERS=0`.
 
 ## 34. Riesgos restantes
 
@@ -484,18 +483,19 @@ convención ya versionada (UTF-8 BOM y LF final); hash antes/después
 
 **Demostrada.** Revertir de adelante hacia atrás:
 
-1. `test(niveles): completar pruebas y evidencia` — elimina documentación,
-   capturas y ajustes de evidencia/aislamiento; no cambia producción.
-2. `372b5aba247e9d0e475d0b6810590f7d75bd81a1` — interfaz, navegación,
+1. `docs(niveles): registrar trazabilidad final en Jira` — revierte únicamente
+   la actualización documental posterior al comentario final.
+2. `321fa13358dc3d60519e0b6647c1f3349fa66901` — documentación, capturas y
+   ajustes finales de evidencia/aislamiento; no cambia producción.
+3. `372b5aba247e9d0e475d0b6810590f7d75bd81a1` — interfaz, navegación,
    harness y copy público.
-3. `cf8d438acd3d4924851e42ab3a0600648107f4ad` — integración activa/histórica
+4. `cf8d438acd3d4924851e42ab3a0600648107f4ad` — integración activa/histórica
    de Cursos.
-4. `c39b4bbd0f5b0046e022179b39688bfbe47cc547` — API, servicios y validación.
-5. `7ab799a4a955bff0c305999e6a97166358f4f275` — migración 006 y tipos.
+5. `c39b4bbd0f5b0046e022179b39688bfbe47cc547` — API, servicios y validación.
+6. `7ab799a4a955bff0c305999e6a97166358f4f275` — migración 006 y tipos.
 
 **Demostrada.** Revertir el archivo de migración no deshace un esquema ya
 aplicado. Fuera de un entorno descartable debe crearse una migración posterior;
 no se edita ni elimina una migración aplicada y la reversión no debe reabrir
-privilegios inseguros. El SHA del quinto commit se obtiene después de confirmar
-este mismo documento: no puede auto-incrustarse en el contenido del objeto Git
-que lo calcula.
+privilegios inseguros. El commit documental de trazabilidad se identifica por su
+mensaje porque no puede auto-incrustar su propio SHA.
