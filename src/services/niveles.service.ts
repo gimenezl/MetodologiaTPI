@@ -54,7 +54,7 @@ function traducirErrorNivel(
       return {
         estado: 400,
         mensaje:
-          'El nombre del nivel debe tener entre 1 y 50 caracteres y no puede tener espacios al inicio o al final.',
+          'El nombre del nivel debe tener entre 1 y 50 caracteres y no puede tener caracteres en blanco al inicio o al final.',
         campo: 'nombre',
       }
     case SQLSTATE_INSTITUCIONAL_PROTEGIDO:

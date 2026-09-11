@@ -136,6 +136,7 @@ DECLARE
     creado public.niveles;
     renombrado public.niveles;
     curso_id UUID;
+    actividad_id INTEGER;
 BEGIN
     EXECUTE 'SET LOCAL ROLE authenticated';
     PERFORM set_config('request.jwt.claims',
@@ -162,6 +163,10 @@ BEGIN
     INSERT INTO public.cursos (nivel_id, denominacion, division)
     VALUES (creado.id, 'Trayecto de prueba', 'A')
     RETURNING id INTO curso_id;
+
+    INSERT INTO public.actividades (nombre, tipo, cupo_maximo, nivel_id)
+    VALUES ('Actividad histórica de prueba', 'TALLER', 20, creado.id)
+    RETURNING id INTO actividad_id;
 
     renombrado := public.renombrar_nivel(creado.id, 'TERCIARIO');
     IF renombrado.nombre <> 'TERCIARIO' THEN
@@ -195,6 +200,15 @@ BEGIN
     END IF;
     RAISE NOTICE 'OK 17: la lectura histórica conserva el nivel inactivo relacionado';
 
+    UPDATE public.actividades
+    SET cupo_maximo = 21
+    WHERE id = actividad_id;
+    IF (SELECT nivel_id FROM public.actividades WHERE id = actividad_id) <> creado.id
+       OR (SELECT cupo_maximo FROM public.actividades WHERE id = actividad_id) <> 21 THEN
+        RAISE EXCEPTION 'FALLO 17bis: la actividad histórica perdió el nivel o no pudo actualizar otros datos';
+    END IF;
+    RAISE NOTICE 'OK 17bis: una actividad histórica conserva el nivel inactivo y puede actualizar otros datos';
+
     PERFORM public.cambiar_estado_nivel(creado.id, TRUE);
     IF NOT (SELECT activo FROM public.niveles WHERE id = creado.id) THEN
         RAISE EXCEPTION 'FALLO 18: el nivel no volvió a activo';
@@ -216,6 +230,7 @@ DECLARE
         SELECT id FROM public.niveles WHERE nombre = 'INICIAL'
     );
     curso_id UUID;
+    actividad_id INTEGER;
 BEGIN
     EXECUTE 'SET LOCAL ROLE authenticated';
     PERFORM set_config('request.jwt.claims',
@@ -253,6 +268,50 @@ BEGIN
     END;
 
     BEGIN
+        PERFORM public.crear_nivel(E'\t');
+        RAISE EXCEPTION 'FALLO 21tab.1: se aceptó una tabulación como nombre';
+    EXCEPTION WHEN SQLSTATE 'P5501' THEN
+        RAISE NOTICE 'OK 21tab.1: se rechaza una tabulación como nombre (P5501)';
+    END;
+
+    BEGIN
+        PERFORM public.crear_nivel(E'\tNIVEL\t');
+        RAISE EXCEPTION 'FALLO 21tab.2: se aceptaron tabulaciones laterales';
+    EXCEPTION WHEN SQLSTATE 'P5501' THEN
+        RAISE NOTICE 'OK 21tab.2: se rechazan tabulaciones laterales (P5501)';
+    END;
+
+    BEGIN
+        PERFORM public.crear_nivel(E'\n');
+        RAISE EXCEPTION 'FALLO 21lf: se aceptó un salto de línea como nombre';
+    EXCEPTION WHEN SQLSTATE 'P5501' THEN
+        RAISE NOTICE 'OK 21lf: se rechaza un salto de línea como nombre (P5501)';
+    END;
+
+    BEGIN
+        PERFORM public.crear_nivel(E' \t\nNIVEL\r ');
+        RAISE EXCEPTION 'FALLO 21combinado: se aceptó whitespace lateral combinado';
+    EXCEPTION WHEN SQLSTATE 'P5501' THEN
+        RAISE NOTICE 'OK 21combinado: se rechaza whitespace lateral combinado (P5501)';
+    END;
+
+    BEGIN
+        PERFORM public.crear_nivel(
+            pg_catalog.chr(160) || 'NIVEL' || pg_catalog.chr(160)
+        );
+        RAISE EXCEPTION 'FALLO 21nbsp: se aceptó NBSP lateral';
+    EXCEPTION WHEN SQLSTATE 'P5501' THEN
+        RAISE NOTICE 'OK 21nbsp: se rechaza NBSP lateral (P5501)';
+    END;
+
+    BEGIN
+        PERFORM public.renombrar_nivel(administrativo_id, E'RENOMBRADO\t');
+        RAISE EXCEPTION 'FALLO 21rename: el renombrado aceptó tabulación lateral';
+    EXCEPTION WHEN SQLSTATE 'P5501' THEN
+        RAISE NOTICE 'OK 21rename: el renombrado aplica el mismo contrato de whitespace (P5501)';
+    END;
+
+    BEGIN
         PERFORM public.renombrar_nivel(2147483647, 'INEXISTENTE');
         RAISE EXCEPTION 'FALLO 21bis: se renombró un nivel inexistente';
     EXCEPTION WHEN SQLSTATE 'P5503' THEN
@@ -272,6 +331,19 @@ BEGIN
     EXCEPTION WHEN SQLSTATE 'P5501' THEN
         RAISE NOTICE 'OK 23: la normalización no permite evadir el contrato de espacios (P5501)';
     END;
+
+    BEGIN
+        PERFORM public.crear_nivel(E'\tTERCIARIO\t');
+        RAISE EXCEPTION 'FALLO 23tab: se intentó normalizar silenciosamente un duplicado con tabs';
+    EXCEPTION WHEN SQLSTATE 'P5501' THEN
+        RAISE NOTICE 'OK 23tab: un duplicado con tabs se rechaza como nombre inválido (P5501)';
+    END;
+
+    IF (public.crear_nivel('A')).nombre <> 'A'
+       OR (public.crear_nivel('NIVEL VÁLIDO')).nombre <> 'NIVEL VÁLIDO' THEN
+        RAISE EXCEPTION 'FALLO 23validos: se rechazó un nombre válido de uno o varios caracteres';
+    END IF;
+    RAISE NOTICE 'OK 23validos: se aceptan nombres válidos de uno y varios caracteres';
 
     PERFORM public.cambiar_estado_nivel(administrativo_id, FALSE);
 
@@ -293,6 +365,35 @@ BEGIN
         RAISE NOTICE 'OK 24bis: tampoco se puede reasignar un curso a un nivel inactivo (P5504)';
     END;
 
+    BEGIN
+        INSERT INTO public.actividades (nombre, tipo, cupo_maximo, nivel_id)
+        VALUES ('Actividad nueva inactiva', 'TALLER', 20, administrativo_id);
+        RAISE EXCEPTION 'FALLO 24act.1: se asignó un nivel inactivo a una actividad nueva';
+    EXCEPTION WHEN SQLSTATE 'P5504' THEN
+        RAISE NOTICE 'OK 24act.1: una actividad nueva rechaza un nivel inactivo (P5504)';
+    END;
+
+    INSERT INTO public.actividades (nombre, tipo, cupo_maximo, nivel_id)
+    VALUES ('Actividad para reasignar', 'TALLER', 20, institucional_id)
+    RETURNING id INTO actividad_id;
+    BEGIN
+        UPDATE public.actividades
+        SET nivel_id = administrativo_id
+        WHERE id = actividad_id;
+        RAISE EXCEPTION 'FALLO 24act.2: se reasignó una actividad a un nivel inactivo';
+    EXCEPTION WHEN SQLSTATE 'P5504' THEN
+        RAISE NOTICE 'OK 24act.2: una actividad existente rechaza la reasignación inactiva (P5504)';
+    END;
+
+    INSERT INTO public.actividades (nombre, tipo, cupo_maximo, nivel_id)
+    VALUES ('Actividad sin nivel', 'TALLER', 20, NULL)
+    RETURNING id INTO actividad_id;
+    UPDATE public.actividades SET cupo_maximo = 22 WHERE id = actividad_id;
+    IF (SELECT nivel_id FROM public.actividades WHERE id = actividad_id) IS NOT NULL THEN
+        RAISE EXCEPTION 'FALLO 24act.3: una actividad sin nivel dejó de aceptar NULL';
+    END IF;
+    RAISE NOTICE 'OK 24act.3: actividades conserva nivel_id NULL en altas y actualizaciones';
+
     SELECT id INTO curso_id FROM public.cursos
     WHERE nivel_id = administrativo_id AND denominacion = 'Trayecto de prueba';
     UPDATE public.cursos SET division = 'C' WHERE id = curso_id;
@@ -303,6 +404,41 @@ BEGIN
 END $$;
 
 RESET ROLE;
+
+-- La tabla aplica el mismo contrato aun fuera de las RPC. Estos casos se
+-- ejecutan como propietario para aislar la restricción CHECK de las ACL.
+DO $$
+DECLARE
+    caso TEXT;
+    orden_prueba INTEGER := 900000;
+BEGIN
+    FOREACH caso IN ARRAY ARRAY[
+        E'\t',
+        E'\tTABLA\t',
+        E'\n',
+        E' \t\nTABLA\r ',
+        pg_catalog.chr(160) || 'TABLA' || pg_catalog.chr(160)
+    ] LOOP
+        BEGIN
+            INSERT INTO public.niveles (nombre, orden)
+            VALUES (caso, orden_prueba);
+            RAISE EXCEPTION 'FALLO 25tabla: la tabla aceptó un nombre con whitespace lateral';
+        EXCEPTION WHEN check_violation THEN
+            NULL;
+        END;
+        orden_prueba := orden_prueba + 10;
+    END LOOP;
+    RAISE NOTICE 'OK 25tabla.1: la restricción de tabla rechaza tabs, saltos, combinaciones y NBSP laterales';
+
+    INSERT INTO public.niveles (nombre, orden)
+    VALUES ('Z', orden_prueba), ('NIVEL DE TABLA', orden_prueba + 10);
+    IF NOT EXISTS (SELECT 1 FROM public.niveles WHERE nombre = 'Z')
+       OR NOT EXISTS (SELECT 1 FROM public.niveles WHERE nombre = 'NIVEL DE TABLA') THEN
+        RAISE EXCEPTION 'FALLO 25tabla: la tabla rechazó nombres válidos';
+    END IF;
+    DELETE FROM public.niveles WHERE nombre IN ('Z', 'NIVEL DE TABLA');
+    RAISE NOTICE 'OK 25tabla.2: la restricción de tabla acepta nombres válidos de uno y varios caracteres';
+END $$;
 
 -- ================================================================
 -- 26–31. DENEGACIÓN POR ACTOR E IDENTIDAD REAL
@@ -328,6 +464,19 @@ BEGIN
             RAISE EXCEPTION 'FALLO 26: % creó un nivel', actor.rol;
         EXCEPTION WHEN insufficient_privilege THEN
             RAISE NOTICE 'OK 26: % no puede escribir niveles (42501)', actor.rol;
+        END;
+
+        BEGIN
+            INSERT INTO public.actividades (nombre, tipo, cupo_maximo, nivel_id)
+            VALUES (
+                'Actividad denegada ' || actor.rol,
+                'TALLER',
+                20,
+                (SELECT id FROM public.niveles WHERE nombre = 'TERCIARIO')
+            );
+            RAISE EXCEPTION 'FALLO 26act: % asignó un nivel inactivo a una actividad', actor.rol;
+        EXCEPTION WHEN SQLSTATE 'P5504' THEN
+            RAISE NOTICE 'OK 26act: % tampoco puede asignar un nivel inactivo a actividades (P5504)', actor.rol;
         END;
     END LOOP;
 
@@ -474,16 +623,13 @@ BEGIN
     END IF;
     RAISE NOTICE 'OK 36: public.niveles conserva RLS habilitado';
 
-    IF EXISTS (
-        SELECT 1 FROM public.niveles
-        WHERE NOT activo AND id IN (SELECT id FROM public.niveles WHERE activo)
-    ) THEN
-        RAISE EXCEPTION 'FALLO 37: la consulta activa contiene un nivel inactivo';
+    IF (SELECT pg_catalog.array_agg(nombre ORDER BY nombre)::TEXT[]
+        FROM public.niveles
+        WHERE activo) IS DISTINCT FROM
+       ARRAY['A', 'INICIAL', 'NIVEL VÁLIDO', 'PRIMARIO', 'SECUNDARIO']::TEXT[] THEN
+        RAISE EXCEPTION 'FALLO 37: la consulta activa no devolvió el conjunto exacto esperado';
     END IF;
-    IF EXISTS (SELECT 1 FROM public.niveles WHERE nombre = 'TERCIARIO' AND activo) THEN
-        RAISE EXCEPTION 'FALLO 37: el fixture inactivo quedó activo';
-    END IF;
-    RAISE NOTICE 'OK 37: la consulta con activo = true excluye niveles inactivos';
+    RAISE NOTICE 'OK 37: la consulta con activo = true devuelve exactamente los niveles activos esperados';
 
     IF NOT EXISTS (SELECT 1 FROM public.niveles WHERE nombre = 'TERCIARIO' AND NOT activo) THEN
         RAISE EXCEPTION 'FALLO 38: la lectura general perdió el nivel inactivo';
@@ -499,6 +645,16 @@ BEGIN
         RAISE EXCEPTION 'FALLO 39: falta la regla de nivel activo en cursos';
     END IF;
     RAISE NOTICE 'OK 39: nuevas asignaciones de cursos validan el nivel activo';
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger
+        WHERE tgrelid = 'public.actividades'::regclass
+          AND tgname = 'validar_nivel_activo_en_actividad'
+          AND NOT tgisinternal
+    ) THEN
+        RAISE EXCEPTION 'FALLO 39bis: falta la regla de nivel activo en actividades';
+    END IF;
+    RAISE NOTICE 'OK 39bis: nuevas asignaciones de actividades validan el nivel activo';
 
     IF (SELECT confdeltype FROM pg_constraint
         WHERE conrelid = 'public.actividades'::regclass

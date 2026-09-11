@@ -198,8 +198,16 @@ test.describe('DIRECTOR autenticado — niveles', () => {
     esperarSinFiltraciones(cuerpo)
   })
 
-  test('rechaza nombres vacíos y con espacios laterales', async () => {
-    for (const nombre of ['', ' NIVEL CON ESPACIOS ']) {
+  test('rechaza nombres vacíos y cualquier whitespace lateral', async () => {
+    for (const nombre of [
+      '',
+      ' NIVEL CON ESPACIOS ',
+      '\t',
+      '\tNIVEL CON TABS\t',
+      '\n',
+      ' \t\nNIVEL COMBINADO\r ',
+      '\u00a0NIVEL CON NBSP\u00a0',
+    ]) {
       const respuesta = await pedirConSesion(SESION_DIRECTORA, '/api/niveles', {
         method: 'POST',
         data: { nombre },

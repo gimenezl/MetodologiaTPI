@@ -181,13 +181,15 @@ export const cursoIdSchema = z.string().uuid('Identificador de curso inválido')
  * El nombre se rechaza, no se recorta silenciosamente. Así la validación HTTP
  * coincide con `niveles_nombre_valido` y con las funciones de PostgreSQL.
  */
+const caracterEnBlancoLateralNivel = /^[\s\u0085]|[\s\u0085]$/u
+
 export const nombreNivelSchema = z
   .string({ message: 'El nombre del nivel es requerido' })
   .min(1, 'El nombre del nivel es requerido')
   .max(50, 'El nombre del nivel no puede superar los 50 caracteres')
   .refine(
-    (nombre) => nombre === nombre.trim(),
-    'El nombre del nivel no puede tener espacios al inicio o al final'
+    (nombre) => !caracterEnBlancoLateralNivel.test(nombre),
+    'El nombre del nivel no puede tener caracteres en blanco al inicio o al final'
   )
 
 export const crearNivelSchema = z
