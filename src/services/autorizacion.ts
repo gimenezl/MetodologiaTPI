@@ -23,12 +23,16 @@ export type ResultadoAutorizacion =
   | { autorizado: true; userId: string }
   | { autorizado: false; estado: EstadoDenegacion; mensaje: string }
 
+const MENSAJE_CURSOS = 'Solo el director puede administrar los cursos.'
+
 /**
  * Exige una sesión válida cuyo perfil tenga el rol DIRECTOR.
  *
  * Falla cerrado: si el rol no se puede resolver, deniega.
  */
-export async function requerirDirector(): Promise<ResultadoAutorizacion> {
+export async function requerirDirector(
+  mensajeNoAutorizado = MENSAJE_CURSOS
+): Promise<ResultadoAutorizacion> {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase.auth.getUser()
@@ -59,7 +63,7 @@ export async function requerirDirector(): Promise<ResultadoAutorizacion> {
     return {
       autorizado: false,
       estado: 403,
-      mensaje: 'Solo el director puede administrar los cursos.',
+      mensaje: mensajeNoAutorizado,
     }
   }
 
