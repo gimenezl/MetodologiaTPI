@@ -185,6 +185,128 @@ test.describe('DIRECTOR autenticado', () => {
       (await request.fetch(`/api/cursos/${ID_INEXISTENTE}`, { method: 'DELETE' })).status()
     ).toBe(405)
   })
+
+  test('ofrece solo niveles activos sin perder la relación histórica', async ({
+    page,
+    request,
+  }) => {
+    const historico = denominacionUnica()
+    const historicoEditado = `${historico} Editado`
+    const reasignable = `${denominacionUnica()} Reasignable`
+    const nivelOrdenTardio = `A NIVEL ${Date.now().toString().slice(-6)}`
+
+    const altaHistorica = await request.post('/api/cursos', {
+      data: { denominacion: historico, division: 'H', nivel_id: 2 },
+    })
+    expect(altaHistorica.status()).toBe(201)
+    const cursoHistorico = (await altaHistorica.json()).curso
+
+    const altaReasignable = await request.post('/api/cursos', {
+      data: { denominacion: reasignable, division: 'R', nivel_id: 3 },
+    })
+    expect(altaReasignable.status()).toBe(201)
+    const cursoReasignable = (await altaReasignable.json()).curso
+
+    const nivelAdicional = await request.post('/api/niveles', {
+      data: { nombre: nivelOrdenTardio },
+    })
+    expect(nivelAdicional.status()).toBe(201)
+
+    const inactivar = await request.patch('/api/niveles/2', {
+      data: { accion: 'cambiar_estado', activo: false },
+    })
+    expect(inactivar.status()).toBe(200)
+
+    try {
+      const altaEnInactivo = await request.post('/api/cursos', {
+        data: {
+          denominacion: denominacionUnica(),
+          division: 'I',
+          nivel_id: 2,
+        },
+      })
+      expect(altaEnInactivo.status()).toBe(400)
+      const errorAlta = await altaEnInactivo.text()
+      expect(JSON.parse(errorAlta)).toMatchObject({
+        error: 'El nivel educativo elegido está inactivo. Elegí un nivel activo.',
+        campo: 'nivel_id',
+      })
+      expect(errorAlta).not.toContain('P5504')
+
+      const conservarRelacion = await request.patch(
+        `/api/cursos/${cursoHistorico.id}`,
+        {
+          data: {
+            denominacion: historicoEditado,
+            division: 'H',
+            nivel_id: 2,
+          },
+        }
+      )
+      expect(conservarRelacion.status()).toBe(200)
+      expect((await conservarRelacion.json()).curso).toMatchObject({
+        id: cursoHistorico.id,
+        denominacion: historicoEditado,
+        nivel_id: 2,
+      })
+
+      const reasignarAInactivo = await request.patch(
+        `/api/cursos/${cursoReasignable.id}`,
+        { data: { nivel_id: 2 } }
+      )
+      expect(reasignarAInactivo.status()).toBe(400)
+      expect(await reasignarAInactivo.json()).toMatchObject({
+        error: 'El nivel educativo elegido está inactivo. Elegí un nivel activo.',
+        campo: 'nivel_id',
+      })
+
+      await page.goto('/dashboard/cursos')
+
+      // El listado mantiene el nombre relacionado aunque el nivel esté inactivo.
+      const filaHistorica = page
+        .getByRole('row')
+        .filter({ hasText: `${historicoEditado} H` })
+      await expect(filaHistorica).toContainText('PRIMARIO')
+
+      await page.getByRole('button', { name: 'Nuevo curso' }).click()
+      const selectorAlta = page.getByLabel('Nivel educativo').first()
+      await expect(selectorAlta.locator('option')).toHaveText([
+        'Seleccioná un nivel...',
+        'INICIAL',
+        'SECUNDARIO',
+        nivelOrdenTardio,
+      ])
+      await page.getByRole('button', { name: 'Cerrar formulario' }).click()
+
+      await page
+        .getByRole('button', { name: `Editar el curso ${historicoEditado} H` })
+        .click()
+      const selectorHistorico = page.locator('#editar-nivel')
+      await expect(selectorHistorico).toHaveValue('2')
+      await expect(selectorHistorico.locator('option:checked')).toHaveText(
+        'PRIMARIO (inactivo, nivel actual)'
+      )
+      await expect(
+        page.getByText(
+          'Este nivel está inactivo. Podés conservarlo, pero si elegís otro nivel solo podrás seleccionar uno activo.'
+        )
+      ).toBeVisible()
+      await page.getByRole('button', { name: 'Cancelar' }).last().click()
+
+      // El nivel inactivo no aparece al editar un curso que no lo tenía.
+      await page
+        .getByRole('button', { name: `Editar el curso ${reasignable} R` })
+        .click()
+      await expect(
+        page.locator('#editar-nivel option', { hasText: 'PRIMARIO' })
+      ).toHaveCount(0)
+    } finally {
+      const reactivar = await request.patch('/api/niveles/2', {
+        data: { accion: 'cambiar_estado', activo: true },
+      })
+      expect(reactivar.status()).toBe(200)
+    }
+  })
 })
 
 test.describe('ESTUDIANTE autenticado', () => {

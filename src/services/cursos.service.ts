@@ -20,7 +20,13 @@ export type CursoConNivel = {
   division: string
   activo: boolean
   fecha_creacion: string
-  nivel: { id: number; nombre: string } | null
+  nivel: { id: number; nombre: string; activo?: boolean } | null
+}
+
+export type NivelSeleccionable = {
+  id: number
+  nombre: string
+  orden: number
 }
 
 export type CampoCurso = 'denominacion' | 'division' | 'nivel_id'
@@ -36,8 +42,10 @@ const SQLSTATE_DUPLICADO = '23505'
 const SQLSTATE_CLAVE_FORANEA = '23503'
 const SQLSTATE_CHECK = '23514'
 const SQLSTATE_PRIVILEGIO_INSUFICIENTE = '42501'
+const SQLSTATE_NIVEL_INACTIVO = 'P5504'
 
-const COLUMNAS = 'id, nivel_id, denominacion, division, activo, fecha_creacion, nivel:niveles(id, nombre)'
+const COLUMNAS =
+  'id, nivel_id, denominacion, division, activo, fecha_creacion, nivel:niveles(id, nombre, activo)'
 
 type ErrorPostgres = { code?: string | null; message?: string | null }
 
@@ -70,6 +78,12 @@ function traducirError(
         estado: 400,
         mensaje: 'La denominación y la división no pueden quedar vacías.',
         campo: 'denominacion',
+      }
+    case SQLSTATE_NIVEL_INACTIVO:
+      return {
+        estado: 400,
+        mensaje: 'El nivel educativo elegido está inactivo. Elegí un nivel activo.',
+        campo: 'nivel_id',
       }
     case SQLSTATE_PRIVILEGIO_INSUFICIENTE:
       // RLS rechazó la operación. El servidor ya autorizó antes de llegar acá,
@@ -115,18 +129,20 @@ export async function listarCursos(): Promise<ResultadoCurso<CursoConNivel[]>> {
   return { ok: true, datos: (data ?? []) as unknown as CursoConNivel[] }
 }
 
-/** Lista los niveles educativos disponibles para el selector del formulario. */
-export async function listarNiveles(): Promise<ResultadoCurso<{ id: number; nombre: string }[]>> {
+/** Lista únicamente niveles válidos para altas o nuevas asignaciones. */
+export async function listarNivelesActivos(): Promise<ResultadoCurso<NivelSeleccionable[]>> {
   const supabase = await createServerSupabaseClient()
   const { data, error } = await supabase
     .from('niveles')
-    .select('id, nombre')
-    .order('id', { ascending: true })
+    .select('id, nombre, orden')
+    .eq('activo', true)
+    .order('orden', { ascending: true })
+    .order('nombre', { ascending: true })
 
   if (error) {
-    return { ok: false, ...traducirError(error, 'listarNiveles') }
+    return { ok: false, ...traducirError(error, 'listarNivelesActivos') }
   }
-  return { ok: true, datos: (data ?? []) as { id: number; nombre: string }[] }
+  return { ok: true, datos: (data ?? []) as NivelSeleccionable[] }
 }
 
 /**
