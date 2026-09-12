@@ -60,13 +60,13 @@ export async function POST(request: Request) {
   const { data: rolRow } = await admin.from('roles').select('nombre').eq('id', rol_id).single()
   const rolElegido = (rolRow as { nombre: string } | null)?.nombre
 
-  // Un alumno SIEMPRE debe tener un tutor asignado
-  if (rolElegido === 'ESTUDIANTE' && !tutor_id) {
-    return NextResponse.json(
-      { error: 'Un alumno debe tener un padre/tutor asignado. Creá primero al padre/tutor.' },
-      { status: 400 }
-    )
-  }
+  // El tutor no es requisito para dar de alta a un alumno (EPT-9).
+  //
+  // La obligación anterior era inalcanzable: `padres_hijos` no existe en las
+  // migraciones versionadas, así que sobre una base reproducida desde cero el
+  // alta de un ESTUDIANTE fallaba siempre. El vínculo parental pertenece a
+  // EPT-13 y sigue siendo opcional acá; el legajo académico se administra en
+  // `/dashboard/alumnos`, que no toca ni Auth ni vínculos familiares.
 
   // 4. Crear el usuario de autenticación (con email ya confirmado)
   const { data: created, error: createErr } = await admin.auth.admin.createUser({

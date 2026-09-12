@@ -98,11 +98,17 @@ export async function buscarPerfilesPaginados(query: string, page = 1, pageSize 
   return { data, count: count ?? 0 }
 }
 
-export async function eliminarPerfil(id: string) {
-  const supabase = createClient()
-  const { error } = await supabase
-    .from('perfiles')
-    .delete()
-    .eq('id', id)
-  if (error) throw new Error(error.message)
-}
+/*
+ * No existe `eliminarPerfil` (EPT-9).
+ *
+ * La función anterior hacía `DELETE FROM perfiles`, pero `perfiles` nunca tuvo
+ * una política RLS de DELETE: la sentencia afectaba cero filas y devolvía éxito,
+ * de modo que la interfaz confirmaba una baja que jamás ocurría. Verificado
+ * sobre la base local antes de quitarla.
+ *
+ * La migración 008 además revoca DELETE y TRUNCATE sobre `perfiles` para los
+ * roles de aplicación, así que la negación ya no depende de que exista o falte
+ * una política. La baja de un estudiante es lógica y viaja por
+ * `inactivarAlumno` en `alumnos.service.ts`, que conserva identidad, legajo e
+ * historial completo.
+ */
