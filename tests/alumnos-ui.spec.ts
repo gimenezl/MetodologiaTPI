@@ -195,6 +195,42 @@ test.describe('interfaz administrativa de alumnos', () => {
     await capturar(page, 'exito')
   })
 
+  test('deshabilita el botón mientras el alta está en vuelo', async ({ page }) => {
+    let liberar: () => void = () => {}
+    const enVuelo = new Promise<void>((resolve) => {
+      liberar = resolve
+    })
+
+    await page.route('**/api/alumnos', async (route) => {
+      await enVuelo
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, alumno_id: 'a1111111-1111-4111-8111-111111111111' }),
+      })
+    })
+    await page.goto('/pruebas-ui/alumnos')
+
+    await page.getByRole('button', { name: 'Nuevo alumno' }).click()
+    await formularioAlta(page).getByLabel('Nombre').fill('Lucía')
+    await formularioAlta(page).getByLabel('Apellido').fill('Maidana')
+    await formularioAlta(page).getByLabel('DNI').fill('47881291')
+    await formularioAlta(page).getByLabel('Estado académico').selectOption('INACTIVO')
+    await page.getByRole('button', { name: 'Crear legajo' }).click()
+
+    // Mientras la petición está en vuelo, el botón anuncia la espera y enviar
+    // de nuevo es imposible.
+    const enviando = page.getByRole('button', { name: 'Cargando...' })
+    await expect(enviando).toBeVisible()
+    await expect(enviando).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Crear legajo' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+    await capturar(page, 'envio-en-curso')
+
+    liberar()
+    await expect(page.getByRole('status')).toContainText('creado como inactivo.')
+  })
+
   test('permite corregir un DNI duplicado y reintentar sin recargar', async ({ page }) => {
     let intentos = 0
     await page.route('**/api/alumnos', async (route) => {

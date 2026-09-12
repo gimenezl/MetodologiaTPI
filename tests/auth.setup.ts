@@ -109,8 +109,15 @@ export const CURSOS_SEMILLA = [
   { denominacion: 'Sala de 5', division: 'A', nivel: 'INICIAL', activo: true },
 ]
 
-/** Curso al que se matricula a los estudiantes de prueba durante la siembra. */
-export const CURSO_INICIAL_ALUMNOS = { denominacion: '1er Grado', division: 'A' }
+/**
+ * Curso al que se matricula a los estudiantes de prueba durante la siembra.
+ *
+ * Deliberadamente NO es «1er Grado A»: la suite de Cursos inactiva ese curso
+ * por nombre, y desde EPT-9 un curso con estudiantes matriculados no se puede
+ * inactivar. Dejarlo libre evita que una siembra de esta historia rompa una
+ * garantía de la anterior.
+ */
+export const CURSO_INICIAL_ALUMNOS = { denominacion: 'Sala de 5', division: 'A' }
 
 /** Se completa en la primera etapa y lo consumen las etapas siguientes. */
 export const perfilesCreados = new Map<string, string>()

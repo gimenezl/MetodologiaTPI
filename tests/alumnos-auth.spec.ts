@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import {
@@ -68,6 +69,55 @@ function esperarSinFiltraciones(cuerpo: string) {
   }
 }
 
+/** Prefijo de los cursos que crea esta suite, para poder retirarlos después. */
+const PREFIJO_CURSO = 'EPT-9 '
+
+/** Prefijo de los DNI sintéticos que crea esta suite. */
+const PREFIJO_DNI = '98'
+
+/**
+ * Devuelve el catálogo al estado que dejó la siembra.
+ *
+ * Sin esto, los legajos y cursos que crean estas pruebas quedarían ocupando
+ * «1er Grado A» y sumando filas al listado, y romperían dos garantías legítimas
+ * de la suite de Cursos: su recuento exacto y la baja lógica de ese curso.
+ *
+ * Se hace en una única transacción porque borrar matrículas y legajos por
+ * separado es justamente lo que la invariante diferida impide.
+ */
+function retirarDatosDeEstaSuite() {
+  const contenedor =
+    process.env.EPT_SUPABASE_DB_CONTAINER ?? 'supabase_db_educar-para-transformar'
+
+  execFileSync(
+    'docker',
+    ['exec', '-i', contenedor, 'psql', '-X', '-q', '-U', 'postgres', '-d', 'postgres',
+     '-v', 'ON_ERROR_STOP=1'],
+    {
+      input: `
+        BEGIN;
+        DELETE FROM public.matriculas
+          WHERE alumno_id IN (
+            SELECT id FROM public.perfiles WHERE dni LIKE '${PREFIJO_DNI}%'
+          );
+        DELETE FROM public.alumnos
+          WHERE perfil_id IN (
+            SELECT id FROM public.perfiles WHERE dni LIKE '${PREFIJO_DNI}%'
+          );
+        DELETE FROM public.perfiles WHERE dni LIKE '${PREFIJO_DNI}%';
+        DELETE FROM public.cursos WHERE denominacion LIKE '${PREFIJO_CURSO}%';
+        COMMIT;
+      `,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }
+  )
+}
+
+test.afterAll(() => {
+  if (process.env.EPT_SUPABASE_LOCAL !== '1') return
+  retirarDatosDeEstaSuite()
+})
+
 const contextosActivos: APIRequestContext[] = []
 
 type EjecutarPeticion = Parameters<APIRequestContext['fetch']>
@@ -124,7 +174,7 @@ let contadorDni = 0
 function dniUnico() {
   contadorDni += 1
   const sufijo = String((Date.now() % 100_000) * 10 + (contadorDni % 10)).padStart(6, '0')
-  return `98${sufijo.slice(-6)}`
+  return `${PREFIJO_DNI}${sufijo.slice(-6)}`
 }
 
 function legajoUnico(prefijo: string) {
@@ -249,7 +299,7 @@ test.describe('DIRECTOR autenticado — alumnos', () => {
     const nuevoCurso = await pedirConSesion(SESION_DIRECTORA, '/api/cursos', {
       method: 'POST',
       data: {
-        denominacion: `Curso EPT-9 ${Date.now()}`,
+        denominacion: `${PREFIJO_CURSO}${Date.now()}`,
         division: 'Z',
         nivel_id: 2,
       },
@@ -426,7 +476,7 @@ test.describe('DIRECTOR autenticado — alumnos', () => {
     const nuevoCurso = await pedirConSesion(SESION_DIRECTORA, '/api/cursos', {
       method: 'POST',
       data: {
-        denominacion: `Curso ocupado ${Date.now()}`,
+        denominacion: `${PREFIJO_CURSO}ocupado ${Date.now()}`,
         division: 'Y',
         nivel_id: 2,
       },
@@ -575,8 +625,8 @@ test.describe('ESTUDIANTE autenticado — alumnos', () => {
     await expect(page.getByRole('heading', { name: 'Situación actual' })).toBeVisible()
     const situacion = page.getByLabel('Situación actual')
     await expect(situacion).toContainText('LEG-PRUEBA-0002')
-    await expect(situacion).toContainText('1er Grado A')
-    await expect(situacion).toContainText('PRIMARIO')
+    await expect(situacion).toContainText('Sala de 5 A')
+    await expect(situacion).toContainText('INICIAL')
     await expect(page.getByRole('heading', { name: 'Historial de cursos' })).toBeVisible()
     await capturar(page, 'escritorio-estudiante-mi-legajo')
   })
@@ -638,6 +688,25 @@ test.describe('ESTUDIANTE AJENO autenticado — alumnos', () => {
   }) => {
     await page.goto('/dashboard/alumnos/11111111-1111-4111-8111-111111111111')
     await expect(page.getByRole('heading', { name: 'Acceso restringido' })).toBeVisible()
+  })
+
+  test('tampoco puede operar sobre otro estudiante por la API', async () => {
+    for (const data of [
+      { accion: 'corregir_identidad', dni: '47000002' },
+      { accion: 'cambiar_curso', curso_id: '11111111-1111-4111-8111-111111111111' },
+      { accion: 'inactivar' },
+      { accion: 'reactivar', curso_id: '11111111-1111-4111-8111-111111111111' },
+    ]) {
+      const respuesta = await pedirConSesion(
+        SESION_ESTUDIANTE_AJENO,
+        '/api/alumnos/11111111-1111-4111-8111-111111111111',
+        { method: 'PATCH', data }
+      )
+      // 403 y no 404: la autorización responde antes de que exista siquiera la
+      // oportunidad de deducir si ese legajo existe.
+      expect(respuesta.status()).toBe(403)
+      esperarSinFiltraciones(await respuesta.text())
+    }
   })
 })
 
