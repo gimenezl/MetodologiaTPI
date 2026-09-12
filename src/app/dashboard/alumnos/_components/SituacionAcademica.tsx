@@ -1,4 +1,7 @@
+import Link from 'next/link'
+import { WarningCircle } from '@phosphor-icons/react/dist/ssr'
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
 import type { AlumnoAcademico, MatriculaHistorica } from '@/services/alumnos.service'
 
 /**
@@ -26,9 +29,21 @@ function formatearFecha(valor: string) {
 export function SituacionAcademica({
   alumno,
   historial,
+  errorHistorial,
+  rutaReintento,
 }: {
   alumno: AlumnoAcademico
   historial: MatriculaHistorica[]
+  /**
+   * Mensaje de dominio cuando el historial no se pudo leer.
+   *
+   * «No hay tramos registrados» y «no pudimos leer los tramos» son estados
+   * distintos: presentarlos igual haría creer que un legajo con trayectoria no
+   * la tiene. Cuando este mensaje existe, se muestra en lugar del estado vacío.
+   */
+  errorHistorial?: string
+  /** Ruta a la que vuelve el botón de reintento; si falta, no se ofrece. */
+  rutaReintento?: string
 }) {
   const cursoVigente = alumno.curso_denominacion
     ? `${alumno.curso_denominacion} ${alumno.curso_division}`
@@ -92,7 +107,34 @@ export function SituacionAcademica({
           </p>
         </div>
 
-        {historial.length === 0 ? (
+        {errorHistorial ? (
+          <div
+            role="alert"
+            className="m-6 bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3 items-start"
+          >
+            <WarningCircle
+              size={20}
+              weight="fill"
+              className="text-red-500 shrink-0 mt-0.5"
+            />
+            <div>
+              <p className="text-sm font-semibold text-red-800">
+                No pudimos cargar el historial de cursos
+              </p>
+              <p className="text-sm text-red-700 mt-1">{errorHistorial}</p>
+              <p className="text-sm text-red-700 mt-1">
+                Esto no significa que el legajo no tenga trayectoria: no se pudo leer.
+              </p>
+              {rutaReintento && (
+                <Link href={rutaReintento} className="inline-block mt-4">
+                  <Button size="sm" variant="outline">
+                    Reintentar
+                  </Button>
+                </Link>
+              )}
+            </div>
+          </div>
+        ) : historial.length === 0 ? (
           <p className="px-6 py-10 text-center text-sm text-neutral-400">
             Todavía no hay matrículas registradas para este legajo.
           </p>

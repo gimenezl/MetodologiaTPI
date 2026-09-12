@@ -169,6 +169,31 @@ async function capturar(page: Page, nombre: string) {
   })
 }
 
+/**
+ * Retira y restituye el permiso de lectura del historial academico.
+ *
+ * Es la unica forma honesta de comprobar el estado de error: la lectura tiene
+ * que fallar de verdad. No se otorga ningun privilegio nuevo; se quita el que
+ * la migracion 008 concedio y se devuelve exactamente igual.
+ */
+function conHistorialIlegible(cuerpo: () => Promise<void>) {
+  const contenedor =
+    process.env.EPT_SUPABASE_DB_CONTAINER ?? 'supabase_db_educar-para-transformar'
+
+  const psql = (sentencia: string) =>
+    execFileSync(
+      'docker',
+      ['exec', '-i', contenedor, 'psql', '-X', '-q', '-U', 'postgres', '-d', 'postgres',
+       '-v', 'ON_ERROR_STOP=1'],
+      { input: sentencia, stdio: ['pipe', 'pipe', 'pipe'] }
+    )
+
+  psql('REVOKE SELECT ON public.matriculas_historial FROM authenticated;')
+  return cuerpo().finally(() => {
+    psql('GRANT SELECT ON public.matriculas_historial TO authenticated;')
+  })
+}
+
 /** DNI sintéticos únicos por corrida, dentro del contrato de 8 dígitos. */
 let contadorDni = 0
 function dniUnico() {
@@ -603,14 +628,25 @@ test.describe('DIRECTOR autenticado — alumnos', () => {
     ).toBeVisible({ timeout: 15_000 })
   })
 
-  test('el banco visual de pruebas no queda expuesto fuera del harness', async () => {
-    // El servidor de esta suite arranca con EPT_UI_HARNESS=1, de modo que la
-    // ruta responde. La doble protección se comprueba en el código: sin la
-    // variable, o con NODE_ENV=production, la página llama a notFound().
-    const fuente = fs.readFileSync('src/app/pruebas-ui/alumnos/page.tsx', 'utf8')
-    expect(fuente).toContain("process.env.NODE_ENV === 'production'")
-    expect(fuente).toContain("process.env.EPT_UI_HARNESS !== '1'")
-    expect(fuente).toContain('notFound()')
+  test('el banco visual sirve datos sinteticos y jamas los reales', async ({ page }) => {
+    // Que el banco no exista en produccion se demuestra por comportamiento, no
+    // leyendo el codigo: `supabase/tests/harness_produccion.mjs` compila la
+    // aplicacion, la levanta con EPT_UI_HARNESS=1 y comprueba que las tres
+    // rutas responden igual que una que nunca existio.
+    //
+    // Lo que se comprueba aca es lo otro que importa: que el banco este
+    // aislado de la base. Este servidor tiene sesion de directora y una base
+    // sembrada; si el banco leyera de ahi, mostraria personas reales.
+    await page.goto('/pruebas-ui/alumnos')
+
+    await expect(page.getByRole('heading', { name: 'Alumnos' })).toBeVisible()
+    await expect(page.getByText('Arrieta, Camila').first()).toBeVisible()
+
+    // Ninguna de las identidades sembradas por `auth.setup.ts` aparece aca.
+    const cuerpo = page.locator('body')
+    await expect(cuerpo).not.toContainText('Estudiante, Beto')
+    await expect(cuerpo).not.toContainText('LEG-PRUEBA-0002')
+    await expect(cuerpo).not.toContainText('99900002')
   })
 })
 
@@ -629,6 +665,45 @@ test.describe('ESTUDIANTE autenticado — alumnos', () => {
     await expect(situacion).toContainText('INICIAL')
     await expect(page.getByRole('heading', { name: 'Historial de cursos' })).toBeVisible()
     await capturar(page, 'escritorio-estudiante-mi-legajo')
+  })
+
+test('distingue no tener trayectoria de no poder leerla', async ({ page }) => {
+    await conHistorialIlegible(async () => {
+      await page.goto('/dashboard/mi-legajo')
+
+      // La situacion actual se lee igual: el fallo es solo del historial.
+      await expect(page.getByRole('heading', { name: 'Situación actual' })).toBeVisible()
+
+      // Y el historial dice que no se pudo leer, no que no existe.
+      const aviso = page.getByRole('alert').filter({
+        hasText: 'No pudimos cargar el historial de cursos',
+      })
+      await expect(aviso).toBeVisible()
+      await expect(aviso).toContainText('No pudimos leer el historial en este momento.')
+      await expect(aviso).toContainText(
+        'Esto no significa que el legajo no tenga trayectoria: no se pudo leer.'
+      )
+
+      // El mensaje no le atribuye al estudiante una falta de permiso que no
+      // tiene: su propio historial sí le corresponde.
+      await expect(aviso).not.toContainText('Solo el director')
+      await expect(aviso.getByRole('link', { name: 'Reintentar' })).toBeVisible()
+
+      // El estado vacio, que diria lo contrario, no aparece.
+      await expect(
+        page.getByText('Todavía no hay matrículas registradas para este legajo.')
+      ).toHaveCount(0)
+
+      await capturar(page, 'escritorio-estudiante-historial-ilegible')
+    })
+
+    // Restituido el permiso, el reintento muestra la trayectoria real.
+    await page.goto('/dashboard/mi-legajo')
+    await expect(page.getByRole('heading', { name: 'Historial de cursos' })).toBeVisible()
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'No pudimos cargar el historial de cursos' })
+    ).toHaveCount(0)
+    await expect(page.getByLabel('Tabla del historial de cursos')).toContainText('Sala de 5 A')
   })
 
   test('ve Mi legajo en la navegación pero no Alumnos', async ({ page }) => {

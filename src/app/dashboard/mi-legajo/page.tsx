@@ -94,6 +94,8 @@ export default async function MiLegajoPage() {
       <SituacionAcademica
         alumno={alumno}
         historial={historial.ok ? historial.datos : []}
+        errorHistorial={historial.ok ? undefined : historial.mensaje}
+        rutaReintento="/dashboard/mi-legajo"
       />
       <p className="text-xs text-neutral-400 text-center">
         Si algún dato no es correcto, comunicate con la administración del centro

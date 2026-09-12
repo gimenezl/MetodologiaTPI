@@ -26,6 +26,7 @@ import {
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input, Select } from '@/components/ui/Input'
+import { cn } from '@/lib/utils'
 import { crearAlumnoSchema, type CrearAlumnoData } from '@/lib/validations'
 import {
   cambiarCursoRemoto,
@@ -110,9 +111,31 @@ export function GestionAlumnos({
     label: `${curso.denominacion} ${curso.division} — ${curso.nivel_nombre}`,
   }))
 
+  /**
+   * Opciones para un cambio de curso: nunca incluyen el curso vigente.
+   *
+   * La base rechaza ese cambio con un error de dominio, porque aceptarlo
+   * abriría y cerraría un tramo de historial sin que nada haya cambiado.
+   * Ofrecerlo en el selector sería ofrecer una operación que no existe.
+   */
+  function opcionesDeCambio(alumno: AlumnoAcademico) {
+    return opcionesCurso.filter((opcion) => opcion.value !== alumno.curso_id)
+  }
+
   useEffect(() => {
     if (formularioAbierto) nombreAltaRef.current?.focus()
   }, [formularioAbierto])
+
+  // Elegir INACTIVO deshabilita el selector de curso. Si además conservara el
+  // valor elegido antes, el formulario quedaría bloqueado por un error sobre un
+  // control que ya no se puede tocar. Se limpia el valor y el error juntos.
+  useEffect(() => {
+    if (estadoElegido !== 'INACTIVO') return
+    if (formularioAlta.getValues('curso_id')) {
+      formularioAlta.setValue('curso_id', undefined, { shouldValidate: false })
+    }
+    formularioAlta.clearErrors('curso_id')
+  }, [estadoElegido, formularioAlta])
 
   function limpiarMensajes() {
     setErrorGeneral(null)
@@ -502,6 +525,7 @@ export function GestionAlumnos({
           tituloId="titulo-corregir-identidad"
           titulo={`Corregir identidad de ${nombreCompleto(alumnoEnEdicion)}`}
           selectorFocoInicial="#corregir-alumno-dni"
+          ocupado={formularioIdentidad.formState.isSubmitting}
           onCerrar={() => setAlumnoEnEdicion(null)}
         >
           <form
@@ -555,9 +579,8 @@ export function GestionAlumnos({
           tituloId="titulo-cambiar-curso"
           titulo={`Cambiar el curso de ${nombreCompleto(cambioDeCurso.alumno)}`}
           selectorFocoInicial="#cambiar-curso-destino"
-          onCerrar={() => {
-            if (!operando) setCambioDeCurso(null)
-          }}
+          ocupado={operando}
+          onCerrar={() => setCambioDeCurso(null)}
         >
           <div className="space-y-5">
             <p className="text-sm text-neutral-600 leading-relaxed">
@@ -569,9 +592,11 @@ export function GestionAlumnos({
               id="cambiar-curso-destino"
               required
               placeholder={
-                sinCursosActivos ? 'No hay cursos activos disponibles' : 'Elegí un curso activo'
+                opcionesDeCambio(cambioDeCurso.alumno).length === 0
+                  ? 'No hay otro curso activo disponible'
+                  : 'Elegí un curso activo'
               }
-              options={opcionesCurso}
+              options={opcionesDeCambio(cambioDeCurso.alumno)}
               value={cambioDeCurso.destino}
               onChange={(evento) =>
                 setCambioDeCurso({ ...cambioDeCurso, destino: evento.target.value })
@@ -608,9 +633,8 @@ export function GestionAlumnos({
           selectorFocoInicial={
             cambioDeEstado.activar ? '#reactivar-alumno-curso' : '#confirmar-estado-alumno'
           }
-          onCerrar={() => {
-            if (!operando) setCambioDeEstado(null)
-          }}
+          ocupado={operando}
+          onCerrar={() => setCambioDeEstado(null)}
         >
           <div className="space-y-5">
             <p className="text-sm text-neutral-600 leading-relaxed">
@@ -843,26 +867,47 @@ function AccionesAlumno({
 const SELECTOR_ENFOCABLES =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
+/**
+ * Diálogo accesible.
+ *
+ * `ocupado` describe una operación en vuelo: mientras dure, el diálogo no se
+ * puede cerrar por ninguna vía. Antes el botón de cerrar y el fondo respondían
+ * al clic pero la función descartaba la acción en silencio, de modo que el
+ * control parecía disponible sin serlo. Ahora el estado es coherente entre el
+ * botón, Escape, el fondo y `aria-busy`.
+ */
 function Dialogo({
   tituloId,
   titulo,
   selectorFocoInicial,
+  ocupado = false,
   onCerrar,
   children,
 }: {
   tituloId: string
   titulo: string
   selectorFocoInicial: string
+  ocupado?: boolean
   onCerrar: () => void
   children: ReactNode
 }) {
   const contenedor = useRef<HTMLDivElement>(null)
   const focoPrevio = useRef<HTMLElement | null>(null)
   const onCerrarRef = useRef(onCerrar)
+  const ocupadoRef = useRef(ocupado)
 
   useEffect(() => {
     onCerrarRef.current = onCerrar
   }, [onCerrar])
+
+  useEffect(() => {
+    ocupadoRef.current = ocupado
+  }, [ocupado])
+
+  function intentarCerrar() {
+    if (ocupadoRef.current) return
+    onCerrarRef.current()
+  }
 
   useEffect(() => {
     focoPrevio.current = document.activeElement as HTMLElement | null
@@ -875,6 +920,7 @@ function Dialogo({
     function alPresionarTecla(evento: KeyboardEvent) {
       if (evento.key === 'Escape') {
         evento.preventDefault()
+        if (ocupadoRef.current) return
         onCerrarRef.current()
         return
       }
@@ -908,8 +954,11 @@ function Dialogo({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8 overflow-y-auto">
       <div
-        className="absolute inset-0 bg-neutral-950/40 backdrop-blur-sm"
-        onClick={() => onCerrarRef.current()}
+        className={cn(
+          'absolute inset-0 bg-neutral-950/40 backdrop-blur-sm',
+          ocupado && 'cursor-progress'
+        )}
+        onClick={intentarCerrar}
         aria-hidden="true"
       />
       <div
@@ -917,6 +966,7 @@ function Dialogo({
         role="dialog"
         aria-modal="true"
         aria-labelledby={tituloId}
+        aria-busy={ocupado || undefined}
         className="relative w-full max-w-lg bg-white rounded-2xl border border-neutral-200 shadow-xl my-auto"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
@@ -925,9 +975,10 @@ function Dialogo({
           </h2>
           <button
             type="button"
-            onClick={() => onCerrarRef.current()}
+            onClick={intentarCerrar}
+            disabled={ocupado}
             aria-label="Cerrar diálogo"
-            className="text-neutral-400 hover:text-neutral-600 p-1 rounded-lg hover:bg-neutral-100 transition-colors"
+            className="text-neutral-400 hover:text-neutral-600 p-1 rounded-lg hover:bg-neutral-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
           >
             <X size={18} />
           </button>

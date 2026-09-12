@@ -88,23 +88,9 @@ export default async function DetalleAlumnoPage({
       <SituacionAcademica
         alumno={alumno.datos}
         historial={historial.ok ? historial.datos : []}
+        errorHistorial={historial.ok ? undefined : historial.mensaje}
+        rutaReintento={`/dashboard/alumnos/${id}`}
       />
-
-      {!historial.ok && (
-        <div
-          role="alert"
-          className="bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3 items-start"
-        >
-          <WarningCircle
-            size={20}
-            weight="fill"
-            className="text-red-500 shrink-0 mt-0.5"
-          />
-          <p className="text-sm text-red-800">
-            No pudimos cargar el historial de cursos. {historial.mensaje}
-          </p>
-        </div>
-      )}
     </div>
   )
 }
