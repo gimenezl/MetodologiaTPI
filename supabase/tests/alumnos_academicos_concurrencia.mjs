@@ -248,6 +248,157 @@ async function dniConcurrente(a, b, pids) {
 }
 
 // ================================================================
+// 18bis. Dos correcciones concurrentes hacia el mismo DNI normalizado
+// ================================================================
+/**
+ * Dos estudiantes distintos, dos sesiones distintas, el mismo DNI de destino.
+ *
+ * Es una carrera diferente de la del escenario 18. Acá las dos transacciones
+ * corrigen filas distintas de `alumnos`, así que el `FOR UPDATE` del principio
+ * de `corregir_identidad_alumno` no las pone en fila: cada una toma su propia
+ * fila sin esperar a la otra. Lo único que impide que las dos confirmen es el
+ * índice único sobre el DNI, y de eso trata este escenario.
+ *
+ * La segunda sesión queda bloqueada en la inserción del índice, no por un
+ * bloqueo de fila; `pg_blocking_pids` lo detecta igual, y por eso la
+ * coordinación sigue siendo determinista y no depende de esperas por tiempo.
+ */
+async function correccionDniConcurrente(a, b, pids) {
+  const DNI_UNO = '93000301'
+  const DNI_DOS = '93000302'
+  const DNI_DESTINO = '93000399'
+
+  await a.ejecutar(
+    `BEGIN;
+     DELETE FROM public.alumnos
+       WHERE perfil_id IN (SELECT id FROM public.perfiles
+                           WHERE dni IN ('${DNI_UNO}', '${DNI_DOS}', '${DNI_DESTINO}'));
+     DELETE FROM public.perfiles
+       WHERE dni IN ('${DNI_UNO}', '${DNI_DOS}', '${DNI_DESTINO}');
+     COMMIT;
+
+     ${CLAIMS_DIRECTORA}
+     SELECT public.crear_alumno('Correccion', 'Uno', '${DNI_UNO}', 'INACTIVO');
+     SELECT public.crear_alumno('Correccion', 'Dos', '${DNI_DOS}', 'INACTIVO');`,
+    'preparar_correccion_dni'
+  )
+
+  const alumnoUno = await a.escalar(
+    `(SELECT id FROM public.perfiles WHERE dni = '${DNI_UNO}')`,
+    'alumno_correccion_uno'
+  )
+  const alumnoDos = await a.escalar(
+    `(SELECT id FROM public.perfiles WHERE dni = '${DNI_DOS}')`,
+    'alumno_correccion_dos'
+  )
+
+  await a.ejecutar(
+    `${CLAIMS_DIRECTORA}
+     BEGIN;
+     SELECT public.corregir_identidad_alumno('${alumnoUno}', '${DNI_DESTINO}');`,
+    'correccion_a_pendiente'
+  )
+
+  const perdedora = b.ejecutar(
+    `${CLAIMS_DIRECTORA}
+     ${esperandoSqlstate(
+       `PERFORM public.corregir_identidad_alumno('${alumnoDos}', '${DNI_DESTINO}');`,
+       '23505',
+       'La segunda corrección concurrente hacia el mismo DNI debía rechazarse'
+     )}`,
+    'correccion_b_pendiente'
+  )
+
+  await esperarBloqueo(a, pids.a, pids.b)
+  await a.ejecutar('COMMIT;', 'confirmar_correccion_a')
+  await perdedora
+
+  await afirmar(
+    a,
+    `(SELECT pg_catalog.count(*) FROM public.perfiles WHERE dni = '${DNI_DESTINO}')`,
+    '1',
+    'verificar_correccion_dni_unico',
+    'Dos correcciones concurrentes dejaron el mismo DNI en dos perfiles'
+  )
+  await afirmar(
+    a,
+    `(SELECT apellido FROM public.perfiles WHERE dni = '${DNI_DESTINO}')`,
+    'Uno',
+    'verificar_correccion_ganadora',
+    'El DNI corregido no quedó en la transacción que confirmó primero'
+  )
+  // La perdedora conserva su DNI anterior: el rechazo no dejó a nadie a medias.
+  await afirmar(
+    a,
+    `(SELECT pg_catalog.count(*) FROM public.perfiles WHERE dni = '${DNI_DOS}')`,
+    '1',
+    'verificar_perdedora_intacta',
+    'La corrección rechazada dejó al segundo estudiante sin su DNI original'
+  )
+  console.log(
+    'OK CONCURRENCIA 18bis: dos correcciones simultáneas hacia el mismo DNI dejan una sola (23505)'
+  )
+}
+
+// ================================================================
+// 18ter. Dos correcciones concurrentes hacia el mismo legajo normalizado
+// ================================================================
+/**
+ * El mismo legajo escrito con distinta caja es el mismo legajo.
+ *
+ * Dos sesiones asignan «LEG-CONC-9000» y «leg-conc-9000» al mismo tiempo a
+ * estudiantes distintos. Si la unicidad dependiera de la cadena literal, las
+ * dos confirmarían y el centro educativo tendría dos legajos que una persona
+ * lee como uno solo.
+ */
+async function correccionLegajoConcurrente(a, b, pids) {
+  const DNI_DOS = '93000302'
+  const LEGAJO = 'LEG-CONC-9000'
+
+  const alumnoUno = await a.escalar(
+    `(SELECT id FROM public.perfiles WHERE dni = '93000399')`,
+    'alumno_legajo_uno'
+  )
+  const alumnoDos = await a.escalar(
+    `(SELECT id FROM public.perfiles WHERE dni = '${DNI_DOS}')`,
+    'alumno_legajo_dos'
+  )
+
+  await a.ejecutar(
+    `${CLAIMS_DIRECTORA}
+     BEGIN;
+     SELECT public.corregir_identidad_alumno('${alumnoUno}', '93000399', '${LEGAJO}');`,
+    'legajo_a_pendiente'
+  )
+
+  const perdedora = b.ejecutar(
+    `${CLAIMS_DIRECTORA}
+     ${esperandoSqlstate(
+       `PERFORM public.corregir_identidad_alumno('${alumnoDos}', '${DNI_DOS}', '${LEGAJO.toLowerCase()}');`,
+       '23505',
+       'El mismo legajo con otra caja debía rechazarse'
+     )}`,
+    'legajo_b_pendiente'
+  )
+
+  await esperarBloqueo(a, pids.a, pids.b)
+  await a.ejecutar('COMMIT;', 'confirmar_legajo_a')
+  await perdedora
+
+  await afirmar(
+    a,
+    `(SELECT pg_catalog.count(*) FROM public.perfiles
+      WHERE pg_catalog.lower(legajo_nro) = '${LEGAJO.toLowerCase()}')`,
+    '1',
+    'verificar_legajo_unico',
+    'Dos correcciones concurrentes dejaron el mismo legajo normalizado dos veces'
+  )
+  console.log(
+    'OK CONCURRENCIA 18ter: el mismo legajo con distinta caja no se duplica bajo concurrencia (23505)'
+  )
+}
+
+// ================================================================
 // 19. Asignación de curso frente a inactivación del estudiante
 // ================================================================
 async function asignacionContraInactivacionDelAlumno(a, b, pids, ctx) {
@@ -399,6 +550,8 @@ try {
   await dobleMatriculaConcurrente(sesionA, sesionB, pids, ctx)
   await dobleMatriculaDirecta(sesionA, sesionB, pids, ctx)
   await dniConcurrente(sesionA, sesionB, pids)
+  await correccionDniConcurrente(sesionA, sesionB, pids)
+  await correccionLegajoConcurrente(sesionA, sesionB, pids)
   await asignacionContraInactivacionDelAlumno(sesionA, sesionB, pids, ctx)
   await asignacionAntesQueInactivacionDelCurso(sesionA, sesionB, pids, ctx)
   await inactivacionDelCursoAntesQueAsignacion(sesionA, sesionB, pids, ctx)
