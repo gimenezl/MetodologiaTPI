@@ -267,14 +267,39 @@ export const dniAlumnoSchema = z
   .min(1, 'El DNI es requerido')
   .regex(/^[0-9]{7,8}$/, 'El DNI debe tener exactamente 7 u 8 dígitos, sin puntos ni letras')
 
-/** El legajo es manual: no existe numeración automática. */
+/**
+ * Espacio en blanco lateral, con el mismo alcance que el contrato de PostgreSQL.
+ *
+ * `\s` con la bandera `u` cubre todo el conjunto que rechaza la restricción
+ * `perfiles_legajo_valido`, salvo `U+0085` (next line), que en JavaScript no
+ * cuenta como espacio en blanco y por eso se agrega a mano. Comprobado contra
+ * los veintiséis puntos de código enumerados en la migración 009.
+ *
+ * `String.prototype.trim()` no sirve acá: se comportaría distinto de `btrim`
+ * justamente en `U+0085`, y un legajo aceptado por el formulario terminaría
+ * rechazado por la base.
+ */
+const espacioLateralUnicode = /^[\s\u0085]|[\s\u0085]$/u
+
+/**
+ * El legajo es manual: no existe numeración automática.
+ *
+ * Se rechaza, nunca se recorta. Un legajo visualmente vacío o con espacios en
+ * blanco Unicode en los extremos es un dato mal cargado; corregirlo en silencio
+ * cambiaría el número que escribió una persona. Los espacios interiores se
+ * conservan: la descripción aprobada no los prohíbe.
+ */
 export const legajoAlumnoSchema = z
   .string({ message: 'El número de legajo es requerido' })
   .min(1, 'El número de legajo es requerido')
   .max(50, 'El número de legajo no puede superar los 50 caracteres')
   .refine(
-    (legajo) => legajo === legajo.trim(),
+    (legajo) => !espacioLateralUnicode.test(legajo),
     'El número de legajo no puede tener espacios al inicio o al final'
+  )
+  .refine(
+    (legajo) => legajo.trim().length > 0,
+    'El número de legajo no puede estar vacío'
   )
 
 const nombrePersonaSchema = z

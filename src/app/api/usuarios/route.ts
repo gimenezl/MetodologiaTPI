@@ -1,21 +1,48 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { dniAlumnoSchema, legajoAlumnoSchema } from '@/lib/validations'
 import { createServerSupabaseClient } from '@/services/supabase.server'
 import { createAdminClient } from '@/services/supabase.admin'
 
 export const dynamic = 'force-dynamic'
+
+/**
+ * Alta de una cuenta de acceso con su perfil.
+ *
+ * Orden de operaciones, deliberado:
+ *
+ *   1. Autorizar.
+ *   2. Validar el cuerpo completo.
+ *   3. Rechazar los vínculos parentales, que esta historia no soporta.
+ *   4. Comprobar que el DNI y el legajo estén libres.
+ *   5. Crear la cuenta en Auth.
+ *   6. Persistir el perfil en una única sentencia.
+ *   7. Si esa sentencia falla, compensar Auth y comprobar el resultado.
+ *
+ * Los pasos 3 y 4 existen para que ningún rechazo previsible ocurra después de
+ * haber creado la cuenta de Auth. El paso 6 es una sola escritura en
+ * PostgreSQL: el trigger de la migración 008 crea la fila de `alumnos` dentro
+ * de esa misma sentencia, así que perfil y legajo académico se confirman o se
+ * descartan juntos. No hay ninguna segunda escritura que pueda dejar el
+ * conjunto a medias.
+ */
+
+const VINCULOS_NO_SOPORTADOS =
+  'Los vínculos entre padres o tutores e hijos todavía no están disponibles. ' +
+  'Creá la cuenta sin vincular y registrá la relación cuando la funcionalidad esté publicada.'
 
 const crearUsuarioSchema = z.object({
   email: z.string().email('Email inválido'),
   password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
   nombre: z.string().min(2, 'Nombre inválido').max(100),
   apellido: z.string().min(2, 'Apellido inválido').max(100),
-  dni: z.string().regex(/^\d{7,8}$/, 'DNI inválido'),
+  dni: dniAlumnoSchema,
   rol_id: z.number().int().positive('Rol inválido'),
   telefono: z.string().max(20).optional().or(z.literal('')),
   direccion: z.string().max(255).optional().or(z.literal('')),
-  legajo_nro: z.string().max(50).optional().or(z.literal('')),
-  // Vínculos familiares
+  legajo_nro: legajoAlumnoSchema.optional().or(z.literal('')),
+  // Vínculos familiares: se aceptan en el contrato solo para poder rechazarlos
+  // con un mensaje propio en lugar de un error genérico de campo desconocido.
   hijos_ids: z.array(z.string().uuid()).optional(),
   tutor_id: z.string().uuid().optional().or(z.literal('')),
 })
@@ -52,23 +79,73 @@ export async function POST(request: Request) {
     const msg = parsed.error.issues[0]?.message ?? 'Datos inválidos'
     return NextResponse.json({ error: msg }, { status: 400 })
   }
-  const { email, password, nombre, apellido, dni, rol_id, telefono, direccion, legajo_nro, hijos_ids, tutor_id } = parsed.data
+  const {
+    email, password, nombre, apellido, dni, rol_id,
+    telefono, direccion, legajo_nro, hijos_ids, tutor_id,
+  } = parsed.data
+
+  // 3. Rechazar los vínculos parentales ANTES de escribir nada.
+  //
+  // `padres_hijos` no existe en el esquema versionado. La versión anterior de
+  // esta ruta intentaba insertar ahí después de haber creado la cuenta de Auth
+  // y el perfil; la inserción fallaba, el borrado compensatorio del perfil
+  // chocaba con la clave foránea `ON DELETE RESTRICT` de `alumnos`, su error se
+  // ignoraba y quedaban filas huérfanas reservando el DNI y el legajo.
+  //
+  // Se rechaza en vez de ignorarse: un director que eligió un tutor tiene que
+  // enterarse de que ese vínculo no se guardó, no creerlo registrado. El
+  // vínculo parental pertenece a EPT-13.
+  const pidioVinculo = Boolean(tutor_id) || (hijos_ids?.length ?? 0) > 0
+  if (pidioVinculo) {
+    return NextResponse.json({ error: VINCULOS_NO_SOPORTADOS }, { status: 400 })
+  }
 
   const admin = createAdminClient()
+  const legajoNormalizado = legajo_nro || null
 
-  // 3. Determinar el nombre del rol elegido para validar los vínculos familiares
-  const { data: rolRow } = await admin.from('roles').select('nombre').eq('id', rol_id).single()
-  const rolElegido = (rolRow as { nombre: string } | null)?.nombre
-
-  // El tutor no es requisito para dar de alta a un alumno (EPT-9).
+  // 4. Comprobar que la identidad esté libre antes de crear la cuenta.
   //
-  // La obligación anterior era inalcanzable: `padres_hijos` no existe en las
-  // migraciones versionadas, así que sobre una base reproducida desde cero el
-  // alta de un ESTUDIANTE fallaba siempre. El vínculo parental pertenece a
-  // EPT-13 y sigue siendo opcional acá; el legajo académico se administra en
-  // `/dashboard/alumnos`, que no toca ni Auth ni vínculos familiares.
+  // No reemplaza a las restricciones únicas, que siguen siendo la autoridad
+  // ante dos altas simultáneas; evita el caso habitual de crear y borrar una
+  // cuenta de Auth por un duplicado que se podía detectar antes.
+  // Se consultan por separado en lugar de con un filtro `or`. El filtro `or` de
+  // PostgREST se arma concatenando texto, y el legajo es una cadena libre: uno
+  // que contenga una coma o un paréntesis —«LEG,2027» es un legajo válido según
+  // el contrato— rompería la expresión y el alta terminaría en un 500 que
+  // culpa al sistema de un dato correcto. `eq` codifica el valor por su cuenta.
+  const [porDni, porLegajo] = await Promise.all([
+    admin.from('perfiles').select('id').eq('dni', dni).limit(1),
+    legajoNormalizado
+      ? admin.from('perfiles').select('id').eq('legajo_nro', legajoNormalizado).limit(1)
+      : Promise.resolve({ data: [] as { id: string }[], error: null }),
+  ])
 
-  // 4. Crear el usuario de autenticación (con email ya confirmado)
+  const errorConsulta = porDni.error ?? porLegajo.error
+  if (errorConsulta) {
+    console.error('[usuarios] no se pudo verificar la identidad', {
+      code: errorConsulta.code,
+      message: errorConsulta.message,
+    })
+    return NextResponse.json(
+      { error: 'No pudimos verificar los datos. Volvé a intentarlo en unos minutos.' },
+      { status: 500 }
+    )
+  }
+
+  if ((porDni.data ?? []).length > 0) {
+    return NextResponse.json(
+      { error: 'Ya existe una persona registrada con ese DNI.' },
+      { status: 409 }
+    )
+  }
+  if ((porLegajo.data ?? []).length > 0) {
+    return NextResponse.json(
+      { error: 'Ya existe un legajo con ese número.' },
+      { status: 409 }
+    )
+  }
+
+  // 5. Crear el usuario de autenticación (con email ya confirmado)
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
     email,
     password,
@@ -82,8 +159,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: friendly }, { status: 400 })
   }
 
-  // 5. Crear el perfil asociado con su rol
-  const { data: nuevoPerfil, error: perfilErr } = await admin.from('perfiles').insert({
+  // 6. Persistir el perfil. Única escritura en PostgreSQL de esta ruta.
+  const { error: perfilErr } = await admin.from('perfiles').insert({
     user_id: created.user.id,
     nombre,
     apellido,
@@ -91,40 +168,38 @@ export async function POST(request: Request) {
     rol_id,
     telefono: telefono || null,
     direccion: direccion || null,
-    legajo_nro: legajo_nro || null,
-  }).select('id').single()
+    legajo_nro: legajoNormalizado,
+  })
 
-  if (perfilErr || !nuevoPerfil) {
-    // Rollback: si falla el perfil, eliminamos el usuario de auth para no dejar huérfanos
-    await admin.auth.admin.deleteUser(created.user.id)
-    const m = perfilErr?.message ?? ''
+  if (perfilErr) {
+    // 7. Compensación explícita y comprobada. Si el borrado de la cuenta de
+    // Auth también falla, no se puede informar un fallo limpio: quedaría una
+    // cuenta sin perfil y hay que decirlo.
+    const { error: errorCompensacion } = await admin.auth.admin.deleteUser(created.user.id)
+
+    if (errorCompensacion) {
+      console.error('[usuarios] la compensación de Auth falló tras un alta incompleta', {
+        user_id: created.user.id,
+        perfil: perfilErr.message,
+        compensacion: errorCompensacion.message,
+      })
+      return NextResponse.json(
+        {
+          error:
+            'No se pudo completar el alta y tampoco revertirla por completo. ' +
+            'Avisale al equipo técnico antes de reintentar con el mismo email.',
+        },
+        { status: 500 }
+      )
+    }
+
+    const m = perfilErr.message ?? ''
     const friendly = m.includes('perfiles_dni')
       ? 'Ya existe una persona registrada con ese DNI.'
-      : (m || 'No se pudo crear el perfil')
+      : m.includes('legajo')
+        ? 'Ya existe un legajo con ese número.'
+        : 'No se pudo crear el perfil'
     return NextResponse.json({ error: friendly }, { status: 400 })
-  }
-
-  // 6. Crear los vínculos familiares
-  const nuevoPerfilId = (nuevoPerfil as { id: string }).id
-
-  if (rolElegido === 'PADRE' && hijos_ids && hijos_ids.length > 0) {
-    const vinculos = hijos_ids.map((hijoId) => ({ padre_id: nuevoPerfilId, hijo_id: hijoId }))
-    const { error: vinculoErr } = await admin.from('padres_hijos').insert(vinculos)
-    if (vinculoErr) {
-      // Rollback completo
-      await admin.from('perfiles').delete().eq('id', nuevoPerfilId)
-      await admin.auth.admin.deleteUser(created.user.id)
-      return NextResponse.json({ error: 'No se pudieron asignar los hijos al padre/tutor.' }, { status: 400 })
-    }
-  }
-
-  if (rolElegido === 'ESTUDIANTE' && tutor_id) {
-    const { error: vinculoErr } = await admin.from('padres_hijos').insert({ padre_id: tutor_id, hijo_id: nuevoPerfilId })
-    if (vinculoErr) {
-      await admin.from('perfiles').delete().eq('id', nuevoPerfilId)
-      await admin.auth.admin.deleteUser(created.user.id)
-      return NextResponse.json({ error: 'No se pudo asignar el tutor al alumno.' }, { status: 400 })
-    }
   }
 
   return NextResponse.json({ ok: true, user_id: created.user.id })

@@ -29,36 +29,50 @@ export async function crearUsuario(payload: CrearUsuarioPayload) {
 
 export type RelacionFamiliar = { padre_id: string; hijo_id: string }
 
-// Devuelve todos los vínculos padre/tutor <-> hijo (el director ve todos por RLS)
+/**
+ * Mensaje único del vínculo parental, compartido por la lectura y la escritura.
+ *
+ * `padres_hijos` no existe en el esquema versionado: ninguna migración la crea.
+ * Sobre una base reproducida desde cero, cualquier consulta a esa tabla falla.
+ * La funcionalidad completa pertenece a EPT-13.
+ */
+export const VINCULO_PARENTAL_NO_DISPONIBLE =
+  'Los vínculos entre padres o tutores e hijos todavía no están disponibles.'
+
+/** SQLSTATE de PostgreSQL para «la relación no existe». */
+const SQLSTATE_TABLA_INEXISTENTE = '42P01'
+
+/**
+ * Devuelve los vínculos padre/tutor ↔ hijo que existan.
+ *
+ * Degrada a una lista vacía cuando la tabla no está en el esquema, en lugar de
+ * propagar el error. Antes, una pantalla que solo necesita roles y perfiles se
+ * caía entera porque cargaba las tres cosas con un `Promise.all`: sobre una base
+ * reproducible el panel de usuarios quedaba inutilizable. Cualquier otro error
+ * sí se propaga: no corresponde ocultar un fallo real de lectura.
+ */
 export async function obtenerRelacionesFamiliares(): Promise<RelacionFamiliar[]> {
   const supabase = createClient()
   const { data, error } = await (supabase
     .from('padres_hijos')
-    .select('padre_id, hijo_id') as unknown as Promise<{ data: RelacionFamiliar[] | null; error: { message: string } | null }>)
-  if (error) throw new Error(error.message)
+    .select('padre_id, hijo_id') as unknown as Promise<{
+      data: RelacionFamiliar[] | null
+      error: { message: string; code?: string } | null
+    }>)
+
+  if (error) {
+    if (error.code === SQLSTATE_TABLA_INEXISTENTE) return []
+    throw new Error(error.message)
+  }
   return data ?? []
 }
 
-// Reemplaza el conjunto de hijos de un padre/tutor
-export async function setHijosDePadre(padreId: string, hijosIds: string[]) {
-  const supabase = createClient()
-  await supabase.from('padres_hijos').delete().eq('padre_id', padreId)
-  if (hijosIds.length > 0) {
-    const { error } = await supabase
-      .from('padres_hijos')
-      .insert(hijosIds.map((hijoId) => ({ padre_id: padreId, hijo_id: hijoId })))
-    if (error) throw new Error(error.message)
-  }
-}
-
-// Asigna (o quita) el tutor de un alumno
-export async function setTutorDeHijo(hijoId: string, tutorId: string | null) {
-  const supabase = createClient()
-  await supabase.from('padres_hijos').delete().eq('hijo_id', hijoId)
-  if (tutorId) {
-    const { error } = await supabase
-      .from('padres_hijos')
-      .insert({ padre_id: tutorId, hijo_id: hijoId })
-    if (error) throw new Error(error.message)
-  }
-}
+/*
+ * No existen `setHijosDePadre` ni `setTutorDeHijo` (EPT-9).
+ *
+ * Escribían en `padres_hijos`, que no existe en ninguna migración: la operación
+ * fallaba siempre y, en el alta de usuarios, lo hacía después de haber creado la
+ * cuenta de Auth y el perfil, dejando filas huérfanas que reservaban el DNI y el
+ * legajo. La escritura del vínculo parental vuelve cuando EPT-13 aporte su
+ * migración; hasta entonces la interfaz lo informa en lugar de intentarlo.
+ */

@@ -1013,4 +1013,199 @@ BEGIN
     RAISE NOTICE 'OK 50: solo los perfiles ESTUDIANTE tienen legajo académico';
 END $$;
 
+
+-- ================================================================
+-- 10. CORRECCIONES DE LA REVISIÓN (migración 009)
+-- ================================================================
+RESET ROLE;
+
+DO $$
+BEGIN
+    -- 51. Las restricciones no dependen de ninguna función propia.
+    --
+    -- Si volvieran a hacerlo, una inserción legítima desde una sesión
+    -- `authenticated` fallaría con «permission denied for function», que es
+    -- exactamente el defecto que cerró la migración 009.
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'public.perfiles'::regclass
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) LIKE '%app_private%'
+    ) THEN
+        RAISE EXCEPTION 'FALLO 51: una restricción de perfiles vuelve a depender de app_private';
+    END IF;
+    RAISE NOTICE 'OK 51: las restricciones de perfiles no llaman funciones de app_private';
+
+    -- 52. Las funciones de validación siguen sin EXECUTE para los roles de
+    -- aplicación: la corrección no abrió privilegios.
+    IF has_function_privilege('authenticated', 'app_private.dni_valido(text)', 'EXECUTE')
+       OR has_function_privilege('authenticated', 'app_private.legajo_valido(text)', 'EXECUTE')
+       OR has_function_privilege('anon', 'app_private.dni_valido(text)', 'EXECUTE')
+       OR has_function_privilege('anon', 'app_private.legajo_valido(text)', 'EXECUTE') THEN
+        RAISE EXCEPTION 'FALLO 52: las funciones de validación quedaron ejecutables por un rol de aplicación';
+    END IF;
+    RAISE NOTICE 'OK 52: las funciones de validación siguen sin EXECUTE para authenticated ni anon';
+END $$;
+
+-- 53. El flujo real «Nuevo legajo» funciona con una sesión authenticated.
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims',
+                  '{"sub":"71111111-1111-4111-8111-111111111111"}', true);
+
+DO $$
+DECLARE
+    v_insertados BIGINT;
+BEGIN
+    INSERT INTO public.perfiles (rol_id, nombre, apellido, dni, legajo_nro)
+    VALUES ((SELECT id FROM public.roles WHERE nombre = 'DOCENTE'),
+            'Nuevo', 'Legajo', '92700001', 'LEG-PERMISO-1');
+
+    SELECT pg_catalog.count(*) INTO v_insertados
+    FROM public.perfiles WHERE dni = '92700001';
+
+    IF v_insertados <> 1 THEN
+        RAISE EXCEPTION 'FALLO 53: el alta autenticada de un legajo no persistió';
+    END IF;
+    RAISE NOTICE 'OK 53: un DIRECTOR autenticado crea un legajo sin privilegios extra';
+END $$;
+
+RESET ROLE;
+
+-- 54 a 56. Contrato de espacios en blanco Unicode del legajo.
+DO $$
+DECLARE
+    v_caso      RECORD;
+    v_perfil    UUID;
+    v_aceptados TEXT := '';
+BEGIN
+    FOR v_caso IN
+        SELECT * FROM (VALUES
+            ('cadena vacia',      ''),
+            ('espacios ASCII',    pg_catalog.repeat(pg_catalog.chr(32), 3)),
+            ('tabulacion',        pg_catalog.chr(9)),
+            ('salto de linea',    pg_catalog.chr(10)),
+            ('retorno de carro',  pg_catalog.chr(13)),
+            ('nbsp solo',         pg_catalog.chr(160)),
+            ('em space solo',     pg_catalog.chr(8195)),
+            ('ws inicial ASCII',  pg_catalog.chr(32) || 'LEG-WS'),
+            ('ws final ASCII',    'LEG-WS' || pg_catalog.chr(32)),
+            ('ws inicial nbsp',   pg_catalog.chr(160) || 'LEG-WS'),
+            ('ws final em space', 'LEG-WS' || pg_catalog.chr(8195)),
+            ('ws final BOM',      'LEG-WS' || pg_catalog.chr(65279))
+        ) AS c(etiqueta, valor)
+    LOOP
+        BEGIN
+            INSERT INTO public.perfiles (rol_id, nombre, apellido, dni, legajo_nro)
+            VALUES ((SELECT id FROM public.roles WHERE nombre = 'DOCENTE'),
+                    'Espacio', 'Blanco', '92750001', v_caso.valor)
+            RETURNING id INTO v_perfil;
+
+            -- Si llegó acá, la base aceptó un valor que debía rechazar.
+            v_aceptados := v_aceptados || v_caso.etiqueta || '; ';
+            DELETE FROM public.perfiles WHERE id = v_perfil;
+        EXCEPTION WHEN check_violation THEN
+            NULL;
+        END;
+    END LOOP;
+
+    IF v_aceptados <> '' THEN
+        RAISE EXCEPTION 'FALLO 54: la base aceptó legajos inválidos: %', v_aceptados;
+    END IF;
+    RAISE NOTICE 'OK 54: el legajo rechaza vacío y espacios en blanco Unicode laterales';
+
+    -- 55. Un legajo válido sí se acepta, con espacios interiores incluidos.
+    INSERT INTO public.perfiles (rol_id, nombre, apellido, dni, legajo_nro)
+    VALUES ((SELECT id FROM public.roles WHERE nombre = 'DOCENTE'),
+            'Legajo', 'Valido', '92750002', 'LEG 2027 018');
+    RAISE NOTICE 'OK 55: un legajo con espacios interiores es válido';
+
+    -- 56. Duplicado normalizado: la misma cadena con otra caja se rechaza.
+    BEGIN
+        INSERT INTO public.perfiles (rol_id, nombre, apellido, dni, legajo_nro)
+        VALUES ((SELECT id FROM public.roles WHERE nombre = 'DOCENTE'),
+                'Legajo', 'Duplicado', '92750003', 'leg 2027 018');
+        RAISE EXCEPTION 'FALLO 56: se aceptó un legajo duplicado con otra caja';
+    EXCEPTION WHEN unique_violation THEN
+        RAISE NOTICE 'OK 56: el legajo duplicado sin distinguir mayúsculas se rechaza (23505)';
+    END;
+
+    DELETE FROM public.perfiles WHERE dni IN ('92750001', '92750002', '92750003');
+END $$;
+
+-- 57 a 59. La lectura propia exige conservar el rol ESTUDIANTE.
+DO $$
+DECLARE
+    v_propio   UUID    := (SELECT id FROM public.perfiles WHERE dni = '92000003');
+    v_docente  INTEGER := (SELECT id FROM public.roles WHERE nombre = 'DOCENTE');
+    v_alumno   INTEGER := (SELECT id FROM public.roles WHERE nombre = 'ESTUDIANTE');
+    v_visibles BIGINT;
+BEGIN
+    -- Estado de partida: el estudiante ve su propio legajo.
+    EXECUTE 'SET LOCAL ROLE authenticated';
+    PERFORM set_config('request.jwt.claims',
+                       '{"sub":"73333333-3333-4333-8333-333333333333"}', true);
+
+    SELECT pg_catalog.count(*) INTO v_visibles FROM public.alumnos_academicos;
+    IF v_visibles <> 1 THEN
+        RAISE EXCEPTION 'FALLO 57: el estudiante ve % legajos y debería ver 1', v_visibles;
+    END IF;
+    RAISE NOTICE 'OK 57: con rol ESTUDIANTE vigente, la lectura propia funciona';
+
+    -- Se le cambia el rol a DOCENTE conservando la fila de `alumnos`.
+    EXECUTE 'RESET ROLE';
+    UPDATE public.perfiles SET rol_id = v_docente WHERE id = v_propio;
+
+    EXECUTE 'SET LOCAL ROLE authenticated';
+    PERFORM set_config('request.jwt.claims',
+                       '{"sub":"73333333-3333-4333-8333-333333333333"}', true);
+
+    SELECT pg_catalog.count(*) INTO v_visibles FROM public.alumnos_academicos;
+    IF v_visibles <> 0 THEN
+        RAISE EXCEPTION 'FALLO 58: un perfil que dejó de ser ESTUDIANTE conserva % legajos', v_visibles;
+    END IF;
+
+    SELECT pg_catalog.count(*) INTO v_visibles FROM public.matriculas_historial;
+    IF v_visibles <> 0 THEN
+        RAISE EXCEPTION 'FALLO 58: un perfil que dejó de ser ESTUDIANTE conserva su historial';
+    END IF;
+    RAISE NOTICE 'OK 58: al dejar de ser ESTUDIANTE se pierde el acceso académico propio';
+
+    -- Se restaura el rol y el acceso vuelve.
+    EXECUTE 'RESET ROLE';
+    UPDATE public.perfiles SET rol_id = v_alumno WHERE id = v_propio;
+
+    EXECUTE 'SET LOCAL ROLE authenticated';
+    PERFORM set_config('request.jwt.claims',
+                       '{"sub":"73333333-3333-4333-8333-333333333333"}', true);
+    SELECT pg_catalog.count(*) INTO v_visibles FROM public.alumnos_academicos;
+    IF v_visibles <> 1 THEN
+        RAISE EXCEPTION 'FALLO 59: al restaurar el rol ESTUDIANTE no vuelve el acceso propio';
+    END IF;
+    RAISE NOTICE 'OK 59: al restaurar el rol ESTUDIANTE vuelve el acceso propio';
+
+    -- El DIRECTOR conserva sus lecturas administrativas.
+    EXECUTE 'SET LOCAL ROLE authenticated';
+    PERFORM set_config('request.jwt.claims',
+                       '{"sub":"71111111-1111-4111-8111-111111111111"}', true);
+    SELECT pg_catalog.count(*) INTO v_visibles FROM public.alumnos_academicos;
+    IF v_visibles < 1 THEN
+        RAISE EXCEPTION 'FALLO 59bis: el director perdió la lectura administrativa';
+    END IF;
+    RAISE NOTICE 'OK 59bis: el DIRECTOR conserva la lectura administrativa completa';
+END $$;
+
+-- 60. `padres_hijos` sigue sin existir: ninguna corrección la creó por la puerta
+-- de atrás y ninguna operación académica la necesita.
+RESET ROLE;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'padres_hijos'
+    ) THEN
+        RAISE EXCEPTION 'FALLO 60: esta unidad no debe crear padres_hijos';
+    END IF;
+    RAISE NOTICE 'OK 60: padres_hijos sigue fuera del esquema y nada de EPT-9 la usa';
+END $$;
+
 ROLLBACK;

@@ -323,7 +323,24 @@ export async function listarHistorialAlumno(
     .order('fecha_inicio', { ascending: false })
 
   if (error) {
-    return { ok: false, ...traducirErrorAlumno(error, 'listarHistorialAlumno') }
+    const traducido = traducirErrorAlumno(error, 'listarHistorialAlumno')
+
+    // Los mensajes de `traducirErrorAlumno` están escritos para una escritura:
+    // explican por qué no se pudo hacer un cambio. Reutilizarlos acá produce
+    // textos que no corresponden a lo que pasó; el peor es el de privilegio,
+    // que le dice «solo el director puede administrar los legajos» a un
+    // estudiante que sí tiene derecho a ver el suyo y contradice al aviso que
+    // lo rodea. Una lectura fallida tiene un solo significado para quien mira:
+    // no se pudo leer. El detalle técnico queda en el registro del servidor.
+    if (traducido.estado >= 403) {
+      return {
+        ok: false,
+        estado: traducido.estado,
+        mensaje: 'No pudimos leer el historial en este momento.',
+      }
+    }
+
+    return { ok: false, ...traducido }
   }
 
   return { ok: true, datos: (data ?? []) as unknown as MatriculaHistorica[] }
