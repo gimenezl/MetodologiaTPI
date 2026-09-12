@@ -1003,6 +1003,39 @@ primera corrida de Playwright, no después. Y habría revisado qué fixtures com
 las suites existentes antes de sembrar datos, en vez de descubrir la colisión con
 la suite de Cursos en la corrida completa.
 
+### Lo que enseñó la revisión que bloqueó la entrega
+
+**Una prueba que mira el código fuente no prueba el comportamiento.** La entrega
+anterior afirmaba que el banco de pruebas devolvía 404 en producción porque la
+condición estaba escrita en el archivo. Cuando se midió de verdad, el 404
+existía, pero era distinguible del de una ruta inexistente: la protección era
+más débil de lo que la evidencia decía. Leer una condición demuestra que alguien
+la escribió, nada más.
+
+**Una restricción puede existir y no restringir.** El literal Unicode de la
+migración se vació sin dejar rastro visible: la restricción seguía declarada,
+con su nombre de siempre, y aceptaba todo. Peor que no tenerla, porque aparenta
+cobertura y nadie la vuelve a mirar. De ahí dos hábitos nuevos: los conjuntos de
+caracteres se construyen con puntos de código en ASCII, nunca con literales
+invisibles ni secuencias de escape, y toda restricción nueva se ejerce dentro de
+su propia migración antes de darla por aplicada.
+
+**Ignorar un dato en silencio es peor que rechazarlo.** La ruta de alta recibía
+un tutor, no lo guardaba y devolvía éxito. Nadie se enteraba. Rechazar con un
+mensaje explícito es menos cómodo y más honesto.
+
+**Un mensaje de error heredado puede mentir.** El traductor de errores devolvía
+«Solo el director puede administrar los legajos» a un estudiante que sí puede
+ver su propio legajo, porque el texto estaba escrito para una escritura
+rechazada y se reutilizó en una lectura. Los mensajes no son intercambiables
+entre operaciones.
+
+**Verificar el entorno antes de medirlo.** Dos veces durante esta corrección una
+prueba midió el proceso equivocado: un servidor de una corrida anterior seguía
+escuchando en el puerto, y en Windows `kill()` sobre un proceso lanzado a través
+del intérprete no baja el árbol. Las pruebas que levantan servidores ahora
+comprueban el puerto antes de empezar y lo liberan de verdad al terminar.
+
 ---
 
 ## 19. Próximo paso
