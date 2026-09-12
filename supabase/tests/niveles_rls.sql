@@ -22,15 +22,15 @@ BEGIN;
 INSERT INTO public.perfiles (user_id, rol_id, nombre, apellido, dni)
 VALUES
     ('61111111-1111-4111-8111-111111111111',
-     (SELECT id FROM public.roles WHERE nombre = 'DIRECTOR'),   'Prueba', 'Directora',  'N90000001'),
+     (SELECT id FROM public.roles WHERE nombre = 'DIRECTOR'),   'Prueba', 'Directora',  '90000001'),
     ('62222222-2222-4222-8222-222222222222',
-     (SELECT id FROM public.roles WHERE nombre = 'DOCENTE'),    'Prueba', 'Docente',    'N90000002'),
+     (SELECT id FROM public.roles WHERE nombre = 'DOCENTE'),    'Prueba', 'Docente',    '90000002'),
     ('63333333-3333-4333-8333-333333333333',
-     (SELECT id FROM public.roles WHERE nombre = 'ESTUDIANTE'), 'Prueba', 'Estudiante', 'N90000003'),
+     (SELECT id FROM public.roles WHERE nombre = 'ESTUDIANTE'), 'Prueba', 'Estudiante', '90000003'),
     ('64444444-4444-4444-8444-444444444444',
-     (SELECT id FROM public.roles WHERE nombre = 'PADRE'),      'Prueba', 'Padre',      'N90000004'),
+     (SELECT id FROM public.roles WHERE nombre = 'PADRE'),      'Prueba', 'Padre',      '90000004'),
     ('65555555-5555-4555-8555-555555555555',
-     (SELECT id FROM public.roles WHERE nombre = 'PERSONAL'),   'Prueba', 'Personal',   'N90000005');
+     (SELECT id FROM public.roles WHERE nombre = 'PERSONAL'),   'Prueba', 'Personal',   '90000005');
 
 -- ================================================================
 -- 1–9. ESTRUCTURA, SEMILLAS Y ORDEN
