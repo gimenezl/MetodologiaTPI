@@ -254,3 +254,163 @@ export function primerErrorNivel(error: z.ZodError): {
 
   return { mensaje: issue.message, campo }
 }
+
+// ---- Alumnos y estado académico (EPT-9) ----
+/**
+ * El contrato del DNI se rechaza, nunca se recorta. Un DNI con espacios o con
+ * letras es un dato personal mal cargado: corregirlo en silencio inventaría la
+ * identidad de una persona. La clase se escribe `[0-9]` y no `\d` para que el
+ * significado sea el mismo que el de `app_private.dni_valido` en PostgreSQL.
+ */
+export const dniAlumnoSchema = z
+  .string({ message: 'El DNI es requerido' })
+  .min(1, 'El DNI es requerido')
+  .regex(/^[0-9]{7,8}$/, 'El DNI debe tener exactamente 7 u 8 dígitos, sin puntos ni letras')
+
+/** El legajo es manual: no existe numeración automática. */
+export const legajoAlumnoSchema = z
+  .string({ message: 'El número de legajo es requerido' })
+  .min(1, 'El número de legajo es requerido')
+  .max(50, 'El número de legajo no puede superar los 50 caracteres')
+  .refine(
+    (legajo) => legajo === legajo.trim(),
+    'El número de legajo no puede tener espacios al inicio o al final'
+  )
+
+const nombrePersonaSchema = z
+  .string({ message: 'Este dato es requerido' })
+  .min(2, 'Mínimo 2 caracteres')
+  .max(100, 'Máximo 100 caracteres')
+  .regex(/^[a-zA-ZÀ-ÿ\s'-]+$/, 'Solo se permiten letras y espacios')
+  .refine(
+    (valor) => valor === valor.trim(),
+    'No puede tener espacios al inicio o al final'
+  )
+
+export const estadoAlumnoSchema = z.enum(['ACTIVO', 'INACTIVO'] as const, {
+  message: 'Elegí explícitamente si el estudiante queda activo o inactivo',
+})
+
+export type EstadoAlumno = z.infer<typeof estadoAlumnoSchema>
+
+export const cursoAsignableSchema = z
+  .string({ message: 'Seleccioná un curso activo' })
+  .uuid('Seleccioná un curso activo')
+
+/**
+ * Alta administrativa. El estado es una elección explícita y obligatoria: no hay
+ * ningún valor por defecto que oculte una decisión académica.
+ *
+ * Los campos opcionales se declaran con `.optional()` a secas. Convertir la
+ * cadena vacía del formulario en `undefined` es responsabilidad del `setValueAs`
+ * de React Hook Form, como en el resto del panel: así el tipo de entrada y el de
+ * salida del esquema coinciden y el resolver conserva la inferencia.
+ */
+export const crearAlumnoSchema = z
+  .object({
+    nombre: nombrePersonaSchema,
+    apellido: nombrePersonaSchema,
+    dni: dniAlumnoSchema,
+    estado: estadoAlumnoSchema,
+    legajo_nro: legajoAlumnoSchema.optional(),
+    curso_id: cursoAsignableSchema.optional(),
+    fecha_nacimiento: z
+      .string()
+      .refine((valor) => new Date(valor) < new Date(), 'La fecha no puede ser en el futuro')
+      .optional(),
+    telefono: z.string().max(20, 'Máximo 20 caracteres').optional(),
+    direccion: z.string().max(255, 'Máximo 255 caracteres').optional(),
+  })
+  .strict()
+  .superRefine((datos, ctx) => {
+    if (datos.estado === 'ACTIVO') {
+      if (!datos.curso_id) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['curso_id'],
+          message: 'Un estudiante activo debe tener un curso asignado',
+        })
+      }
+      if (!datos.legajo_nro) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['legajo_nro'],
+          message: 'Un estudiante activo debe tener un número de legajo',
+        })
+      }
+      return
+    }
+
+    if (datos.curso_id) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['curso_id'],
+        message: 'Un estudiante inactivo no puede quedar matriculado en un curso',
+      })
+    }
+  })
+
+export type CrearAlumnoData = z.infer<typeof crearAlumnoSchema>
+
+const corregirIdentidadSchema = z
+  .object({
+    accion: z.literal('corregir_identidad'),
+    dni: dniAlumnoSchema,
+    legajo_nro: legajoAlumnoSchema.optional(),
+  })
+  .strict()
+
+const cambiarCursoSchema = z
+  .object({
+    accion: z.literal('cambiar_curso'),
+    curso_id: cursoAsignableSchema,
+  })
+  .strict()
+
+const inactivarAlumnoSchema = z
+  .object({ accion: z.literal('inactivar') })
+  .strict()
+
+const reactivarAlumnoSchema = z
+  .object({
+    accion: z.literal('reactivar'),
+    curso_id: cursoAsignableSchema,
+  })
+  .strict()
+
+/**
+ * Contrato PATCH discriminado: cada petición realiza una sola operación
+ * académica. No existe ninguna acción de borrado.
+ */
+export const actualizarAlumnoSchema = z.discriminatedUnion('accion', [
+  corregirIdentidadSchema,
+  cambiarCursoSchema,
+  inactivarAlumnoSchema,
+  reactivarAlumnoSchema,
+])
+
+export type ActualizarAlumnoData = z.infer<typeof actualizarAlumnoSchema>
+
+export const alumnoIdSchema = z.string().uuid('Identificador de alumno inválido')
+
+/** Misma traducción estructural que `primerErrorNivel`, para el dominio de alumnos. */
+export function primerErrorAlumno(error: z.ZodError): {
+  mensaje: string
+  campo?: string
+} {
+  const issue = error.issues[0]
+  const campo = typeof issue?.path?.[0] === 'string' ? issue.path[0] : undefined
+
+  if (!issue) return { mensaje: 'Datos inválidos' }
+  if (issue.code === 'unrecognized_keys') {
+    return { mensaje: 'La petición contiene campos no permitidos' }
+  }
+  if (issue.code === 'invalid_union') {
+    return { mensaje: 'Seleccioná una acción válida', campo: 'accion' }
+  }
+  if (issue.code === 'invalid_type' && !campo) {
+    return { mensaje: 'Datos inválidos' }
+  }
+
+  return { mensaje: issue.message, campo }
+}
