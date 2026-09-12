@@ -223,16 +223,25 @@ export type Database = {
       }
       niveles: {
         Row: {
+          activo: boolean
+          es_institucional: boolean
           id: number
           nombre: string
+          orden: number
         }
         Insert: {
+          activo?: boolean
+          es_institucional?: boolean
           id?: number
           nombre: string
+          orden: number
         }
         Update: {
+          activo?: boolean
+          es_institucional?: boolean
           id?: number
           nombre?: string
+          orden?: number
         }
         Relationships: []
       }
@@ -412,7 +421,55 @@ export type Database = {
         Args: { p_estudiante_id: string }
         Returns: number
       }
+      cambiar_estado_nivel: {
+        Args: { p_activo: boolean; p_nivel_id: number }
+        Returns: {
+          activo: boolean
+          es_institucional: boolean
+          id: number
+          nombre: string
+          orden: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "niveles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      crear_nivel: {
+        Args: { p_nombre: string }
+        Returns: {
+          activo: boolean
+          es_institucional: boolean
+          id: number
+          nombre: string
+          orden: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "niveles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       es_director_actual: { Args: never; Returns: boolean }
+      renombrar_nivel: {
+        Args: { p_nivel_id: number; p_nombre: string }
+        Returns: {
+          activo: boolean
+          es_institucional: boolean
+          id: number
+          nombre: string
+          orden: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "niveles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       [_ in never]: never

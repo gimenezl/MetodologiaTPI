@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 }
 
 const stats = [
-  { value: '3', label: 'Niveles educativos', icon: GraduationCap },
+  { value: 'Integral', label: 'Trayectoria educativa', icon: GraduationCap },
   { value: '8+', label: 'Deportes y talleres', icon: Trophy },
   { value: '2027', label: 'Inicio de clases', icon: Star },
   { value: '100%', label: 'Compromiso docente', icon: Heart },
@@ -205,7 +205,7 @@ export default async function HomePage() {
           <div className="text-center mb-14">
             <p className="text-brand-600 font-semibold text-sm uppercase tracking-widest mb-3">Oferta educativa</p>
             <h2 id="niveles-heading" className="text-4xl font-extrabold text-neutral-900 tracking-tight">
-              Tres niveles, una sola visión
+              Cada etapa, una sola visión
             </h2>
           </div>
           <div className="grid md:grid-cols-3 gap-6">

@@ -7,7 +7,8 @@ import { loadEnvConfig } from '@next/env'
 // variables. Sin esto, el setup autenticado no encuentra la base local.
 loadEnvConfig(process.cwd())
 
-// El banco de pruebas de interfaz (`/pruebas-ui/cursos`) solo se habilita para
+// Los bancos de pruebas de interfaz (`/pruebas-ui/cursos` y
+// `/pruebas-ui/niveles`) solo se habilitan para
 // esta corrida. Las credenciales de Supabase se completan con valores de relleno
 // únicamente cuando el entorno no trae unas propias, para que la suite arranque
 // sin configuración previa y sin pisar la configuración real de nadie.
@@ -30,15 +31,29 @@ const entornoServidor: Record<string, string> = {
  */
 const conBaseLocal = process.env.EPT_SUPABASE_LOCAL === '1'
 
-const PRUEBAS_AUTENTICADAS = /cursos-auth\.spec\.ts/
+const PRUEBAS_AUTENTICADAS = /(?:cursos|niveles)-auth\.spec\.ts/
 const PRUEBAS_SETUP = /auth\.setup\.ts/
+const PRUEBAS_RESPONSIVE_NIVELES = /niveles-responsive\.spec\.ts/
 
 const proyectoBase: Project = {
   name: 'chromium',
   use: { ...devices['Desktop Chrome'] },
   // Estas pruebas asumen que NO hay sesión: se excluyen las autenticadas.
-  testIgnore: [PRUEBAS_AUTENTICADAS, PRUEBAS_SETUP],
+  testIgnore: [PRUEBAS_AUTENTICADAS, PRUEBAS_SETUP, PRUEBAS_RESPONSIVE_NIVELES],
 }
+
+const proyectosResponsive: Project[] = [
+  {
+    name: 'pixel-5-chromium',
+    use: { ...devices['Pixel 5'] },
+    testMatch: PRUEBAS_RESPONSIVE_NIVELES,
+  },
+  {
+    name: 'iphone-13-webkit',
+    use: { ...devices['iPhone 13'] },
+    testMatch: PRUEBAS_RESPONSIVE_NIVELES,
+  },
+]
 
 const proyectosAutenticados: Project[] = [
   {
@@ -66,6 +81,10 @@ export default defineConfig({
   testDir: './tests',
   timeout: 30000,
   retries: 1,
+  // Las suites autenticadas comparten el catálogo local descartable. Un único
+  // worker evita que las altas reales de Niveles alteren mientras tanto las
+  // aserciones históricas de Cursos; sin base local se conserva el paralelismo.
+  workers: conBaseLocal ? 1 : undefined,
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
@@ -76,5 +95,7 @@ export default defineConfig({
     reuseExistingServer: true,
     env: entornoServidor,
   },
-  projects: conBaseLocal ? [...proyectosAutenticados, proyectoBase] : [proyectoBase],
+  projects: conBaseLocal
+    ? [...proyectosAutenticados, proyectoBase, ...proyectosResponsive]
+    : [proyectoBase, ...proyectosResponsive],
 })

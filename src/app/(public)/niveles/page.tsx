@@ -77,10 +77,10 @@ export default function NivelesPage() {
           <div className="max-w-2xl">
             <p className="text-brand-600 font-semibold text-sm uppercase tracking-widest mb-4">Oferta educativa</p>
             <h1 className="text-5xl md:text-6xl font-extrabold text-neutral-900 tracking-tight text-balance leading-tight">
-              Tres niveles, una sola visión
+              Cada etapa, una sola visión
             </h1>
             <p className="mt-5 text-neutral-600 text-lg leading-relaxed max-w-[52ch]">
-              Acompañamos a cada alumno desde los 3 hasta los 17 años con propuestas pedagógicas adaptadas a cada etapa del desarrollo.
+              Acompañamos a cada alumno a lo largo de su trayectoria con propuestas pedagógicas adaptadas a cada etapa del desarrollo.
             </p>
           </div>
         </div>

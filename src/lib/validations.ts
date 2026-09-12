@@ -175,3 +175,82 @@ export const actualizarCursoSchema = z
 export type ActualizarCursoData = z.infer<typeof actualizarCursoSchema>
 
 export const cursoIdSchema = z.string().uuid('Identificador de curso inválido')
+
+// ---- Niveles educativos (EPT-55) ----
+/**
+ * El nombre se rechaza, no se recorta silenciosamente. Así la validación HTTP
+ * coincide con `niveles_nombre_valido` y con las funciones de PostgreSQL.
+ */
+const caracterEnBlancoLateralNivel = /^[\s\u0085]|[\s\u0085]$/u
+
+export const nombreNivelSchema = z
+  .string({ message: 'El nombre del nivel es requerido' })
+  .min(1, 'El nombre del nivel es requerido')
+  .max(50, 'El nombre del nivel no puede superar los 50 caracteres')
+  .refine(
+    (nombre) => !caracterEnBlancoLateralNivel.test(nombre),
+    'El nombre del nivel no puede tener caracteres en blanco al inicio o al final'
+  )
+
+export const crearNivelSchema = z
+  .object({ nombre: nombreNivelSchema })
+  .strict()
+
+export type CrearNivelData = z.infer<typeof crearNivelSchema>
+
+const renombrarNivelSchema = z
+  .object({
+    accion: z.literal('renombrar'),
+    nombre: nombreNivelSchema,
+  })
+  .strict()
+
+const cambiarEstadoNivelSchema = z
+  .object({
+    accion: z.literal('cambiar_estado'),
+    activo: z.boolean({ message: 'El estado del nivel debe ser verdadero o falso' }),
+  })
+  .strict()
+
+/**
+ * Contrato PATCH discriminado: cada petición realiza una sola operación y no
+ * puede mezclar un renombrado con un cambio de estado.
+ */
+export const actualizarNivelSchema = z.discriminatedUnion('accion', [
+  renombrarNivelSchema,
+  cambiarEstadoNivelSchema,
+])
+
+export type ActualizarNivelData = z.infer<typeof actualizarNivelSchema>
+
+/** Identificador serial de PostgreSQL representado como segmento de URL. */
+export const nivelEducativoIdSchema = z
+  .string()
+  .regex(/^[1-9]\d*$/, 'Identificador de nivel inválido')
+  .transform(Number)
+  .refine(
+    (id) => Number.isSafeInteger(id) && id <= 2147483647,
+    'Identificador de nivel inválido'
+  )
+
+/** Traduce también los errores estructurales que Zod emite en inglés. */
+export function primerErrorNivel(error: z.ZodError): {
+  mensaje: string
+  campo?: string
+} {
+  const issue = error.issues[0]
+  const campo = typeof issue?.path?.[0] === 'string' ? issue.path[0] : undefined
+
+  if (!issue) return { mensaje: 'Datos inválidos' }
+  if (issue.code === 'unrecognized_keys') {
+    return { mensaje: 'La petición contiene campos no permitidos' }
+  }
+  if (issue.code === 'invalid_union') {
+    return { mensaje: 'Seleccioná una acción válida', campo: 'accion' }
+  }
+  if (issue.code === 'invalid_type' && !campo) {
+    return { mensaje: 'Datos inválidos' }
+  }
+
+  return { mensaje: issue.message, campo }
+}

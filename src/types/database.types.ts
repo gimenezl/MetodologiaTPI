@@ -78,9 +78,27 @@ export type Database = {
         }
       }
       niveles: {
-        Row: { id: number; nombre: string }
-        Insert: { id?: number; nombre: string }
-        Update: { id?: number; nombre?: string }
+        Row: {
+          activo: boolean
+          es_institucional: boolean
+          id: number
+          nombre: string
+          orden: number
+        }
+        Insert: {
+          activo?: boolean
+          es_institucional?: boolean
+          id?: number
+          nombre: string
+          orden: number
+        }
+        Update: {
+          activo?: boolean
+          es_institucional?: boolean
+          id?: number
+          nombre?: string
+          orden?: number
+        }
       }
       cursos: {
         Row: {
@@ -341,9 +359,39 @@ export type Database = {
         Args: { p_estudiante_id: string }
         Returns: number
       }
+      cambiar_estado_nivel: {
+        Args: { p_activo: boolean; p_nivel_id: number }
+        Returns: {
+          activo: boolean
+          es_institucional: boolean
+          id: number
+          nombre: string
+          orden: number
+        }
+      }
+      crear_nivel: {
+        Args: { p_nombre: string }
+        Returns: {
+          activo: boolean
+          es_institucional: boolean
+          id: number
+          nombre: string
+          orden: number
+        }
+      }
       es_director_actual: {
         Args: Record<string, never>
         Returns: boolean
+      }
+      renombrar_nivel: {
+        Args: { p_nivel_id: number; p_nombre: string }
+        Returns: {
+          activo: boolean
+          es_institucional: boolean
+          id: number
+          nombre: string
+          orden: number
+        }
       }
     }
   }

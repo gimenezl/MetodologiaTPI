@@ -44,7 +44,21 @@ export function GestionCursos({ cursos, niveles }: GestionCursosProps) {
   const [cursoCambiandoEstado, setCursoCambiandoEstado] = useState<string | null>(null)
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null)
 
+  // La página recibe solo niveles activos. Un nivel inactivo se reincorpora
+  // exclusivamente al editar el curso que ya lo tiene, para preservar historia
+  // sin convertirlo en una opción para altas o reasignaciones nuevas.
   const opcionesNivel = niveles.map((nivel) => ({ value: nivel.id, label: nivel.nombre }))
+  const nivelActualInactivo =
+    cursoEnEdicion?.nivel?.activo === false ? cursoEnEdicion.nivel : null
+  const opcionesNivelEdicion = nivelActualInactivo
+    ? [
+        ...opcionesNivel,
+        {
+          value: nivelActualInactivo.id,
+          label: `${nivelActualInactivo.nombre} (inactivo, nivel actual)`,
+        },
+      ]
+    : opcionesNivel
 
   const formularioAlta = useForm<CrearCursoData>({
     resolver: zodResolver(crearCursoSchema),
@@ -360,10 +374,16 @@ export function GestionCursos({ cursos, niveles }: GestionCursosProps) {
               id="editar-nivel"
               placeholder="Seleccioná un nivel..."
               required
-              options={opcionesNivel}
+              options={opcionesNivelEdicion}
               error={formularioEdicion.formState.errors.nivel_id?.message}
               {...formularioEdicion.register('nivel_id', { valueAsNumber: true })}
             />
+            {nivelActualInactivo && (
+              <p className="text-xs text-amber-700 -mt-2">
+                Este nivel está inactivo. Podés conservarlo, pero si elegís otro nivel solo
+                podrás seleccionar uno activo.
+              </p>
+            )}
             <div className="flex flex-wrap gap-3 pt-2">
               <Button type="submit" loading={formularioEdicion.formState.isSubmitting}>
                 Guardar cambios

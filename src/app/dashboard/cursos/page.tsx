@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Lock, WarningCircle } from '@phosphor-icons/react/dist/ssr'
 import { requerirDirector } from '@/services/autorizacion'
-import { listarCursos, listarNiveles } from '@/services/cursos.service'
+import { listarCursos, listarNivelesActivos } from '@/services/cursos.service'
 import { Button } from '@/components/ui/Button'
 import { GestionCursos } from './_components/GestionCursos'
 
@@ -39,7 +39,7 @@ export default async function CursosPage() {
 
   const [resultadoCursos, resultadoNiveles] = await Promise.all([
     listarCursos(),
-    listarNiveles(),
+    listarNivelesActivos(),
   ])
 
   // Un fallo de lectura se muestra como error explícito. Nunca se degrada a una

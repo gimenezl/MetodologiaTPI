@@ -55,7 +55,13 @@ function clienteAdmin() {
         'Levantá el stack local con `supabase start` y generá .env.local.'
     )
   }
-  if (!/localhost|127\.0\.0\.1/.test(url)) {
+  let hostname: string
+  try {
+    hostname = new URL(url).hostname.replace(/^\[|\]$/g, '')
+  } catch {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL no es una URL válida para el stack local.')
+  }
+  if (!new Set(['localhost', '127.0.0.1', '::1']).has(hostname)) {
     throw new Error(
       `Se esperaba una base local y se encontró ${url}. Este setup nunca debe correr contra un proyecto remoto.`
     )
@@ -105,8 +111,26 @@ setup('crear identidades y datos de prueba', async () => {
     }
   }
 
-  // 3. Dejar los cursos en un estado conocido.
+  // 3. Dejar el catálogo y los cursos en un estado conocido. Esta limpieza usa
+  // exclusivamente la clave administrativa del stack local descartable; no
+  // representa una operación disponible en la aplicación.
   await admin.from('cursos').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  const { error: errorLimpiarNiveles } = await admin
+    .from('niveles')
+    .delete()
+    .eq('es_institucional', false)
+  if (errorLimpiarNiveles) {
+    throw new Error(`No se pudieron limpiar los niveles de prueba: ${errorLimpiarNiveles.message}`)
+  }
+  const { error: errorRestaurarNiveles } = await admin
+    .from('niveles')
+    .update({ activo: true })
+    .eq('es_institucional', true)
+  if (errorRestaurarNiveles) {
+    throw new Error(
+      `No se pudieron restaurar los niveles institucionales: ${errorRestaurarNiveles.message}`
+    )
+  }
   const { data: niveles } = await admin.from('niveles').select('id, nombre')
   const porNombre = new Map<string, number>(
     (niveles ?? []).map((n: any) => [String(n.nombre).trim().toUpperCase(), n.id as number])
