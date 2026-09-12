@@ -6,8 +6,10 @@ nivel derivado siempre del curso, y las invariantes garantizadas dentro de
 PostgreSQL en vez de solo en la interfaz. Todo lo que este documento afirma se
 ejecutó; los comandos y sus códigos de salida están más abajo.
 
-**Estado: listo para revisión independiente.** EPT-9 permanece `En curso`. No hubo
-push, ni pull request, ni merge, ni ningún cambio en `main`.
+**Estado: corregido tras una revisión independiente que bloqueó el candidato
+`5419942`.** Los doce hallazgos están cerrados y demostrados; el detalle está en
+la sección 0. EPT-9 permanece `En curso`. No hubo push, ni pull request, ni
+merge, ni ningún cambio en `main`.
 
 ---
 
@@ -17,8 +19,88 @@ push, ni pull request, ni merge, ni ningún cambio en `main`.
 2. Probar la base: las dos suites SQL y las dos de concurrencia (§ Pruebas de base).
 3. Probar la aplicación: TypeScript, ESLint focalizado, build y las tres suites de
    navegador (§ Pruebas de servidor y navegador).
-4. Revisar las capturas en [`EPT-9/`](EPT-9/), diferenciadas entre banco visual
+4. Comprobar que los bancos de pruebas no existen en producción:
+   `node supabase/tests/harness_produccion.mjs`.
+5. Revisar las capturas en [`EPT-9/`](EPT-9/), diferenciadas entre banco visual
    (`fixture-*`) y base real (`real-*`).
+
+---
+
+## 0. Remediación de la revisión independiente
+
+Una revisión independiente **bloqueó** el candidato anterior y levantó doce
+hallazgos. Esta sección es el registro de qué se confirmó, qué se corrigió y con
+qué prueba se demuestra cada corrección. Lo que sigue en el resto del documento
+describe la unidad completa; acá está solamente lo que cambió después del
+bloqueo.
+
+**Candidato bloqueado:** `5419942d698527780477fa74e5a353a943f1955e`.
+
+Ese identificador es el del código revisado, no el de esta entrega. Un archivo
+versionado no puede contener honestamente el SHA del commit que lo contiene: el
+hash se calcula sobre el contenido, así que escribirlo sería imposible o falso.
+El SHA definitivo de esta remediación queda en el comentario de Jira y en el
+informe final. Para reconstruirlo desde el repositorio:
+
+```bash
+git log --oneline origin/main..HEAD
+git rev-parse HEAD
+```
+
+### Los doce hallazgos
+
+| # | Hallazgo | Veredicto | Corrección | Prueba que lo demuestra |
+|---|---|---|---|---|
+| 1 | Persistencia parcial al crear un estudiante con tutor | **Confirmado** | `POST /api/usuarios` reescrito: rechaza los vínculos parentales en vez de ignorarlos, comprueba DNI y legajo libres antes de tocar Auth, persiste en una sola sentencia y verifica la compensación | `tests/usuarios-auth.spec.ts` (9 casos) |
+| 2 | Permiso denegado sobre las funciones de un CHECK | **Confirmado y reproducido** | Las restricciones pasan a expresiones inmutables en línea; no se otorga ningún EXECUTE nuevo | `alumnos_academicos_rls.sql` casos 51 a 53 |
+| 3 | Falta una migración progresiva | **Confirmado** | `009_correcciones_revision_alumnos.sql`, aditiva, idempotente, con verificación previa de los datos y autocomprobación del contrato | `npx supabase db reset --local` exit 0; sección 7 de la propia migración |
+| 4 | `btrim(text)` no rechazaba todos los espacios en blanco | **Confirmado** | Conjunto Unicode de 26 puntos de código, idéntico en PostgreSQL y en Zod | `alumnos_academicos_rls.sql` casos 54 a 56; `alumnos-correcciones.spec.ts` |
+| 5 | La lectura propia no exigía conservar el rol ESTUDIANTE | **Confirmado** | Las dos políticas exigen `perfil_id` propio **y** rol vigente | `alumnos_academicos_rls.sql` casos 57 a 59bis |
+| 6 | ACTIVO → INACTIVO dejaba un curso incompatible | **Confirmado** | El curso se limpia junto con su error al cambiar de estado | `alumnos-correcciones.spec.ts`, prueba de nueve pasos |
+| 7 | Cuatro defectos de interfaz | **Confirmados** | Historial ilegible distinguido del vacío; `aria-invalid` y `aria-describedby`; diálogos coherentes mientras hay una petición en vuelo; el curso vigente no se ofrece como destino | `alumnos-correcciones.spec.ts` (8 casos) y `alumnos-auth.spec.ts` |
+| 8 | La concurrencia de corrección de DNI estaba simulada | **Confirmado** | Dos escenarios nuevos con dos conexiones `psql` reales | `alumnos_academicos_concurrencia.mjs` 18bis y 18ter |
+| 9 | El 404 del banco de pruebas se afirmaba leyendo el código | **Confirmado** | Los bancos salen del binario de producción; la prueba compila, levanta y mide | `supabase/tests/harness_produccion.mjs`, 12 afirmaciones |
+| 10 | Integridad de Git y de los tipos | **Confirmado** | Tipos regenerados desde la base local, salto de línea final normalizado | `git diff --check` exit 0; dos generaciones con el mismo SHA256 |
+| 11 | Evidencia y métricas desactualizadas | **Confirmado** | Cifras recalculadas desde Git, recuentos separados entre setup y casos funcionales, 59 capturas regeneradas sin el indicador de desarrollo | Este documento |
+| 12 | Faltaba la lista completa de pruebas | **Confirmado** | Tabla de verificación con comando, código de salida y resultado | § 11 |
+
+### Tres defectos que aparecieron durante la corrección
+
+No estaban en el informe de revisión. Se encontraron al escribir las pruebas y
+se corrigieron en la misma tanda.
+
+1. **El literal de espacios en blanco de la migración estaba vacío.** La
+   restricción `perfiles_legajo_valido` existía, tenía su nombre de siempre y
+   no rechazaba nada: `btrim(legajo_nro, '')` no recorta. Una herramienta de
+   edición había vaciado la secuencia de escape sin dejar rastro visible. El
+   conjunto se reconstruyó con `chr()`, que es ASCII puro en el archivo, y la
+   migración ahora ejerce su propio contrato antes de terminar: si un solo caso
+   pasa, aborta. La guardia se probó reproduciendo el defecto.
+2. **La comprobación previa de identidad rompía con un legajo con coma.** El
+   filtro `or` de PostgREST se arma concatenando texto, así que «LEG,2027» —un
+   legajo válido según el contrato— producía una expresión inválida y un 500
+   que culpaba al sistema de un dato correcto. Se pasó a dos consultas con `eq`,
+   que codifica el valor.
+3. **El mensaje de un historial ilegible acusaba al estudiante.** Al fallar la
+   lectura, el traductor de errores devolvía «Solo el director puede administrar
+   los legajos académicos», escrito para una escritura rechazada, a alguien que
+   sí tiene derecho a ver su propio legajo, y contradecía al aviso que lo
+   rodeaba. Las lecturas fallidas ahora dicen lo único que se puede afirmar: no
+   se pudo leer.
+
+### Un defecto que se cerró más allá de lo pedido
+
+El hallazgo 9 pedía comprobar que `/pruebas-ui/alumnos` respondiera 404 en
+producción. Responde 404, pero al medirlo apareció algo más: ese 404 **no era
+igual** al de una ruta inexistente. Next incluye los segmentos de la URL en la
+carga RSC de toda ruta que el enrutador conoce, así que la respuesta confirmaba
+que el banco estaba ahí. Un 404 que revela lo que niega no protege nada.
+
+Los tres bancos pasaron a llamarse `page.banco.tsx`, y `pageExtensions` sólo
+reconoce esa extensión fuera de producción. `next build` ya no los compila: la
+ruta no existe. La guarda en tiempo de ejecución se conserva igual, porque una
+sola línea de configuración no debería ser lo único que separa un banco de
+pruebas del público.
 
 ---
 
@@ -146,7 +228,7 @@ porque la migración 001 no siembra perfiles.
 | Archivo | Cambio |
 |---|---|
 | `supabase/migrations/008_alumnos_estado_academico.sql` | **Nuevo.** Todo el modelo académico, sus invariantes, funciones, grants y RLS |
-| `supabase/tests/alumnos_academicos_rls.sql` | **Nuevo.** 58 comprobaciones de estructura, integridad, ciclo de vida y autorización |
+| `supabase/tests/alumnos_academicos_rls.sql` | **Nuevo.** 69 comprobaciones de estructura, integridad, ciclo de vida y autorización |
 | `supabase/tests/alumnos_academicos_concurrencia.mjs` | **Nuevo.** 6 escenarios con dos conexiones PostgreSQL reales |
 | `supabase/tests/_sesion-psql.mjs` | **Nuevo.** Arnés de dos conexiones, extraído de la prueba de niveles |
 | `supabase/tests/niveles_concurrencia.mjs` | Usa el arnés compartido; de 249 a 138 líneas |
@@ -194,6 +276,29 @@ porque la migración 001 no siembra perfiles.
 | `tests/alumnos-auth.spec.ts` | **Nuevo.** Sesiones reales por actor |
 | `tests/auth.setup.ts` | De dos identidades a siete; siembra académica por la API real |
 | `playwright.config.ts` | Cinco proyectos autenticados nuevos; `alumnos-ui` en los tres perfiles |
+
+### Archivos de la remediación
+
+| Archivo | Cambio |
+|---|---|
+| `supabase/migrations/009_correcciones_revision_alumnos.sql` | **Nuevo.** Restricciones inline, política de lectura propia con rol vigente, mensaje del mismo curso y autocomprobación del contrato |
+| `src/app/api/usuarios/route.ts` | Reescrito: rechazo explícito de vínculos parentales, comprobación previa de identidad con `eq`, una sola escritura, compensación verificada |
+| `src/services/usuarios.service.ts` | `obtenerRelacionesFamiliares` degrada sólo ante 42P01; se retiran las escrituras parentales |
+| `src/services/alumnos.service.ts` | Las lecturas fallidas del historial dejan de reutilizar mensajes escritos para escrituras |
+| `src/app/dashboard/usuarios/page.tsx` | Sin requisito de tutor ni escrituras parentales; aviso explícito; se retira el código que quedó muerto |
+| `src/components/ui/Input.tsx` | `aria-invalid`, `aria-describedby` compuesto y `role="alert"` en `Input`, `Select` y `Textarea` |
+| `src/app/dashboard/alumnos/_components/GestionAlumnos.tsx` | Limpieza de `curso_id` al inactivar; diálogos con estado ocupado coherente; el curso vigente no se ofrece como destino |
+| `src/app/dashboard/alumnos/_components/SituacionAcademica.tsx` | Distingue «sin trayectoria» de «no se pudo leer», con reintento |
+| `src/lib/validations.ts` | Contrato de espacios en blanco Unicode idéntico al de PostgreSQL |
+| `next.config.ts` | Los bancos de prueba salen del binario de producción; sin indicador de desarrollo en corridas automatizadas |
+| `src/app/pruebas-ui/*/page.banco.tsx` | Renombrados desde `page.tsx` |
+| `tests/alumnos-correcciones.spec.ts` | **Nuevo.** Nueve casos de formulario, diálogos y accesibilidad |
+| `tests/usuarios-auth.spec.ts` | **Nuevo.** Nueve casos del alta de cuentas contra Auth y PostgreSQL reales |
+| `supabase/tests/harness_produccion.mjs` | **Nuevo.** Doce afirmaciones sobre la aplicación compilada |
+| `supabase/tests/correr-autenticadas.mjs` | **Nuevo.** Inyecta las credenciales locales sin escribirlas en disco y se niega a correr fuera de una base de bucle local |
+| `supabase/tests/alumnos_academicos_concurrencia.mjs` | Dos escenarios nuevos de corrección concurrente |
+| `supabase/tests/alumnos_academicos_rls.sql` | Once aserciones nuevas (51 a 60) |
+| `tests/e2e.spec.ts` | Se corrige una aserción heredada que esperaba el destino de redirección sin codificar |
 
 ---
 
@@ -351,9 +456,9 @@ EPT-9 aparece en `auth_rls_initplan`.
 
 | Subtarea | Evidencia específica |
 |---|---|
-| **EPT-20** Persistencia | Migración 008; `alumnos_academicos_rls.sql` 58 OK; concurrencia 6 OK; `db reset` y `db lint` exit 0; `migration list` 001→008 |
-| **EPT-21** Tipos, servicios y API | Tipos sin deriva; `alumnos.service.ts` + rutas; `tsc` exit 0; ESLint focalizado 0 errores; build exit 0; `alumnos.spec.ts` 10/10 y `alumnos-auth.spec.ts` 40/40 |
-| **EPT-22** Interfaz | `alumnos-ui.spec.ts` 16/16 en escritorio, Pixel 5 e iPhone 13; 58 capturas; auditoría de idioma automatizada |
+| **EPT-20** Persistencia | Migraciones 008 y 009; `alumnos_academicos_rls.sql` 69 OK; concurrencia 8 escenarios OK; `db reset` y `db lint` exit 0; `migration list` 001→009 |
+| **EPT-21** Tipos, servicios y API | Tipos sin deriva y regeneración determinista; `alumnos.service.ts` + rutas; `tsc` exit 0; ESLint sin errores nuevos; build exit 0; `alumnos.spec.ts` 10 casos, `alumnos-auth.spec.ts` 32 casos y `usuarios-auth.spec.ts` 9 casos, todos verdes |
+| **EPT-22** Interfaz | `alumnos-ui.spec.ts` 48 casos (16 por perfil: escritorio, Pixel 5 e iPhone 13) y `alumnos-correcciones.spec.ts` 9 casos; 59 capturas; auditoría de idioma automatizada |
 | **EPT-23** DNI y legajo | RLS 12, 19-22, 24, 32-34; concurrencia 18; auth «duplicados reales»; fixtures sintéticos corregidos |
 | **EPT-24** Verificación | Los 39 casos obligatorios, § Pruebas |
 | **EPT-25** Documentación | Este archivo, `EPT-9/` y los comentarios en las siete incidencias |
@@ -370,8 +475,8 @@ Todas contra el stack local descartable, después de `supabase db reset --local`
 | `npx supabase db reset --local` | Aplica 001 a 008 | 0 |
 | `npx supabase migration list --local` | 001…008 local y remoto | 0 |
 | `npx supabase db lint --local --level warning --fail-on error` | `No schema errors found` | 0 |
-| `alumnos_academicos_rls.sql` | **58 OK, 0 FALLO** | 0 |
-| `alumnos_academicos_concurrencia.mjs` | **6 OK** | 0 |
+| `alumnos_academicos_rls.sql` | **69 OK, 0 FALLO** | 0 |
+| `alumnos_academicos_concurrencia.mjs` | **8 OK** | 0 |
 | `cursos_rls.sql` (regresión) | **39 OK, 0 FALLO** | 0 |
 | `niveles_rls.sql` (regresión) | **73 OK, 0 FALLO** | 0 |
 | `niveles_concurrencia.mjs` (regresión) | **4 OK** | 0 |
@@ -384,7 +489,7 @@ Get-Content -Raw supabase/tests/alumnos_academicos_rls.sql |
 node supabase/tests/alumnos_academicos_concurrencia.mjs
 ```
 
-### Los seis escenarios de concurrencia
+### Los ocho escenarios de concurrencia
 
 Dos procesos `psql` independientes. El orden es determinista: cada escenario
 comprueba con `pg_blocking_pids` que la segunda transacción quedó efectivamente
@@ -396,9 +501,18 @@ tiempo**, que daría una prueba que pasa o falla según la carga de la máquina.
 | 17 | Dos matrículas simultáneas para el mismo estudiante | Una sola vigente; la perdedora recibe P5516 |
 | 17bis | Dos inserciones directas, sin pasar por las funciones | El índice único parcial rechaza la segunda (23505) |
 | 18 | Dos altas simultáneas con el mismo DNI | Solo una confirma (23505); gana la primera |
+| 18bis | Dos **correcciones** simultáneas hacia el mismo DNI | Solo una confirma (23505); la perdedora conserva su DNI anterior |
+| 18ter | Dos correcciones simultáneas hacia el mismo legajo con distinta caja | Solo una confirma (23505); no hay dos legajos que se lean igual |
 | 19 | Cambio de curso contra inactivación del estudiante | El cambio se rechaza (P5513); queda INACTIVO sin matrícula |
 | 20a | Asignación primero, inactivación del curso después | La inactivación se rechaza (P5514); el curso sigue activo |
 | 20b | Inactivación del curso primero, asignación después | La asignación se rechaza (P5504); no persiste matrícula |
+
+Los escenarios 18bis y 18ter son carreras distintas de la 18, no una
+repetición. En un alta las dos transacciones insertan; en una corrección
+actualizan filas distintas de `alumnos`, de modo que el `FOR UPDATE` del
+principio de la función no las serializa: cada una toma su propia fila sin
+esperar a la otra. Lo único que impide que las dos confirmen es el índice
+único, y por eso hace falta demostrarlo aparte.
 
 ### Casos obligatorios de EPT-24, uno por uno
 
@@ -457,7 +571,7 @@ tiempo**, que daría una prueba que pasa o falla según la carga de la máquina.
 | `npx playwright test tests/alumnos-ui.spec.ts --project=chromium` | **16 passed** | 0 |
 | `npx playwright test tests/alumnos-ui.spec.ts --project=pixel-5-chromium` | **16 passed** | 0 |
 | `npx playwright test tests/alumnos-ui.spec.ts --project=iphone-13-webkit` | **16 passed** | 0 |
-| `EPT_SUPABASE_LOCAL=1 npx playwright test tests/alumnos-auth.spec.ts` | **40 passed** | 0 |
+| `node supabase/tests/correr-autenticadas.mjs tests/alumnos-auth.spec.ts` | **32 casos funcionales, más 9 de siembra en el proyecto `setup`** | 0 |
 
 ### Nombres de proyecto: por qué difieren de los del enunciado
 
@@ -527,38 +641,99 @@ estados y los textos accesibles están en español.
 
 ## 11. Verificación completa: comandos y códigos
 
-```
-git status --short --branch          # limpio salvo docs/evidence/EPT-9/
-git diff --check                     # sin salida
-git diff --stat origin/main...HEAD   # 33 archivos, +7306 / -263
-git log --oneline origin/main..HEAD  # 6 commits
-```
+Todo lo de esta tabla se ejecutó en esta remediación, contra la base local
+descartable reconstruida desde las migraciones. La columna del resultado dice
+lo que realmente imprimió cada comando.
 
-| Gate completo | Candidato | Baseline `e31bdf25` | Veredicto |
-|---|---|---|---|
-| `npm run lint -- --no-cache` | **124 problemas (15 errores, 109 avisos)**, exit 1 | **125 problemas (16 errores, 109 avisos)**, exit 1 | Un error **menos** y cero avisos nuevos |
-| `EPT_SUPABASE_LOCAL=1 npm run test:e2e` | **176 passed, 1 failed**, exit 1 | 50 passed, 1 failed, exit 1 | El único fallo es idéntico |
+### Base de datos y migraciones
 
-El baseline se reprodujo en un worktree descartable creado desde
-`e31bdf250e06ca9aae1233c2ee737a0443f4df51`, con su propia instalación de
-dependencias (`npm ci`), sin compartir `node_modules` y sin tocar el checkout
-original. Se eliminó al terminar.
+| Comando | Resultado | Salida |
+|---|---|---|
+| `npx supabase db reset --local` | Aplica 001 → 009 y siembra; la sección 7 de la 009 ejerce su propio contrato | 0 |
+| `npx supabase db lint --local --level warning` | `No schema errors found` | 0 |
+| `docker exec -i … psql … < supabase/tests/alumnos_academicos_rls.sql` | **69 aserciones OK, 0 FALLO** | 0 |
+| `docker exec -i … psql … < supabase/tests/cursos_rls.sql` | **39 aserciones OK, 0 FALLO** | 0 |
+| `docker exec -i … psql … < supabase/tests/niveles_rls.sql` | **73 aserciones OK, 0 FALLO** | 0 |
+| `node supabase/tests/alumnos_academicos_concurrencia.mjs` | **8 escenarios OK** con dos conexiones reales | 0 |
+| `node supabase/tests/niveles_concurrencia.mjs` | **4 escenarios OK** | 0 |
 
-### El único fallo, byte a byte en ambos lados
+Los tres guiones SQL corren íntegramente dentro de una transacción que termina
+en `ROLLBACK`: no dejan nada en la base. Cada aserción está escrita como un
+`RAISE EXCEPTION` cuando no se cumple, y `psql` corre con `ON_ERROR_STOP=1`, así
+que un incumplimiento termina el proceso con código distinto de cero. Eso no es
+una afirmación de diseño: durante esta remediación el guion de alumnos falló de
+verdad, con salida 3, en el caso 21, y así se descubrió que el literal de
+espacios en blanco de la migración estaba vacío.
 
-```
-[chromium] › tests/e2e.spec.ts:8:5 › dashboard redirects to login when unauthenticated
-  Expected pattern: /\/login\?redirect=\/dashboard/
-  Received string:  "http://localhost:3000/login?redirect=%2Fdashboard"
-```
+### Código
 
-Idéntico en el candidato y en el baseline: mismo archivo, misma línea, misma
-aserción, mismo valor recibido. **Preexistente demostrado.** Corresponde al
-redirect codificado del login, que pertenece a EPT-66.
+| Comando | Resultado | Salida |
+|---|---|---|
+| `npx tsc --noEmit --incremental false` | Sin errores | 0 |
+| `npx eslint` | 112 problemas: 15 errores y 97 avisos, **todos preexistentes y fuera de los archivos de esta unidad** | 1 |
+| `npx next build` (dentro de la prueba de producción) | Compila | 0 |
+| `npx supabase gen types typescript --local`, dos veces | Mismo SHA256 `7b77055d2e2d408259dde2dc2c46d9fe5d228921712ea4f36b46fc1f2f151cff`, idéntico al del árbol | 0 |
+| `git diff --check` sobre el árbol de trabajo | Sin salida | 0 |
 
-El aviso preexistente del lint focalizado es
-`src/app/dashboard/layout.tsx:130 'perfil' is assigned a value but never used`,
-en un bloque idéntico al del baseline que esta historia no modifica.
+Los quince errores de ESLint están en `(public)/inscripcion`, `(public)/noticias`,
+`(public)/quienes-somos`, `dashboard/asistencias`, `dashboard/solicitudes`,
+`dashboard/testimonios`, `global-error`, `login` y `context/AuthContext`: ninguno
+de esos archivos se toca en esta unidad. En los archivos que sí se tocan queda un
+único aviso, `react-hooks/incompatible-library` en `dashboard/usuarios/page.tsx`,
+preexistente y ajeno a este cambio. Los tres avisos de variable sin uso que esta
+remediación había dejado al retirar la interfaz de vínculos parentales se
+limpiaron.
+
+### Servidor, navegador, accesibilidad y responsive
+
+| Comando | Resultado | Salida |
+|---|---|---|
+| `node supabase/tests/correr-autenticadas.mjs` | **196 pruebas, 196 verdes** | 0 |
+| `node supabase/tests/harness_produccion.mjs` | **12 afirmaciones cumplidas** | 0 |
+
+De las 196, **nueve pertenecen al proyecto `setup`**: no comprueban nada del
+producto, siembran las siete identidades de prueba y sus sesiones. Los **casos
+funcionales son 187**, repartidos así:
+
+| Archivo | Casos | Unidad |
+|---|---|---|
+| `alumnos-ui.spec.ts` | 48 (16 × escritorio, Pixel 5, iPhone 13) | EPT-9 |
+| `alumnos-auth.spec.ts` | 32 | EPT-9 |
+| `alumnos.spec.ts` | 10 | EPT-9 |
+| `alumnos-correcciones.spec.ts` | 9 | EPT-9 (remediación) |
+| `usuarios-auth.spec.ts` | 9 | EPT-9 (remediación) |
+| **Subtotal EPT-9** | **108** | |
+| `cursos-ui.spec.ts`, `cursos-auth.spec.ts`, `cursos.spec.ts` | 39 | EPT-8, regresión |
+| `niveles-*.spec.ts` | 36 | EPT-55, regresión |
+| `e2e.spec.ts` | 4 | Base, regresión |
+| **Subtotal regresión** | **79** | |
+| `auth.setup.ts` | 9 | Siembra, no son casos |
+| **Total ejecutado** | **196** | |
+
+Por proyecto: `chromium` 82, `chromium-directora` 41, `chromium-estudiante` 13,
+`pixel-5-chromium` 18, `iphone-13-webkit` 18, `chromium-docente` 3,
+`chromium-estudiante-ajeno` 3, `chromium-padre` 3, `chromium-personal` 3,
+`chromium-sin-perfil` 3, `setup` 9.
+
+### Auditoría de seguridad sobre la base migrada
+
+| Comprobación | Resultado |
+|---|---|
+| Privilegios de tabla para `anon` y `authenticated` | Sólo `SELECT` en `alumnos`, `matriculas` y sus dos vistas; ninguna escritura directa |
+| Funciones de `app_private` ejecutables por `anon` o `PUBLIC` | Ninguna |
+| `SECURITY DEFINER` sin `search_path` vacío | Ninguna de las 19 |
+| Tablas del dominio sin RLS | Ninguna |
+| Políticas de `DELETE` en el dominio | Ninguna |
+| Vistas académicas | Las dos con `security_invoker = true` |
+| Restricciones CHECK que dependan de `app_private` | Ninguna |
+| Funciones del dominio que liguen la identidad con `auth.uid()` | Las cinco |
+
+`anon` conserva `INSERT` y `UPDATE` sobre `perfiles`, heredados del flujo de
+preinscripción anterior a esta unidad. Se comprobó por comportamiento que RLS
+los anula: como `anon`, el `INSERT` se rechaza con 42501 y el `UPDATE` no alcanza
+ninguna fila, porque las tres políticas de `perfiles` son para `authenticated` o
+para el propio perfil. Queda registrado como observación, no como hallazgo de
+EPT-9.
 
 ---
 
@@ -566,7 +741,7 @@ en un bloque idéntico al del baseline que esta historia no modifica.
 
 | Hallazgo | Clasificación | Prueba |
 |---|---|---|
-| `e2e.spec.ts:8` redirect codificado | Preexistente | Reproducido en el baseline con salida idéntica |
+| `e2e.spec.ts:8` redirect codificado | Preexistente, **corregido** | Reproducido en el baseline con salida idéntica; `encodeURIComponent` viene de `84ef8c7`, muy anterior a esta unidad, y ninguno de los siete commits de EPT-9 tocó ese camino. La aserción era la equivocada, no el código: se ajustó para aceptar el destino codificado |
 | Lint global con errores | Preexistente, **mejorado** | 16 → 15 errores |
 | `layout.tsx:130` variable sin usar | Preexistente | Bloque idéntico al baseline |
 | Asesor ERROR `rls_disabled_in_public` en `actividades` | Preexistente | Ninguna migración habilitó RLS ahí; 008 no menciona la tabla |
@@ -574,7 +749,10 @@ en un bloque idéntico al del baseline que esta historia no modifica.
 | `eliminarPerfil` afectaba cero filas | Preexistente, **corregido** | Verificado con `SET LOCAL ROLE authenticated; DELETE …` → `DELETE 0` |
 | `TRUNCATE` anónimo sobre `perfiles` | Preexistente, **corregido** | Verificado antes y después |
 
-**Regresiones causadas por EPT-9: ninguna.** Durante el desarrollo aparecieron dos
+**Regresiones causadas por EPT-9: ninguna.** Con la aserción de `e2e.spec.ts`
+corregida, la suite completa queda en verde: 196 de 196.
+
+Durante el desarrollo aparecieron dos
 fallos en `cursos-auth.spec.ts` que sí eran responsabilidad de esta unidad: la
 siembra académica ocupaba «1er Grado A», el curso que esa suite inactiva por
 nombre, y dejaba cursos creados que alteraban su recuento exacto. Se corrigió el
@@ -629,7 +807,16 @@ ninguna migración habilitó RLS en esa tabla y 008 no la menciona.
 
 ## 14. Documentación y capturas
 
-58 capturas reproducibles en [`EPT-9/`](EPT-9/), generadas con `EPT_CAPTURAS=1`.
+59 capturas reproducibles en [`EPT-9/`](EPT-9/), generadas con `EPT_CAPTURAS=1`.
+
+Se regeneraron todas después de las correcciones: las anteriores mostraban la
+interfaz previa y el indicador flotante de desarrollo de Next, que sugería un
+entorno de desarrollo en evidencia que habla del comportamiento del producto.
+Ese indicador ahora se apaga durante las corridas automatizadas. Ninguna captura
+contiene datos personales reales ni credenciales: los DNI pertenecen al rango
+sintético 9x.xxx.xxx y los correos a un dominio reservado. El prefijo del nombre
+distingue el origen: `fixture-` es el banco determinista, sin base; `real-` es
+una sesión autenticada contra la base local.
 
 | Prefijo | Origen | Qué demuestra |
 |---|---|---|
@@ -668,12 +855,24 @@ vuelve a leer de la base, y en las capturas `real-*`.
 | `840ad3e` | feat(alumnos): agregar la interfaz administrativa y la vista propia del estudiante |
 | `605ec5d` | test(alumnos): probar actores, persistencia real, accesibilidad y responsive |
 | `96aea77` | test(alumnos): aislar los fixtures académicos de la suite de Cursos |
-| _(este commit)_ | docs(alumnos): registrar la evidencia ejecutada de EPT-9 |
+| `5419942` | docs(alumnos): registrar la evidencia ejecutada de EPT-9 |
 
-Siete commits convencionales, sin `Co-Authored-By` ni atribución de IA. Las
-pruebas viajan con la conducta que verifican. El SHA del commit de
-documentación no puede figurar dentro de él mismo; se informa en la respuesta
-de la sesión y se obtiene con `git log --oneline origin/main..HEAD`.
+Esos siete son el candidato que la revisión bloqueó. **No se reescribieron:**
+conservan sus SHA y su historia. La remediación se aplicó encima, en commits
+nuevos:
+
+| Commit | Mensaje | Qué agrupa |
+|---|---|---|
+| _(nuevo 1)_ | fix(alumnos): corregir la persistencia del alta y endurecer el contrato académico | Migración 009, ruta de usuarios, validaciones, servicios y las pruebas de base |
+| _(nuevo 2)_ | fix(alumnos): corregir el formulario, los diálogos y la accesibilidad del legajo | Interfaz, componentes de formulario y sus pruebas de navegador |
+| _(nuevo 3)_ | test(alumnos): probar la concurrencia real y la ausencia del banco en producción | Concurrencia de dos conexiones y prueba conductual de producción |
+| _(nuevo 4)_ | docs(alumnos): actualizar la evidencia con las correcciones de la revisión | Este documento y las capturas regeneradas |
+
+Once commits convencionales en total, ninguno con `Co-Authored-By` ni atribución
+de IA. Las pruebas viajan con la conducta que verifican. Los SHA de los cuatro
+commits nuevos no pueden figurar dentro de un archivo que ellos mismos
+contienen; se informan en Jira y en la respuesta de la sesión, y se obtienen con
+`git log --oneline origin/main..HEAD`.
 
 **No hubo push, ni pull request, ni merge, ni ningún cambio en `main`.**
 
@@ -688,10 +887,12 @@ propone esta cadena, en este orden; cada eslabón deja el repositorio coherente:
 3. `02e9ed8` — retiro de la eliminación física.
 4. `840ad3e` — interfaz administrativa y vista propia.
 5. `605ec5d` + `96aea77` — pruebas de navegador e infraestructura de actores.
-6. Este documento y las capturas.
+6. `5419942` — evidencia de la primera entrega.
+7. Los cuatro commits de remediación, en su orden.
 
-Lo primero que conviene revisar es la migración 008: todo lo demás depende de las
-garantías que establece. Lo intencionalmente fuera de alcance está en § Riesgos.
+Lo primero que conviene revisar son las migraciones 008 y 009: todo lo demás
+depende de las garantías que establecen. La 009 se lee bien de arriba abajo,
+porque cada sección explica qué defecto cierra. Lo intencionalmente fuera de alcance está en § Riesgos.
 
 ---
 
@@ -702,17 +903,24 @@ Revertir esto **no** es simétrico: Git deshace archivos, no un esquema ya aplic
 | Qué se revierte con Git | Qué **no** |
 |---|---|
 | Todo el código de aplicación y las pruebas | Las tablas, tipos, índices, funciones, triggers y grants que 008 ya creó en una base donde se aplicó |
-| El archivo `008_alumnos_estado_academico.sql` | La fila `008` en `supabase_migrations.schema_migrations` |
+| Los archivos `008_alumnos_estado_academico.sql` y `009_correcciones_revision_alumnos.sql` | Las filas `008` y `009` en `supabase_migrations.schema_migrations` |
 | La entrada de navegación y las rutas | Las filas de `alumnos` y `matriculas` ya cargadas |
 
 ### Orden inverso, si hay que revertir
 
-1. `git revert 96aea77 605ec5d 840ad3e 02e9ed8 348723c` (código y pruebas).
-2. **No revertir `6cd0c3c` sin más.** Si 008 ya se aplicó, hay que escribir una
-   migración `009` que deshaga explícitamente lo aplicable.
-3. Nunca editar ni borrar `008`: puede haber sido aplicada en otro entorno.
+1. Revertir los cuatro commits de remediación, del último al primero.
+2. `git revert 5419942 96aea77 605ec5d 840ad3e 02e9ed8 348723c` (código y pruebas).
+3. **No revertir `6cd0c3c` sin más.** Si 008 ya se aplicó, hay que escribir una
+   migración `010` que deshaga explícitamente lo aplicable.
+4. Nunca editar ni borrar `008` ni `009`: pueden haber sido aplicadas en otro
+   entorno. La 009 es aditiva e idempotente, así que reaplicarla es inocuo, pero
+   modificarla en el lugar rompería cualquier base que ya la tenga.
 
-### Cómo tendría que ser esa `009`
+Revertir sólo la remediación y dejar el candidato bloqueado sería la peor
+opción: devolvería el alta que deja perfiles huérfanos reservando DNI y legajo.
+Si hay que retroceder, corresponde retroceder la unidad entera.
+
+### Cómo tendría que ser esa `010`
 
 Deshacer sin perder información académica exige, en este orden: quitar los
 triggers de `cursos` y `perfiles`; quitar los CHECK de DNI y legajo y el índice
@@ -799,10 +1007,15 @@ la suite de Cursos en la corrida completa.
 
 ## 19. Próximo paso
 
-1. **Revisión independiente documentada** del candidato `96aea77`. Empezar por la
-   migración 008.
-2. Con la revisión aprobada: push, pull request en español y merge, para obtener el
-   commit de integración identificable en `main`.
-3. Recién entonces EPT-9 puede pasar a `Listo`.
-4. La siguiente unidad del plan es **WU-04 (EPT-56 a EPT-59)**. No se inició nada
+1. **Nueva revisión independiente** del candidato corregido. Conviene empezar por
+   la migración 009 y por `src/app/api/usuarios/route.ts`: son las dos piezas
+   donde estaban los dos hallazgos más graves.
+2. Verificar en particular las tres cosas que la revisión anterior pidió no dar
+   por buenas sin ejecutarlas: que la suite SQL falle de verdad cuando una
+   aserción no se cumple, que la concurrencia use dos conexiones reales, y que
+   el 404 de producción se mida sobre la aplicación compilada.
+3. Con la revisión aprobada: push, pull request en español y merge, para obtener
+   el commit de integración identificable en `main`.
+4. Recién entonces EPT-9 puede pasar a `Listo`.
+5. La siguiente unidad del plan es **WU-04 (EPT-56 a EPT-59)**. No se inició nada
    de ella.
