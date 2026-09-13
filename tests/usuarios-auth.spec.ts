@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { capturarSinHerramientas } from './_captura'
 import { expect, test, type APIRequestContext } from '@playwright/test'
 
 /**
@@ -656,6 +657,9 @@ test.describe('DIRECTOR autenticado: PGRST205 se clasifica, no se traga', () => 
   })
 
   test('un PGRST205 que nombra roles se propaga', async ({ page }) => {
+    // Esta es la que deja la captura del estado de error con mensaje de
+    // dominio: es el caso más representativo de un fallo de carga real.
+
     await interceptarVinculos(page, {
       status: 404,
       cuerpo: {
@@ -668,6 +672,13 @@ test.describe('DIRECTOR autenticado: PGRST205 se clasifica, no se traga', () => 
 
     await page.goto('/dashboard/usuarios')
     await esperarEstadoDeError(page)
+
+    if (process.env.EPT_CAPTURAS === '1') {
+      await capturarSinHerramientas(
+        page,
+        'docs/evidence/EPT-9/real-escritorio-usuarios-error-de-carga.png'
+      )
+    }
   })
 
   test('un PGRST205 que nombra otra tabla se propaga', async ({ page }) => {

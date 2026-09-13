@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
+import { capturarSinHerramientas } from './_captura'
 
 /**
  * Interfaz del legajo académico contra el banco visual determinista.
@@ -20,10 +21,10 @@ const ANCHO_TABLA = 640
 async function capturar(page: Page, nombre: string) {
   if (!CAPTURAR) return
   const perfil = test.info().project.name
-  await page.screenshot({
-    path: path.join('docs/evidence/EPT-9', `fixture-${perfil}-${nombre}.png`),
-    fullPage: true,
-  })
+  await capturarSinHerramientas(
+    page,
+    path.join('docs/evidence/EPT-9', `fixture-${perfil}-${nombre}.png`)
+  )
 }
 
 /** Acota los campos al formulario de alta: varias etiquetas se repiten en los diálogos. */

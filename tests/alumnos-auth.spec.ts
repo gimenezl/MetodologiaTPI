@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { capturarSinHerramientas } from './_captura'
 import { exigirContraste } from './_contraste'
 import {
   expect,
@@ -164,10 +165,10 @@ test.afterEach(async () => {
 
 async function capturar(page: Page, nombre: string) {
   if (!CAPTURAR) return
-  await page.screenshot({
-    path: path.join('docs/evidence/EPT-9', `real-${nombre}.png`),
-    fullPage: true,
-  })
+  await capturarSinHerramientas(
+    page,
+    path.join('docs/evidence/EPT-9', `real-${nombre}.png`)
+  )
 }
 
 /**

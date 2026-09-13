@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { capturarSinHerramientas } from './_captura'
 
 /**
  * Pruebas de las correcciones de la revisión sobre la interfaz de alumnos.
@@ -376,6 +377,13 @@ test.describe('Diálogos: durante una operación en vuelo no se cierran de menti
     // Escape tampoco cierra mientras está ocupado.
     await page.keyboard.press('Escape')
     await expect(dialogo).toBeVisible()
+
+    if (process.env.EPT_CAPTURAS === '1') {
+      await capturarSinHerramientas(
+        page,
+        'docs/evidence/EPT-9/fixture-chromium-dialogo-ocupado-foco-contenido.png'
+      )
+    }
 
     // 8. Se libera la solicitud y el recorrido normal vuelve a funcionar.
     liberar()
