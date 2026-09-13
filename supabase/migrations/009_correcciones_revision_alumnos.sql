@@ -346,26 +346,49 @@ $$;
 
 
 -- ================================================================
--- 7. AUTOVERIFICACION DEL CONTRATO DEL LEGAJO
+-- 7. AUTOVERIFICACION DEL CONTRATO
 -- ================================================================
--- Esta migracion existe, entre otras cosas, porque una restriccion CHECK
--- quedo vigente con un conjunto de recorte vacio: seguia declarada, con su
--- nombre de siempre, y no rechazaba nada. Una restriccion que aparenta
--- cobertura es peor que su ausencia, porque nadie la vuelve a mirar.
+-- Esta migracion existe, entre otras cosas, porque una restriccion CHECK quedo
+-- vigente con un conjunto de recorte vacio: seguia declarada, con su nombre de
+-- siempre, y no rechazaba nada. Una restriccion que aparenta cobertura es peor
+-- que su ausencia, porque nadie la vuelve a mirar. Por eso el contrato se
+-- ejerce aca mismo, y si un solo caso pasa la migracion aborta.
 --
--- Por eso el contrato se ejerce aca mismo, contra la tabla real, sobre una
--- fila que se descarta. Si un solo caso pasa, la migracion aborta y no deja
--- la base a medio migrar: todo el archivo corre en una transaccion.
+-- La comprobacion NO escribe en `public.perfiles`. Una version anterior lo
+-- hacia, con un DNI y un legajo fijos, y sobre una base que ya contuviera
+-- alguno de esos valores el INSERT chocaba con la restriccion unica y abortaba
+-- la migracion por un dato legitimo. Una autoverificacion no puede consumir
+-- identificadores productivos.
 --
--- Tambien se comprueba el caso positivo. Una restriccion que rechaza todo
--- pasaria los doce casos negativos sin proteger nada.
+-- En su lugar se copia la definicion exacta de cada restriccion con
+-- `pg_get_constraintdef` a una tabla temporal sin indices unicos ni claves
+-- foraneas. Es la misma expresion, no una transcripcion que pueda derivar, y no
+-- hay ningun valor con el que chocar. La tabla desaparece al cerrar la
+-- transaccion.
 DO $$
 DECLARE
-    v_caso      RECORD;
-    v_rol       INTEGER := (SELECT id FROM public.roles WHERE nombre = 'DOCENTE');
-    v_perfil    UUID;
-    v_aceptados TEXT := '';
+    v_definicion TEXT;
+    v_caso       RECORD;
+    v_aceptados  TEXT := '';
 BEGIN
+    SELECT pg_get_constraintdef(oid) INTO v_definicion
+    FROM pg_constraint
+    WHERE conrelid = 'public.perfiles'::regclass
+      AND conname = 'perfiles_legajo_valido';
+
+    IF v_definicion IS NULL THEN
+        RAISE EXCEPTION
+            'No existe la restriccion perfiles_legajo_valido: no hay contrato que verificar.';
+    END IF;
+
+    EXECUTE pg_catalog.format(
+        'CREATE TEMPORARY TABLE ept9_contrato_legajo (
+             legajo_nro CHARACTER VARYING(50),
+             CONSTRAINT ept9_contrato %s
+         ) ON COMMIT DROP',
+        v_definicion
+    );
+
     FOR v_caso IN
         SELECT * FROM (VALUES
             ('vacio', ''),
@@ -383,12 +406,10 @@ BEGIN
         ) AS c(etiqueta, valor)
     LOOP
         BEGIN
-            INSERT INTO public.perfiles (rol_id, nombre, apellido, dni, legajo_nro)
-            VALUES (v_rol, 'Autoverificacion', 'Migracion', '90090001', v_caso.valor)
-            RETURNING id INTO v_perfil;
-
+            EXECUTE 'INSERT INTO ept9_contrato_legajo (legajo_nro) VALUES ($1)'
+                USING v_caso.valor;
+            -- Si llego aca, la restriccion acepto un valor que debia rechazar.
             v_aceptados := v_aceptados || v_caso.etiqueta || '; ';
-            DELETE FROM public.perfiles WHERE id = v_perfil;
         EXCEPTION WHEN check_violation THEN
             NULL;
         END;
@@ -400,11 +421,81 @@ BEGIN
             'El conjunto de espacios en blanco quedo incompleto.', v_aceptados;
     END IF;
 
-    -- Caso positivo: un legajo legitimo, con espacios interiores, se acepta.
-    INSERT INTO public.perfiles (rol_id, nombre, apellido, dni, legajo_nro)
-    VALUES (v_rol, 'Autoverificacion', 'Migracion', '90090002', 'LEG 2027 018')
-    RETURNING id INTO v_perfil;
-    DELETE FROM public.perfiles WHERE id = v_perfil;
+    -- Caso positivo. Una restriccion que rechazara todo pasaria los doce casos
+    -- negativos sin proteger nada, asi que hay que comprobar que acepta un
+    -- legajo legitimo, con espacios interiores incluidos.
+    BEGIN
+        INSERT INTO ept9_contrato_legajo (legajo_nro) VALUES ('LEG 2027 018');
+    EXCEPTION WHEN check_violation THEN
+        RAISE EXCEPTION
+            'La restriccion perfiles_legajo_valido rechaza un legajo valido: '
+            'el contrato quedo demasiado estricto.';
+    END;
 
-    RAISE NOTICE 'Contrato del legajo verificado: 12 casos rechazados, 1 aceptado.';
+    -- Y que un legajo nulo sigue permitido: no todo perfil tiene legajo.
+    INSERT INTO ept9_contrato_legajo (legajo_nro) VALUES (NULL);
+
+    RAISE NOTICE 'Contrato del legajo verificado: 12 casos rechazados, 2 aceptados.';
+END $$;
+
+-- El mismo procedimiento para el DNI. Interesa sobre todo el digito no ASCII:
+-- en una expresion regular de PostgreSQL `\d` acepta, por ejemplo, el
+-- arabigo-indico U+0668, y por eso la clase se enumera a mano.
+DO $$
+DECLARE
+    v_definicion TEXT;
+    v_caso       RECORD;
+    v_aceptados  TEXT := '';
+BEGIN
+    SELECT pg_get_constraintdef(oid) INTO v_definicion
+    FROM pg_constraint
+    WHERE conrelid = 'public.perfiles'::regclass
+      AND conname = 'perfiles_dni_valido';
+
+    IF v_definicion IS NULL THEN
+        RAISE EXCEPTION
+            'No existe la restriccion perfiles_dni_valido: no hay contrato que verificar.';
+    END IF;
+
+    EXECUTE pg_catalog.format(
+        'CREATE TEMPORARY TABLE ept9_contrato_dni (
+             dni CHARACTER VARYING(20),
+             CONSTRAINT ept9_contrato %s
+         ) ON COMMIT DROP',
+        v_definicion
+    );
+
+    FOR v_caso IN
+        SELECT * FROM (VALUES
+            ('vacio', ''),
+            ('seis digitos', '123456'),
+            ('nueve digitos', '123456789'),
+            ('con letras', '1234567A'),
+            ('con puntos', '12.345.678'),
+            ('con espacio final', '12345678' || pg_catalog.chr(32)),
+            ('digito arabigo-indico', '1234567' || pg_catalog.chr(1640))
+        ) AS c(etiqueta, valor)
+    LOOP
+        BEGIN
+            EXECUTE 'INSERT INTO ept9_contrato_dni (dni) VALUES ($1)' USING v_caso.valor;
+            v_aceptados := v_aceptados || v_caso.etiqueta || '; ';
+        EXCEPTION WHEN check_violation THEN
+            NULL;
+        END;
+    END LOOP;
+
+    IF v_aceptados <> '' THEN
+        RAISE EXCEPTION
+            'La restriccion perfiles_dni_valido no rechaza: %.', v_aceptados;
+    END IF;
+
+    BEGIN
+        INSERT INTO ept9_contrato_dni (dni) VALUES ('1234567');
+        INSERT INTO ept9_contrato_dni (dni) VALUES ('12345678');
+    EXCEPTION WHEN check_violation THEN
+        RAISE EXCEPTION
+            'La restriccion perfiles_dni_valido rechaza un DNI valido de 7 u 8 digitos.';
+    END;
+
+    RAISE NOTICE 'Contrato del DNI verificado: 7 casos rechazados, 2 aceptados.';
 END $$;
