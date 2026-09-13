@@ -381,3 +381,203 @@ test.describe('DIRECTOR autenticado: el alta de cuentas no deja estados a medias
     }
   })
 })
+
+// ================================================================
+// El panel real, no solo la ruta
+// ================================================================
+test.describe('DIRECTOR autenticado: el panel de usuarios carga y da de alta', () => {
+  /**
+   * La revisión encontró que la ruta funcionaba y la pantalla no.
+   *
+   * `obtenerRelacionesFamiliares` consulta `padres_hijos`, que no existe en el
+   * esquema versionado. PostgREST responde 404 con `PGRST205`, no con el
+   * `42P01` de PostgreSQL, así que el servicio no degradaba: lanzaba. Y como la
+   * página cargaba roles, perfiles y vínculos con un solo `Promise.all`, ese
+   * error tumbaba las tres cosas. Sin roles, el desplegable quedaba vacío y la
+   * directora no podía crear a nadie.
+   *
+   * Estas pruebas manejan la pantalla, no la API.
+   */
+
+  test('la tabla de vínculos no existe en el esquema reproducible', () => {
+    expect(
+      contar(
+        `FROM information_schema.tables
+         WHERE table_schema = 'public' AND table_name = 'padres_hijos'`
+      )
+    ).toBe(0)
+  })
+
+  test('carga roles y perfiles pese a la ausencia de padres_hijos', async ({ page }) => {
+    const peticiones: { metodo: string; url: string; estado: number }[] = []
+    page.on('response', (respuesta) => {
+      if (!respuesta.url().includes('padres_hijos')) return
+      peticiones.push({
+        metodo: respuesta.request().method(),
+        url: respuesta.url(),
+        estado: respuesta.status(),
+      })
+    })
+
+    await page.goto('/dashboard/usuarios')
+
+    await expect(page.getByRole('heading', { name: 'Gestión de usuarios' })).toBeVisible()
+
+    // Los roles llegaron: el desplegable tiene opciones reales.
+    const rol = page.getByLabel(/^Rol/)
+    await expect(rol).toBeVisible()
+    const opciones = await rol.locator('option').allTextContents()
+    expect(opciones).toContain('ESTUDIANTE')
+    expect(opciones).toContain('DOCENTE')
+    expect(opciones).toContain('DIRECTOR')
+
+    // Los perfiles también: el listado muestra las identidades sembradas.
+    const listado = page.getByLabel('Usuarios registrados')
+    await expect(listado).toBeVisible()
+    await expect(listado).toContainText('Directora')
+
+    // Y no hay estado de error.
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'No pudimos cargar la gestión de usuarios' })
+    ).toHaveCount(0)
+
+    // Sobre `padres_hijos` solo hubo lecturas, y ninguna prosperó.
+    expect(peticiones.length).toBeGreaterThan(0)
+    for (const peticion of peticiones) {
+      expect(peticion.metodo, `no debe escribir en padres_hijos: ${peticion.url}`).toBe('GET')
+      expect(peticion.estado, 'la lectura no debe prosperar').toBe(404)
+    }
+  })
+
+  test('crea un ESTUDIANTE sin tutor desde el formulario y persiste tras recargar', async ({
+    page,
+  }) => {
+    const dni = `${PREFIJO_DNI}200001`
+    const email = `alta.prueba.${dni}@${DOMINIO}`
+
+    await page.goto('/dashboard/usuarios')
+    await expect(page.getByRole('heading', { name: 'Nuevo usuario' })).toBeVisible()
+
+    await page.getByLabel(/^Nombre/).fill('Valentina')
+    await page.getByLabel(/^Apellido/).fill('DesdeElPanel')
+    await page.getByLabel(/^DNI/).fill(dni)
+    await page.getByLabel(/^Rol/).selectOption({ label: 'ESTUDIANTE' })
+    await page.getByLabel(/^Email/).fill(email)
+    await page.getByLabel(/^Contraseña/).fill('prueba-ept-9-panel-seguro')
+    await page.getByLabel(/^Legajo/).fill('LEG-PANEL-0001')
+
+    // El formulario no pide tutor: avisa que el vínculo no está disponible.
+    await expect(page.getByText(/vínculos entre padres o tutores/i)).toBeVisible()
+
+    await page.getByRole('button', { name: 'Crear usuario' }).click()
+
+    // La fila aparece en el listado sin recargar.
+    const listado = page.getByLabel('Usuarios registrados')
+    await expect(listado).toContainText('DesdeElPanel', { timeout: 15_000 })
+
+    // Y persiste: se recarga la página y sigue ahí.
+    await page.reload()
+    await expect(page.getByLabel('Usuarios registrados')).toContainText('DesdeElPanel', {
+      timeout: 15_000,
+    })
+
+    // La base confirma las tres piezas, y ninguna quedó huérfana.
+    expect(contar(`FROM public.perfiles WHERE dni = '${dni}'`)).toBe(1)
+    expect(contar(`FROM auth.users WHERE email = '${email}'`)).toBe(1)
+    expect(
+      contar(
+        `FROM public.alumnos a JOIN public.perfiles p ON p.id = a.perfil_id
+         WHERE p.dni = '${dni}'`
+      )
+    ).toBe(1)
+    expect(
+      contar(
+        `FROM public.alumnos a LEFT JOIN public.perfiles p ON p.id = a.perfil_id
+         WHERE p.id IS NULL`
+      )
+    ).toBe(0)
+    expect(
+      contar(
+        `FROM auth.users u LEFT JOIN public.perfiles p ON p.user_id = u.id
+         WHERE u.email LIKE 'alta.prueba.%@${DOMINIO}' AND p.id IS NULL`
+      )
+    ).toBe(0)
+  })
+
+  test('un PGRST205 de otra tabla no se tolera: muestra el estado de error', async ({
+    page,
+  }) => {
+    // Mismo código, otra tabla. Tolerarlo en general convertiría cualquier
+    // tabla ausente en una lista vacía silenciosa.
+    await page.route('**/rest/v1/roles*', (ruta) =>
+      ruta.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 'PGRST205',
+          details: null,
+          hint: null,
+          message: "Could not find the table 'public.roles' in the schema cache",
+        }),
+      })
+    )
+
+    await page.goto('/dashboard/usuarios')
+
+    const aviso = page.getByRole('alert').filter({
+      hasText: 'No pudimos cargar la gestión de usuarios',
+    })
+    await expect(aviso).toBeVisible()
+    await expect(aviso).toContainText('roles')
+    await expect(aviso.getByRole('button', { name: 'Reintentar' })).toBeVisible()
+  })
+
+  test('un error de red o de servidor tampoco se oculta', async ({ page }) => {
+    // Se interviene `roles`, que solo pide esta pagina. Intervenir `perfiles`
+    // no serviria: el contexto de sesion lee esa misma tabla, asi que el
+    // layout redirige a login antes de que la pagina llegue a renderizar, y la
+    // prueba no estaria midiendo lo que dice medir.
+    await page.route('**/rest/v1/roles*', (ruta) =>
+      ruta.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: '57014',
+          details: null,
+          hint: null,
+          message: 'canceling statement due to statement timeout',
+        }),
+      })
+    )
+
+    await page.goto('/dashboard/usuarios')
+
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'No pudimos cargar la gestión de usuarios' })
+    ).toBeVisible()
+  })
+
+  test('el reintento vuelve a cargar cuando el fallo se resuelve', async ({ page }) => {
+    let falla = true
+    await page.route('**/rest/v1/roles*', async (ruta) => {
+      if (!falla) return ruta.fallback()
+      await ruta.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: '08006', message: 'connection failure' }),
+      })
+    })
+
+    await page.goto('/dashboard/usuarios')
+    const aviso = page.getByRole('alert').filter({
+      hasText: 'No pudimos cargar la gestión de usuarios',
+    })
+    await expect(aviso).toBeVisible()
+
+    falla = false
+    await aviso.getByRole('button', { name: 'Reintentar' }).click()
+
+    await expect(aviso).toBeHidden()
+    await expect(page.getByLabel(/^Rol/).locator('option')).not.toHaveCount(1)
+  })
+})
