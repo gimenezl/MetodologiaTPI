@@ -22,7 +22,7 @@
 
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { setTimeout as esperar } from 'node:timers/promises'
 
@@ -157,6 +157,16 @@ if (await puertoOcupado()) {
   process.exit(1)
 }
 
+/**
+ * El build de produccion se hace sobre un directorio limpio.
+ *
+ * Una corrida de Playwright deja un build de desarrollo bajo `.next/dev`, que
+ * si contiene los bancos: para eso existe. Medir sobre esos restos hacia que
+ * el arnes hablara de otro build. Se borra todo antes de compilar, por el
+ * mismo motivo por el que se comprueba que el puerto este libre.
+ */
+rmSync('.next', { recursive: true, force: true })
+
 console.log('Compilando en modo producción. Puede tardar varios minutos.')
 const compilacion = await ejecutar('npx', ['next', 'build'])
 if (compilacion.codigo !== 0) {
@@ -212,10 +222,12 @@ function revisarArtefactos() {
   }
   afirmar(revisados > 0, `se encontro al menos un manifiesto de rutas (${revisados})`)
 
-  // Ningun archivo compilado se llama como los bancos.
-  const modulos = archivosDe('.next').filter(
-    (archivo) => archivo.includes('page.banco') || archivo.includes('pruebas-ui')
-  )
+  // Ningun archivo compilado se llama como los bancos. Se excluyen `dev` y
+  // `cache`, que no forman parte de la salida de produccion: el build de
+  // desarrollo si contiene los bancos, y confundirlos seria medir otra cosa.
+  const modulos = archivosDe('.next')
+    .filter((archivo) => !/[\/](dev|cache)[\/]/.test(archivo))
+    .filter((archivo) => archivo.includes('page.banco') || archivo.includes('pruebas-ui'))
   afirmar(
     modulos.length === 0,
     `ningun artefacto compilado corresponde a un banco${
