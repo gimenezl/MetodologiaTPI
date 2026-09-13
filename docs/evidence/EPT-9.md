@@ -59,7 +59,7 @@ git rev-parse HEAD
 | 6 | ACTIVO → INACTIVO dejaba un curso incompatible | **Confirmado** | El curso se limpia junto con su error al cambiar de estado | `alumnos-correcciones.spec.ts`, prueba de nueve pasos |
 | 7 | Cuatro defectos de interfaz | **Confirmados** | Historial ilegible distinguido del vacío; `aria-invalid` y `aria-describedby`; diálogos coherentes mientras hay una petición en vuelo; el curso vigente no se ofrece como destino | `alumnos-correcciones.spec.ts` (8 casos) y `alumnos-auth.spec.ts` |
 | 8 | La concurrencia de corrección de DNI estaba simulada | **Confirmado** | Dos escenarios nuevos con dos conexiones `psql` reales | `alumnos_academicos_concurrencia.mjs` 18bis y 18ter |
-| 9 | El 404 del banco de pruebas se afirmaba leyendo el código | **Confirmado** | Los bancos salen del binario de producción; la prueba compila, levanta y mide | `supabase/tests/harness_produccion.mjs`, 12 afirmaciones |
+| 9 | El 404 del banco de pruebas se afirmaba leyendo el código | **Confirmado** | Los bancos salen del binario de producción; la prueba compila, levanta y mide | `supabase/tests/harness_produccion.mjs`, 22 afirmaciones |
 | 10 | Integridad de Git y de los tipos | **Confirmado** | Tipos regenerados desde la base local, salto de línea final normalizado | `git diff --check` exit 0; dos generaciones con el mismo SHA256 |
 | 11 | Evidencia y métricas desactualizadas | **Confirmado** | Cifras recalculadas desde Git, recuentos separados entre setup y casos funcionales, 59 capturas regeneradas sin el indicador de desarrollo | Este documento |
 | 12 | Faltaba la lista completa de pruebas | **Confirmado** | Tabla de verificación con comando, código de salida y resultado | § 11 |
@@ -101,6 +101,88 @@ reconoce esa extensión fuera de producción. `next build` ya no los compila: la
 ruta no existe. La guarda en tiempo de ejecución se conserva igual, porque una
 sola línea de configuración no debería ser lo único que separa un banco de
 pruebas del público.
+
+---
+
+### Segunda ronda: siete correcciones mas
+
+Una segunda revision del candidato corregido encontro siete cosas. Las siete se
+confirmaron.
+
+| # | Hallazgo | Correccion | Prueba |
+|---|---|---|---|
+| 13 | `/dashboard/usuarios` no cargaba sobre una base reproducible | El servicio tolera `PGRST205` —el codigo que PostgREST devuelve de verdad— solo cuando el mensaje nombra a `padres_hijos`; el fallo de carga deja un estado de error con reintento | 6 casos de navegador en `usuarios-auth.spec.ts` |
+| 14 | La autoverificacion de la 009 consumia DNI y legajos fijos | Copia la definicion de cada restriccion a una tabla temporal sin indices unicos; no escribe en `perfiles` | `migracion_009_colisiones.mjs`, 12 afirmaciones |
+| 15 | Contraste por debajo de WCAG AA | `neutral-400` pasa de 3,07:1 a 4,67:1 y el asterisco obligatorio de 3,81:1 a 4,77:1 | 21 comprobaciones en tres perfiles, mas el detalle y «Mi legajo» |
+| 16 | El arnes comparaba respuestas por longitud | Compara por SHA-256, valida que la referencia sea estable y revisa manifiestos y artefactos | 22 afirmaciones |
+| 17 | Los tipos no eran literalmente identicos a la salida cruda | Politica escrita y ejecutable: se versiona la salida normalizada, con una unica regla | `tipos-generados.mjs`, 4 afirmaciones |
+| 18 | Cifras obsoletas y autorreferenciales en la evidencia | Los totales se piden con un comando; las metricas exactas se atan a un SHA nombrado | Este documento |
+| 19 | El foco escapaba al deshabilitarse el control enfocado | El cuadro del dialogo es enfocable por programa y recibe el foco | `alumnos-correcciones.spec.ts` |
+
+Dos defectos mas aparecieron mientras se corregia, los dos en las propias
+pruebas y los dos de la misma familia: **medir el artefacto equivocado**. El
+arnes recorria todo `.next` y encontraba los bancos en el build de desarrollo
+que deja Playwright; ahora compila sobre un directorio limpio. Y antes, un
+servidor de una corrida anterior seguia escuchando en el puerto y el arnes lo
+media sin notarlo; ahora comprueba el puerto antes de empezar.
+
+Ninguna de las correcciones de esta ronda se dio por buena sin comprobar que su
+prueba **falla cuando la correccion se revierte**. Se hizo con la tolerancia a
+`PGRST205`, con el token de contraste, con la retencion de foco y con la
+guardia de la migracion.
+
+### Por que la correccion de la 009 no fue una 010
+
+Una migracion posterior no podia arreglarlo: `db reset` aplica la 009 primero y
+abortaria antes de llegar a la 010. La correccion tenia que ir en la 009.
+
+Que eso fuera admisible se demostro, no se supuso. `git for-each-ref --contains`
+sobre el commit que introdujo la 009 devuelve unicamente la rama local; la rama
+no existe en el remoto, no tiene upstream configurado y no hay ningun proyecto
+de Supabase vinculado en `supabase/.temp`. La 009 nunca salio de este candidato
+y solo se aplico contra la instancia de bucle local.
+
+---
+
+## 0bis. Como leer las cifras de este documento
+
+La revision anterior encontro que casi todos los numeros estaban desactualizados
+—commits, lineas, archivos, pruebas—, y tenia razon. La causa no fue descuido:
+un archivo versionado no puede afirmar un total sobre su propio commit, porque
+el commit que lo contiene cambia ese total en el instante en que se escribe.
+
+Asi que la politica cambia:
+
+**Los totales de HEAD se piden, no se escriben.**
+
+```bash
+git rev-list --count origin/main..HEAD      # cantidad de commits
+git log --oneline origin/main..HEAD         # cadena completa
+git diff --shortstat origin/main...HEAD     # lineas y archivos
+git rev-parse HEAD                          # SHA final
+```
+
+**Las metricas exactas se atan a un SHA anterior, nombrado.** Cuando este
+documento da un numero concreto, se refiere al **candidato funcional previo al
+commit documental**:
+
+    999857fff8c238ed21b0d886e73f7dea8135e1b0
+
+Ese commit contiene todo el codigo y todas las pruebas de la unidad, y nada de
+esta documentacion. Sus cifras no cambian.
+
+| Metrica del candidato funcional | Valor |
+|---|---|
+| Commits desde `origin/main` | 17 |
+| Archivos tocados | 112 |
+| Lineas | +11 987 / −492 |
+| Pruebas de navegador | 226, todas verdes |
+| Aserciones SQL | 69 + 39 + 73 |
+| Escenarios de concurrencia | 8 + 4 |
+
+**El SHA final y las cifras del candidato definitivo se registran fuera de este
+archivo**: en el comentario de Jira y en la respuesta posterior al ultimo
+commit. Es el unico lugar donde pueden ser exactos.
 
 ---
 
@@ -458,7 +540,7 @@ EPT-9 aparece en `auth_rls_initplan`.
 |---|---|
 | **EPT-20** Persistencia | Migraciones 008 y 009; `alumnos_academicos_rls.sql` 69 OK; concurrencia 8 escenarios OK; `db reset` y `db lint` exit 0; `migration list` 001→009 |
 | **EPT-21** Tipos, servicios y API | Tipos sin deriva y regeneración determinista; `alumnos.service.ts` + rutas; `tsc` exit 0; ESLint sin errores nuevos; build exit 0; `alumnos.spec.ts` 10 casos, `alumnos-auth.spec.ts` 32 casos y `usuarios-auth.spec.ts` 9 casos, todos verdes |
-| **EPT-22** Interfaz | `alumnos-ui.spec.ts` 48 casos (16 por perfil: escritorio, Pixel 5 e iPhone 13) y `alumnos-correcciones.spec.ts` 9 casos; 59 capturas; auditoría de idioma automatizada |
+| **EPT-22** Interfaz | `alumnos-ui.spec.ts` 48 casos (16 por perfil), `alumnos-correcciones.spec.ts` 10 y `alumnos-contraste.spec.ts` 21; contraste WCAG AA medido sobre el color que pinta el navegador; 59 capturas; auditoría de idioma automatizada |
 | **EPT-23** DNI y legajo | RLS 12, 19-22, 24, 32-34; concurrencia 18; auth «duplicados reales»; fixtures sintéticos corregidos |
 | **EPT-24** Verificación | Los 39 casos obligatorios, § Pruebas |
 | **EPT-25** Documentación | Este archivo, `EPT-9/` y los comentarios en las siete incidencias |
@@ -565,7 +647,7 @@ esperar a la otra. Lo único que impide que las dos confirmen es el índice
 | Comando | Resultado | Código |
 |---|---|---|
 | `npx tsc --noEmit --incremental false` | Sin errores | 0 |
-| `npx eslint --no-cache <archivos cambiados>` | 0 errores, 1 aviso preexistente | 0 |
+| `npx eslint <archivos cambiados>` | 0 errores, 2 avisos preexistentes | 0 |
 | `npm run build` | Compila y prerenderiza | 0 |
 | `npx playwright test tests/alumnos.spec.ts` | **10 passed** | 0 |
 | `npx playwright test tests/alumnos-ui.spec.ts --project=chromium` | **16 passed** | 0 |
@@ -599,7 +681,7 @@ Proyectos autenticados nuevos: `chromium-estudiante-ajeno`, `chromium-docente`,
 | Comportamiento en producción | Fuera de alcance y prohibido por el encargo |
 | Rendimiento bajo carga | No lo pide ningún criterio |
 | Migración sobre datos preexistentes reales | La base local se reproduce vacía; el backfill se prueba con perfiles sintéticos (RLS 49) |
-| Que la ruta de fixture devuelva 404 en producción | Se comprueba la doble guarda en el código (`NODE_ENV` y `EPT_UI_HARNESS`), no un despliegue real |
+| Que la ruta de fixture no exista en producción | **Demostrado por comportamiento.** `supabase/tests/harness_produccion.mjs` compila en modo producción sobre un directorio limpio, levanta la aplicación con `EPT_UI_HARNESS=1` y comprueba que las tres rutas responden con un cuerpo idéntico, byte a byte, al de una ruta que nunca existió. Además revisa los manifiestos y los artefactos compilados |
 
 ---
 
@@ -670,9 +752,10 @@ espacios en blanco de la migración estaba vacío.
 | Comando | Resultado | Salida |
 |---|---|---|
 | `npx tsc --noEmit --incremental false` | Sin errores | 0 |
-| `npx eslint` | 112 problemas: 15 errores y 97 avisos, **todos preexistentes y fuera de los archivos de esta unidad** | 1 |
+| `npx eslint` | 124 problemas: **15 errores y 109 avisos**, todos preexistentes y fuera de los archivos de esta unidad | 1 |
+| `npx eslint <archivos de esta unidad>` | 0 errores y **2 avisos** preexistentes | 0 |
 | `npx next build` (dentro de la prueba de producción) | Compila | 0 |
-| `npx supabase gen types typescript --local`, dos veces | Mismo SHA256 `7b77055d2e2d408259dde2dc2c46d9fe5d228921712ea4f36b46fc1f2f151cff`, idéntico al del árbol | 0 |
+| `node supabase/tests/tipos-generados.mjs` | Dos generaciones con la misma salida cruda (`48d2ab2b…`) y la misma normalizada (`7b77055d…`), que coincide **byte a byte** con el repositorio | 0 |
 | `git diff --check` sobre el árbol de trabajo | Sin salida | 0 |
 
 Los quince errores de ESLint están en `(public)/inscripcion`, `(public)/noticias`,
@@ -688,30 +771,33 @@ limpiaron.
 
 | Comando | Resultado | Salida |
 |---|---|---|
-| `node supabase/tests/correr-autenticadas.mjs` | **196 pruebas, 196 verdes** | 0 |
-| `node supabase/tests/harness_produccion.mjs` | **12 afirmaciones cumplidas** | 0 |
+| `node supabase/tests/correr-autenticadas.mjs` | **226 pruebas, 226 verdes** | 0 |
+| `node supabase/tests/migracion_009_colisiones.mjs` | 12 afirmaciones cumplidas | 0 |
+| `node supabase/tests/tipos-generados.mjs` | 4 afirmaciones cumplidas | 0 |
+| `node supabase/tests/harness_produccion.mjs` | **22 afirmaciones cumplidas** | 0 |
 
-De las 196, **nueve pertenecen al proyecto `setup`**: no comprueban nada del
+De las 226, **nueve pertenecen al proyecto `setup`**: no comprueban nada del
 producto, siembran las siete identidades de prueba y sus sesiones. Los **casos
-funcionales son 187**, repartidos así:
+funcionales son 217**, repartidos así:
 
 | Archivo | Casos | Unidad |
 |---|---|---|
 | `alumnos-ui.spec.ts` | 48 (16 × escritorio, Pixel 5, iPhone 13) | EPT-9 |
-| `alumnos-auth.spec.ts` | 32 | EPT-9 |
+| `alumnos-auth.spec.ts` | 34 | EPT-9 |
+| `alumnos-contraste.spec.ts` | 21 (7 × tres perfiles) | EPT-9 (remediación) |
+| `usuarios-auth.spec.ts` | 15 | EPT-9 (remediación) |
+| `alumnos-correcciones.spec.ts` | 10 | EPT-9 (remediación) |
 | `alumnos.spec.ts` | 10 | EPT-9 |
-| `alumnos-correcciones.spec.ts` | 9 | EPT-9 (remediación) |
-| `usuarios-auth.spec.ts` | 9 | EPT-9 (remediación) |
-| **Subtotal EPT-9** | **108** | |
+| **Subtotal EPT-9** | **138** | |
 | `cursos-ui.spec.ts`, `cursos-auth.spec.ts`, `cursos.spec.ts` | 39 | EPT-8, regresión |
 | `niveles-*.spec.ts` | 36 | EPT-55, regresión |
 | `e2e.spec.ts` | 4 | Base, regresión |
 | **Subtotal regresión** | **79** | |
 | `auth.setup.ts` | 9 | Siembra, no son casos |
-| **Total ejecutado** | **196** | |
+| **Total ejecutado** | **226** | |
 
-Por proyecto: `chromium` 82, `chromium-directora` 41, `chromium-estudiante` 13,
-`pixel-5-chromium` 18, `iphone-13-webkit` 18, `chromium-docente` 3,
+Por proyecto: `chromium` 90, `chromium-directora` 48, `pixel-5-chromium` 25,
+`iphone-13-webkit` 25, `chromium-estudiante` 14, `chromium-docente` 3,
 `chromium-estudiante-ajeno` 3, `chromium-padre` 3, `chromium-personal` 3,
 `chromium-sin-perfil` 3, `setup` 9.
 
@@ -750,7 +836,7 @@ EPT-9.
 | `TRUNCATE` anónimo sobre `perfiles` | Preexistente, **corregido** | Verificado antes y después |
 
 **Regresiones causadas por EPT-9: ninguna.** Con la aserción de `e2e.spec.ts`
-corregida, la suite completa queda en verde: 196 de 196.
+corregida, la suite completa queda en verde: 226 de 226.
 
 Durante el desarrollo aparecieron dos
 fallos en `cursos-auth.spec.ts` que sí eran responsabilidad de esta unidad: la
@@ -861,14 +947,23 @@ Esos siete son el candidato que la revisión bloqueó. **No se reescribieron:**
 conservan sus SHA y su historia. La remediación se aplicó encima, en commits
 nuevos:
 
-| Commit | Mensaje | Qué agrupa |
-|---|---|---|
-| _(nuevo 1)_ | fix(alumnos): corregir la persistencia del alta y endurecer el contrato académico | Migración 009, ruta de usuarios, validaciones, servicios y las pruebas de base |
-| _(nuevo 2)_ | fix(alumnos): corregir el formulario, los diálogos y la accesibilidad del legajo | Interfaz, componentes de formulario y sus pruebas de navegador |
-| _(nuevo 3)_ | test(alumnos): probar la concurrencia real y la ausencia del banco en producción | Concurrencia de dos conexiones y prueba conductual de producción |
-| _(nuevo 4)_ | docs(alumnos): actualizar la evidencia con las correcciones de la revisión | Este documento y las capturas regeneradas |
+La cadena completa, con sus SHA, se obtiene con:
 
-Once commits convencionales en total, ninguno con `Co-Authored-By` ni atribución
+```bash
+git log --oneline origin/main..HEAD
+```
+
+No se transcribe acá. Enumerar los commits dentro de un archivo que a su vez
+genera uno más deja la lista incompleta en el instante en que se escribe: eso
+fue exactamente lo que la revisión encontró mal la vez anterior.
+
+Agrupados por intención, los commits de remediación cubren: la persistencia y
+el contrato académico de la migración; el formulario, los diálogos y la
+accesibilidad; la concurrencia real y la ausencia del banco en producción; la
+reparación del panel de usuarios; la autoverificación de la migración; el
+contraste, el arnés y la política de tipos; y esta documentación.
+
+Ningun commit lleva `Co-Authored-By` ni atribución
 de IA. Las pruebas viajan con la conducta que verifican. Los SHA de los cuatro
 commits nuevos no pueden figurar dentro de un archivo que ellos mismos
 contienen; se informan en Jira y en la respuesta de la sesión, y se obtienen con
@@ -878,7 +973,8 @@ contienen; se informan en Jira y en la respuesta de la sesión, y se obtienen co
 
 ### Propuesta de división para la revisión
 
-La unidad supera con holgura las 400 líneas revisables (+7306/-263). No se
+La unidad supera con holgura las 400 líneas revisables; el tamaño exacto se
+obtiene con `git diff --shortstat origin/main...HEAD`. No se
 recortaron pruebas ni se partió la responsabilidad. Para la revisión posterior se
 propone esta cadena, en este orden; cada eslabón deja el repositorio coherente:
 
@@ -888,7 +984,8 @@ propone esta cadena, en este orden; cada eslabón deja el repositorio coherente:
 4. `840ad3e` — interfaz administrativa y vista propia.
 5. `605ec5d` + `96aea77` — pruebas de navegador e infraestructura de actores.
 6. `5419942` — evidencia de la primera entrega.
-7. Los cuatro commits de remediación, en su orden.
+7. Los commits de remediación, en su orden, tal como los lista
+   `git log --oneline origin/main..HEAD`.
 
 Lo primero que conviene revisar son las migraciones 008 y 009: todo lo demás
 depende de las garantías que establecen. La 009 se lee bien de arriba abajo,
@@ -908,7 +1005,8 @@ Revertir esto **no** es simétrico: Git deshace archivos, no un esquema ya aplic
 
 ### Orden inverso, si hay que revertir
 
-1. Revertir los cuatro commits de remediación, del último al primero.
+1. Revertir los commits de remediación, del último al primero, en el orden
+   inverso al que devuelve `git log --oneline origin/main..HEAD`.
 2. `git revert 5419942 96aea77 605ec5d 840ad3e 02e9ed8 348723c` (código y pruebas).
 3. **No revertir `6cd0c3c` sin más.** Si 008 ya se aplicó, hay que escribir una
    migración `010` que deshaga explícitamente lo aplicable.
@@ -972,7 +1070,8 @@ Dos consecuencias que conviene decir en voz alta:
   coherente con que la unicidad del DNI ya era global y con que la aplicación
   valida 7 u 8 dígitos desde 001, pero sobre una base con datos incompatibles la
   migración falla y exige corregirlos con la persona titular.
-- `GestionAlumnos.tsx` tiene 939 líneas. Sigue el patrón de `GestionNiveles.tsx`,
+- `GestionAlumnos.tsx` supera las mil líneas (`wc -l` sobre el archivo da el
+  número exacto de cada momento). Sigue el patrón de `GestionNiveles.tsx`,
   pero es el candidato natural a dividirse cuando aparezca la próxima operación.
 
 ---
