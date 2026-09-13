@@ -251,4 +251,3 @@ export async function exigirContraste(page: Page, contexto: string) {
     `${contexto}: ${hallazgos.length} texto(s) por debajo del mínimo AA\n${describir(hallazgos)}`
   ).toEqual([])
 }
-
