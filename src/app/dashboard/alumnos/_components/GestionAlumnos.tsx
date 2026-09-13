@@ -545,6 +545,9 @@ export function GestionAlumnos({
               required
               autoComplete="off"
               helperText="7 u 8 dígitos, sin puntos"
+              // Mientras el envío está en vuelo el campo se congela: cambiarlo
+              // no alteraría lo que ya viajó, y dejarlo editable sugiere que sí.
+              disabled={formularioIdentidad.formState.isSubmitting}
               error={formularioIdentidad.formState.errors.dni?.message}
               {...formularioIdentidad.register('dni')}
             />
@@ -554,6 +557,7 @@ export function GestionAlumnos({
               maxLength={50}
               required={alumnoEnEdicion.estado === 'ACTIVO'}
               autoComplete="off"
+              disabled={formularioIdentidad.formState.isSubmitting}
               error={formularioIdentidad.formState.errors.legajo_nro?.message}
               {...formularioIdentidad.register('legajo_nro')}
             />
@@ -597,6 +601,7 @@ export function GestionAlumnos({
                   : 'Elegí un curso activo'
               }
               options={opcionesDeCambio(cambioDeCurso.alumno)}
+              disabled={operando}
               value={cambioDeCurso.destino}
               onChange={(evento) =>
                 setCambioDeCurso({ ...cambioDeCurso, destino: evento.target.value })
@@ -653,6 +658,7 @@ export function GestionAlumnos({
                     : 'Elegí un curso activo'
                 }
                 options={opcionesCurso}
+                disabled={operando}
                 value={cambioDeEstado.destino}
                 onChange={(evento) =>
                   setCambioDeEstado({ ...cambioDeEstado, destino: evento.target.value })
@@ -947,7 +953,18 @@ function Dialogo({
       const enfocables = Array.from(
         cuadro?.querySelectorAll<HTMLElement>(SELECTOR_ENFOCABLES) ?? []
       )
-      if (enfocables.length === 0) return
+
+      // Mientras la operación está en vuelo, todos los controles del diálogo
+      // quedan deshabilitados y no queda ni uno enfocable. La versión anterior
+      // se rendía acá y devolvía el control al navegador, que llevaba el foco
+      // al contenido de atrás: el diálogo seguía tapando la pantalla y la
+      // persona ya estaba navegando otra cosa sin verla. El tabulador se
+      // detiene y el foco se queda en el cuadro, que es enfocable por programa.
+      if (enfocables.length === 0) {
+        evento.preventDefault()
+        if (!cuadro?.contains(document.activeElement)) cuadro?.focus()
+        return
+      }
 
       const primero = enfocables[0]
       const ultimo = enfocables[enfocables.length - 1]

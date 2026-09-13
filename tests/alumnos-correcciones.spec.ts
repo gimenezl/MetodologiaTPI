@@ -284,6 +284,114 @@ test.describe('Diálogos: durante una operación en vuelo no se cierran de menti
     await expect(dialogo).not.toHaveAttribute('aria-busy', 'true')
   })
 
+  test('el tabulador no escapa del diálogo ocupado, ni con Tab ni con Shift+Tab', async ({
+    page,
+  }) => {
+    // Diez pasos. Mientras la operación está en vuelo no queda ni un control
+    // enfocable dentro del diálogo, y esa es exactamente la situación en la
+    // que el manejador anterior se rendía: devolvía el control al navegador,
+    // que llevaba el foco al contenido de atrás. El diálogo seguía tapando la
+    // pantalla y la persona ya estaba navegando otra cosa sin verla.
+    await page.goto(BANCO)
+
+    let liberar: () => void = () => {}
+    const pendiente = new Promise<void>((resolver) => {
+      liberar = resolver
+    })
+    await page.route('**/api/alumnos/**', async (ruta) => {
+      await pendiente
+      await ruta.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Operación interceptada por la prueba.' }),
+      })
+    })
+
+    const disparador = page.getByRole('button', {
+      name: 'Cambiar el curso del alumno Arrieta, Camila',
+    })
+    await disparador.click()
+
+    const dialogo = page.getByRole('dialog')
+    await page.locator('#cambiar-curso-destino').selectOption(ID_SEGUNDO_GRADO_B)
+
+    // 1. El foco se lleva a «Cancelar».
+    const cancelar = page.getByRole('button', { name: 'Cancelar' })
+    const cerrar = page.getByRole('button', { name: 'Cerrar diálogo' })
+    await cancelar.focus()
+    await expect(cancelar).toBeFocused()
+
+    // 2. Se inicia la solicitud.
+    await page.getByRole('button', { name: 'Confirmar cambio de curso' }).click()
+    await expect(dialogo).toHaveAttribute('aria-busy', 'true')
+
+    // 3. Los dos controles de cierre quedan deshabilitados.
+    await expect(cancelar).toBeDisabled()
+    await expect(cerrar).toBeDisabled()
+
+    // Y no queda ningún descendiente enfocable: es el caso límite.
+    const enfocables = await page.evaluate(() => {
+      const cuadro = document.querySelector('[role="dialog"]')
+      return cuadro
+        ? cuadro.querySelectorAll(
+            'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          ).length
+        : -1
+    })
+    expect(enfocables, 'el escenario exige que no queden controles enfocables').toBe(0)
+
+    /** Dónde está el foco, mirando también al propio cuadro. */
+    const ubicarFoco = () =>
+      page.evaluate(() => {
+        const cuadro = document.querySelector('[role="dialog"]')
+        const activo = document.activeElement
+        return {
+          dentro: Boolean(cuadro && activo && cuadro.contains(activo)),
+          enElBody: activo === document.body || activo === null,
+          etiqueta: activo ? activo.tagName.toLowerCase() : 'ninguno',
+        }
+      })
+
+    // 4. El diálogo tiene el foco.
+    let donde = await ubicarFoco()
+    expect(donde.enElBody, 'el foco no debe estar en el body').toBe(false)
+    expect(donde.dentro, `el foco quedó en «${donde.etiqueta}»`).toBe(true)
+
+    // 5. Tab varias veces. 7. Después de cada pulsación sigue dentro.
+    for (let paso = 1; paso <= 5; paso += 1) {
+      await page.keyboard.press('Tab')
+      donde = await ubicarFoco()
+      expect(donde.enElBody, `Tab ${paso}: el foco cayó al body`).toBe(false)
+      expect(donde.dentro, `Tab ${paso}: el foco escapó a «${donde.etiqueta}»`).toBe(true)
+    }
+
+    // 6. Shift+Tab varias veces, con la misma comprobación.
+    for (let paso = 1; paso <= 5; paso += 1) {
+      await page.keyboard.press('Shift+Tab')
+      donde = await ubicarFoco()
+      expect(donde.enElBody, `Shift+Tab ${paso}: el foco cayó al body`).toBe(false)
+      expect(donde.dentro, `Shift+Tab ${paso}: el foco escapó a «${donde.etiqueta}»`).toBe(true)
+    }
+
+    // Escape tampoco cierra mientras está ocupado.
+    await page.keyboard.press('Escape')
+    await expect(dialogo).toBeVisible()
+
+    // 8. Se libera la solicitud y el recorrido normal vuelve a funcionar.
+    liberar()
+    await expect(dialogo).not.toHaveAttribute('aria-busy', 'true')
+    await expect(cancelar).toBeEnabled()
+
+    await page.keyboard.press('Tab')
+    donde = await ubicarFoco()
+    expect(donde.dentro, 'tras liberar, el tabulador sigue contenido').toBe(true)
+
+    // 9. Se cierra. 10. El foco vuelve al disparador.
+    await page.keyboard.press('Escape')
+    await expect(dialogo).toBeHidden()
+    await expect(disparador).toBeFocused()
+  })
+
   test('sin operación en vuelo, Escape cierra y devuelve el foco al disparador', async ({
     page,
   }) => {
