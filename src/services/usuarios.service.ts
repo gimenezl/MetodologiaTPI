@@ -69,8 +69,16 @@ const SQLSTATE_TABLA_INEXISTENTE = '42P01'
  * documentada y pertenece a EPT-13, y ninguna otra.
  */
 function esLaAusenciaConocida(error: { message: string; code?: string }) {
-  if (error.code === SQLSTATE_TABLA_INEXISTENTE) return true
-  if (error.code !== CODIGO_POSTGREST_TABLA_AUSENTE) return false
+  const esCodigoDeAusencia =
+    error.code === SQLSTATE_TABLA_INEXISTENTE ||
+    error.code === CODIGO_POSTGREST_TABLA_AUSENTE
+  if (!esCodigoDeAusencia) return false
+
+  // El código dice «falta una relación»; el mensaje dice cuál. Los dos códigos
+  // exigen lo mismo: si la que falta no es `padres_hijos`, el error se propaga.
+  // Aceptar `42P01` a secas era la misma indulgencia que ya se había corregido
+  // para `PGRST205`, y convertía la desaparición de cualquier otra tabla en una
+  // lista vacía silenciosa.
   return error.message.includes(TABLA_VINCULOS)
 }
 

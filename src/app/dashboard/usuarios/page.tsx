@@ -17,6 +17,47 @@ import { Button } from '@/components/ui/Button'
 import { Badge, Skeleton } from '@/components/ui/Badge'
 import { useAuth } from '@/context/AuthContext'
 
+/**
+ * Mensaje único de un fallo de carga.
+ *
+ * Es siempre el mismo, en español y sin detalles. Lo que salió mal por dentro
+ * se registra en el servidor; lo que la persona necesita saber es que no se
+ * cargó y que puede volver a intentarlo.
+ */
+const MENSAJE_CARGA_FALLIDA =
+  'No pudimos cargar los usuarios. Intentá nuevamente.'
+
+/**
+ * Cuánto se espera a que la carga responda, en milisegundos.
+ *
+ * Sin este límite la pantalla podía quedar esperando para siempre. Se comprobó:
+ * con la conexión cortada, la promesa del cliente de Supabase no se resuelve ni
+ * se rechaza, así que el `catch` nunca corría y no aparecía ningún error. La
+ * directora veía un formulario sin roles, sin explicación y sin forma de
+ * reintentar. Un fallo silencioso es malo; una espera infinita es peor.
+ */
+const LIMITE_DE_CARGA_MS = 15_000
+
+/** Rechaza si la promesa no responde dentro del límite. */
+function conLimite<T>(promesa: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolver, rechazar) => {
+    const temporizador = setTimeout(
+      () => rechazar(new Error(`La carga no respondió en ${ms} ms`)),
+      ms
+    )
+    promesa.then(
+      (valor) => {
+        clearTimeout(temporizador)
+        resolver(valor)
+      },
+      (error) => {
+        clearTimeout(temporizador)
+        rechazar(error)
+      }
+    )
+  })
+}
+
 const soloLetras = /^[a-zA-ZÀ-ÿ\s'-]+$/
 const longitudMinimaNombre = 2
 const longitudMaximaNombre = 100
@@ -93,19 +134,22 @@ export default function UsuariosPage() {
     setLoading(true)
     setErrorCarga(null)
     try {
-      const [rolesData, perfilesData, relacionesData] = await Promise.all([
-        obtenerRoles(), obtenerPerfiles(), obtenerRelacionesFamiliares(),
-      ])
+      const [rolesData, perfilesData, relacionesData] = await conLimite(
+        Promise.all([obtenerRoles(), obtenerPerfiles(), obtenerRelacionesFamiliares()]),
+        LIMITE_DE_CARGA_MS
+      )
       setRoles((rolesData ?? []) as Rol[])
       setPerfiles((perfilesData ?? []) as PerfilRow[])
       setRelaciones(relacionesData)
     } catch (error) {
-      const detalle = error instanceof Error ? error.message : ''
-      setErrorCarga(
-        detalle
-          ? `No pudimos cargar los usuarios. ${detalle}`
-          : 'No pudimos cargar los usuarios.'
-      )
+      // El detalle técnico va al registro del servidor, nunca a la pantalla.
+      // Un mensaje de PostgREST o de PostgreSQL está en inglés, nombra tablas
+      // y columnas internas y trae códigos como SQLSTATE: no le dice nada útil
+      // a una directora y sí le cuenta al visitante cómo está armada la base.
+      console.error('[usuarios] no se pudo cargar la pantalla', {
+        detalle: error instanceof Error ? error.message : String(error),
+      })
+      setErrorCarga(MENSAJE_CARGA_FALLIDA)
       toast.error('Error al cargar los datos')
     } finally {
       setLoading(false)
@@ -231,7 +275,7 @@ export default function UsuariosPage() {
             <p className="text-sm font-semibold text-red-800">
               No pudimos cargar la gestión de usuarios
             </p>
-            <p className="text-sm text-red-700 mt-1 break-words">{errorCarga}</p>
+            <p className="text-sm text-red-700 mt-1">{errorCarga}</p>
             <p className="text-sm text-red-700 mt-1">
               El listado que ves puede estar incompleto. No crees cuentas hasta
               resolverlo.

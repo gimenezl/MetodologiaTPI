@@ -528,7 +528,10 @@ test.describe('DIRECTOR autenticado: el panel de usuarios carga y da de alta', (
       hasText: 'No pudimos cargar la gestión de usuarios',
     })
     await expect(aviso).toBeVisible()
-    await expect(aviso).toContainText('roles')
+    // El aviso no repite el mensaje de PostgREST: sería inglés, con el nombre
+    // de una tabla interna. El detalle va al registro del servidor.
+    await expect(aviso).toContainText('No pudimos cargar los usuarios. Intentá nuevamente.')
+    await expect(aviso).not.toContainText('roles')
     await expect(aviso.getByRole('button', { name: 'Reintentar' })).toBeVisible()
   })
 
@@ -580,4 +583,189 @@ test.describe('DIRECTOR autenticado: el panel de usuarios carga y da de alta', (
     await expect(aviso).toBeHidden()
     await expect(page.getByLabel(/^Rol/).locator('option')).not.toHaveCount(1)
   })
+})
+
+// ================================================================
+// El clasificador de la ausencia conocida
+// ================================================================
+test.describe('DIRECTOR autenticado: PGRST205 se clasifica, no se traga', () => {
+  /**
+   * Estas pruebas interceptan `padres_hijos`, que es la única solicitud que
+   * llega a `esLaAusenciaConocida`. La prueba anterior interceptaba `roles`, y
+   * eso pasa por `obtenerRoles()`: demostraba que un error propaga, pero no que
+   * el clasificador distinga una ausencia conocida de cualquier otro fallo.
+   *
+   * Todas atraviesan el servicio y la pantalla real. Un clasificador demasiado
+   * permisivo convertiría cualquier tabla ausente —o una caché de esquema
+   * desactualizada tras un despliegue— en una lista vacía silenciosa.
+   */
+
+  const AVISO = 'No pudimos cargar la gestión de usuarios'
+  const MENSAJE_ESTABLE = 'No pudimos cargar los usuarios. Intentá nuevamente.'
+
+  /** Responde la solicitud a `padres_hijos` con el error indicado. */
+  async function interceptarVinculos(
+    page: import('@playwright/test').Page,
+    respuesta: { status: number; cuerpo: unknown } | 'cortar'
+  ) {
+    await page.route('**/rest/v1/padres_hijos*', async (ruta) => {
+      if (respuesta === 'cortar') return ruta.abort('connectionfailed')
+      await ruta.fulfill({
+        status: respuesta.status,
+        contentType: 'application/json',
+        body: JSON.stringify(respuesta.cuerpo),
+      })
+    })
+  }
+
+  /** Comprueba que la pantalla cargó y no muestra el estado de error. */
+  async function esperarPantallaSana(page: import('@playwright/test').Page) {
+    await expect(page.getByRole('heading', { name: 'Gestión de usuarios' })).toBeVisible()
+    const opciones = await page.getByLabel(/^Rol/).locator('option').allTextContents()
+    expect(opciones).toContain('ESTUDIANTE')
+    await expect(page.getByLabel('Usuarios registrados')).toContainText('Directora')
+    await expect(page.getByRole('alert').filter({ hasText: AVISO })).toHaveCount(0)
+  }
+
+  /** Comprueba que la pantalla muestra el estado de error en español. */
+  async function esperarEstadoDeError(
+    page: import('@playwright/test').Page,
+    espera = 5_000
+  ) {
+    const aviso = page.getByRole('alert').filter({ hasText: AVISO })
+    await expect(aviso).toBeVisible({ timeout: espera })
+    await expect(aviso).toContainText(MENSAJE_ESTABLE)
+    await expect(aviso.getByRole('button', { name: 'Reintentar' })).toBeVisible()
+  }
+
+  test('la ausencia conocida degrada a relaciones vacías y la pantalla carga', async ({
+    page,
+  }) => {
+    await interceptarVinculos(page, {
+      status: 404,
+      cuerpo: {
+        code: 'PGRST205',
+        details: null,
+        hint: null,
+        message: "Could not find the table 'public.padres_hijos' in the schema cache",
+      },
+    })
+
+    await page.goto('/dashboard/usuarios')
+    await esperarPantallaSana(page)
+  })
+
+  test('un PGRST205 que nombra roles se propaga', async ({ page }) => {
+    await interceptarVinculos(page, {
+      status: 404,
+      cuerpo: {
+        code: 'PGRST205',
+        details: null,
+        hint: null,
+        message: "Could not find the table 'public.roles' in the schema cache",
+      },
+    })
+
+    await page.goto('/dashboard/usuarios')
+    await esperarEstadoDeError(page)
+  })
+
+  test('un PGRST205 que nombra otra tabla se propaga', async ({ page }) => {
+    await interceptarVinculos(page, {
+      status: 404,
+      cuerpo: {
+        code: 'PGRST205',
+        details: null,
+        hint: null,
+        message: "Could not find the table 'public.matriculas' in the schema cache",
+      },
+    })
+
+    await page.goto('/dashboard/usuarios')
+    await esperarEstadoDeError(page)
+  })
+
+  test('un 42501 se propaga', async ({ page }) => {
+    await interceptarVinculos(page, {
+      status: 403,
+      cuerpo: {
+        code: '42501',
+        details: null,
+        hint: null,
+        message: 'permission denied for relation padres_hijos',
+      },
+    })
+
+    await page.goto('/dashboard/usuarios')
+    await esperarEstadoDeError(page)
+  })
+
+  test('una conexión cortada no deja la pantalla esperando para siempre', async ({
+    page,
+  }) => {
+    // Con la conexión cortada, la promesa del cliente de Supabase no se
+    // resuelve ni se rechaza: el `catch` nunca corría y la pantalla quedaba
+    // esperando indefinidamente, sin error y sin forma de reintentar. El
+    // límite de espera de la carga es lo que convierte eso en un fallo visible.
+    test.setTimeout(60_000)
+    await interceptarVinculos(page, 'cortar')
+
+    await page.goto('/dashboard/usuarios')
+    await esperarEstadoDeError(page, 30_000)
+  })
+
+  test('un error sin código se propaga', async ({ page }) => {
+    await interceptarVinculos(page, {
+      status: 500,
+      cuerpo: { message: 'algo salió mal', details: null, hint: null },
+    })
+
+    await page.goto('/dashboard/usuarios')
+    await esperarEstadoDeError(page)
+  })
+
+  // Cada mensaje técnico se prueba en su propia página. Recorrerlos dentro de
+  // un solo caso reutilizaba el mismo documento y alguna navegación no volvía
+  // a montar la pantalla, así que la prueba medía el estado de la iteración
+  // anterior.
+  const MENSAJES_TECNICOS = [
+    { code: '57014', message: 'canceling statement due to statement timeout' },
+    { code: '42501', message: 'permission denied for relation padres_hijos' },
+    {
+      code: 'PGRST205',
+      message: "Could not find the table 'public.matriculas' in the schema cache",
+    },
+    { code: '42P01', message: 'relation "public.matriculas_historial" does not exist' },
+  ]
+
+  const FRAGMENTOS_PROHIBIDOS = [
+    'canceling statement',
+    'permission denied',
+    'schema cache',
+    'does not exist',
+    'padres_hijos',
+    'matriculas_historial',
+    'sqlstate',
+    'postgrest',
+  ]
+
+  for (const tecnico of MENSAJES_TECNICOS) {
+    test(`el detalle técnico ${tecnico.code} no llega al DOM visible`, async ({ page }) => {
+      await interceptarVinculos(page, {
+        status: 500,
+        cuerpo: { ...tecnico, details: null, hint: null },
+      })
+
+      await page.goto('/dashboard/usuarios')
+      await esperarEstadoDeError(page)
+
+      const visible = (await page.locator('body').innerText()).toLowerCase()
+      for (const prohibido of [tecnico.code.toLowerCase(), ...FRAGMENTOS_PROHIBIDOS]) {
+        expect(
+          visible,
+          `«${prohibido}» no debe aparecer en la pantalla`
+        ).not.toContain(prohibido)
+      }
+    })
+  }
 })
