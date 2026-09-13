@@ -21,6 +21,9 @@
  */
 
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { setTimeout as esperar } from 'node:timers/promises'
 
 const PUERTO = 3123
@@ -40,6 +43,35 @@ const RUTA_LEGITIMA = '/login'
  * coincidan es lo que demuestra que el banco no llego al binario.
  */
 const RUTA_INEXISTENTE = '/pruebas-ui/no-existe-esta-ruta'
+
+/**
+ * Identidades sinteticas que solo existen en los bancos.
+ *
+ * Son datos de fixture: si aparecen en un artefacto compilado o en una
+ * respuesta, el banco llego a produccion.
+ */
+const IDENTIDADES_DEL_BANCO = [
+  'Arrieta',
+  'Zalazar',
+  'LEG-2027-018',
+  'LEG-2026-233',
+  '48213907',
+  '49660312',
+]
+
+/**
+ * Rastros que no deben aparecer en la respuesta de un 404.
+ *
+ * Suma el titulo del formulario real. Ese texto si esta —legitimamente— en el
+ * binario de produccion, porque la pantalla de alumnos lo usa; lo que no puede
+ * pasar es que lo devuelva una ruta que responde 404.
+ */
+const RASTROS_EN_RESPUESTA = [...IDENTIDADES_DEL_BANCO, 'Nuevo legajo académico']
+
+/** Huella de un cuerpo, para compararlo byte a byte sin volcarlo. */
+function digerir(texto) {
+  return createHash('sha256').update(texto, 'utf8').digest('hex')
+}
 
 /**
  * Credenciales de relleno. La compilación necesita que las variables existan,
@@ -153,6 +185,85 @@ async function detener(proceso) {
   await Promise.race([terminado, esperar(5000)])
 }
 
+/**
+ * Comprueba que el banco no esta en lo que se compilo.
+ *
+ * Una respuesta 404 dice lo que el servidor contesta hoy; el manifiesto y los
+ * artefactos dicen lo que se desplego. Son dos preguntas distintas y las dos
+ * importan: un banco presente en el build es una ruta a un paso de quedar
+ * accesible por un cambio de configuracion.
+ */
+function revisarArtefactos() {
+  const manifiestos = [
+    '.next/server/app-paths-manifest.json',
+    '.next/app-path-routes-manifest.json',
+    '.next/routes-manifest.json',
+  ]
+
+  let revisados = 0
+  for (const relativo of manifiestos) {
+    if (!existsSync(relativo)) continue
+    revisados += 1
+    const contenido = readFileSync(relativo, 'utf8')
+    afirmar(
+      !contenido.includes('pruebas-ui'),
+      `${relativo} no registra ninguna ruta de banco`
+    )
+  }
+  afirmar(revisados > 0, `se encontro al menos un manifiesto de rutas (${revisados})`)
+
+  // Ningun archivo compilado se llama como los bancos.
+  const modulos = archivosDe('.next').filter(
+    (archivo) => archivo.includes('page.banco') || archivo.includes('pruebas-ui')
+  )
+  afirmar(
+    modulos.length === 0,
+    `ningun artefacto compilado corresponde a un banco${
+      modulos.length ? ` (${modulos.slice(0, 5).join(', ')})` : ''
+    }`
+  )
+
+  // Ni contiene sus datos. Se recorre el servidor compilado, que es lo que se
+  // ejecuta, buscando las identidades sinteticas del banco.
+  const conRastros = []
+  for (const archivo of archivosDe('.next/server')) {
+    if (!/\.(js|json|html|rsc)$/.test(archivo)) continue
+    let contenido
+    try {
+      contenido = readFileSync(archivo, 'utf8')
+    } catch {
+      continue
+    }
+    if (IDENTIDADES_DEL_BANCO.some((rastro) => contenido.includes(rastro))) {
+      conRastros.push(archivo)
+    }
+  }
+  afirmar(
+    conRastros.length === 0,
+    `ningun artefacto del servidor contiene datos del banco${
+      conRastros.length ? ` (${conRastros.slice(0, 5).join(', ')})` : ''
+    }`
+  )
+}
+
+/** Lista recursiva de archivos, tolerante a directorios ausentes. */
+function archivosDe(raiz) {
+  if (!existsSync(raiz)) return []
+  const pendientes = [raiz]
+  const encontrados = []
+  while (pendientes.length > 0) {
+    const actual = pendientes.pop()
+    for (const entrada of readdirSync(actual, { withFileTypes: true })) {
+      const completo = join(actual, entrada.name)
+      if (entrada.isDirectory()) pendientes.push(completo)
+      else encontrados.push(completo)
+    }
+  }
+  return encontrados
+}
+
+revisarArtefactos()
+
 const servidor = spawn('npx', ['next', 'start', '--port', String(PUERTO)], {
   env: ENTORNO,
   shell: process.platform === 'win32',
@@ -185,18 +296,22 @@ try {
   // Referencia: el 404 de una ruta que nunca existio.
   const control = await fetch(`${BASE}${RUTA_INEXISTENTE}`, { redirect: 'manual' })
   const cuerpoControl = await control.text()
+  const huellaControl = digerir(cuerpoControl)
   afirmar(
     control.status === 404,
     `la ruta de control responde 404 (${RUTA_INEXISTENTE} devolvió ${control.status})`
   )
 
-  // Rastros del contenido del banco que jamas deben aparecer en produccion.
-  const RASTROS = [
-    'Nuevo legajo académico',
-    'Arrieta',
-    'LEG-2027-018',
-    '48213907',
-  ]
+  // La referencia solo sirve si es estable: dos rutas inexistentes distintas
+  // tienen que producir exactamente el mismo cuerpo. Si no lo fueran, la
+  // comparacion de abajo no probaria nada.
+  const segundaControl = await fetch(`${BASE}/otra/ruta/que-no-existe`, {
+    redirect: 'manual',
+  })
+  afirmar(
+    digerir(await segundaControl.text()) === huellaControl,
+    'dos rutas inexistentes producen el mismo cuerpo: la referencia es estable'
+  )
 
   for (const ruta of RUTAS_DE_BANCO) {
     const respuesta = await fetch(`${BASE}${ruta}`, { redirect: 'manual' })
@@ -207,18 +322,32 @@ try {
 
     const cuerpo = await respuesta.text()
 
-    const filtrados = RASTROS.filter((rastro) => cuerpo.includes(rastro))
+    const filtrados = RASTROS_EN_RESPUESTA.filter((rastro) => cuerpo.includes(rastro))
     afirmar(
       filtrados.length === 0,
       `${ruta} no sirve contenido del banco${filtrados.length ? ` (apareció: ${filtrados.join(', ')})` : ''}`
     )
 
-    // La prueba fuerte: la respuesta no se distingue de la de una ruta que no
-    // existe, asi que el 404 no confirma que el banco este ahi.
+    // Tampoco filtra los segmentos de su propia URL. Next los incluye en la
+    // carga RSC de toda ruta que el enrutador conoce, asi que verlos ahi seria
+    // la señal de que el banco sigue registrado.
+    const segmentos = ruta.split('/').filter(Boolean)
+    const filtradosSegmentos = segmentos.filter((segmento) => cuerpo.includes(segmento))
     afirmar(
-      cuerpo.length === cuerpoControl.length,
-      `${ruta} responde igual que una ruta inexistente, sin revelar que existe ` +
-        `(${cuerpo.length} bytes contra ${cuerpoControl.length} de control)`
+      filtradosSegmentos.length === 0,
+      `${ruta} no filtra sus segmentos en el cuerpo${
+        filtradosSegmentos.length ? ` (apareció: ${filtradosSegmentos.join(', ')})` : ''
+      }`
+    )
+
+    // La prueba fuerte: la respuesta es identica, byte a byte, a la de una
+    // ruta que nunca existio. Comparar longitudes no alcanzaba: dos cuerpos
+    // distintos del mismo tamaño pasaban.
+    const huella = digerir(cuerpo)
+    afirmar(
+      huella === huellaControl,
+      `${ruta} responde exactamente igual que una ruta inexistente ` +
+        `(SHA-256 ${huella.slice(0, 16)}… contra ${huellaControl.slice(0, 16)}… de control)`
     )
   }
 } finally {

@@ -228,6 +228,62 @@ test.describe('Diálogos: durante una operación en vuelo no se cierran de menti
     await expect(dialogo).toBeHidden()
   })
 
+  test('el foco no se escapa cuando el control enfocado se deshabilita', async ({
+    page,
+  }) => {
+    await page.goto(BANCO)
+
+    let liberar: () => void = () => {}
+    const pendiente = new Promise<void>((resolver) => {
+      liberar = resolver
+    })
+    await page.route('**/api/alumnos/**', async (ruta) => {
+      await pendiente
+      await ruta.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Operación interceptada por la prueba.' }),
+      })
+    })
+
+    await page
+      .getByRole('button', { name: 'Cambiar el curso del alumno Arrieta, Camila' })
+      .click()
+
+    const dialogo = page.getByRole('dialog')
+    await page.locator('#cambiar-curso-destino').selectOption(ID_SEGUNDO_GRADO_B)
+
+    // El foco se lleva a «Cancelar», que es el control que va a deshabilitarse.
+    const cancelar = page.getByRole('button', { name: 'Cancelar' })
+    await cancelar.focus()
+    await expect(cancelar).toBeFocused()
+
+    await page.getByRole('button', { name: 'Confirmar cambio de curso' }).click()
+    await expect(dialogo).toHaveAttribute('aria-busy', 'true')
+    await expect(cancelar).toBeDisabled()
+
+    // El foco quedó dentro del diálogo, no en el `body` de la página de atrás.
+    // Se comprueba sobre el propio cuadro además de sus descendientes: cuando
+    // el control enfocado se deshabilita, el foco pasa al contenedor.
+    const dondeQuedo = await page.evaluate(() => {
+      const cuadro = document.querySelector('[role="dialog"]')
+      const activo = document.activeElement
+      return {
+        enElBody: activo === document.body || activo === null,
+        dentroDelDialogo: Boolean(cuadro && activo && cuadro.contains(activo)),
+        etiqueta: activo ? activo.tagName.toLowerCase() : 'ninguno',
+      }
+    })
+    expect(dondeQuedo.enElBody, 'el foco no debe volver al body').toBe(false)
+    expect(
+      dondeQuedo.dentroDelDialogo,
+      `el foco quedó en «${dondeQuedo.etiqueta}», fuera del diálogo`
+    ).toBe(true)
+
+    liberar()
+    await expect(dialogo).not.toHaveAttribute('aria-busy', 'true')
+  })
+
   test('sin operación en vuelo, Escape cierra y devuelve el foco al disparador', async ({
     page,
   }) => {

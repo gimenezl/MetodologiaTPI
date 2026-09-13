@@ -35,7 +35,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             className="text-sm font-semibold text-neutral-700"
           >
             {label}
-            {props.required && <span className="text-red-500 ml-0.5">*</span>}
+            {props.required && <span className="text-red-600 ml-0.5">*</span>}
           </label>
         )}
         <input
@@ -102,7 +102,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         {label && (
           <label htmlFor={inputId} className="text-sm font-semibold text-neutral-700">
             {label}
-            {props.required && <span className="text-red-500 ml-0.5">*</span>}
+            {props.required && <span className="text-red-600 ml-0.5">*</span>}
           </label>
         )}
         <select

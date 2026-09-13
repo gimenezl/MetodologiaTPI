@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { exigirContraste } from './_contraste'
 import {
   expect,
   request as crearContexto,
@@ -628,6 +629,34 @@ test.describe('DIRECTOR autenticado — alumnos', () => {
     ).toBeVisible({ timeout: 15_000 })
   })
 
+  test('el detalle del legajo cumple el contraste AA', async ({ page }) => {
+    // `SituacionAcademica` usa rotulos pequenos que la revision midio en
+    // 3,05:1. Se comprueba sobre la pantalla real, con datos reales.
+    const cursos = await cursosActivos(page)
+    const dni = dniUnico()
+    const alta = await pedirConSesion(SESION_DIRECTORA, '/api/alumnos', {
+      method: 'POST',
+      data: {
+        nombre: 'Contraste',
+        apellido: 'Detalle',
+        dni,
+        estado: 'ACTIVO',
+        legajo_nro: legajoUnico('LEG-CONTRASTE'),
+        curso_id: cursos[0],
+      },
+    })
+    expect(alta.status()).toBe(201)
+    const alumnoId = (await alta.json()).alumno_id as string
+
+    await page.goto(`/dashboard/alumnos/${alumnoId}`)
+    await expect(page.getByRole('heading', { name: 'Situación actual' })).toBeVisible()
+    await exigirContraste(page, 'detalle del legajo académico')
+
+    await page.goto('/dashboard/alumnos')
+    await expect(page.getByRole('heading', { name: 'Alumnos' })).toBeVisible()
+    await exigirContraste(page, 'listado administrativo con datos reales')
+  })
+
   test('el banco visual sirve datos sinteticos y jamas los reales', async ({ page }) => {
     // Que el banco no exista en produccion se demuestra por comportamiento, no
     // leyendo el codigo: `supabase/tests/harness_produccion.mjs` compila la
@@ -704,6 +733,12 @@ test('distingue no tener trayectoria de no poder leerla', async ({ page }) => {
       page.getByRole('alert').filter({ hasText: 'No pudimos cargar el historial de cursos' })
     ).toHaveCount(0)
     await expect(page.getByLabel('Tabla del historial de cursos')).toContainText('Sala de 5 A')
+  })
+
+  test('mi legajo cumple el contraste AA', async ({ page }) => {
+    await page.goto('/dashboard/mi-legajo')
+    await expect(page.getByRole('heading', { name: 'Situación actual' })).toBeVisible()
+    await exigirContraste(page, 'mi legajo académico')
   })
 
   test('ve Mi legajo en la navegación pero no Alumnos', async ({ page }) => {

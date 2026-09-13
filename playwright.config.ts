@@ -40,7 +40,7 @@ const PRUEBAS_SOLO_MOVIL = /niveles-responsive\.spec\.ts/
 // `alumnos-ui` corre en los tres perfiles: escritorio, Pixel 5 e iPhone 13. Sus
 // aserciones se adaptan al ancho de la ventana, de modo que un mismo archivo
 // demuestra la tabla de escritorio y las tarjetas móviles.
-const PRUEBAS_MULTIPERFIL = /alumnos-ui\.spec\.ts/
+const PRUEBAS_MULTIPERFIL = /alumnos-(?:ui|contraste)\.spec\.ts/
 
 const proyectoBase: Project = {
   name: 'chromium',

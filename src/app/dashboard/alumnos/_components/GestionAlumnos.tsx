@@ -904,6 +904,24 @@ function Dialogo({
     ocupadoRef.current = ocupado
   }, [ocupado])
 
+  /**
+   * Retiene el foco cuando el control que lo tenía se deshabilita.
+   *
+   * Al empezar la operación, «Cancelar» y el botón de cerrar pasan a
+   * `disabled`. Si el foco estaba en uno de ellos, el navegador lo devuelve al
+   * `body`: quien navega con teclado o lector de pantalla queda fuera del
+   * diálogo, en una página que además está tapada por el fondo. El cuadro es
+   * enfocable por programa justamente para poder recibirlo en ese momento.
+   */
+  useEffect(() => {
+    if (!ocupado) return
+    const cuadro = contenedor.current
+    if (!cuadro) return
+    const activo = document.activeElement
+    if (activo && activo !== document.body && cuadro.contains(activo)) return
+    cuadro.focus()
+  }, [ocupado])
+
   function intentarCerrar() {
     if (ocupadoRef.current) return
     onCerrarRef.current()
@@ -967,6 +985,9 @@ function Dialogo({
         aria-modal="true"
         aria-labelledby={tituloId}
         aria-busy={ocupado || undefined}
+        // Solo por programa: no entra en el orden de tabulación, pero puede
+        // recibir el foco cuando el control que lo tenía se deshabilita.
+        tabIndex={-1}
         className="relative w-full max-w-lg bg-white rounded-2xl border border-neutral-200 shadow-xl my-auto"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
