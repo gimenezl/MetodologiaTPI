@@ -152,7 +152,10 @@ export function GestionAlumnos({
     formulario?: { setError: (campo: never, opciones: { type: string; message: string }) => void },
     camposValidos?: string[]
   ) {
-    const mensaje = error instanceof Error ? error.message : respaldo
+    // Solo el mensaje de dominio que devolvió la API. Cualquier otra excepción
+    // —una falla de render, un error de otra biblioteca— puede traer texto
+    // técnico en inglés y se reemplaza por el respaldo de la pantalla.
+    const mensaje = error instanceof ErrorAlumno ? error.message : respaldo
     if (
       error instanceof ErrorAlumno &&
       error.campo &&

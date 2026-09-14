@@ -70,7 +70,7 @@ export type CampoAlumno =
   | 'curso_id'
   | 'estado'
 
-export type EstadoErrorAlumno = 400 | 401 | 403 | 404 | 409 | 500
+export type EstadoErrorAlumno = 400 | 401 | 403 | 404 | 409 | 500 | 503
 
 export type ResultadoAlumno<T> =
   | { ok: true; datos: T }
@@ -105,46 +105,56 @@ const COLUMNAS_HISTORIAL =
 const MENSAJE_GENERICO =
   'No pudimos completar la operación. Volvé a intentarlo en unos minutos.'
 
+const MENSAJE_SERVICIO_NO_DISPONIBLE =
+  'El servicio no está disponible en este momento. Volvé a intentarlo en unos minutos.'
+
 type ErrorPostgres = { code?: string | null; message?: string | null; details?: string | null }
 
 /**
  * Distingue qué restricción única se violó para dar el mensaje correcto.
  *
- * El nombre de la restricción se lee del error de PostgreSQL pero nunca se
- * devuelve al cliente: solo elige cuál de los mensajes de dominio corresponde.
+ * Se reconoce por el NOMBRE EXACTO de la restricción, extraído del mensaje
+ * anclado de PostgreSQL. La versión anterior buscaba subcadenas («dni»,
+ * «legajo», «matricula») en el mensaje y los detalles, y cualquier restricción
+ * cuyo nombre o valor las contuviera recibía un mensaje equivocado.
+ *
+ * El nombre nunca se devuelve al cliente: solo elige el mensaje de dominio.
  */
 function traducirDuplicado(error: ErrorPostgres): {
   estado: EstadoErrorAlumno
   mensaje: string
   campo?: CampoAlumno
 } {
-  const detalle = `${error.message ?? ''} ${error.details ?? ''}`.toLowerCase()
+  const restriccion =
+    /^duplicate key value violates unique constraint "([^"]+)"$/u.exec(error.message ?? '')?.[1] ??
+    null
 
-  if (detalle.includes('dni')) {
-    return {
-      estado: 409,
-      mensaje: 'Ya existe una persona registrada con ese DNI.',
-      campo: 'dni',
-    }
-  }
-  if (detalle.includes('legajo')) {
-    return {
-      estado: 409,
-      mensaje: 'Ya existe un legajo con ese número.',
-      campo: 'legajo_nro',
-    }
-  }
-  if (detalle.includes('matricula')) {
-    return {
-      estado: 409,
-      mensaje:
-        'El estudiante ya tiene una matrícula vigente. Actualizá el listado antes de reintentar.',
-      campo: 'curso_id',
-    }
-  }
-  return {
-    estado: 409,
-    mensaje: 'El dato ingresado ya está registrado para otra persona.',
+  switch (restriccion) {
+    case 'perfiles_dni_key':
+      return {
+        estado: 409,
+        mensaje: 'Ya existe una persona registrada con ese DNI.',
+        campo: 'dni',
+      }
+    case 'perfiles_legajo_nro_key':
+    case 'idx_perfiles_legajo_normalizado':
+      return {
+        estado: 409,
+        mensaje: 'Ya existe un legajo con ese número.',
+        campo: 'legajo_nro',
+      }
+    case 'idx_matriculas_una_activa_por_alumno':
+      return {
+        estado: 409,
+        mensaje:
+          'El estudiante ya tiene una matrícula vigente. Actualizá el listado antes de reintentar.',
+        campo: 'curso_id',
+      }
+    default:
+      return {
+        estado: 409,
+        mensaje: 'El dato ingresado ya está registrado para otra persona.',
+      }
   }
 }
 
@@ -250,6 +260,11 @@ function traducirErrorAlumno(
         code: error.code,
         message: error.message,
       })
+      // Sin código, la consulta ni siquiera obtuvo respuesta de PostgREST: es
+      // una dependencia caída o lenta, no un fallo del pedido.
+      if (!error.code) {
+        return { estado: 503, mensaje: MENSAJE_SERVICIO_NO_DISPONIBLE }
+      }
       return { estado: 500, mensaje: MENSAJE_GENERICO }
   }
 }

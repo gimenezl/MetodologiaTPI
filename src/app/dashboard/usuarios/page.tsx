@@ -1,16 +1,17 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { UserPlus, Users, Warning, PencilSimple, X } from '@phosphor-icons/react'
+import { ErrorDeDominio, mensajeParaMostrar, registroSeguro } from '@/lib/errores'
 import { obtenerRoles } from '@/services/roles.service'
 import { obtenerPerfiles, actualizarPerfil } from '@/services/perfiles.service'
 import {
-  crearUsuario, obtenerRelacionesFamiliares, VINCULO_PARENTAL_NO_DISPONIBLE,
-  type RelacionFamiliar,
+  crearUsuario, nuevoIdentificadorDeOperacion, obtenerRelacionesFamiliares,
+  VINCULO_PARENTAL_NO_DISPONIBLE, type RelacionFamiliar,
 } from '@/services/usuarios.service'
 import { Input, Select } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
@@ -20,12 +21,18 @@ import { useAuth } from '@/context/AuthContext'
 /**
  * Mensaje único de un fallo de carga.
  *
- * Es siempre el mismo, en español y sin detalles. Lo que salió mal por dentro
- * se registra en el servidor; lo que la persona necesita saber es que no se
- * cargó y que puede volver a intentarlo.
+ * Es siempre el mismo, en español y sin detalles. Lo que la persona necesita
+ * saber es que no se cargó y que puede volver a intentarlo; el detalle técnico
+ * no llega a la pantalla (ver `src/lib/errores.ts`).
  */
 const MENSAJE_CARGA_FALLIDA =
   'No pudimos cargar los usuarios. Intentá nuevamente.'
+
+const MENSAJE_ALTA_FALLIDA = 'No pudimos crear la cuenta. Volvé a intentarlo en unos minutos.'
+const MENSAJE_EDICION_FALLIDA = 'No pudimos guardar los cambios. Volvé a intentarlo en unos minutos.'
+
+/** Campos del formulario de alta a los que la API puede atribuir un error. */
+const CAMPOS_DEL_ALTA = new Set(['nombre', 'apellido', 'dni', 'rol_id', 'email', 'password', 'telefono', 'direccion', 'legajo_nro'])
 
 /**
  * Cuánto se espera a que la carga responda, en milisegundos.
@@ -114,6 +121,22 @@ export default function UsuariosPage() {
    * poder reintentarse.
    */
   const [errorCarga, setErrorCarga] = useState<string | null>(null)
+  /**
+   * Resultado fallido del último alta, visible hasta el próximo envío.
+   *
+   * Un aviso flotante se desvanece; un alta que no se pudo confirmar tiene que
+   * quedar a la vista con su referencia mientras la directora revisa el listado.
+   */
+  const [errorAlta, setErrorAlta] = useState<string | null>(null)
+  /**
+   * Clave de idempotencia del alta en curso.
+   *
+   * Se conserva mientras se reintenta el mismo envío, de modo que un reintento
+   * después de un resultado incierto nunca duplica la cuenta. Se renueva cuando
+   * el alta se confirma o cuando la API informa que la clave ya se usó con otros
+   * datos.
+   */
+  const operacionRef = useRef<string | null>(null)
   const [mostrarPass, setMostrarPass] = useState(false)
 
   // --- Estado del modal de edición ---
@@ -123,7 +146,7 @@ export default function UsuariosPage() {
   const [guardando, setGuardando] = useState(false)
 
   const {
-    register, handleSubmit, reset, watch,
+    register, handleSubmit, reset, watch, setError,
     formState: { errors, isSubmitting },
   } = useForm<UsuarioForm>({ resolver: zodResolver(usuarioSchema), mode: 'onTouched' })
 
@@ -142,13 +165,10 @@ export default function UsuariosPage() {
       setPerfiles((perfilesData ?? []) as PerfilRow[])
       setRelaciones(relacionesData)
     } catch (error) {
-      // El detalle técnico va al registro del servidor, nunca a la pantalla.
-      // Un mensaje de PostgREST o de PostgreSQL está en inglés, nombra tablas
-      // y columnas internas y trae códigos como SQLSTATE: no le dice nada útil
-      // a una directora y sí le cuenta al visitante cómo está armada la base.
-      console.error('[usuarios] no se pudo cargar la pantalla', {
-        detalle: error instanceof Error ? error.message : String(error),
-      })
+      // Nunca el mensaje técnico, ni en pantalla ni en la consola: solo el
+      // código de dominio. Un mensaje de PostgREST o de PostgreSQL está en
+      // inglés, nombra tablas y columnas internas y trae códigos como SQLSTATE.
+      console.error('[usuarios] no se pudo cargar la pantalla', registroSeguro(error))
       setErrorCarga(MENSAJE_CARGA_FALLIDA)
       toast.error('Error al cargar los datos')
     } finally {
@@ -182,8 +202,11 @@ export default function UsuariosPage() {
     // El tutor no es requisito para dar de alta a un alumno (EPT-9), y el
     // vínculo parental no se envía: `padres_hijos` no existe en el esquema
     // versionado y la API lo rechaza antes de escribir nada.
+    setErrorAlta(null)
+    operacionRef.current ??= nuevoIdentificadorDeOperacion()
     try {
       await crearUsuario({
+        operacion_id: operacionRef.current,
         email: data.email,
         password: data.password,
         nombre: data.nombre,
@@ -194,12 +217,24 @@ export default function UsuariosPage() {
         direccion: data.direccion,
         legajo_nro: data.legajo_nro,
       })
+      operacionRef.current = null
       toast.success(`Usuario creado: ${data.email}`)
       reset()
       await cargar()
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'No se pudo crear el usuario'
-      toast.error(message)
+      const mensaje = mensajeParaMostrar(error, MENSAJE_ALTA_FALLIDA)
+      setErrorAlta(mensaje)
+      toast.error(mensaje)
+
+      if (error instanceof ErrorDeDominio) {
+        if (error.codigo === 'OPERACION_REUTILIZADA') operacionRef.current = null
+        if (error.campo && CAMPOS_DEL_ALTA.has(error.campo)) {
+          setError(error.campo as keyof UsuarioForm, { type: 'server', message: error.message })
+        }
+        // Si no se sabe si la cuenta quedó creada, el listado es donde la
+        // directora lo comprueba: se vuelve a cargar.
+        if (error.codigo === 'ALTA_SIN_CONFIRMAR') await cargar()
+      }
     }
   }
 
@@ -240,8 +275,9 @@ export default function UsuariosPage() {
       setEditando(null)
       await cargar()
     } catch (error) {
-      const m = error instanceof Error ? error.message : ''
-      toast.error(m.includes('perfiles_dni') ? 'Ya existe una persona con ese DNI.' : (m || 'No se pudo actualizar'))
+      // El servicio ya tradujo el error por el nombre exacto de la restricción;
+      // cualquier otra cosa se reemplaza por un mensaje estable.
+      toast.error(mensajeParaMostrar(error, MENSAJE_EDICION_FALLIDA))
     } finally {
       setGuardando(false)
     }
@@ -293,6 +329,18 @@ export default function UsuariosPage() {
           <UserPlus size={20} weight="fill" className="text-brand-500" />
           <h2 className="font-bold text-neutral-900">Nuevo usuario</h2>
         </div>
+        {errorAlta && (
+          <div
+            role="alert"
+            className="mb-5 bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3 items-start"
+          >
+            <Warning size={18} weight="fill" className="text-red-600 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-red-800">No se completó el alta</p>
+              <p className="text-sm text-red-700 mt-1 break-words">{errorAlta}</p>
+            </div>
+          </div>
+        )}
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">
             <Input label="Nombre" required placeholder="María" {...register('nombre')} error={errors.nombre?.message} />

@@ -1,22 +1,29 @@
 import { execFileSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { capturarSinHerramientas } from './_captura'
-import { expect, test, type APIRequestContext } from '@playwright/test'
+import { exigirMensajeSinDetalleTecnico, exigirPantallaSinDetalleTecnico } from './_sin-detalle-tecnico'
+import { exigirSinControlesAnidados } from './_semantica'
+import {
+  expect,
+  request as crearContexto,
+  test,
+  type APIRequestContext,
+  type APIResponse,
+  type Page,
+} from '@playwright/test'
 
 /**
- * Alta de cuentas de acceso: `POST /api/usuarios`.
+ * Alta de cuentas de acceso (`POST /api/usuarios`) y panel de Usuarios.
  *
- * La revisión encontró acá el defecto más grave del candidato anterior. La
- * ruta escribía en `padres_hijos`, una tabla que no existe en el esquema
- * versionado; la escritura fallaba, el borrado compensatorio del perfil chocaba
- * con la clave foránea `ON DELETE RESTRICT` de `alumnos`, ese error se
- * descartaba en silencio y sólo se borraba la cuenta de Auth. Resultado: un
- * perfil y un legajo huérfanos que reservaban para siempre un DNI y un número
- * de legajo, sin cuenta que los reclamara, y un director convencido de haber
- * registrado un vínculo que nunca existió.
+ * Estas pruebas atraviesan la ruta real, Auth real y PostgreSQL real. Cuando una
+ * afirmación dice que no quedó una fila, es porque se consultó la base.
  *
- * Estas pruebas atraviesan la ruta real, Auth real y PostgreSQL real. Nada está
- * simulado: cuando una afirmación dice que no quedó una fila, es porque se
- * consultó la base.
+ * Desde la cuarta revisión el alta es atómica: la migración 010 crea el perfil
+ * dentro de la misma transacción en la que GoTrue crea la cuenta. Un rechazo de
+ * PostgreSQL ya no «borra la cuenta después»: la cuenta nunca llega a existir.
+ * Las situaciones de transporte ambiguo —respuesta perdida, escritura en vuelo,
+ * caída del servidor— se prueban con un intermediario real en
+ * `supabase/tests/usuarios_reconciliacion.mjs`.
  *
  * Los datos son sintéticos. Los DNI usan el rango 97.xxx.xxx y los correos un
  * dominio reservado; ninguno corresponde a una persona real.
@@ -29,6 +36,7 @@ test.skip(
 
 const PREFIJO_DNI = '97'
 const DOMINIO = 'ept.local'
+const BASE_URL = 'http://localhost:3000'
 
 const CONTENEDOR =
   process.env.EPT_SUPABASE_DB_CONTAINER ?? 'supabase_db_educar-para-transformar'
@@ -36,17 +44,10 @@ const CONTENEDOR =
 const MENSAJE_VINCULO =
   'Los vínculos entre padres o tutores e hijos todavía no están disponibles.'
 
-/**
- * Marca que fuerza el fallo de la escritura del perfil.
- *
- * Para demostrar la compensación hace falta que el paso 6 falle después de que
- * el paso 5 ya creó la cuenta de Auth. Simular ese fallo en el código de la
- * aplicación probaría el simulacro, no la ruta; por eso se inyecta en la
- * frontera real, con un disparador en PostgreSQL que rechaza un apellido
- * concreto. La ruta no sabe nada de esto: recibe un error de inserción como
- * recibiría cualquier otro.
- */
+/** Marca que hace fallar la escritura del perfil dentro de la transacción de alta. */
 const APELLIDO_QUE_FALLA = 'FalloForzadoDePrueba'
+
+const PATRON_REFERENCIA = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u
 
 /** Ejecuta SQL en la base local descartable y devuelve la salida. */
 function sql(sentencia: string) {
@@ -110,17 +111,23 @@ function limpiar() {
   `)
 }
 
+// La limpieza pertenece al proyecto de la directora, que es el que crea datos.
+// Si corriera también en el proyecto de otro actor, podría borrar a mitad de
+// camino las filas en las que se apoyan las pruebas de la directora.
 test.beforeAll(() => {
   if (process.env.EPT_SUPABASE_LOCAL !== '1') return
+  if (test.info().project.name !== 'chromium-directora') return
   limpiar()
 })
 
 test.afterAll(() => {
   if (process.env.EPT_SUPABASE_LOCAL !== '1') return
+  if (test.info().project.name !== 'chromium-directora') return
   limpiar()
 })
 
 type Alta = {
+  operacion_id?: string
   email: string
   password: string
   nombre: string
@@ -132,35 +139,69 @@ type Alta = {
   hijos_ids?: string[]
 }
 
-function crear(peticion: APIRequestContext, datos: Partial<Alta> & { dni: string }) {
-  return peticion.post('/api/usuarios', {
-    data: {
-      email: `alta.prueba.${datos.dni}@${DOMINIO}`,
-      password: 'prueba-ept-9-alta-segura',
-      nombre: 'Alta',
-      apellido: 'DePrueba',
-      rol_id: rolId('ESTUDIANTE'),
-      ...datos,
-    },
-  })
+function datosDeAlta(datos: Partial<Alta> & { dni: string }): Alta {
+  return {
+    operacion_id: randomUUID(),
+    email: `alta.prueba.${datos.dni}@${DOMINIO}`,
+    password: 'prueba-ept-9-alta-segura',
+    nombre: 'Alta',
+    apellido: 'DePrueba',
+    rol_id: rolId('ESTUDIANTE'),
+    ...datos,
+  }
 }
 
-test.describe('DIRECTOR autenticado: el alta de cuentas no deja estados a medias', () => {
+function crear(peticion: APIRequestContext, datos: Partial<Alta> & { dni: string }) {
+  return peticion.post('/api/usuarios', { data: datosDeAlta(datos) })
+}
+
+/**
+ * Alta de referencia sobre la que se prueban los duplicados.
+ *
+ * Tiene una operación fija, así que pedirla otra vez es idempotente: cada
+ * prueba que la necesita la asegura por su cuenta. Playwright reinicia el
+ * worker después de un fallo y vuelve a correr `beforeAll`, que limpia la base;
+ * una prueba que dependiera de lo que dejó otra fallaría en cascada.
+ */
+const ALTA_BASE = {
+  operacion_id: '97100001-0000-4000-8000-000000000001',
+  email: `alta.prueba.${PREFIJO_DNI}100001@${DOMINIO}`,
+  password: 'prueba-ept-9-alta-segura',
+  nombre: 'Lucía',
+  apellido: 'SinTutor',
+  dni: `${PREFIJO_DNI}100001`,
+  legajo_nro: 'LEG-ALTA-0001',
+}
+
+async function asegurarAltaBase(peticion: APIRequestContext) {
+  const respuesta = await peticion.post('/api/usuarios', {
+    data: { ...ALTA_BASE, rol_id: rolId('ESTUDIANTE') },
+  })
+  expect(respuesta.status(), await respuesta.text()).toBe(200)
+  return (await respuesta.json()) as { ok: true; user_id: string; reconciliada: boolean }
+}
+
+/** Lee una respuesta de error y exige que su mensaje sea de dominio. */
+async function errorDeDominio(respuesta: APIResponse, contexto: string) {
+  const cuerpo = await respuesta.json()
+  expect(typeof cuerpo.error, `${contexto}: trae un mensaje`).toBe('string')
+  expect(typeof cuerpo.codigo, `${contexto}: trae un código de dominio`).toBe('string')
+  exigirMensajeSinDetalleTecnico(contexto, cuerpo.error)
+  return cuerpo as { error: string; codigo: string; referencia?: string; campo?: string }
+}
+
+// ================================================================
+// La ruta de alta
+// ================================================================
+test.describe('DIRECTOR autenticado: el alta de cuentas es atómica y no deja estados a medias', () => {
   test('crea un estudiante sin tutor y persiste perfil, legajo académico y cuenta', async ({
     request,
   }) => {
-    const dni = `${PREFIJO_DNI}100001`
+    const dni = ALTA_BASE.dni
 
-    const respuesta = await crear(request, {
-      dni,
-      nombre: 'Lucía',
-      apellido: 'SinTutor',
-      legajo_nro: 'LEG-ALTA-0001',
-    })
+    const alta = await asegurarAltaBase(request)
+    expect(alta.user_id).toBe(ALTA_BASE.operacion_id)
 
-    expect(respuesta.status(), await respuesta.text()).toBe(200)
-
-    // Las tres piezas quedaron, y quedaron juntas.
     expect(contar(`FROM public.perfiles WHERE dni = '${dni}'`)).toBe(1)
     expect(
       contar(
@@ -168,28 +209,23 @@ test.describe('DIRECTOR autenticado: el alta de cuentas no deja estados a medias
          WHERE p.dni = '${dni}'`
       )
     ).toBe(1)
-    expect(
-      contar(`FROM auth.users WHERE email = 'alta.prueba.${dni}@${DOMINIO}'`)
-    ).toBe(1)
+    expect(contar(`FROM auth.users WHERE email = 'alta.prueba.${dni}@${DOMINIO}'`)).toBe(1)
 
-    // Un estudiante recién dado de alta queda INACTIVO y sin matrícula: el alta
-    // de la cuenta no inventa una situación académica.
+    // Un estudiante recién dado de alta queda INACTIVO y sin matrícula.
     expect(
       sql(
         `SELECT a.estado FROM public.alumnos a
          JOIN public.perfiles p ON p.id = a.perfil_id WHERE p.dni = '${dni}';`
       )
     ).toBe('INACTIVO')
+
+    // Los datos personales viajaron por app_metadata y no quedaron en la cuenta.
+    expect(contar(`FROM auth.users WHERE raw_app_meta_data ? 'ept_alta'`)).toBe(0)
   })
 
-  test('el tutor no es obligatorio: el alta funciona sin mencionarlo', async ({
-    request,
-  }) => {
+  test('el tutor no es obligatorio: el alta funciona sin mencionarlo', async ({ request }) => {
     const dni = `${PREFIJO_DNI}100002`
-
-    // El cuerpo no lleva `tutor_id` ni `hijos_ids` en absoluto.
     const respuesta = await crear(request, { dni, apellido: 'SinMencion' })
-
     expect(respuesta.status(), await respuesta.text()).toBe(200)
     expect(contar(`FROM public.perfiles WHERE dni = '${dni}'`)).toBe(1)
   })
@@ -198,103 +234,110 @@ test.describe('DIRECTOR autenticado: el alta de cuentas no deja estados a medias
     request,
   }) => {
     const dni = `${PREFIJO_DNI}100003`
-    const tutor = sql(
-      `SELECT id FROM public.perfiles WHERE dni = '${PREFIJO_DNI}100001';`
-    )
+    await asegurarAltaBase(request)
+    const tutor = sql(`SELECT id FROM public.perfiles WHERE dni = '${ALTA_BASE.dni}';`)
+    expect(tutor).toMatch(/^[0-9a-f-]{36}$/u)
 
     const respuesta = await crear(request, { dni, tutor_id: tutor })
 
-    // Se rechaza en lugar de ignorarse: un director que eligió un tutor tiene
-    // que enterarse de que ese vínculo no se guardó.
     expect(respuesta.status()).toBe(400)
-    expect((await respuesta.json()).error).toContain(MENSAJE_VINCULO)
-
-    // Y no quedó ni cuenta ni perfil.
+    const cuerpo = await errorDeDominio(respuesta, 'vínculo parental')
+    expect(cuerpo.codigo).toBe('VINCULO_NO_DISPONIBLE')
+    expect(cuerpo.error).toContain(MENSAJE_VINCULO)
     expect(contar(`FROM public.perfiles WHERE dni = '${dni}'`)).toBe(0)
-    expect(
-      contar(`FROM auth.users WHERE email = 'alta.prueba.${dni}@${DOMINIO}'`)
-    ).toBe(0)
+    expect(contar(`FROM auth.users WHERE email = 'alta.prueba.${dni}@${DOMINIO}'`)).toBe(0)
   })
 
   test('ni el alta ni el esquema tocan padres_hijos', async ({ request }) => {
     const dni = `${PREFIJO_DNI}100004`
-
-    // La tabla no existe. El alta tiene que funcionar igual: EPT-9 no depende
-    // de ella ni la consulta.
-    expect(
-      contar(
-        `FROM information_schema.tables
-         WHERE table_schema = 'public' AND table_name = 'padres_hijos'`
-      )
-    ).toBe(0)
-
+    const tablas = `FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name = 'padres_hijos'`
+    expect(contar(tablas)).toBe(0)
     const respuesta = await crear(request, { dni, apellido: 'SinPadresHijos' })
     expect(respuesta.status(), await respuesta.text()).toBe(200)
-
-    // Y sigue sin existir después: nada la creó por la puerta de atrás.
-    expect(
-      contar(
-        `FROM information_schema.tables
-         WHERE table_schema = 'public' AND table_name = 'padres_hijos'`
-      )
-    ).toBe(0)
+    expect(contar(tablas)).toBe(0)
   })
 
   test('una petición inválida no crea cuenta, ni perfil, ni legajo académico', async ({
     request,
   }) => {
     const dni = `${PREFIJO_DNI}100005`
-
-    // DNI de tres dígitos: el contrato lo rechaza antes de tocar Auth.
     const respuesta = await request.post('/api/usuarios', {
-      data: {
-        email: `alta.prueba.${dni}@${DOMINIO}`,
-        password: 'prueba-ept-9-alta-segura',
-        nombre: 'Alta',
-        apellido: 'Invalida',
-        dni: '123',
-        rol_id: rolId('ESTUDIANTE'),
-      },
+      data: { ...datosDeAlta({ dni }), apellido: 'Invalida', dni: '123' },
     })
 
     expect(respuesta.status()).toBe(400)
-    expect(
-      contar(`FROM auth.users WHERE email = 'alta.prueba.${dni}@${DOMINIO}'`)
-    ).toBe(0)
-    expect(contar(`FROM public.perfiles WHERE dni = '123'`)).toBe(0)
-    expect(contar(`FROM public.perfiles WHERE dni LIKE '${PREFIJO_DNI}10000_'`)).toBe(3)
+    const cuerpo = await errorDeDominio(respuesta, 'DNI inválido')
+    expect(cuerpo.codigo).toBe('DATOS_INVALIDOS')
+    expect(cuerpo.campo).toBe('dni')
+    expect(contar(`FROM auth.users WHERE email = 'alta.prueba.${dni}@${DOMINIO}'`)).toBe(0)
+    expect(contar(`FROM public.perfiles WHERE dni IN ('123', '${dni}')`)).toBe(0)
   })
 
-  test('si la persistencia falla después de crear la cuenta, la cuenta se borra', async ({
+  test('los datos de tipo equivocado reciben mensajes en español, nunca los de Zod', async ({
+    request,
+  }) => {
+    const dni = `${PREFIJO_DNI}100013`
+    const casos: [string, Record<string, unknown>, string][] = [
+      ['rol como texto', { rol_id: 'cuatro' }, 'Rol inválido'],
+      ['vínculo con formato inválido', { hijos_ids: ['no-es-un-uuid'] }, 'Vínculo inválido'],
+      ['operación con formato inválido', { operacion_id: 'abc' }, 'El envío no tiene un identificador válido. Recargá la página.'],
+      ['email ausente', { email: undefined }, 'Revisá los datos ingresados.'],
+    ]
+    for (const [contexto, cambio, mensaje] of casos) {
+      const respuesta = await request.post('/api/usuarios', { data: { ...datosDeAlta({ dni }), ...cambio } })
+      expect(respuesta.status(), contexto).toBe(400)
+      const cuerpo = await errorDeDominio(respuesta, contexto)
+      expect(cuerpo.codigo, contexto).toBe('DATOS_INVALIDOS')
+      expect(cuerpo.error, contexto).toBe(mensaje)
+    }
+    expect(contar(`FROM public.perfiles WHERE dni = '${dni}'`)).toBe(0)
+  })
+
+  test('un cuerpo que no es JSON se rechaza con un mensaje de dominio', async ({ request }) => {
+    // Como Buffer: con `content-type: application/json`, Playwright serializa
+    // una cadena como JSON y el cuerpo llegaría bien formado.
+    const respuesta = await request.post('/api/usuarios', {
+      headers: { 'content-type': 'application/json' },
+      data: Buffer.from('{esto no es json', 'utf8'),
+    })
+    expect(respuesta.status()).toBe(400)
+    expect((await errorDeDominio(respuesta, 'cuerpo inválido')).codigo).toBe('CUERPO_INVALIDO')
+  })
+
+  test('un rol inexistente se explica antes de intentar nada', async ({ request }) => {
+    const dni = `${PREFIJO_DNI}100014`
+    const respuesta = await crear(request, { dni, rol_id: 999999 })
+    expect(respuesta.status()).toBe(422)
+    expect((await errorDeDominio(respuesta, 'rol inexistente')).codigo).toBe('ROL_INEXISTENTE')
+    expect(contar(`FROM auth.users WHERE email = 'alta.prueba.${dni}@${DOMINIO}'`)).toBe(0)
+  })
+
+  test('si PostgreSQL rechaza el perfil, la cuenta tampoco llega a existir', async ({
     request,
   }) => {
     const dni = `${PREFIJO_DNI}100006`
     const email = `alta.prueba.${dni}@${DOMINIO}`
     const legajo = 'LEG-ALTA-0006'
+    const datos = datosDeAlta({ dni, apellido: APELLIDO_QUE_FALLA, legajo_nro: legajo })
 
     instalarFalloDePersistencia()
     try {
-      const respuesta = await crear(request, {
-        dni,
-        apellido: APELLIDO_QUE_FALLA,
-        legajo_nro: legajo,
-      })
+      const respuesta = await request.post('/api/usuarios', { data: datos })
 
-      // El alta no prospera, y lo dice.
-      expect(respuesta.status()).toBe(400)
+      expect(respuesta.status()).toBe(422)
+      const cuerpo = await errorDeDominio(respuesta, 'rechazo de PostgreSQL')
+      expect(cuerpo.codigo).toBe('ALTA_RECHAZADA')
+      expect(cuerpo.referencia).toMatch(PATRON_REFERENCIA)
 
-      // La cuenta de Auth no sobrevive al fallo.
+      // No hay nada que compensar: la transacción revirtió cuenta y perfil juntos.
       expect(contar(`FROM auth.users WHERE email = '${email}'`)).toBe(0)
-
-      // Y no queda nada reservando la identidad: ni DNI, ni legajo, ni un
-      // perfil huérfano, ni una fila de `alumnos` colgada. Este es exactamente
-      // el estado que el candidato anterior dejaba atrás.
+      expect(contar(`FROM auth.users WHERE id = '${datos.operacion_id}'`)).toBe(0)
       expect(contar(`FROM public.perfiles WHERE dni = '${dni}'`)).toBe(0)
       expect(contar(`FROM public.perfiles WHERE legajo_nro = '${legajo}'`)).toBe(0)
       expect(
         contar(
-          `FROM public.alumnos a
-           LEFT JOIN public.perfiles p ON p.id = a.perfil_id
+          `FROM public.alumnos a LEFT JOIN public.perfiles p ON p.id = a.perfil_id
            WHERE p.id IS NULL`
         )
       ).toBe(0)
@@ -302,77 +345,72 @@ test.describe('DIRECTOR autenticado: el alta de cuentas no deja estados a medias
       retirarFalloDePersistencia()
     }
 
-    // Reintentar con exactamente los mismos datos funciona: el fallo anterior
-    // no dejó nada bloqueado.
-    const reintento = await crear(request, { dni, apellido: 'Reintento', legajo_nro: legajo })
+    // La misma operación, con el rechazo retirado, se completa: nada quedó bloqueado.
+    const reintento = await request.post('/api/usuarios', {
+      data: { ...datos, apellido: 'Reintento' },
+    })
     expect(reintento.status(), await reintento.text()).toBe(200)
     expect(contar(`FROM public.perfiles WHERE dni = '${dni}'`)).toBe(1)
-    expect(contar(`FROM public.perfiles WHERE legajo_nro = '${legajo}'`)).toBe(1)
     expect(contar(`FROM auth.users WHERE email = '${email}'`)).toBe(1)
   })
 
-  test('un DNI ya usado se rechaza antes de crear la cuenta de Auth', async ({
-    request,
-  }) => {
-    const dniOcupado = `${PREFIJO_DNI}100001`
+  test('un DNI ya usado se rechaza antes de crear la cuenta de Auth', async ({ request }) => {
+    await asegurarAltaBase(request)
+    const dniOcupado = ALTA_BASE.dni
     const email = `alta.prueba.${PREFIJO_DNI}100007@${DOMINIO}`
 
     const respuesta = await request.post('/api/usuarios', {
-      data: {
-        email,
-        password: 'prueba-ept-9-alta-segura',
-        nombre: 'Alta',
-        apellido: 'DniRepetido',
-        dni: dniOcupado,
-        rol_id: rolId('ESTUDIANTE'),
-      },
+      data: { ...datosDeAlta({ dni: dniOcupado }), email, apellido: 'DniRepetido' },
     })
 
     expect(respuesta.status()).toBe(409)
-    expect((await respuesta.json()).error).toContain('DNI')
-
-    // La comprobación previa evita el ciclo de crear y borrar una cuenta.
+    const cuerpo = await errorDeDominio(respuesta, 'DNI duplicado')
+    expect(cuerpo.codigo).toBe('DNI_DUPLICADO')
+    expect(cuerpo.error).toContain('DNI')
     expect(contar(`FROM auth.users WHERE email = '${email}'`)).toBe(0)
+  })
+
+  test('un legajo existente que solo cambia en mayúsculas también es un duplicado', async ({
+    request,
+  }) => {
+    await asegurarAltaBase(request)
+    const dni = `${PREFIJO_DNI}100015`
+    const respuesta = await crear(request, { dni, legajo_nro: ALTA_BASE.legajo_nro.toLowerCase() })
+    expect(respuesta.status()).toBe(409)
+    expect((await errorDeDominio(respuesta, 'legajo duplicado')).codigo).toBe('LEGAJO_DUPLICADO')
+    expect(contar(`FROM auth.users WHERE email = 'alta.prueba.${dni}@${DOMINIO}'`)).toBe(0)
+  })
+
+  test('un email ya registrado se informa como duplicado sin crear otro perfil', async ({
+    request,
+  }) => {
+    await asegurarAltaBase(request)
+    const dni = `${PREFIJO_DNI}100016`
+    const respuesta = await crear(request, { dni, email: ALTA_BASE.email })
+    expect(respuesta.status()).toBe(409)
+    expect((await errorDeDominio(respuesta, 'email duplicado')).codigo).toBe('EMAIL_DUPLICADO')
+    expect(contar(`FROM public.perfiles WHERE dni = '${dni}'`)).toBe(0)
   })
 
   test('un legajo con coma es un legajo válido y no rompe la comprobación previa', async ({
     request,
   }) => {
     const dni = `${PREFIJO_DNI}100008`
-
-    // La versión anterior armaba el filtro concatenando texto, así que una coma
-    // rompía la expresión y el alta terminaba en un 500 que culpaba al sistema
-    // de un dato correcto.
-    const respuesta = await crear(request, {
-      dni,
-      apellido: 'ConComa',
-      legajo_nro: 'LEG,2027,008',
-    })
-
+    const respuesta = await crear(request, { dni, apellido: 'ConComa', legajo_nro: 'LEG,2027,008' })
     expect(respuesta.status(), await respuesta.text()).toBe(200)
     expect(contar(`FROM public.perfiles WHERE legajo_nro = 'LEG,2027,008'`)).toBe(1)
   })
 
-  test('los roles ajenos a esta historia conservan su comportamiento', async ({
-    request,
-  }) => {
+  test('los roles ajenos a esta historia conservan su comportamiento', async ({ request }) => {
     for (const [rol, sufijo] of [
       ['DOCENTE', '100010'],
       ['PADRE', '100011'],
       ['PERSONAL', '100012'],
     ] as const) {
       const dni = `${PREFIJO_DNI}${sufijo}`
-      const respuesta = await crear(request, {
-        dni,
-        apellido: `Rol${rol}`,
-        rol_id: rolId(rol),
-      })
-
+      const respuesta = await crear(request, { dni, apellido: `Rol${rol}`, rol_id: rolId(rol) })
       expect(respuesta.status(), `${rol}: ${await respuesta.text()}`).toBe(200)
       expect(contar(`FROM public.perfiles WHERE dni = '${dni}'`)).toBe(1)
-
-      // Sólo un ESTUDIANTE tiene legajo académico. Ningún otro rol lo gana por
-      // el hecho de haberse dado de alta desde la misma ruta.
       expect(
         contar(
           `FROM public.alumnos a JOIN public.perfiles p ON p.id = a.perfil_id
@@ -381,25 +419,90 @@ test.describe('DIRECTOR autenticado: el alta de cuentas no deja estados a medias
       ).toBe(0)
     }
   })
+
+  test('repetir la misma operación confirma el alta existente sin duplicarla', async ({
+    request,
+  }) => {
+    const datos = datosDeAlta({ dni: `${PREFIJO_DNI}100017`, apellido: 'Repetida' })
+    const primera = await request.post('/api/usuarios', { data: datos })
+    expect(primera.status(), await primera.text()).toBe(200)
+    expect((await primera.json()).reconciliada).toBe(false)
+
+    const segunda = await request.post('/api/usuarios', { data: datos })
+    expect(segunda.status(), await segunda.text()).toBe(200)
+    const cuerpo = await segunda.json()
+    expect(cuerpo.reconciliada).toBe(true)
+    expect(cuerpo.user_id).toBe(datos.operacion_id)
+
+    expect(contar(`FROM auth.users WHERE email = '${datos.email}'`)).toBe(1)
+    expect(contar(`FROM public.perfiles WHERE dni = '${datos.dni}'`)).toBe(1)
+  })
+
+  test('la misma operación con otra identidad se rechaza y no toca la existente', async ({
+    request,
+  }) => {
+    const datos = datosDeAlta({ dni: `${PREFIJO_DNI}100018`, apellido: 'Original' })
+    expect((await request.post('/api/usuarios', { data: datos })).status()).toBe(200)
+
+    const otra = {
+      ...datos,
+      dni: `${PREFIJO_DNI}100019`,
+      email: `alta.prueba.${PREFIJO_DNI}100019@${DOMINIO}`,
+      apellido: 'Impostora',
+    }
+    const respuesta = await request.post('/api/usuarios', { data: otra })
+    expect(respuesta.status()).toBe(409)
+    expect((await errorDeDominio(respuesta, 'operación reutilizada')).codigo).toBe('OPERACION_REUTILIZADA')
+
+    expect(sql(`SELECT apellido FROM public.perfiles WHERE user_id = '${datos.operacion_id}';`)).toBe('Original')
+    expect(contar(`FROM public.perfiles WHERE dni = '${otra.dni}'`)).toBe(0)
+    expect(contar(`FROM auth.users WHERE email = '${otra.email}'`)).toBe(0)
+  })
+
+  test('sin sesión la ruta responde 401 con un mensaje de dominio', async () => {
+    // El estado de sesión vacío es explícito: dentro del proyecto de la
+    // directora, un contexto nuevo hereda su `storageState` si no se le indica otro.
+    const anonimo = await crearContexto.newContext({
+      baseURL: BASE_URL,
+      storageState: { cookies: [], origins: [] },
+    })
+    try {
+      const respuesta = await anonimo.post('/api/usuarios', {
+        data: datosDeAlta({ dni: `${PREFIJO_DNI}100020` }),
+      })
+      expect(respuesta.status()).toBe(401)
+      expect((await errorDeDominio(respuesta, 'sin sesión')).codigo).toBe('NO_AUTENTICADO')
+    } finally {
+      await anonimo.dispose()
+    }
+  })
+})
+
+test.describe('DOCENTE autenticado: el alta de cuentas', () => {
+  test('recibe 403 con un mensaje de dominio y no crea nada', async ({ request }) => {
+    const dni = `${PREFIJO_DNI}100021`
+    const respuesta = await request.post('/api/usuarios', { data: datosDeAlta({ dni }) })
+    expect(respuesta.status()).toBe(403)
+    expect((await errorDeDominio(respuesta, 'docente')).codigo).toBe('SIN_PERMISO')
+    expect(contar(`FROM auth.users WHERE email = 'alta.prueba.${dni}@${DOMINIO}'`)).toBe(0)
+  })
 })
 
 // ================================================================
-// El panel real, no solo la ruta
+// El panel real
 // ================================================================
-test.describe('DIRECTOR autenticado: el panel de usuarios carga y da de alta', () => {
-  /**
-   * La revisión encontró que la ruta funcionaba y la pantalla no.
-   *
-   * `obtenerRelacionesFamiliares` consulta `padres_hijos`, que no existe en el
-   * esquema versionado. PostgREST responde 404 con `PGRST205`, no con el
-   * `42P01` de PostgreSQL, así que el servicio no degradaba: lanzaba. Y como la
-   * página cargaba roles, perfiles y vínculos con un solo `Promise.all`, ese
-   * error tumbaba las tres cosas. Sin roles, el desplegable quedaba vacío y la
-   * directora no podía crear a nadie.
-   *
-   * Estas pruebas manejan la pantalla, no la API.
-   */
+async function completarFormulario(page: Page, dni: string, apellido: string) {
+  await page.getByLabel(/^Nombre/).fill('Valentina')
+  await page.getByLabel(/^Apellido/).fill(apellido)
+  await page.getByLabel(/^DNI/).fill(dni)
+  await page.getByLabel(/^Rol/).selectOption({ label: 'ESTUDIANTE' })
+  await page.getByLabel(/^Email/).fill(`alta.prueba.${dni}@${DOMINIO}`)
+  await page.getByLabel(/^Contraseña/).fill('prueba-ept-9-panel-seguro')
+}
 
+const AVISO_ALTA = 'No se completó el alta'
+
+test.describe('DIRECTOR autenticado: el panel de usuarios carga, da de alta y explica los fallos', () => {
   test('la tabla de vínculos no existe en el esquema reproducible', () => {
     expect(
       contar(
@@ -421,33 +524,27 @@ test.describe('DIRECTOR autenticado: el panel de usuarios carga y da de alta', (
     })
 
     await page.goto('/dashboard/usuarios')
-
     await expect(page.getByRole('heading', { name: 'Gestión de usuarios' })).toBeVisible()
 
-    // Los roles llegaron: el desplegable tiene opciones reales.
-    const rol = page.getByLabel(/^Rol/)
-    await expect(rol).toBeVisible()
-    const opciones = await rol.locator('option').allTextContents()
+    const opciones = await page.getByLabel(/^Rol/).locator('option').allTextContents()
     expect(opciones).toContain('ESTUDIANTE')
     expect(opciones).toContain('DOCENTE')
     expect(opciones).toContain('DIRECTOR')
 
-    // Los perfiles también: el listado muestra las identidades sembradas.
     const listado = page.getByLabel('Usuarios registrados')
-    await expect(listado).toBeVisible()
     await expect(listado).toContainText('Directora')
-
-    // Y no hay estado de error.
     await expect(
       page.getByRole('alert').filter({ hasText: 'No pudimos cargar la gestión de usuarios' })
     ).toHaveCount(0)
 
-    // Sobre `padres_hijos` solo hubo lecturas, y ninguna prosperó.
     expect(peticiones.length).toBeGreaterThan(0)
     for (const peticion of peticiones) {
       expect(peticion.metodo, `no debe escribir en padres_hijos: ${peticion.url}`).toBe('GET')
       expect(peticion.estado, 'la lectura no debe prosperar').toBe(404)
     }
+
+    await exigirSinControlesAnidados(page, 'panel de usuarios')
+    await exigirPantallaSinDetalleTecnico(page, 'panel de usuarios cargado')
   })
 
   test('crea un ESTUDIANTE sin tutor desde el formulario y persiste tras recargar', async ({
@@ -458,31 +555,19 @@ test.describe('DIRECTOR autenticado: el panel de usuarios carga y da de alta', (
 
     await page.goto('/dashboard/usuarios')
     await expect(page.getByRole('heading', { name: 'Nuevo usuario' })).toBeVisible()
-
-    await page.getByLabel(/^Nombre/).fill('Valentina')
-    await page.getByLabel(/^Apellido/).fill('DesdeElPanel')
-    await page.getByLabel(/^DNI/).fill(dni)
-    await page.getByLabel(/^Rol/).selectOption({ label: 'ESTUDIANTE' })
-    await page.getByLabel(/^Email/).fill(email)
-    await page.getByLabel(/^Contraseña/).fill('prueba-ept-9-panel-seguro')
+    await completarFormulario(page, dni, 'DesdeElPanel')
     await page.getByLabel(/^Legajo/).fill('LEG-PANEL-0001')
-
-    // El formulario no pide tutor: avisa que el vínculo no está disponible.
     await expect(page.getByText(/vínculos entre padres o tutores/i)).toBeVisible()
 
     await page.getByRole('button', { name: 'Crear usuario' }).click()
 
-    // La fila aparece en el listado sin recargar.
     const listado = page.getByLabel('Usuarios registrados')
     await expect(listado).toContainText('DesdeElPanel', { timeout: 15_000 })
-
-    // Y persiste: se recarga la página y sigue ahí.
     await page.reload()
     await expect(page.getByLabel('Usuarios registrados')).toContainText('DesdeElPanel', {
       timeout: 15_000,
     })
 
-    // La base confirma las tres piezas, y ninguna quedó huérfana.
     expect(contar(`FROM public.perfiles WHERE dni = '${dni}'`)).toBe(1)
     expect(contar(`FROM auth.users WHERE email = '${email}'`)).toBe(1)
     expect(
@@ -493,72 +578,215 @@ test.describe('DIRECTOR autenticado: el panel de usuarios carga y da de alta', (
     ).toBe(1)
     expect(
       contar(
-        `FROM public.alumnos a LEFT JOIN public.perfiles p ON p.id = a.perfil_id
-         WHERE p.id IS NULL`
-      )
-    ).toBe(0)
-    expect(
-      contar(
         `FROM auth.users u LEFT JOIN public.perfiles p ON p.user_id = u.id
          WHERE u.email LIKE 'alta.prueba.%@${DOMINIO}' AND p.id IS NULL`
       )
     ).toBe(0)
   })
 
-  test('un PGRST205 de otra tabla no se tolera: muestra el estado de error', async ({
+  test('un DNI duplicado se explica en el campo y en un aviso persistente', async ({
     page,
+    request,
   }) => {
-    // Mismo código, otra tabla. Tolerarlo en general convertiría cualquier
-    // tabla ausente en una lista vacía silenciosa.
-    await page.route('**/rest/v1/roles*', (ruta) =>
-      ruta.fulfill({
-        status: 404,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          code: 'PGRST205',
-          details: null,
-          hint: null,
-          message: "Could not find the table 'public.roles' in the schema cache",
-        }),
-      })
-    )
-
+    await asegurarAltaBase(request)
     await page.goto('/dashboard/usuarios')
+    await completarFormulario(page, ALTA_BASE.dni, 'DuplicadoPanel')
+    // El email es nuevo: el rechazo tiene que venir del DNI.
+    await page.getByLabel(/^Email/).fill(`alta.prueba.${PREFIJO_DNI}200002@${DOMINIO}`)
+    await page.getByRole('button', { name: 'Crear usuario' }).click()
 
-    const aviso = page.getByRole('alert').filter({
-      hasText: 'No pudimos cargar la gestión de usuarios',
-    })
-    await expect(aviso).toBeVisible()
-    // El aviso no repite el mensaje de PostgREST: sería inglés, con el nombre
-    // de una tabla interna. El detalle va al registro del servidor.
-    await expect(aviso).toContainText('No pudimos cargar los usuarios. Intentá nuevamente.')
-    await expect(aviso).not.toContainText('roles')
-    await expect(aviso.getByRole('button', { name: 'Reintentar' })).toBeVisible()
+    const aviso = page.getByRole('alert').filter({ hasText: AVISO_ALTA })
+    await expect(aviso).toContainText('Ya existe una persona registrada con ese DNI.')
+    await expect(page.locator('#dni-error')).toHaveText('Ya existe una persona registrada con ese DNI.')
+    await expect(page.getByLabel(/^DNI/).first()).toHaveAttribute('aria-invalid', 'true')
+    await exigirPantallaSinDetalleTecnico(page, 'DNI duplicado en el formulario')
+    expect(contar(`FROM auth.users WHERE email = 'alta.prueba.${PREFIJO_DNI}200002@${DOMINIO}'`)).toBe(0)
   })
 
-  test('un error de red o de servidor tampoco se oculta', async ({ page }) => {
-    // Se interviene `roles`, que solo pide esta pagina. Intervenir `perfiles`
-    // no serviria: el contexto de sesion lee esa misma tabla, asi que el
-    // layout redirige a login antes de que la pagina llegue a renderizar, y la
-    // prueba no estaria midiendo lo que dice medir.
+  test('si la respuesta del alta se pierde, la pantalla lo dice y el reintento no duplica', async ({
+    page,
+  }) => {
+    const dni = `${PREFIJO_DNI}200003`
+    const email = `alta.prueba.${dni}@${DOMINIO}`
+
+    // La primera petición llega al servidor y confirma; lo que se pierde es la
+    // respuesta. Es el caso que antes terminaba en una cuenta borrada.
+    let perdidas = 0
+    await page.route('**/api/usuarios', async (ruta) => {
+      if (perdidas > 0) return ruta.fallback()
+      perdidas += 1
+      await ruta.fetch()
+      await ruta.abort('connectionreset')
+    })
+
+    await page.goto('/dashboard/usuarios')
+    await completarFormulario(page, dni, 'RespuestaPerdida')
+    await page.getByRole('button', { name: 'Crear usuario' }).click()
+
+    const aviso = page.getByRole('alert').filter({ hasText: AVISO_ALTA })
+    await expect(aviso).toContainText('No pudimos confirmar si la cuenta se creó.')
+    await expect(aviso).toContainText('No se borró ningún dato.')
+    await exigirPantallaSinDetalleTecnico(page, 'respuesta perdida')
+
+    // La cuenta existe y está completa: nada se borró.
+    expect(contar(`FROM auth.users WHERE email = '${email}'`)).toBe(1)
+    expect(contar(`FROM public.perfiles WHERE dni = '${dni}'`)).toBe(1)
+    // Y el listado se volvió a cargar para que la directora pueda comprobarlo.
+    await expect(page.getByLabel('Usuarios registrados')).toContainText('RespuestaPerdida', { timeout: 15_000 })
+
+    // Reintentar desde el mismo formulario reutiliza la operación: confirma, no duplica.
+    await page.getByRole('button', { name: 'Crear usuario' }).click()
+    await expect(page.getByText(`Usuario creado: ${email}`)).toBeVisible({ timeout: 15_000 })
+    expect(contar(`FROM auth.users WHERE email = '${email}'`)).toBe(1)
+    expect(contar(`FROM public.perfiles WHERE dni = '${dni}'`)).toBe(1)
+  })
+
+  test('una respuesta sin código de dominio nunca se muestra tal cual', async ({ page }) => {
+    const respuestas = [
+      { status: 502, contentType: 'text/html', body: '<html><body>502 Bad Gateway nginx</body></html>' },
+      {
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'duplicate key value violates unique constraint "perfiles_dni_key"' }),
+      },
+      {
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Database error creating new user', code: 'unexpected_failure' }),
+      },
+    ]
+    for (const [indice, respuesta] of respuestas.entries()) {
+      await page.unrouteAll({ behavior: 'ignoreErrors' })
+      await page.route('**/api/usuarios', (ruta) => ruta.fulfill(respuesta))
+      await page.goto('/dashboard/usuarios')
+      await completarFormulario(page, `${PREFIJO_DNI}20001${indice}`, 'Intermediario')
+      await page.getByRole('button', { name: 'Crear usuario' }).click()
+
+      const aviso = page.getByRole('alert').filter({ hasText: AVISO_ALTA })
+      await expect(aviso).toContainText('No pudimos confirmar si la cuenta se creó.')
+      await exigirPantallaSinDetalleTecnico(page, `respuesta sin código ${respuesta.status} ${indice}`)
+    }
+  })
+
+  test('una conexión cortada al crear no muestra el error del navegador', async ({ page }) => {
+    await page.route('**/api/usuarios', (ruta) => ruta.abort('connectionfailed'))
+    await page.goto('/dashboard/usuarios')
+    await completarFormulario(page, `${PREFIJO_DNI}200020`, 'Cortada')
+    await page.getByRole('button', { name: 'Crear usuario' }).click()
+    await expect(page.getByRole('alert').filter({ hasText: AVISO_ALTA })).toContainText(
+      'No pudimos confirmar si la cuenta se creó.'
+    )
+    await exigirPantallaSinDetalleTecnico(page, 'conexión cortada al crear')
+  })
+
+  test('editar un usuario sin permiso de actualización informa que no se guardó', async ({
+    page,
+  }) => {
+    // `perfiles` no tiene política UPDATE: la edición afecta cero filas y
+    // PostgREST responde PGRST116. La pantalla no puede decir «actualizado».
+    const antes = sql(`SELECT nombre FROM public.perfiles WHERE dni = '99900004';`)
+    await page.goto('/dashboard/usuarios')
+    const fila = page.getByLabel('Usuarios registrados').getByRole('row').filter({ hasText: '99900004' })
+    await fila.getByRole('button', { name: 'Editar' }).click()
+    await page.getByLabel('Nombre', { exact: true }).last().fill('CambioNoPermitido')
+    await page.getByRole('button', { name: 'Guardar cambios' }).click()
+
+    await expect(
+      page.getByText('No se guardaron los cambios: el registro ya no existe o tu perfil no puede modificarlo desde este panel.')
+    ).toBeVisible()
+    await expect(page.getByText('Usuario actualizado')).toHaveCount(0)
+    await exigirPantallaSinDetalleTecnico(page, 'edición sin permiso')
+    expect(sql(`SELECT nombre FROM public.perfiles WHERE dni = '99900004';`)).toBe(antes)
+  })
+
+  for (const caso of [
+    {
+      nombre: 'un DNI duplicado',
+      respuesta: {
+        status: 409,
+        body: {
+          code: '23505',
+          details: 'Key (dni)=(99900001) already exists.',
+          hint: null,
+          message: 'duplicate key value violates unique constraint "perfiles_dni_key"',
+        },
+      },
+      mensaje: 'Ya existe una persona registrada con ese DNI.',
+    },
+    {
+      nombre: 'un permiso denegado',
+      respuesta: {
+        status: 403,
+        body: { code: '42501', details: null, hint: null, message: 'permission denied for table perfiles' },
+      },
+      mensaje: 'No tenés permiso para realizar esta operación.',
+    },
+    {
+      nombre: 'una restricción sin nombre conocido',
+      respuesta: {
+        status: 409,
+        body: { code: '23505', details: null, hint: null, message: 'duplicate key value violates unique constraint "otra_restriccion"' },
+      },
+      mensaje: 'Alguno de los datos ya está registrado para otra persona.',
+    },
+    {
+      nombre: 'un tiempo agotado de PostgreSQL',
+      respuesta: {
+        status: 500,
+        body: { code: '57014', details: null, hint: null, message: 'canceling statement due to statement timeout' },
+      },
+      mensaje: 'No pudimos completar la operación. Volvé a intentarlo en unos minutos.',
+    },
+  ]) {
+    test(`al editar, ${caso.nombre} se muestra como mensaje de dominio`, async ({ page }) => {
+      await page.route('**/rest/v1/perfiles?*', async (ruta) => {
+        if (ruta.request().method() !== 'PATCH') return ruta.fallback()
+        await ruta.fulfill({
+          status: caso.respuesta.status,
+          contentType: 'application/json',
+          body: JSON.stringify(caso.respuesta.body),
+        })
+      })
+      await page.goto('/dashboard/usuarios')
+      const fila = page.getByLabel('Usuarios registrados').getByRole('row').filter({ hasText: '99900004' })
+      await fila.getByRole('button', { name: 'Editar' }).click()
+      await page.getByRole('button', { name: 'Guardar cambios' }).click()
+      await expect(page.getByText(caso.mensaje)).toBeVisible()
+      await exigirPantallaSinDetalleTecnico(page, `edición con ${caso.nombre}`)
+    })
+  }
+
+  test('al editar, una conexión cortada se informa sin el error del navegador', async ({ page }) => {
+    await page.route('**/rest/v1/perfiles?*', async (ruta) => {
+      if (ruta.request().method() !== 'PATCH') return ruta.fallback()
+      await ruta.abort('connectionfailed')
+    })
+    await page.goto('/dashboard/usuarios')
+    const fila = page.getByLabel('Usuarios registrados').getByRole('row').filter({ hasText: '99900004' })
+    await fila.getByRole('button', { name: 'Editar' }).click()
+    await page.getByRole('button', { name: 'Guardar cambios' }).click()
+    await expect(
+      page.getByText('El servicio no está disponible en este momento. Volvé a intentarlo en unos minutos.')
+    ).toBeVisible()
+    await exigirPantallaSinDetalleTecnico(page, 'edición con conexión cortada')
+  })
+
+  test('un error de carga de roles no se oculta y no muestra detalle técnico', async ({ page }) => {
+    // Se interviene `roles`, que solo pide esta página. Intervenir `perfiles`
+    // no serviría: el contexto de sesión lee esa misma tabla y el panel
+    // redirigiría a login antes de renderizar.
     await page.route('**/rest/v1/roles*', (ruta) =>
       ruta.fulfill({
         status: 500,
         contentType: 'application/json',
-        body: JSON.stringify({
-          code: '57014',
-          details: null,
-          hint: null,
-          message: 'canceling statement due to statement timeout',
-        }),
+        body: JSON.stringify({ code: '57014', details: null, hint: null, message: 'canceling statement due to statement timeout' }),
       })
     )
-
     await page.goto('/dashboard/usuarios')
-
-    await expect(
-      page.getByRole('alert').filter({ hasText: 'No pudimos cargar la gestión de usuarios' })
-    ).toBeVisible()
+    const aviso = page.getByRole('alert').filter({ hasText: 'No pudimos cargar la gestión de usuarios' })
+    await expect(aviso).toContainText('No pudimos cargar los usuarios. Intentá nuevamente.')
+    await expect(aviso.getByRole('button', { name: 'Reintentar' })).toBeVisible()
+    await exigirPantallaSinDetalleTecnico(page, 'error de carga de roles')
   })
 
   test('el reintento vuelve a cargar cuando el fallo se resuelve', async ({ page }) => {
@@ -573,14 +801,11 @@ test.describe('DIRECTOR autenticado: el panel de usuarios carga y da de alta', (
     })
 
     await page.goto('/dashboard/usuarios')
-    const aviso = page.getByRole('alert').filter({
-      hasText: 'No pudimos cargar la gestión de usuarios',
-    })
+    const aviso = page.getByRole('alert').filter({ hasText: 'No pudimos cargar la gestión de usuarios' })
     await expect(aviso).toBeVisible()
 
     falla = false
     await aviso.getByRole('button', { name: 'Reintentar' }).click()
-
     await expect(aviso).toBeHidden()
     await expect(page.getByLabel(/^Rol/).locator('option')).not.toHaveCount(1)
   })
@@ -589,38 +814,32 @@ test.describe('DIRECTOR autenticado: el panel de usuarios carga y da de alta', (
 // ================================================================
 // El clasificador de la ausencia conocida
 // ================================================================
-test.describe('DIRECTOR autenticado: PGRST205 se clasifica, no se traga', () => {
+test.describe('DIRECTOR autenticado: solo la ausencia exacta de public.padres_hijos se tolera', () => {
   /**
-   * Estas pruebas interceptan `padres_hijos`, que es la única solicitud que
-   * llega a `esLaAusenciaConocida`. La prueba anterior interceptaba `roles`, y
-   * eso pasa por `obtenerRoles()`: demostraba que un error propaga, pero no que
-   * el clasificador distinga una ausencia conocida de cualquier otro fallo.
-   *
-   * Todas atraviesan el servicio y la pantalla real. Un clasificador demasiado
-   * permisivo convertiría cualquier tabla ausente —o una caché de esquema
-   * desactualizada tras un despliegue— en una lista vacía silenciosa.
+   * Cada caso intercepta la lectura de `padres_hijos`, que es la única que llega
+   * a `esAusenciaDeLaTablaDeVinculos`, y atraviesa el servicio y la pantalla
+   * reales. Un clasificador demasiado permisivo convertiría cualquier tabla
+   * ausente —o una caché de esquema desactualizada— en una lista vacía silenciosa.
    */
 
   const AVISO = 'No pudimos cargar la gestión de usuarios'
   const MENSAJE_ESTABLE = 'No pudimos cargar los usuarios. Intentá nuevamente.'
 
-  /** Responde la solicitud a `padres_hijos` con el error indicado. */
   async function interceptarVinculos(
-    page: import('@playwright/test').Page,
-    respuesta: { status: number; cuerpo: unknown } | 'cortar'
+    page: Page,
+    respuesta: { status: number; cuerpo: unknown; tipo?: string } | 'cortar'
   ) {
     await page.route('**/rest/v1/padres_hijos*', async (ruta) => {
       if (respuesta === 'cortar') return ruta.abort('connectionfailed')
       await ruta.fulfill({
         status: respuesta.status,
-        contentType: 'application/json',
-        body: JSON.stringify(respuesta.cuerpo),
+        contentType: respuesta.tipo ?? 'application/json',
+        body: typeof respuesta.cuerpo === 'string' ? respuesta.cuerpo : JSON.stringify(respuesta.cuerpo),
       })
     })
   }
 
-  /** Comprueba que la pantalla cargó y no muestra el estado de error. */
-  async function esperarPantallaSana(page: import('@playwright/test').Page) {
+  async function esperarPantallaSana(page: Page) {
     await expect(page.getByRole('heading', { name: 'Gestión de usuarios' })).toBeVisible()
     const opciones = await page.getByLabel(/^Rol/).locator('option').allTextContents()
     expect(opciones).toContain('ESTUDIANTE')
@@ -628,155 +847,71 @@ test.describe('DIRECTOR autenticado: PGRST205 se clasifica, no se traga', () => 
     await expect(page.getByRole('alert').filter({ hasText: AVISO })).toHaveCount(0)
   }
 
-  /** Comprueba que la pantalla muestra el estado de error en español. */
-  async function esperarEstadoDeError(
-    page: import('@playwright/test').Page,
-    espera = 5_000
-  ) {
+  async function esperarEstadoDeError(page: Page, espera = 5_000) {
     const aviso = page.getByRole('alert').filter({ hasText: AVISO })
     await expect(aviso).toBeVisible({ timeout: espera })
     await expect(aviso).toContainText(MENSAJE_ESTABLE)
     await expect(aviso.getByRole('button', { name: 'Reintentar' })).toBeVisible()
+    await exigirPantallaSinDetalleTecnico(page, 'estado de error de carga')
   }
 
-  test('la ausencia conocida degrada a relaciones vacías y la pantalla carga', async ({
-    page,
-  }) => {
-    await interceptarVinculos(page, {
-      status: 404,
-      cuerpo: {
-        code: 'PGRST205',
-        details: null,
-        hint: null,
-        message: "Could not find the table 'public.padres_hijos' in the schema cache",
-      },
-    })
+  const ausenciaPostgrest = (tabla: string) =>
+    `Could not find the table '${tabla}' in the schema cache`
 
-    await page.goto('/dashboard/usuarios')
-    await esperarPantallaSana(page)
-  })
-
-  test('un PGRST205 que nombra roles se propaga', async ({ page }) => {
-    // Esta es la que deja la captura del estado de error con mensaje de
-    // dominio: es el caso más representativo de un fallo de carga real.
-
-    await interceptarVinculos(page, {
-      status: 404,
-      cuerpo: {
-        code: 'PGRST205',
-        details: null,
-        hint: null,
-        message: "Could not find the table 'public.roles' in the schema cache",
-      },
-    })
-
-    await page.goto('/dashboard/usuarios')
-    await esperarEstadoDeError(page)
-
-    if (process.env.EPT_CAPTURAS === '1') {
-      await capturarSinHerramientas(
-        page,
-        'docs/evidence/EPT-9/real-escritorio-usuarios-error-de-carga.png'
-      )
-    }
-  })
-
-  test('un PGRST205 que nombra otra tabla se propaga', async ({ page }) => {
-    await interceptarVinculos(page, {
-      status: 404,
-      cuerpo: {
-        code: 'PGRST205',
-        details: null,
-        hint: null,
-        message: "Could not find the table 'public.matriculas' in the schema cache",
-      },
-    })
-
-    await page.goto('/dashboard/usuarios')
-    await esperarEstadoDeError(page)
-  })
-
-  test('un 42501 se propaga', async ({ page }) => {
-    await interceptarVinculos(page, {
-      status: 403,
-      cuerpo: {
-        code: '42501',
-        details: null,
-        hint: null,
-        message: 'permission denied for relation padres_hijos',
-      },
-    })
-
-    await page.goto('/dashboard/usuarios')
-    await esperarEstadoDeError(page)
-  })
-
-  test('una conexión cortada no deja la pantalla esperando para siempre', async ({
-    page,
-  }) => {
-    // Con la conexión cortada, la promesa del cliente de Supabase no se
-    // resuelve ni se rechaza: el `catch` nunca corría y la pantalla quedaba
-    // esperando indefinidamente, sin error y sin forma de reintentar. El
-    // límite de espera de la carga es lo que convierte eso en un fallo visible.
-    test.setTimeout(60_000)
-    await interceptarVinculos(page, 'cortar')
-
-    await page.goto('/dashboard/usuarios')
-    await esperarEstadoDeError(page, 30_000)
-  })
-
-  test('un error sin código se propaga', async ({ page }) => {
-    await interceptarVinculos(page, {
-      status: 500,
-      cuerpo: { message: 'algo salió mal', details: null, hint: null },
-    })
-
-    await page.goto('/dashboard/usuarios')
-    await esperarEstadoDeError(page)
-  })
-
-  // Cada mensaje técnico se prueba en su propia página. Recorrerlos dentro de
-  // un solo caso reutilizaba el mismo documento y alguna navegación no volvía
-  // a montar la pantalla, así que la prueba medía el estado de la iteración
-  // anterior.
-  const MENSAJES_TECNICOS = [
-    { code: '57014', message: 'canceling statement due to statement timeout' },
-    { code: '42501', message: 'permission denied for relation padres_hijos' },
+  const POSITIVOS = [
     {
-      code: 'PGRST205',
-      message: "Could not find the table 'public.matriculas' in the schema cache",
+      nombre: 'PGRST205 de public.padres_hijos',
+      respuesta: { status: 404, cuerpo: { code: 'PGRST205', details: null, hint: null, message: ausenciaPostgrest('public.padres_hijos') } },
     },
-    { code: '42P01', message: 'relation "public.matriculas_historial" does not exist' },
+    {
+      nombre: '42P01 de public.padres_hijos',
+      respuesta: { status: 404, cuerpo: { code: '42P01', details: null, hint: null, message: 'relation "public.padres_hijos" does not exist' } },
+    },
   ]
 
-  const FRAGMENTOS_PROHIBIDOS = [
-    'canceling statement',
-    'permission denied',
-    'schema cache',
-    'does not exist',
-    'padres_hijos',
-    'matriculas_historial',
-    'sqlstate',
-    'postgrest',
-  ]
+  const NEGATIVOS = [
+    ['padres_hijos_backup', { status: 404, cuerpo: { code: 'PGRST205', details: null, hint: null, message: ausenciaPostgrest('public.padres_hijos_backup') } }],
+    ['padres_hijos_old', { status: 404, cuerpo: { code: 'PGRST205', details: null, hint: null, message: ausenciaPostgrest('public.padres_hijos_old') } }],
+    ['otra_padres_hijos', { status: 404, cuerpo: { code: 'PGRST205', details: null, hint: null, message: ausenciaPostgrest('public.otra_padres_hijos') } }],
+    ['roles', { status: 404, cuerpo: { code: 'PGRST205', details: null, hint: null, message: ausenciaPostgrest('public.roles') } }],
+    ['matriculas', { status: 404, cuerpo: { code: 'PGRST205', details: null, hint: null, message: ausenciaPostgrest('public.matriculas') } }],
+    ['el mismo mensaje con otro código', { status: 404, cuerpo: { code: 'PGRST204', details: null, hint: null, message: ausenciaPostgrest('public.padres_hijos') } }],
+    ['el mismo código sin el esquema exacto', { status: 404, cuerpo: { code: 'PGRST205', details: null, hint: null, message: ausenciaPostgrest('padres_hijos') } }],
+    ['el mismo código con texto agregado al mensaje', { status: 404, cuerpo: { code: 'PGRST205', details: null, hint: null, message: `${ausenciaPostgrest('public.padres_hijos')}. Perhaps you meant 'public.padres'` } }],
+    ['42P01 sin el esquema exacto', { status: 404, cuerpo: { code: '42P01', details: null, hint: null, message: 'relation "padres_hijos" does not exist' } }],
+    ['un permiso denegado sobre padres_hijos', { status: 403, cuerpo: { code: '42501', details: null, hint: null, message: 'permission denied for table padres_hijos' } }],
+    ['el código y el mensaje exactos con un estado HTTP que no es 404', { status: 500, cuerpo: { code: 'PGRST205', details: null, hint: null, message: ausenciaPostgrest('public.padres_hijos') } }],
+    ['un error sin código', { status: 500, cuerpo: { message: 'algo salió mal', details: null, hint: null } }],
+    ['un cuerpo que no es un error de PostgREST', { status: 404, cuerpo: '<html>404</html>', tipo: 'text/html' }],
+    ['un tiempo agotado de PostgreSQL', { status: 500, cuerpo: { code: '57014', details: null, hint: null, message: 'canceling statement due to statement timeout' } }],
+  ] as const
 
-  for (const tecnico of MENSAJES_TECNICOS) {
-    test(`el detalle técnico ${tecnico.code} no llega al DOM visible`, async ({ page }) => {
-      await interceptarVinculos(page, {
-        status: 500,
-        cuerpo: { ...tecnico, details: null, hint: null },
-      })
+  for (const positivo of POSITIVOS) {
+    test(`tolera ${positivo.nombre} y la pantalla carga`, async ({ page }) => {
+      await interceptarVinculos(page, positivo.respuesta)
+      await page.goto('/dashboard/usuarios')
+      await esperarPantallaSana(page)
+    })
+  }
 
+  for (const [nombre, respuesta] of NEGATIVOS) {
+    test(`no tolera ${nombre}: muestra el estado de error sin detalle técnico`, async ({ page }) => {
+      await interceptarVinculos(page, respuesta)
       await page.goto('/dashboard/usuarios')
       await esperarEstadoDeError(page)
 
-      const visible = (await page.locator('body').innerText()).toLowerCase()
-      for (const prohibido of [tecnico.code.toLowerCase(), ...FRAGMENTOS_PROHIBIDOS]) {
-        expect(
-          visible,
-          `«${prohibido}» no debe aparecer en la pantalla`
-        ).not.toContain(prohibido)
+      if (nombre === 'roles' && process.env.EPT_CAPTURAS === '1') {
+        await capturarSinHerramientas(page, 'docs/evidence/EPT-9/real-escritorio-usuarios-error-de-carga.png')
       }
     })
   }
+
+  test('no tolera una conexión cortada y no deja la pantalla esperando', async ({ page }) => {
+    // Con la conexión cortada, la promesa del cliente de Supabase no se resuelve
+    // ni se rechaza. El límite de carga es lo que la convierte en un fallo visible.
+    test.setTimeout(60_000)
+    await interceptarVinculos(page, 'cortar')
+    await page.goto('/dashboard/usuarios')
+    await esperarEstadoDeError(page, 30_000)
+  })
 })

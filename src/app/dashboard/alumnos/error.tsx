@@ -4,16 +4,26 @@ import { useEffect } from 'react'
 import { ArrowClockwise, WarningCircle } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/Button'
 
-/** Recuperación ante fallos inesperados del segmento administrativo. */
+/**
+ * Recuperación ante fallos inesperados del segmento administrativo.
+ *
+ * Nunca muestra `error.message`: en desarrollo Next reenvía el mensaje original
+ * al navegador. En la consola solo queda el `digest`, que en producción es lo
+ * que permite encontrar el error en el registro del servidor.
+ *
+ * Usa `unstable_retry` y no `reset`: la documentación de Next 16.2 indica que
+ * `reset` solo limpia el estado del límite de error sin volver a pedir los
+ * datos, así que un error de lectura en el servidor volvería a mostrarse igual.
+ */
 export default function AlumnosError({
   error,
-  reset,
+  unstable_retry,
 }: {
   error: Error & { digest?: string }
-  reset: () => void
+  unstable_retry: () => void
 }) {
   useEffect(() => {
-    console.error('[alumnos] error no controlado en la página', error)
+    console.error('[alumnos] error no controlado en la página', { digest: error.digest ?? null })
   }, [error])
 
   return (
@@ -28,7 +38,7 @@ export default function AlumnosError({
         Ocurrió un error inesperado. Podés reintentar; si continúa, avisale al
         equipo técnico.
       </p>
-      <Button variant="accent" className="mt-6" onClick={() => reset()}>
+      <Button variant="accent" className="mt-6" onClick={() => unstable_retry()}>
         <ArrowClockwise size={18} weight="bold" />
         Reintentar
       </Button>

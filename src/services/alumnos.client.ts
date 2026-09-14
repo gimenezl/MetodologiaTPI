@@ -14,26 +14,53 @@ export class ErrorAlumno extends Error {
   }
 }
 
-async function enviar(url: string, method: 'POST' | 'PATCH', cuerpo: unknown) {
-  const respuesta = await fetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(cuerpo),
-  })
+/**
+ * Cuánto espera el navegador una operación académica, en milisegundos.
+ *
+ * Sin límite, una petición que nunca responde deja el diálogo ocupado para
+ * siempre y sin explicación.
+ */
+export const LIMITE_DE_OPERACION_ACADEMICA_MS = 20_000
 
-  const datos = await respuesta.json().catch(() => ({}))
+const MENSAJE_SIN_RESPUESTA =
+  'No pudimos confirmar si el cambio se guardó porque el servidor no respondió. ' +
+  'Actualizá el listado antes de volver a intentarlo.'
+
+const MENSAJE_GENERICO = 'No pudimos completar la operación. Volvé a intentarlo.'
+
+async function enviar(url: string, method: 'POST' | 'PATCH', cuerpo: unknown) {
+  let respuesta: Response
+  try {
+    respuesta = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cuerpo),
+      signal: AbortSignal.timeout(LIMITE_DE_OPERACION_ACADEMICA_MS),
+    })
+  } catch {
+    // Un `TypeError: Failed to fetch` o un `TimeoutError` no son mensajes para
+    // una persona. Y sin respuesta no se sabe si la operación llegó a
+    // confirmarse: se dice eso, no «falló».
+    throw new ErrorAlumno(MENSAJE_SIN_RESPUESTA, 503)
+  }
+
+  const datos = await respuesta.json().catch(() => null)
 
   if (!respuesta.ok) {
-    throw new ErrorAlumno(
-      typeof datos?.error === 'string'
+    // La ruta responde siempre JSON con un mensaje de dominio en `error`. Sin
+    // ese formato, la respuesta no la escribió la ruta y su texto no se muestra.
+    const mensaje =
+      datos && typeof datos === 'object' && typeof datos.error === 'string' && datos.error
         ? datos.error
-        : 'No pudimos completar la operación. Volvé a intentarlo.',
+        : MENSAJE_GENERICO
+    throw new ErrorAlumno(
+      mensaje,
       respuesta.status,
-      typeof datos?.campo === 'string' ? datos.campo : undefined
+      datos && typeof datos.campo === 'string' ? datos.campo : undefined
     )
   }
 
-  return datos
+  return datos ?? {}
 }
 
 export function crearAlumnoRemoto(datos: CrearAlumnoData) {
