@@ -184,49 +184,241 @@ export function procesoVivo(pid) {
 }
 
 /**
- * Recupera los descendientes que Windows todavía atribuye al PID raíz.
+ * Cita un argumento con las reglas de CommandLineToArgvW.
  *
- * `taskkill /T` no siempre puede reconstruir el árbol si el padre ya terminó.
- * Win32_Process conserva `ParentProcessId`, así que se toma una foto acotada y
- * solo se devuelven procesos cuya cadena llega al hijo lanzado por este arnés.
+ * `CreateProcessW` recibe una única línea; las barras anteriores a comillas y
+ * al cierre se duplican para que Node reciba exactamente el argumento original.
  */
-function descendientesWindows(pid, graciaMs) {
-  try {
-    const script = [
-      '$ErrorActionPreference = "Stop"',
-      '$p = Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId',
-      '$p | ConvertTo-Json -Compress',
-    ].join('; ')
-    const salida = execFileSync(
-      'powershell.exe',
-      ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
-      { encoding: 'utf8', timeout: graciaMs, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }
-    ).trim()
-    if (!salida) return []
-    const procesos = JSON.parse(salida)
-    const lista = Array.isArray(procesos) ? procesos : [procesos]
-    const porPadre = new Map()
-    for (const item of lista) {
-      const procesoId = Number(item.ProcessId)
-      const padreId = Number(item.ParentProcessId)
-      if (!Number.isInteger(procesoId) || !Number.isInteger(padreId)) continue
-      const hijos = porPadre.get(padreId) ?? []
-      hijos.push(procesoId)
-      porPadre.set(padreId, hijos)
+function citarArgumentoWindows(valor) {
+  const texto = String(valor)
+  if (texto !== '' && !/[\s"]/u.test(texto)) return texto
+  return `"${texto.replace(/(\\*)"/gu, '$1$1\\"').replace(/(\\+)$/u, '$1$1')}"`
+}
+
+/**
+ * En Windows el proceso real se ejecuta debajo de un supervisor PowerShell.
+ *
+ * El supervisor crea el proceso suspendido, lo asigna a un Job Object con
+ * `KILL_ON_JOB_CLOSE` y recién entonces lo reanuda. No existe una ventana donde
+ * pueda crear descendientes fuera de la frontera. Cuando termina el proceso
+ * principal se cierra el job —que elimina cualquier trabajador restante— y se
+ * devuelve su código. Si vence el límite, matar al supervisor cierra el handle
+ * del job y Windows elimina el árbol sin consultar PID ni ParentProcessId.
+ */
+function supervisionWindows(comando, argumentos, env) {
+  const script = `
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+$comando = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:EPT_COMANDO_SUPERVISADO))
+$linea = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:EPT_LINEA_SUPERVISADA))
+Remove-Item Env:EPT_COMANDO_SUPERVISADO -ErrorAction SilentlyContinue
+Remove-Item Env:EPT_LINEA_SUPERVISADA -ErrorAction SilentlyContinue
+try {
+  Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class EptJobSupervisor {
+  private const uint CREATE_SUSPENDED = 0x00000004;
+  private const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
+  private const uint CREATE_NO_WINDOW = 0x08000000;
+  private const uint STARTF_USESTDHANDLES = 0x00000100;
+  private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
+  private const int JobObjectExtendedLimitInformation = 9;
+  private const uint INFINITE = 0xFFFFFFFF;
+
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+  private struct STARTUPINFO {
+    public int cb;
+    public string lpReserved;
+    public string lpDesktop;
+    public string lpTitle;
+    public uint dwX;
+    public uint dwY;
+    public uint dwXSize;
+    public uint dwYSize;
+    public uint dwXCountChars;
+    public uint dwYCountChars;
+    public uint dwFillAttribute;
+    public uint dwFlags;
+    public short wShowWindow;
+    public short cbReserved2;
+    public IntPtr lpReserved2;
+    public IntPtr hStdInput;
+    public IntPtr hStdOutput;
+    public IntPtr hStdError;
+  }
+
+  [StructLayout(LayoutKind.Sequential)]
+  private struct PROCESS_INFORMATION {
+    public IntPtr hProcess;
+    public IntPtr hThread;
+    public uint dwProcessId;
+    public uint dwThreadId;
+  }
+
+  [StructLayout(LayoutKind.Sequential)]
+  private struct JOBOBJECT_BASIC_LIMIT_INFORMATION {
+    public long PerProcessUserTimeLimit;
+    public long PerJobUserTimeLimit;
+    public uint LimitFlags;
+    public UIntPtr MinimumWorkingSetSize;
+    public UIntPtr MaximumWorkingSetSize;
+    public uint ActiveProcessLimit;
+    public UIntPtr Affinity;
+    public uint PriorityClass;
+    public uint SchedulingClass;
+  }
+
+  [StructLayout(LayoutKind.Sequential)]
+  private struct IO_COUNTERS {
+    public ulong ReadOperationCount;
+    public ulong WriteOperationCount;
+    public ulong OtherOperationCount;
+    public ulong ReadTransferCount;
+    public ulong WriteTransferCount;
+    public ulong OtherTransferCount;
+  }
+
+  [StructLayout(LayoutKind.Sequential)]
+  private struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION {
+    public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
+    public IO_COUNTERS IoInfo;
+    public UIntPtr ProcessMemoryLimit;
+    public UIntPtr JobMemoryLimit;
+    public UIntPtr PeakProcessMemoryUsed;
+    public UIntPtr PeakJobMemoryUsed;
+  }
+
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+  private static extern IntPtr CreateJobObject(IntPtr attributes, string name);
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  private static extern bool SetInformationJobObject(IntPtr job, int infoClass, IntPtr info, uint length);
+
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+  private static extern bool CreateProcess(
+    string applicationName,
+    StringBuilder commandLine,
+    IntPtr processAttributes,
+    IntPtr threadAttributes,
+    bool inheritHandles,
+    uint creationFlags,
+    IntPtr environment,
+    string currentDirectory,
+    ref STARTUPINFO startupInfo,
+    out PROCESS_INFORMATION processInformation);
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  private static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  private static extern uint ResumeThread(IntPtr thread);
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  private static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  private static extern bool GetExitCodeProcess(IntPtr process, out uint exitCode);
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  private static extern bool TerminateProcess(IntPtr process, uint exitCode);
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  private static extern bool TerminateJobObject(IntPtr job, uint exitCode);
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  private static extern bool CloseHandle(IntPtr handle);
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  private static extern IntPtr GetStdHandle(int standardHandle);
+
+  private static void Win32(bool ok) {
+    if (!ok) throw new Win32Exception(Marshal.GetLastWin32Error());
+  }
+
+  public static int Run(string application, string commandLine) {
+    IntPtr job = CreateJobObject(IntPtr.Zero, null);
+    if (job == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
+    PROCESS_INFORMATION process = new PROCESS_INFORMATION();
+    bool created = false;
+    try {
+      JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
+      limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+      int size = Marshal.SizeOf(typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
+      IntPtr pointer = Marshal.AllocHGlobal(size);
+      try {
+        Marshal.StructureToPtr(limits, pointer, false);
+        Win32(SetInformationJobObject(job, JobObjectExtendedLimitInformation, pointer, (uint)size));
+      } finally {
+        Marshal.FreeHGlobal(pointer);
+      }
+
+      STARTUPINFO startup = new STARTUPINFO();
+      startup.cb = Marshal.SizeOf(typeof(STARTUPINFO));
+      startup.dwFlags = STARTF_USESTDHANDLES;
+      startup.hStdInput = GetStdHandle(-10);
+      startup.hStdOutput = GetStdHandle(-11);
+      startup.hStdError = GetStdHandle(-12);
+      Win32(CreateProcess(
+        application,
+        new StringBuilder(commandLine),
+        IntPtr.Zero,
+        IntPtr.Zero,
+        true,
+        CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW,
+        IntPtr.Zero,
+        null,
+        ref startup,
+        out process));
+      created = true;
+      if (!AssignProcessToJobObject(job, process.hProcess)) {
+        TerminateProcess(process.hProcess, 127);
+        throw new Win32Exception(Marshal.GetLastWin32Error());
+      }
+      if (ResumeThread(process.hThread) == 0xFFFFFFFF) {
+        TerminateJobObject(job, 127);
+        throw new Win32Exception(Marshal.GetLastWin32Error());
+      }
+      uint espera = WaitForSingleObject(process.hProcess, INFINITE);
+      if (espera != 0) throw new Win32Exception(Marshal.GetLastWin32Error());
+      uint code;
+      Win32(GetExitCodeProcess(process.hProcess, out code));
+      Win32(TerminateJobObject(job, 1));
+      return unchecked((int)code);
+    } finally {
+      if (created) {
+        CloseHandle(process.hThread);
+        CloseHandle(process.hProcess);
+      }
+      CloseHandle(job);
     }
-    const pendientes = [...(porPadre.get(pid) ?? [])]
-    const encontrados = []
-    while (pendientes.length > 0) {
-      const actual = pendientes.pop()
-      if (encontrados.includes(actual)) continue
-      encontrados.push(actual)
-      pendientes.push(...(porPadre.get(actual) ?? []))
-    }
-    return encontrados
-  } catch {
-    // La eliminación principal todavía se intenta; el llamador verificará el
-    // resultado. No se amplía el alcance a búsquedas por nombre ni por puerto.
-    return []
+  }
+}
+'@
+  exit [EptJobSupervisor]::Run($comando, $linea)
+} catch {
+  [Console]::Error.WriteLine($_.Exception.Message)
+  exit 127
+}
+`.trim()
+  const linea = [citarArgumentoWindows(comando), ...argumentos.map(citarArgumentoWindows)].join(' ')
+  return {
+    comando: 'powershell.exe',
+    argumentos: [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-EncodedCommand',
+      Buffer.from(script, 'utf16le').toString('base64'),
+    ],
+    env: {
+      ...env,
+      EPT_COMANDO_SUPERVISADO: Buffer.from(comando, 'utf8').toString('base64'),
+      EPT_LINEA_SUPERVISADA: Buffer.from(linea, 'utf8').toString('base64'),
+    },
   }
 }
 
@@ -244,36 +436,22 @@ function descendientesWindows(pid, graciaMs) {
 export async function detener(proceso, { graciaMs = GRACIA_DE_CIERRE_MS } = {}) {
   if (!proceso || typeof proceso.pid !== 'number') return
   const raizViva = proceso.exitCode === null && proceso.signalCode === null
+  // En Windows la raíz supervisora garantiza que, si terminó, también terminó
+  // todo su árbol. Actuar sobre ese PID muerto permitiría alcanzar un proceso
+  // ajeno si el sistema ya lo reutilizó.
+  if (process.platform === 'win32' && !raizViva) return
   const terminado = raizViva
     ? new Promise((resolver) => proceso.once('exit', resolver))
     : Promise.resolve()
   if (process.platform === 'win32') {
-    const descendientes = descendientesWindows(proceso.pid, graciaMs)
-    // Nunca se señala un PID raíz que ya terminó: podría haber sido reutilizado
-    // por un proceso ajeno. Si sigue vivo, `/T` es la vía primaria.
-    if (raizViva) {
-      try {
-        execFileSync('taskkill', ['/pid', String(proceso.pid), '/T', '/F'], {
-          stdio: 'ignore',
-          timeout: graciaMs,
-          windowsHide: true,
-        })
-      } catch {
-        // Puede haber terminado entre la comprobación y `taskkill`.
-      }
-    }
-    // Si la raíz ya murió, `/T` puede no encontrarla. Se eliminan solamente los
-    // PID que la foto de Win32_Process vinculó con ese hijo propio.
-    for (const pid of descendientes.reverse()) {
-      try {
-        execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], {
-          stdio: 'ignore',
-          timeout: graciaMs,
-          windowsHide: true,
-        })
-      } catch {
-        // Ya terminó o fue eliminado junto con un ancestro.
-      }
+    try {
+      execFileSync('taskkill', ['/pid', String(proceso.pid), '/T', '/F'], {
+        stdio: 'ignore',
+        timeout: graciaMs,
+        windowsHide: true,
+      })
+    } catch {
+      // Puede haber terminado entre la comprobación y `taskkill`.
     }
   } else {
     try {
@@ -327,9 +505,12 @@ export function ejecutarConLimite(
     }
 
     try {
-      proceso = spawn(comando, argumentos, {
+      const lanzamiento = process.platform === 'win32'
+        ? supervisionWindows(comando, argumentos, env)
+        : { comando, argumentos, env }
+      proceso = spawn(lanzamiento.comando, lanzamiento.argumentos, {
         cwd,
-        env,
+        env: lanzamiento.env,
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: process.platform !== 'win32',
         windowsHide: true,
@@ -363,9 +544,10 @@ export function ejecutarConLimite(
         new Promise((r) => proceso.once('close', r)),
         Math.min(graciaMs, 2000)
       )
-      // El código del padre puede ser 0 aunque haya dejado trabajadores vivos.
-      // Se conserva el grupo y se baja antes de resolver como éxito.
-      await detener(proceso, { graciaMs })
+      // En POSIX el grupo sigue siendo una frontera segura aunque el líder haya
+      // terminado. En Windows la raíz supervisora solo llega acá cuando terminó
+      // todo el árbol; no se vuelve a actuar sobre su PID muerto.
+      if (process.platform !== 'win32') await detener(proceso, { graciaMs })
       proceso.stdout.destroy()
       proceso.stderr.destroy()
       terminar({ codigo, error: null })

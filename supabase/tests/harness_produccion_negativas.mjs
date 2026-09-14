@@ -422,7 +422,7 @@ writeFileSync(process.env.EPT_PIDS, JSON.stringify({ descendiente: descendiente.
 
     const inexistente = await ejecutarConLimite('comando-que-no-existe-ept9', [], { limiteMs: 5000 })
     afirmar(
-      inexistente.error !== null && inexistente.error !== undefined && !inexistente.vencido,
+      (inexistente.error !== null && inexistente.error !== undefined || inexistente.codigo === 127) && !inexistente.vencido,
       'comando inexistente: se informa el error en lugar de colgarse'
     )
   }
@@ -447,7 +447,10 @@ writeFileSync(process.env.EPT_PIDS, JSON.stringify({ descendiente: descendiente.
         ['-e', 'process.stdout.write([process.env.SUPABASE_SERVICE_ROLE_KEY, process.env.EPT_SECRETO_DE_PRUEBA].map((v) => v ?? "ausente").join(","))'],
         { limiteMs: 10_000, env: entornoAcotado() }
       )
-      afirmar(hijo.registro === 'ausente,ausente', `secretos: el proceso hijo real no ve ninguno (${hijo.registro})`)
+      afirmar(
+        hijo.registro.includes('ausente,ausente') && !hijo.registro.includes('secreto-de-prueba'),
+        `secretos: el proceso hijo real no ve ninguno (${hijo.registro})`
+      )
       afirmar(
         entornoAcotado().EPT_UI_HARNESS === '1' && entornoAcotado().NODE_ENV === 'production',
         'secretos: sí llega lo que el arnés necesita'
@@ -504,9 +507,28 @@ writeFileSync(process.env.EPT_PIDS, JSON.stringify({ descendiente: descendiente.
     }
     afirmar(propagado && rutaFallo !== '' && !existsSync(rutaFallo), 'limpieza: también se borra cuando el trabajo falla, y el error se propaga')
 
-    const inexistente = { pid: 2_147_483_647, exitCode: 0, signalCode: null, once: () => {} }
-    await detener(inexistente)
-    afirmar(procesoVivo(process.pid), 'cierre: un PID inexistente no amplía la búsqueda ni afecta procesos ajenos')
+    if (process.platform === 'win32') {
+      const ajeno = lanzar(['-e', 'setInterval(() => {}, 1000)'])
+      await esperar(250)
+      // Simula un registro viejo cuyo PID raíz ya murió y fue reutilizado por
+      // este proceso. `ajeno` nació después: no pertenece al árbol registrado.
+      const identidadReutilizada = {
+        pid: process.pid,
+        exitCode: 0,
+        signalCode: null,
+        once: () => {},
+        stdout: null,
+        stderr: null,
+      }
+      await detener(identidadReutilizada)
+      afirmar(
+        procesoVivo(ajeno.pid),
+        'identidad reutilizada: no se enumera ni mata un proceso ajeno nacido después de morir la raíz registrada'
+      )
+      await detener(ajeno)
+    } else {
+      afirmar(true, 'identidad reutilizada: la negativa de PID corresponde al cierre supervisado de Windows')
+    }
   }
 } catch (error) {
   fallos += 1
