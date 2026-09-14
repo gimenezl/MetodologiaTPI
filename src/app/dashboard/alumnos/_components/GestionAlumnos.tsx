@@ -843,7 +843,9 @@ function AccionesAlumno({
           size="sm"
           variant="secondary"
           onClick={() => onCambiarCurso(alumno)}
-          aria-label={`Cambiar el curso del alumno ${nombre}`}
+          // El nombre accesible empieza con la etiqueta visible (WCAG 2.5.3):
+          // quien usa control por voz dice «Cambiar curso» y tiene que encontrarlo.
+          aria-label={`Cambiar curso del alumno ${nombre}`}
         >
           <ArrowsLeftRight size={15} />
           Cambiar curso

@@ -93,7 +93,7 @@ test.describe('interfaz administrativa de alumnos', () => {
     // Ferreyra cursa "Sala de 4 C", que ya no está entre los cursos activos.
     await expect(listado(page)).toContainText('Sala de 4 C')
 
-    await page.getByRole('button', { name: 'Cambiar el curso del alumno Ferreyra, Bautista' }).click()
+    await page.getByRole('button', { name: 'Cambiar curso del alumno Ferreyra, Bautista' }).click()
     const dialogo = page.getByRole('dialog')
     await expect(dialogo).toContainText('Actualmente cursa Sala de 4 C')
 
@@ -315,7 +315,7 @@ test.describe('interfaz administrativa de alumnos', () => {
     await page.goto('/pruebas-ui/alumnos')
 
     await page
-      .getByRole('button', { name: 'Cambiar el curso del alumno Arrieta, Camila' })
+      .getByRole('button', { name: 'Cambiar curso del alumno Arrieta, Camila' })
       .click()
     await page.getByLabel('Curso nuevo').selectOption({ index: 1 })
     await page.getByRole('button', { name: 'Confirmar cambio de curso' }).click()

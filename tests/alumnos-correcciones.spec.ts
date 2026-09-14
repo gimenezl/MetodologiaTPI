@@ -152,7 +152,7 @@ test.describe('Cambio de curso: el curso actual no se ofrece como destino', () =
   test('el desplegable excluye el curso vigente', async ({ page }) => {
     await page.goto(BANCO)
     await page
-      .getByRole('button', { name: 'Cambiar el curso del alumno Arrieta, Camila' })
+      .getByRole('button', { name: 'Cambiar curso del alumno Arrieta, Camila' })
       .click()
 
     const destino = page.locator('#cambiar-curso-destino')
@@ -200,7 +200,7 @@ test.describe('Diálogos: durante una operación en vuelo no se cierran de menti
     })
 
     await page
-      .getByRole('button', { name: 'Cambiar el curso del alumno Arrieta, Camila' })
+      .getByRole('button', { name: 'Cambiar curso del alumno Arrieta, Camila' })
       .click()
 
     const dialogo = page.getByRole('dialog')
@@ -248,7 +248,7 @@ test.describe('Diálogos: durante una operación en vuelo no se cierran de menti
     })
 
     await page
-      .getByRole('button', { name: 'Cambiar el curso del alumno Arrieta, Camila' })
+      .getByRole('button', { name: 'Cambiar curso del alumno Arrieta, Camila' })
       .click()
 
     const dialogo = page.getByRole('dialog')
@@ -309,7 +309,7 @@ test.describe('Diálogos: durante una operación en vuelo no se cierran de menti
     })
 
     const disparador = page.getByRole('button', {
-      name: 'Cambiar el curso del alumno Arrieta, Camila',
+      name: 'Cambiar curso del alumno Arrieta, Camila',
     })
     await disparador.click()
 
@@ -406,7 +406,7 @@ test.describe('Diálogos: durante una operación en vuelo no se cierran de menti
     await page.goto(BANCO)
 
     const disparador = page.getByRole('button', {
-      name: 'Cambiar el curso del alumno Arrieta, Camila',
+      name: 'Cambiar curso del alumno Arrieta, Camila',
     })
     await disparador.click()
 
@@ -425,7 +425,7 @@ test.describe('Diálogos: durante una operación en vuelo no se cierran de menti
   test('el tabulador queda contenido dentro del diálogo', async ({ page }) => {
     await page.goto(BANCO)
     await page
-      .getByRole('button', { name: 'Cambiar el curso del alumno Arrieta, Camila' })
+      .getByRole('button', { name: 'Cambiar curso del alumno Arrieta, Camila' })
       .click()
 
     const dialogo = page.getByRole('dialog')

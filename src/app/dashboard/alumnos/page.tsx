@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { Lock, WarningCircle } from '@phosphor-icons/react/dist/ssr'
-import { Button } from '@/components/ui/Button'
+import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 import { requerirDirector } from '@/services/autorizacion'
 import { listarAlumnos, listarCursosAsignables } from '@/services/alumnos.service'
 import { GestionAlumnos } from './_components/GestionAlumnos'
@@ -29,9 +28,9 @@ export default async function AlumnosPage() {
           Acceso restringido
         </h1>
         <p className="text-neutral-500 text-sm mt-2">{autorizacion.mensaje}</p>
-        <Link href="/dashboard" className="inline-block mt-6">
-          <Button>Volver al panel</Button>
-        </Link>
+        <EnlaceBoton href="/dashboard" className="mt-6">
+          Volver al panel
+        </EnlaceBoton>
       </div>
     )
   }
@@ -76,11 +75,9 @@ function PanelErrorLectura({ mensaje }: { mensaje: string }) {
             No pudimos cargar los legajos académicos
           </p>
           <p className="text-sm text-red-700 mt-1">{mensaje}</p>
-          <Link href="/dashboard/alumnos" className="inline-block mt-4">
-            <Button size="sm" variant="outline">
-              Reintentar
-            </Button>
-          </Link>
+          <EnlaceBoton href="/dashboard/alumnos" size="sm" variant="outline" className="mt-4">
+            Reintentar
+          </EnlaceBoton>
         </div>
       </div>
     </div>

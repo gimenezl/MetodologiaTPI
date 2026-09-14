@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft, Lock, WarningCircle } from '@phosphor-icons/react/dist/ssr'
-import { Button } from '@/components/ui/Button'
+import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 import { requerirDirector } from '@/services/autorizacion'
 import { listarHistorialAlumno, obtenerAlumno } from '@/services/alumnos.service'
 import { SituacionAcademica } from '../_components/SituacionAcademica'
@@ -37,9 +37,9 @@ export default async function DetalleAlumnoPage({
           Acceso restringido
         </h1>
         <p className="text-neutral-500 text-sm mt-2">{autorizacion.mensaje}</p>
-        <Link href="/dashboard" className="inline-block mt-6">
-          <Button>Volver al panel</Button>
-        </Link>
+        <EnlaceBoton href="/dashboard" className="mt-6">
+          Volver al panel
+        </EnlaceBoton>
       </div>
     )
   }

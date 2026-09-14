@@ -446,8 +446,13 @@ export default function UsuariosPage() {
           <div className="relative w-full max-w-lg bg-white rounded-2xl border border-neutral-200 shadow-xl my-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
               <h3 className="font-bold text-neutral-900">Editar usuario</h3>
-              <button onClick={() => setEditando(null)} className="text-neutral-400 hover:text-neutral-600 p-1 rounded-lg hover:bg-neutral-100">
-                <X size={18} />
+              <button
+                type="button"
+                onClick={() => setEditando(null)}
+                aria-label="Cerrar la edición"
+                className="text-neutral-500 hover:text-neutral-700 p-1 rounded-lg hover:bg-neutral-100"
+              >
+                <X size={18} aria-hidden="true" />
               </button>
             </div>
 

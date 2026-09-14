@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { Lock, Student, WarningCircle } from '@phosphor-icons/react/dist/ssr'
-import { Button } from '@/components/ui/Button'
+import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 import { requerirSesion } from '@/services/autorizacion'
 import { listarAlumnos, listarHistorialAlumno } from '@/services/alumnos.service'
 import { SituacionAcademica } from '../alumnos/_components/SituacionAcademica'
@@ -33,9 +32,9 @@ export default async function MiLegajoPage() {
           Acceso restringido
         </h1>
         <p className="text-neutral-500 text-sm mt-2">{sesion.mensaje}</p>
-        <Link href="/login" className="inline-block mt-6">
-          <Button>Iniciar sesión</Button>
-        </Link>
+        <EnlaceBoton href="/login" className="mt-6">
+          Iniciar sesión
+        </EnlaceBoton>
       </div>
     )
   }

@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { capturarSinHerramientas } from './_captura'
 import { exigirContraste } from './_contraste'
+import { exigirEnlaceDeAccionUnico, exigirSinControlesAnidados } from './_semantica'
 import {
   expect,
   request as crearContexto,
@@ -193,6 +194,33 @@ function conHistorialIlegible(cuerpo: () => Promise<void>) {
   psql('REVOKE SELECT ON public.matriculas_historial FROM authenticated;')
   return cuerpo().finally(() => {
     psql('GRANT SELECT ON public.matriculas_historial TO authenticated;')
+  })
+}
+
+/**
+ * Retira un privilegio de `authenticated` mientras dura `cuerpo` y lo devuelve.
+ *
+ * Sirve para llegar de verdad a los estados que el servidor muestra cuando no
+ * puede autorizar o no puede leer: no se simulan, se provocan. Nunca se concede
+ * un privilegio que la base no tuviera.
+ */
+function conPrivilegioRetirado(
+  retirar: string,
+  restituir: string,
+  cuerpo: () => Promise<void>
+) {
+  const contenedor =
+    process.env.EPT_SUPABASE_DB_CONTAINER ?? 'supabase_db_educar-para-transformar'
+  const psql = (sentencia: string) =>
+    execFileSync(
+      'docker',
+      ['exec', '-i', contenedor, 'psql', '-X', '-q', '-U', 'postgres', '-d', 'postgres',
+       '-v', 'ON_ERROR_STOP=1'],
+      { input: sentencia, stdio: ['pipe', 'pipe', 'pipe'] }
+    )
+  psql(retirar)
+  return cuerpo().finally(() => {
+    psql(restituir)
   })
 }
 
@@ -651,11 +679,68 @@ test.describe('DIRECTOR autenticado — alumnos', () => {
 
     await page.goto(`/dashboard/alumnos/${alumnoId}`)
     await expect(page.getByRole('heading', { name: 'Situación actual' })).toBeVisible()
-    await exigirContraste(page, 'detalle del legajo académico')
+    await exigirContraste(page, 'detalle del legajo académico', {
+      raiz: 'main',
+      esenciales: [
+        'main h1',
+        'section[aria-labelledby="titulo-situacion-actual"] dt',
+        'section[aria-labelledby="titulo-situacion-actual"] dd',
+        '[aria-label="Tabla del historial de cursos"] td',
+      ],
+    })
 
     await page.goto('/dashboard/alumnos')
     await expect(page.getByRole('heading', { name: 'Alumnos' })).toBeVisible()
-    await exigirContraste(page, 'listado administrativo con datos reales')
+    await exigirContraste(page, 'listado administrativo con datos reales', {
+      raiz: 'main',
+      esenciales: ['main h1', '[aria-label="Tabla de alumnos"] th', '[aria-label="Tabla de alumnos"] td'],
+    })
+  })
+
+  test('el rechazo del servidor ofrece un único enlace para volver, sin controles anidados', async ({
+    page,
+  }) => {
+    // La navegación del panel permite la ruta a la directora; lo que falla es la
+    // verificación del servidor. Así se llega al bloque restringido de la
+    // propia página, que antes anidaba un botón dentro de un enlace.
+    await conPrivilegioRetirado(
+      'REVOKE EXECUTE ON FUNCTION public.es_director_actual() FROM authenticated;',
+      'GRANT EXECUTE ON FUNCTION public.es_director_actual() TO authenticated;',
+      async () => {
+        await page.goto('/dashboard/alumnos/11111111-1111-4111-8111-111111111111')
+        await expect(page.getByRole('heading', { name: 'Acceso restringido' })).toBeVisible()
+        await expect(page.getByText('No pudimos verificar tus permisos')).toBeVisible()
+        await exigirSinControlesAnidados(page, 'detalle con rechazo del servidor')
+        await exigirEnlaceDeAccionUnico(page, { nombre: 'Volver al panel', destino: '/dashboard' })
+
+        await page.goto('/dashboard/alumnos')
+        await expect(page.getByRole('heading', { name: 'Acceso restringido' })).toBeVisible()
+        await exigirSinControlesAnidados(page, 'listado con rechazo del servidor')
+        await exigirEnlaceDeAccionUnico(page, { nombre: 'Volver al panel', destino: '/dashboard' })
+      }
+    )
+  })
+
+  test('el error de lectura del listado ofrece un único enlace para reintentar', async ({
+    page,
+  }) => {
+    await conPrivilegioRetirado(
+      'REVOKE SELECT ON public.alumnos_academicos FROM authenticated;',
+      'GRANT SELECT ON public.alumnos_academicos TO authenticated;',
+      async () => {
+        await page.goto('/dashboard/alumnos')
+        const aviso = page.getByRole('alert').filter({
+          hasText: 'No pudimos cargar los legajos académicos',
+        })
+        await expect(aviso).toBeVisible()
+        await exigirSinControlesAnidados(page, 'error de lectura del listado')
+        await exigirEnlaceDeAccionUnico(page, { nombre: 'Reintentar', destino: '/dashboard/alumnos' })
+      }
+    )
+    // Restituido el permiso, el mismo enlace lleva al listado real.
+    await page.goto('/dashboard/alumnos')
+    await expect(page.getByRole('table', { name: 'Tabla de alumnos' })).toBeVisible()
+    await exigirSinControlesAnidados(page, 'listado administrativo')
   })
 
   test('el banco visual sirve datos sinteticos y jamas los reales', async ({ page }) => {
@@ -725,6 +810,11 @@ test('distingue no tener trayectoria de no poder leerla', async ({ page }) => {
       ).toHaveCount(0)
 
       await capturar(page, 'escritorio-estudiante-historial-ilegible')
+
+      // El reintento es un único enlace: ni un botón dentro de un enlace, ni
+      // dos paradas de tabulador para una misma acción.
+      await exigirSinControlesAnidados(page, 'historial ilegible')
+      await exigirEnlaceDeAccionUnico(page, { nombre: 'Reintentar', destino: '/dashboard/mi-legajo' })
     })
 
     // Restituido el permiso, el reintento muestra la trayectoria real.
@@ -739,7 +829,14 @@ test('distingue no tener trayectoria de no poder leerla', async ({ page }) => {
   test('mi legajo cumple el contraste AA', async ({ page }) => {
     await page.goto('/dashboard/mi-legajo')
     await expect(page.getByRole('heading', { name: 'Situación actual' })).toBeVisible()
-    await exigirContraste(page, 'mi legajo académico')
+    await exigirContraste(page, 'mi legajo académico', {
+      raiz: 'main',
+      esenciales: [
+        'main h1',
+        'section[aria-labelledby="titulo-situacion-actual"] dt',
+        'section[aria-labelledby="titulo-situacion-actual"] dd',
+      ],
+    })
   })
 
   test('ve Mi legajo en la navegación pero no Alumnos', async ({ page }) => {
@@ -840,6 +937,13 @@ for (const [rol, sesion] of [
       await page.goto('/dashboard/alumnos')
       await expect(page.getByRole('heading', { name: 'Acceso restringido' })).toBeVisible()
       await expect(page.getByRole('table', { name: 'Tabla de alumnos' })).toHaveCount(0)
+    })
+
+    test('el acceso restringido es un único enlace para volver', async ({ page }) => {
+      await page.goto('/dashboard/alumnos')
+      await expect(page.getByRole('heading', { name: 'Acceso restringido' })).toBeVisible()
+      await exigirSinControlesAnidados(page, `${rol} en el acceso restringido`)
+      await exigirEnlaceDeAccionUnico(page, { nombre: 'Volver al panel', destino: '/dashboard' })
     })
 
     test('no alcanza la vista propia del legajo académico', async ({ page }) => {

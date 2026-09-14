@@ -1,7 +1,6 @@
-import Link from 'next/link'
 import { WarningCircle } from '@phosphor-icons/react/dist/ssr'
 import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
+import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 import type { AlumnoAcademico, MatriculaHistorica } from '@/services/alumnos.service'
 
 /**
@@ -126,11 +125,9 @@ export function SituacionAcademica({
                 Esto no significa que el legajo no tenga trayectoria: no se pudo leer.
               </p>
               {rutaReintento && (
-                <Link href={rutaReintento} className="inline-block mt-4">
-                  <Button size="sm" variant="outline">
-                    Reintentar
-                  </Button>
-                </Link>
+                <EnlaceBoton href={rutaReintento} size="sm" variant="outline" className="mt-4">
+                  Reintentar
+                </EnlaceBoton>
               )}
             </div>
           </div>

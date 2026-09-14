@@ -10,7 +10,7 @@ import {
 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/Button'
+import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 
 interface NavItem {
   href: string
@@ -231,9 +231,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <p className="text-neutral-500 text-sm mt-2">
                 No tenés permisos para ver esta sección del panel.
               </p>
-              <Link href="/dashboard" className="inline-block mt-6">
-                <Button>Volver al panel</Button>
-              </Link>
+              {/* Un solo control: un enlace con aspecto de botón, no un botón dentro de un enlace. */}
+              <EnlaceBoton href="/dashboard" className="mt-6">
+                Volver al panel
+              </EnlaceBoton>
             </div>
           )}
         </main>
