@@ -7,7 +7,10 @@ test('home loads', async ({ page }) => {
 
 test('dashboard redirects to login when unauthenticated', async ({ page }) => {
   await page.goto('/dashboard')
-  await expect(page).toHaveURL(/\/login\?redirect=\/dashboard/)
+  // El destino viaja codificado (`%2Fdashboard`), que es lo correcto para un
+  // valor dentro de una cadena de consulta. La expresion acepta las dos formas
+  // para no volver a fallar si alguien cambia la codificacion.
+  await expect(page).toHaveURL(/\/login\?redirect=(?:\/|%2F)dashboard/)
 })
 
 test('inscripción muestra exactamente los tres niveles institucionales', async ({ page }) => {

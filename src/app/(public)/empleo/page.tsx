@@ -136,7 +136,7 @@ export default function EmpleoPage() {
                 <Input label="Teléfono" type="tel" required placeholder="+54 362 4..." {...register('telefono')} error={errors.telefono?.message} />
 
                 <div className="space-y-1.5">
-                  <label className="block text-sm font-semibold text-neutral-700">Puesto de interés <span className="text-red-500 ml-0.5">*</span></label>
+                  <label className="block text-sm font-semibold text-neutral-700">Puesto de interés <span className="text-red-600 ml-0.5">*</span></label>
                   <select {...register('puesto')}
                     className={`w-full h-10 px-3 rounded-lg border text-sm focus:outline-none focus:ring-2 transition-all bg-white
                       ${errors.puesto ? 'border-red-300 focus:ring-red-500/20' : 'border-neutral-200 focus:ring-brand-500/20 focus:border-brand-400'}`}>
@@ -147,7 +147,7 @@ export default function EmpleoPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-sm font-semibold text-neutral-700">Presentación y experiencia <span className="text-red-500 ml-0.5">*</span></label>
+                  <label className="block text-sm font-semibold text-neutral-700">Presentación y experiencia <span className="text-red-600 ml-0.5">*</span></label>
                   <textarea rows={5} maxLength={800} placeholder="Contanos sobre tu experiencia docente, formación y motivación..." {...register('mensaje')}
                     className={`w-full px-3.5 py-2.5 rounded-lg border text-sm focus:outline-none focus:ring-2 transition-all resize-none
                       ${errors.mensaje ? 'border-red-300 focus:ring-red-500/20' : 'border-neutral-200 focus:ring-brand-500/20 focus:border-brand-400'}`} />

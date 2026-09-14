@@ -69,3 +69,29 @@ export async function requerirDirector(
 
   return { autorizado: true, userId: user.id }
 }
+
+/**
+ * Exige únicamente una sesión válida (EPT-9).
+ *
+ * La usa la vista propia del estudiante, donde la autorización por fila la
+ * resuelve RLS: las vistas académicas son `security_invoker` y solo devuelven el
+ * legajo cuyo `perfil_id` coincide con el `auth.uid()` de la sesión. Un actor sin
+ * legajo propio no obtiene un error que delate a otra persona, obtiene cero filas.
+ *
+ * Falla cerrado: sin usuario resuelto, deniega.
+ */
+export async function requerirSesion(): Promise<ResultadoAutorizacion> {
+  const supabase = await createServerSupabaseClient()
+
+  const { data, error } = await supabase.auth.getUser()
+  const user = data?.user
+  if (error || !user) {
+    return {
+      autorizado: false,
+      estado: 401,
+      mensaje: 'Necesitás iniciar sesión para continuar.',
+    }
+  }
+
+  return { autorizado: true, userId: user.id }
+}

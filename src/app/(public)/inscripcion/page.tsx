@@ -357,7 +357,7 @@ export default function InscripcionPage() {
                       términos y condiciones
                     </a>{' '}
                     y la política de privacidad del centro educativo.
-                    <span className="text-red-500 ml-0.5">*</span>
+                    <span className="text-red-600 ml-0.5">*</span>
                   </span>
                 </label>
                 {errors.acepta_terminos && (

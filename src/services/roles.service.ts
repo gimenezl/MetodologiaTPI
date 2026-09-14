@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { traducirErrorDeLectura } from '@/lib/errores'
 import { createClient } from '@/services/supabase'
 
 export async function obtenerRoles() {
@@ -7,6 +8,7 @@ export async function obtenerRoles() {
     .from('roles')
     .select('*')
     .order('nombre') as any)
-  if (error) throw new Error(error.message)
+  // Nunca el mensaje de PostgREST: una lectura fallida es una carga fallida.
+  if (error) throw traducirErrorDeLectura(error)
   return data
 }

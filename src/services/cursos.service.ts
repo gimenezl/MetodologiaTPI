@@ -29,7 +29,7 @@ export type NivelSeleccionable = {
   orden: number
 }
 
-export type CampoCurso = 'denominacion' | 'division' | 'nivel_id'
+export type CampoCurso = 'denominacion' | 'division' | 'nivel_id' | 'activo'
 
 export type EstadoErrorCurso = 400 | 409 | 500
 
@@ -43,6 +43,7 @@ const SQLSTATE_CLAVE_FORANEA = '23503'
 const SQLSTATE_CHECK = '23514'
 const SQLSTATE_PRIVILEGIO_INSUFICIENTE = '42501'
 const SQLSTATE_NIVEL_INACTIVO = 'P5504'
+const SQLSTATE_CURSO_CON_MATRICULAS = 'P5514'
 
 const COLUMNAS =
   'id, nivel_id, denominacion, division, activo, fecha_creacion, nivel:niveles(id, nombre, activo)'
@@ -84,6 +85,16 @@ function traducirError(
         estado: 400,
         mensaje: 'El nivel educativo elegido está inactivo. Elegí un nivel activo.',
         campo: 'nivel_id',
+      }
+    case SQLSTATE_CURSO_CON_MATRICULAS:
+      // Lo levanta el trigger de EPT-9 sobre `cursos`. La comprobación es
+      // transaccional, así que una asignación concurrente tampoco puede colarse
+      // entre la verificación y la baja.
+      return {
+        estado: 409,
+        mensaje:
+          'No se puede inactivar un curso con estudiantes matriculados. Reasignalos o inactivalos primero.',
+        campo: 'activo',
       }
     case SQLSTATE_PRIVILEGIO_INSUFICIENTE:
       // RLS rechazó la operación. El servidor ya autorizó antes de llegar acá,

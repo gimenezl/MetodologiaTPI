@@ -7,8 +7,8 @@ import { loadEnvConfig } from '@next/env'
 // variables. Sin esto, el setup autenticado no encuentra la base local.
 loadEnvConfig(process.cwd())
 
-// Los bancos de pruebas de interfaz (`/pruebas-ui/cursos` y
-// `/pruebas-ui/niveles`) solo se habilitan para
+// Los bancos de pruebas de interfaz (`/pruebas-ui/cursos`, `/pruebas-ui/niveles`
+// y `/pruebas-ui/alumnos`) solo se habilitan para
 // esta corrida. Las credenciales de Supabase se completan con valores de relleno
 // únicamente cuando el entorno no trae unas propias, para que la suite arranque
 // sin configuración previa y sin pisar la configuración real de nadie.
@@ -31,30 +31,42 @@ const entornoServidor: Record<string, string> = {
  */
 const conBaseLocal = process.env.EPT_SUPABASE_LOCAL === '1'
 
-const PRUEBAS_AUTENTICADAS = /(?:cursos|niveles)-auth\.spec\.ts/
+const PRUEBAS_AUTENTICADAS = /(?:cursos|niveles|alumnos|usuarios)-auth\.spec\.ts/
 const PRUEBAS_SETUP = /auth\.setup\.ts/
-const PRUEBAS_RESPONSIVE_NIVELES = /niveles-responsive\.spec\.ts/
+
+// `niveles-responsive` existe únicamente para los perfiles móviles.
+const PRUEBAS_SOLO_MOVIL = /niveles-responsive\.spec\.ts/
+
+// `alumnos-ui` corre en los tres perfiles: escritorio, Pixel 5 e iPhone 13. Sus
+// aserciones se adaptan al ancho de la ventana, de modo que un mismo archivo
+// demuestra la tabla de escritorio y las tarjetas móviles.
+const PRUEBAS_MULTIPERFIL = /alumnos-(?:ui|contraste)\.spec\.ts/
 
 const proyectoBase: Project = {
   name: 'chromium',
   use: { ...devices['Desktop Chrome'] },
   // Estas pruebas asumen que NO hay sesión: se excluyen las autenticadas.
-  testIgnore: [PRUEBAS_AUTENTICADAS, PRUEBAS_SETUP, PRUEBAS_RESPONSIVE_NIVELES],
+  testIgnore: [PRUEBAS_AUTENTICADAS, PRUEBAS_SETUP, PRUEBAS_SOLO_MOVIL],
 }
 
 const proyectosResponsive: Project[] = [
   {
     name: 'pixel-5-chromium',
     use: { ...devices['Pixel 5'] },
-    testMatch: PRUEBAS_RESPONSIVE_NIVELES,
+    testMatch: [PRUEBAS_SOLO_MOVIL, PRUEBAS_MULTIPERFIL],
   },
   {
     name: 'iphone-13-webkit',
     use: { ...devices['iPhone 13'] },
-    testMatch: PRUEBAS_RESPONSIVE_NIVELES,
+    testMatch: [PRUEBAS_SOLO_MOVIL, PRUEBAS_MULTIPERFIL],
   },
 ]
 
+/**
+ * Un proyecto por actor. El `grep` enruta cada bloque `describe` al perfil con
+ * la sesión correcta, de modo que las pruebas de denegación corren con la
+ * identidad que realmente debe ser rechazada y no con una simulación.
+ */
 const proyectosAutenticados: Project[] = [
   {
     name: 'setup',
@@ -73,6 +85,44 @@ const proyectosAutenticados: Project[] = [
     use: { ...devices['Desktop Chrome'], storageState: 'tests/.auth/estudiante.json' },
     testMatch: PRUEBAS_AUTENTICADAS,
     grep: /ESTUDIANTE autenticado/,
+    dependencies: ['setup'],
+  },
+  {
+    name: 'chromium-estudiante-ajeno',
+    use: {
+      ...devices['Desktop Chrome'],
+      storageState: 'tests/.auth/estudiante-ajeno.json',
+    },
+    testMatch: PRUEBAS_AUTENTICADAS,
+    grep: /ESTUDIANTE AJENO autenticado/,
+    dependencies: ['setup'],
+  },
+  {
+    name: 'chromium-docente',
+    use: { ...devices['Desktop Chrome'], storageState: 'tests/.auth/docente.json' },
+    testMatch: PRUEBAS_AUTENTICADAS,
+    grep: /DOCENTE autenticado/,
+    dependencies: ['setup'],
+  },
+  {
+    name: 'chromium-padre',
+    use: { ...devices['Desktop Chrome'], storageState: 'tests/.auth/padre.json' },
+    testMatch: PRUEBAS_AUTENTICADAS,
+    grep: /PADRE autenticado/,
+    dependencies: ['setup'],
+  },
+  {
+    name: 'chromium-personal',
+    use: { ...devices['Desktop Chrome'], storageState: 'tests/.auth/personal.json' },
+    testMatch: PRUEBAS_AUTENTICADAS,
+    grep: /PERSONAL autenticado/,
+    dependencies: ['setup'],
+  },
+  {
+    name: 'chromium-sin-perfil',
+    use: { ...devices['Desktop Chrome'], storageState: 'tests/.auth/sin-perfil.json' },
+    testMatch: PRUEBAS_AUTENTICADAS,
+    grep: /SIN PERFIL autenticado/,
     dependencies: ['setup'],
   },
 ]

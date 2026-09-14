@@ -4,13 +4,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import { MagnifyingGlass, Users, Trash, Warning } from '@phosphor-icons/react'
+import { MagnifyingGlass, Users } from '@phosphor-icons/react'
 import {
   obtenerPerfilesPaginados,
   buscarPerfilesPaginados,
   crearPerfil,
   actualizarPerfil,
-  eliminarPerfil,
 } from '@/services/perfiles.service'
 import { obtenerRoles } from '@/services/roles.service'
 import { formatFecha, ROLES } from '@/lib/utils'
@@ -38,8 +37,13 @@ type Rol = { id: number; nombre: string }
 const rolesAlternativos: Rol[] = ROLES.map((nombre, indice) => ({ id: indice + 1, nombre }))
 const elementosPorPagina = 10
 
-const variantePorRol: Record<string, 'info' | 'success' | 'warning' | 'default'> = {
-  DIRECTOR: 'danger' as any,
+// `danger` siempre fue una variante válida de Badge; faltaba en este tipo, y el
+// `as any` que lo tapaba hacía fallar el lint focalizado de este archivo.
+const variantePorRol: Record<
+  string,
+  'info' | 'success' | 'warning' | 'default' | 'danger'
+> = {
+  DIRECTOR: 'danger',
   DOCENTE: 'info',
   ESTUDIANTE: 'success',
   PADRE: 'warning',
@@ -57,8 +61,6 @@ export default function LegajosPage() {
   const [modoFormulario, setModoFormulario] = useState<'crear' | 'editar' | null>(null)
   const [paginaActual, setPaginaActual] = useState(1)
   const [totalPaginas, setTotalPaginas] = useState(1)
-  const [perfilAEliminar, setPerfilAEliminar] = useState<Perfil | null>(null)
-  const [eliminando, setEliminando] = useState(false)
   const {
     register: registrarCampo,
     handleSubmit: procesarEnvio,
@@ -170,23 +172,6 @@ export default function LegajosPage() {
     } catch (error) {
       const mensaje = error instanceof Error ? error.message : 'No se pudo guardar el legajo'
       toast.error(mensaje)
-    }
-  }
-
-  const confirmarEliminacion = async () => {
-    if (!perfilAEliminar) return
-    setEliminando(true)
-    try {
-      await eliminarPerfil(perfilAEliminar.id)
-      toast.success(`Legajo de ${perfilAEliminar.nombre} ${perfilAEliminar.apellido} eliminado`)
-      setPerfilAEliminar(null)
-      setPerfilSeleccionado(null)
-      await cargarDatos(paginaActual, busquedaAplicada)
-    } catch (error) {
-      const mensaje = error instanceof Error ? error.message : 'No se pudo eliminar el legajo'
-      toast.error(mensaje)
-    } finally {
-      setEliminando(false)
     }
   }
 
@@ -375,15 +360,6 @@ export default function LegajosPage() {
               Legajo: {perfilSeleccionado.apellido}, {perfilSeleccionado.nombre}
             </h2>
           <div className="flex items-center gap-3">
-              {rol === 'DIRECTOR' && (
-                <button
-                  onClick={() => setPerfilAEliminar(perfilSeleccionado)}
-                  className="flex items-center gap-1.5 text-sm font-semibold text-red-500 hover:text-red-700 transition-colors"
-                >
-                  <Trash size={15} weight="fill" />
-                  Eliminar
-                </button>
-              )}
               <button onClick={() => iniciarEdicion(perfilSeleccionado)} className="text-sm font-semibold text-brand-600 hover:text-brand-800">
                 Editar
               </button>
@@ -406,50 +382,6 @@ export default function LegajosPage() {
                 <p className="text-neutral-800 font-medium">{valor}</p>
               </div>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* Modal de confirmación de eliminación */}
-      {perfilAEliminar && (
-        <div
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Confirmar eliminación"
-        >
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center shrink-0">
-                <Warning size={20} weight="fill" className="text-red-600" />
-              </div>
-              <div>
-                <h3 className="font-bold text-neutral-900 text-lg">Eliminar legajo</h3>
-                <p className="text-neutral-600 text-sm mt-1">
-                  ¿Estás seguro que querés eliminar el legajo de{' '}
-                  <strong>{perfilAEliminar.nombre} {perfilAEliminar.apellido}</strong>?
-                  Esta acción no se puede deshacer.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3 justify-end">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setPerfilAEliminar(null)}
-                disabled={eliminando}
-              >
-                Cancelar
-              </Button>
-              <button
-                onClick={confirmarEliminacion}
-                disabled={eliminando}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors"
-              >
-                <Trash size={15} weight="fill" />
-                {eliminando ? 'Eliminando...' : 'Sí, eliminar'}
-              </button>
-            </div>
           </div>
         </div>
       )}

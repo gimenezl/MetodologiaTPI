@@ -1,22 +1,69 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { UserPlus, Users, Warning, PencilSimple, X } from '@phosphor-icons/react'
+import { ErrorDeDominio, mensajeParaMostrar, registroSeguro } from '@/lib/errores'
 import { obtenerRoles } from '@/services/roles.service'
 import { obtenerPerfiles, actualizarPerfil } from '@/services/perfiles.service'
 import {
-  crearUsuario, obtenerRelacionesFamiliares, setHijosDePadre, setTutorDeHijo,
-  type RelacionFamiliar,
+  crearUsuario, nuevoIdentificadorDeOperacion, obtenerRelacionesFamiliares,
+  VINCULO_PARENTAL_NO_DISPONIBLE, type RelacionFamiliar,
 } from '@/services/usuarios.service'
 import { Input, Select } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { Badge, Skeleton } from '@/components/ui/Badge'
 import { useAuth } from '@/context/AuthContext'
-import { cn } from '@/lib/utils'
+
+/**
+ * Mensaje único de un fallo de carga.
+ *
+ * Es siempre el mismo, en español y sin detalles. Lo que la persona necesita
+ * saber es que no se cargó y que puede volver a intentarlo; el detalle técnico
+ * no llega a la pantalla (ver `src/lib/errores.ts`).
+ */
+const MENSAJE_CARGA_FALLIDA =
+  'No pudimos cargar los usuarios. Intentá nuevamente.'
+
+const MENSAJE_ALTA_FALLIDA = 'No pudimos crear la cuenta. Volvé a intentarlo en unos minutos.'
+const MENSAJE_EDICION_FALLIDA = 'No pudimos guardar los cambios. Volvé a intentarlo en unos minutos.'
+
+/** Campos del formulario de alta a los que la API puede atribuir un error. */
+const CAMPOS_DEL_ALTA = new Set(['nombre', 'apellido', 'dni', 'rol_id', 'email', 'password', 'telefono', 'direccion', 'legajo_nro'])
+
+/**
+ * Cuánto se espera a que la carga responda, en milisegundos.
+ *
+ * Sin este límite la pantalla podía quedar esperando para siempre. Se comprobó:
+ * con la conexión cortada, la promesa del cliente de Supabase no se resuelve ni
+ * se rechaza, así que el `catch` nunca corría y no aparecía ningún error. La
+ * directora veía un formulario sin roles, sin explicación y sin forma de
+ * reintentar. Un fallo silencioso es malo; una espera infinita es peor.
+ */
+const LIMITE_DE_CARGA_MS = 15_000
+
+/** Rechaza si la promesa no responde dentro del límite. */
+function conLimite<T>(promesa: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolver, rechazar) => {
+    const temporizador = setTimeout(
+      () => rechazar(new Error(`La carga no respondió en ${ms} ms`)),
+      ms
+    )
+    promesa.then(
+      (valor) => {
+        clearTimeout(temporizador)
+        resolver(valor)
+      },
+      (error) => {
+        clearTimeout(temporizador)
+        rechazar(error)
+      }
+    )
+  })
+}
 
 const soloLetras = /^[a-zA-ZÀ-ÿ\s'-]+$/
 const longitudMinimaNombre = 2
@@ -65,20 +112,41 @@ export default function UsuariosPage() {
   const [perfiles, setPerfiles] = useState<PerfilRow[]>([])
   const [relaciones, setRelaciones] = useState<RelacionFamiliar[]>([])
   const [loading, setLoading] = useState(true)
-  const [hijosSeleccionados, setHijosSeleccionados] = useState<string[]>([])
-  const [tutorSeleccionado, setTutorSeleccionado] = useState<string>('')
+  /**
+   * Motivo por el que la carga falló, si falló.
+   *
+   * Antes el fallo terminaba en un aviso flotante que se desvanecía y dejaba
+   * la pantalla vacía: sin roles, el formulario no podía dar de alta a nadie y
+   * nada explicaba por qué. Un error de carga tiene que quedar a la vista y
+   * poder reintentarse.
+   */
+  const [errorCarga, setErrorCarga] = useState<string | null>(null)
+  /**
+   * Resultado fallido del último alta, visible hasta el próximo envío.
+   *
+   * Un aviso flotante se desvanece; un alta que no se pudo confirmar tiene que
+   * quedar a la vista con su referencia mientras la directora revisa el listado.
+   */
+  const [errorAlta, setErrorAlta] = useState<string | null>(null)
+  /**
+   * Clave de idempotencia del alta en curso.
+   *
+   * Se conserva mientras se reintenta el mismo envío, de modo que un reintento
+   * después de un resultado incierto nunca duplica la cuenta. Se renueva cuando
+   * el alta se confirma o cuando la API informa que la clave ya se usó con otros
+   * datos.
+   */
+  const operacionRef = useRef<string | null>(null)
   const [mostrarPass, setMostrarPass] = useState(false)
 
   // --- Estado del modal de edición ---
   const [editando, setEditando] = useState<PerfilRow | null>(null)
   const [editForm, setEditForm] = useState({ nombre: '', apellido: '', dni: '', telefono: '', direccion: '', legajo_nro: '' })
   const [editRolId, setEditRolId] = useState<string>('')
-  const [editHijos, setEditHijos] = useState<string[]>([])
-  const [editTutor, setEditTutor] = useState<string>('')
   const [guardando, setGuardando] = useState(false)
 
   const {
-    register, handleSubmit, reset, watch,
+    register, handleSubmit, reset, watch, setError,
     formState: { errors, isSubmitting },
   } = useForm<UsuarioForm>({ resolver: zodResolver(usuarioSchema), mode: 'onTouched' })
 
@@ -87,14 +155,26 @@ export default function UsuariosPage() {
 
   const cargar = useCallback(async () => {
     setLoading(true)
+    setErrorCarga(null)
     try {
-      const [rolesData, perfilesData, relacionesData] = await Promise.all([
-        obtenerRoles(), obtenerPerfiles(), obtenerRelacionesFamiliares(),
-      ])
+      const [rolesData, perfilesData, relacionesData] = await conLimite(
+        Promise.all([obtenerRoles(), obtenerPerfiles(), obtenerRelacionesFamiliares()]),
+        LIMITE_DE_CARGA_MS
+      )
       setRoles((rolesData ?? []) as Rol[])
       setPerfiles((perfilesData ?? []) as PerfilRow[])
       setRelaciones(relacionesData)
-    } catch {
+    } catch (error) {
+      // Nunca el mensaje técnico, ni en pantalla ni en la consola: solo el
+      // código de dominio. Un mensaje de PostgREST o de PostgreSQL está en
+      // inglés, nombra tablas y columnas internas y trae códigos como SQLSTATE.
+      //
+      // Es un aviso y no un error de consola: la falla ya está manejada y la
+      // pantalla la muestra con un reintento. En desarrollo, Next trata cada
+      // `console.error` del navegador como un defecto del código y abre su
+      // diálogo de error encima de la pantalla.
+      console.warn('[usuarios] no se pudo cargar la pantalla', registroSeguro(error))
+      setErrorCarga(MENSAJE_CARGA_FALLIDA)
       toast.error('Error al cargar los datos')
     } finally {
       setLoading(false)
@@ -106,8 +186,6 @@ export default function UsuariosPage() {
     cargar()
   }, [rol, cargar])
 
-  const estudiantes = useMemo(() => perfiles.filter((p) => p.rol?.nombre === 'ESTUDIANTE'), [perfiles])
-  const padres = useMemo(() => perfiles.filter((p) => p.rol?.nombre === 'PADRE'), [perfiles])
   const perfilesById = useMemo(() => {
     const m: Record<string, PerfilRow> = {}
     perfiles.forEach((p) => { m[p.id] = p })
@@ -125,23 +203,15 @@ export default function UsuariosPage() {
     return m
   }, [relaciones])
 
-  // Solo alumnos SIN tutor están disponibles para asignar a un padre nuevo
-  const estudiantesSinTutor = useMemo(
-    () => estudiantes.filter((e) => (tutoresDeUnHijo[e.id]?.length ?? 0) === 0),
-    [estudiantes, tutoresDeUnHijo]
-  )
-
-  const toggleHijo = (id: string) => {
-    setHijosSeleccionados((prev) => prev.includes(id) ? prev.filter((h) => h !== id) : [...prev, id])
-  }
-
   const onSubmit = async (data: UsuarioForm) => {
-    if (rolNombreSel === 'ESTUDIANTE' && !tutorSeleccionado) {
-      toast.error('Un alumno debe tener un padre/tutor asignado.')
-      return
-    }
+    // El tutor no es requisito para dar de alta a un alumno (EPT-9), y el
+    // vínculo parental no se envía: `padres_hijos` no existe en el esquema
+    // versionado y la API lo rechaza antes de escribir nada.
+    setErrorAlta(null)
+    operacionRef.current ??= nuevoIdentificadorDeOperacion()
     try {
       await crearUsuario({
+        operacion_id: operacionRef.current,
         email: data.email,
         password: data.password,
         nombre: data.nombre,
@@ -151,17 +221,25 @@ export default function UsuariosPage() {
         telefono: data.telefono,
         direccion: data.direccion,
         legajo_nro: data.legajo_nro,
-        hijos_ids: rolNombreSel === 'PADRE' ? hijosSeleccionados : undefined,
-        tutor_id: rolNombreSel === 'ESTUDIANTE' ? (tutorSeleccionado || undefined) : undefined,
       })
+      operacionRef.current = null
       toast.success(`Usuario creado: ${data.email}`)
       reset()
-      setHijosSeleccionados([])
-      setTutorSeleccionado('')
       await cargar()
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'No se pudo crear el usuario'
-      toast.error(message)
+      const mensaje = mensajeParaMostrar(error, MENSAJE_ALTA_FALLIDA)
+      setErrorAlta(mensaje)
+      toast.error(mensaje)
+
+      if (error instanceof ErrorDeDominio) {
+        if (error.codigo === 'OPERACION_REUTILIZADA') operacionRef.current = null
+        if (error.campo && CAMPOS_DEL_ALTA.has(error.campo)) {
+          setError(error.campo as keyof UsuarioForm, { type: 'server', message: error.message })
+        }
+        // Si no se sabe si la cuenta quedó creada, el listado es donde la
+        // directora lo comprueba: se vuelve a cargar.
+        if (error.codigo === 'ALTA_SIN_CONFIRMAR') await cargar()
+      }
     }
   }
 
@@ -173,15 +251,9 @@ export default function UsuariosPage() {
       telefono: p.telefono ?? '', direccion: p.direccion ?? '', legajo_nro: p.legajo_nro ?? '',
     })
     setEditRolId(p.rol_id ? String(p.rol_id) : '')
-    setEditHijos(hijosDeUnPadre[p.id] ?? [])
-    setEditTutor(tutoresDeUnHijo[p.id]?.[0] ?? '')
   }
 
   const editRolNombre = roles.find((r) => String(r.id) === editRolId)?.nombre
-
-  const toggleEditHijo = (id: string) => {
-    setEditHijos((prev) => prev.includes(id) ? prev.filter((h) => h !== id) : [...prev, id])
-  }
 
   const guardarEdicion = async () => {
     if (!editando) return
@@ -189,7 +261,6 @@ export default function UsuariosPage() {
     if (!soloLetras.test(editForm.apellido) || editForm.apellido.trim().length < longitudMinimaNombre) { toast.error('Apellido inválido'); return }
     if (!patronDni.test(editForm.dni)) { toast.error(mensajeDniInvalido); return }
     if (!editRolId) { toast.error('Seleccioná un rol'); return }
-    if (editRolNombre === 'ESTUDIANTE' && !editTutor) { toast.error('Un alumno debe tener un padre/tutor asignado.'); return }
 
     setGuardando(true)
     try {
@@ -203,24 +274,15 @@ export default function UsuariosPage() {
         rol_id: Number(editRolId),
       })
 
-      // Sincronizar vínculos según el rol resultante
-      if (editRolNombre === 'PADRE') {
-        await setHijosDePadre(editando.id, editHijos)
-        await setTutorDeHijo(editando.id, null) // por si antes era hijo
-      } else if (editRolNombre === 'ESTUDIANTE') {
-        await setTutorDeHijo(editando.id, editTutor)
-        await setHijosDePadre(editando.id, []) // por si antes era padre
-      } else {
-        await setHijosDePadre(editando.id, [])
-        await setTutorDeHijo(editando.id, null)
-      }
-
+      // No se sincroniza ningún vínculo parental: la escritura sobre
+      // `padres_hijos` se retiró porque la tabla no existe en las migraciones.
       toast.success('Usuario actualizado')
       setEditando(null)
       await cargar()
     } catch (error) {
-      const m = error instanceof Error ? error.message : ''
-      toast.error(m.includes('perfiles_dni') ? 'Ya existe una persona con ese DNI.' : (m || 'No se pudo actualizar'))
+      // El servicio ya tradujo el error por el nombre exacto de la restricción;
+      // cualquier otra cosa se reemplaza por un mensaje estable.
+      toast.error(mensajeParaMostrar(error, MENSAJE_EDICION_FALLIDA))
     } finally {
       setGuardando(false)
     }
@@ -236,19 +298,35 @@ export default function UsuariosPage() {
     )
   }
 
-  // Alumnos elegibles como hijos al editar un padre: los que ya son sus hijos + los que no tienen tutor
-  const estudiantesEditables = editando
-    ? estudiantes.filter((e) => editHijos.includes(e.id) || (tutoresDeUnHijo[e.id]?.length ?? 0) === 0)
-    : []
-
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">Gestión de usuarios</h1>
         <p className="text-neutral-500 text-sm mt-0.5">
-          Creá cuentas de acceso (docentes, padres, alumnos, personal), asignales su rol y editá sus vínculos.
+          Creá cuentas de acceso (docentes, padres, alumnos, personal), asignales su rol y mantené sus datos.
         </p>
       </div>
+
+      {errorCarga && (
+        <div
+          role="alert"
+          className="bg-red-50 border border-red-200 rounded-2xl p-4 flex flex-wrap gap-3 items-start"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-red-800">
+              No pudimos cargar la gestión de usuarios
+            </p>
+            <p className="text-sm text-red-700 mt-1">{errorCarga}</p>
+            <p className="text-sm text-red-700 mt-1">
+              El listado que ves puede estar incompleto. No crees cuentas hasta
+              resolverlo.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={cargar}>
+            Reintentar
+          </Button>
+        </div>
+      )}
 
       {/* Formulario de creación */}
       <div className="bg-white rounded-2xl border border-neutral-200 p-6">
@@ -256,6 +334,18 @@ export default function UsuariosPage() {
           <UserPlus size={20} weight="fill" className="text-brand-500" />
           <h2 className="font-bold text-neutral-900">Nuevo usuario</h2>
         </div>
+        {errorAlta && (
+          <div
+            role="alert"
+            className="mb-5 bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3 items-start"
+          >
+            <Warning size={18} weight="fill" className="text-red-600 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-red-800">No se completó el alta</p>
+              <p className="text-sm text-red-700 mt-1 break-words">{errorAlta}</p>
+            </div>
+          </div>
+        )}
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">
             <Input label="Nombre" required placeholder="María" {...register('nombre')} error={errors.nombre?.message} />
@@ -295,73 +385,17 @@ export default function UsuariosPage() {
             <Input label="Legajo (opcional)" placeholder="2027-0001" {...register('legajo_nro')} error={errors.legajo_nro?.message} />
           </div>
 
-          {/* PADRE: asignar hijos (opcional). Solo alumnos sin tutor. */}
-          {rolNombreSel === 'PADRE' && (
-            <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
-              <p className="text-sm font-semibold text-brand-800 mb-1">
-                Hijos a cargo <span className="text-neutral-400 font-normal">(opcional)</span>
-              </p>
-              <p className="text-xs text-brand-600 mb-3">
-                Solo aparecen los alumnos que todavía no tienen tutor. Podés dejarlo vacío y asignarlos al crear cada alumno.
-              </p>
-              {estudiantesSinTutor.length === 0 ? (
-                <p className="text-xs text-neutral-500">
-                  No hay alumnos sin tutor disponibles.
+          {/* Vínculo parental: pertenece a EPT-13 y todavía no tiene migración. */}
+          {(rolNombreSel === 'PADRE' || rolNombreSel === 'ESTUDIANTE') && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex gap-3 items-start">
+              <Warning size={18} weight="fill" className="text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-800">
+                <p className="font-semibold">{VINCULO_PARENTAL_NO_DISPONIBLE}</p>
+                <p className="mt-1 text-amber-700">
+                  Podés crear la cuenta igual: el vínculo no es requisito. La situación
+                  académica del alumno se administra desde Alumnos.
                 </p>
-              ) : (
-                <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
-                  {estudiantesSinTutor.map((e) => (
-                    <label
-                      key={e.id}
-                      className={cn(
-                        'flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors bg-white',
-                        hijosSeleccionados.includes(e.id) ? 'border-brand-400 ring-1 ring-brand-300' : 'border-neutral-200 hover:border-neutral-300'
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        className="w-4 h-4 rounded border-neutral-300 accent-brand-500"
-                        checked={hijosSeleccionados.includes(e.id)}
-                        onChange={() => toggleHijo(e.id)}
-                      />
-                      <span className="text-sm text-neutral-800 flex-1">
-                        {e.apellido}, {e.nombre}
-                        {e.legajo_nro && <span className="text-neutral-400 font-mono text-xs ml-1.5">Leg. {e.legajo_nro}</span>}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
-              {hijosSeleccionados.length > 0 && (
-                <p className="text-xs text-brand-700 font-medium mt-2">{hijosSeleccionados.length} hijo(s) seleccionado(s)</p>
-              )}
-            </div>
-          )}
-
-          {/* ESTUDIANTE: asignar tutor (obligatorio) */}
-          {rolNombreSel === 'ESTUDIANTE' && (
-            <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
-              {padres.length === 0 ? (
-                <div className="flex items-start gap-2 text-sm text-amber-700">
-                  <Warning size={16} weight="fill" className="mt-0.5 shrink-0" />
-                  <p>
-                    Todavía no hay padres/tutores creados. Para crear un alumno primero tenés que
-                    crear al menos una cuenta de <strong>padre/tutor</strong>.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <Select
-                    label="Padre / tutor"
-                    required
-                    placeholder="Seleccionar padre/tutor..."
-                    options={padres.map((p) => ({ value: p.id, label: `${p.apellido}, ${p.nombre}` }))}
-                    value={tutorSeleccionado}
-                    onChange={(e) => setTutorSeleccionado(e.target.value)}
-                  />
-                  <p className="text-xs text-brand-600 mt-2">Todo alumno debe tener un padre/tutor a cargo.</p>
-                </>
-              )}
+              </div>
             </div>
           )}
 
@@ -465,8 +499,13 @@ export default function UsuariosPage() {
           <div className="relative w-full max-w-lg bg-white rounded-2xl border border-neutral-200 shadow-xl my-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
               <h3 className="font-bold text-neutral-900">Editar usuario</h3>
-              <button onClick={() => setEditando(null)} className="text-neutral-400 hover:text-neutral-600 p-1 rounded-lg hover:bg-neutral-100">
-                <X size={18} />
+              <button
+                type="button"
+                onClick={() => setEditando(null)}
+                aria-label="Cerrar la edición"
+                className="text-neutral-500 hover:text-neutral-700 p-1 rounded-lg hover:bg-neutral-100"
+              >
+                <X size={18} aria-hidden="true" />
               </button>
             </div>
 
@@ -491,40 +530,13 @@ export default function UsuariosPage() {
                 <Input label="Legajo" value={editForm.legajo_nro} onChange={(e) => setEditForm((f) => ({ ...f, legajo_nro: e.target.value }))} />
               </div>
 
-              {/* Vínculos según el rol elegido */}
-              {editRolNombre === 'PADRE' && (
-                <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
-                  <p className="text-sm font-semibold text-brand-800 mb-2">Hijos a cargo</p>
-                  {estudiantesEditables.length === 0 ? (
-                    <p className="text-xs text-neutral-500">No hay alumnos disponibles para asignar.</p>
-                  ) : (
-                    <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
-                      {estudiantesEditables.map((e) => (
-                        <label key={e.id} className={cn(
-                          'flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors bg-white',
-                          editHijos.includes(e.id) ? 'border-brand-400 ring-1 ring-brand-300' : 'border-neutral-200 hover:border-neutral-300'
-                        )}>
-                          <input type="checkbox" className="w-4 h-4 rounded border-neutral-300 accent-brand-500"
-                            checked={editHijos.includes(e.id)} onChange={() => toggleEditHijo(e.id)} />
-                          <span className="text-sm text-neutral-800 flex-1">{e.apellido}, {e.nombre}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {editRolNombre === 'ESTUDIANTE' && (
-                <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
-                  <Select
-                    label="Padre / tutor"
-                    required
-                    placeholder={padres.length ? 'Seleccionar padre/tutor...' : 'No hay padres/tutores creados'}
-                    options={padres.map((p) => ({ value: p.id, label: `${p.apellido}, ${p.nombre}` }))}
-                    value={editTutor}
-                    onChange={(e) => setEditTutor(e.target.value)}
-                  />
-                  <p className="text-xs text-brand-600 mt-2">Todo alumno debe tener un padre/tutor a cargo.</p>
+              {/* Vínculo parental: pertenece a EPT-13 y todavía no tiene migración. */}
+              {(editRolNombre === 'PADRE' || editRolNombre === 'ESTUDIANTE') && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex gap-3 items-start">
+                  <Warning size={18} weight="fill" className="text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-sm text-amber-800">
+                    {VINCULO_PARENTAL_NO_DISPONIBLE} Los datos personales y el rol sí se guardan.
+                  </p>
                 </div>
               )}
             </div>

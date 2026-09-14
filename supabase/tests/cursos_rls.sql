@@ -30,15 +30,15 @@ BEGIN;
 INSERT INTO public.perfiles (user_id, rol_id, nombre, apellido, dni)
 VALUES
     ('11111111-1111-4111-8111-111111111111',
-     (SELECT id FROM public.roles WHERE nombre = 'DIRECTOR'),   'Prueba', 'Directora',  'T90000001'),
+     (SELECT id FROM public.roles WHERE nombre = 'DIRECTOR'),   'Prueba', 'Directora',  '91000001'),
     ('22222222-2222-4222-8222-222222222222',
-     (SELECT id FROM public.roles WHERE nombre = 'DOCENTE'),    'Prueba', 'Docente',    'T90000002'),
+     (SELECT id FROM public.roles WHERE nombre = 'DOCENTE'),    'Prueba', 'Docente',    '91000002'),
     ('33333333-3333-4333-8333-333333333333',
-     (SELECT id FROM public.roles WHERE nombre = 'ESTUDIANTE'), 'Prueba', 'Estudiante', 'T90000003'),
+     (SELECT id FROM public.roles WHERE nombre = 'ESTUDIANTE'), 'Prueba', 'Estudiante', '91000003'),
     ('44444444-4444-4444-8444-444444444444',
-     (SELECT id FROM public.roles WHERE nombre = 'PADRE'),      'Prueba', 'Padre',      'T90000004'),
+     (SELECT id FROM public.roles WHERE nombre = 'PADRE'),      'Prueba', 'Padre',      '91000004'),
     ('55555555-5555-4555-8555-555555555555',
-     (SELECT id FROM public.roles WHERE nombre = 'PERSONAL'),   'Prueba', 'Personal',   'T90000005');
+     (SELECT id FROM public.roles WHERE nombre = 'PERSONAL'),   'Prueba', 'Personal',   '91000005');
 
 -- Los niveles de referencia se resuelven por nombre normalizado en cada bloque.
 -- No se usa una tabla temporal a propósito: pertenecería al usuario de la sesión
@@ -425,7 +425,7 @@ BEGIN
     -- 9.2 Insertarse un perfil nuevo con rol de director.
     BEGIN
         INSERT INTO public.perfiles (user_id, rol_id, nombre, apellido, dni)
-        VALUES ('33333333-3333-4333-8333-333333333333', id_director, 'Falso', 'Director', 'T90000099');
+        VALUES ('33333333-3333-4333-8333-333333333333', id_director, 'Falso', 'Director', '91000099');
         RAISE EXCEPTION 'FALLO 9.2: un estudiante se creó un perfil de director';
     EXCEPTION
         WHEN insufficient_privilege THEN

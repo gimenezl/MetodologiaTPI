@@ -31,7 +31,12 @@
   --color-neutral-100: oklch(0.968 0.007 275);
   --color-neutral-200: oklch(0.928 0.009 275);
   --color-neutral-300: oklch(0.835 0.011 275);
-  --color-neutral-400: oklch(0.665 0.011 275);
+  /* 0.665 daba 3,07:1 sobre blanco: por debajo del 4,5:1 que exige WCAG AA
+     para texto normal. Con 0.56 el contraste sube a 4,67:1 y el tono sigue
+     siendo claramente mas claro que neutral-500, que se usa para el texto
+     secundario con mas peso. Se corrige el token y no cada uso, para que la
+     proxima etiqueta que lo utilice nazca legible. */
+  --color-neutral-400: oklch(0.56 0.011 275);
   --color-neutral-500: oklch(0.535 0.011 275);
   --color-neutral-600: oklch(0.425 0.009 275);
   --color-neutral-700: oklch(0.335 0.008 275);
@@ -136,7 +141,12 @@
   --color-neutral-100: oklch(0.968 0.007 275);
   --color-neutral-200: oklch(0.928 0.009 275);
   --color-neutral-300: oklch(0.835 0.011 275);
-  --color-neutral-400: oklch(0.665 0.011 275);
+  /* 0.665 daba 3,07:1 sobre blanco: por debajo del 4,5:1 que exige WCAG AA
+     para texto normal. Con 0.56 el contraste sube a 4,67:1 y el tono sigue
+     siendo claramente mas claro que neutral-500, que se usa para el texto
+     secundario con mas peso. Se corrige el token y no cada uso, para que la
+     proxima etiqueta que lo utilice nazca legible. */
+  --color-neutral-400: oklch(0.56 0.011 275);
   --color-neutral-500: oklch(0.535 0.011 275);
   --color-neutral-600: oklch(0.425 0.009 275);
   --color-neutral-700: oklch(0.335 0.008 275);

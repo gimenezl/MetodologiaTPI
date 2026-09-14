@@ -6,11 +6,11 @@ import { useEffect, useState } from 'react'
 import {
   House, Users, CalendarCheck, Pulse, FileText,
   SignOut, List, X, Briefcase, ChatCenteredText, UserPlus, Lock,
-  Newspaper, UserCircle, Chalkboard, GraduationCap
+  Newspaper, UserCircle, Chalkboard, GraduationCap, Student, IdentificationCard
 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/Button'
+import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 
 interface NavItem {
   href: string
@@ -23,6 +23,8 @@ const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Inicio', icon: House, roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE'] },
   { href: '/dashboard/usuarios', label: 'Usuarios', icon: UserPlus, roles: ['DIRECTOR'] },
   { href: '/dashboard/legajos', label: 'Legajos', icon: Users, roles: ['DIRECTOR'] },
+  { href: '/dashboard/alumnos', label: 'Alumnos', icon: Student, roles: ['DIRECTOR'] },
+  { href: '/dashboard/mi-legajo', label: 'Mi legajo', icon: IdentificationCard, roles: ['ESTUDIANTE'] },
   { href: '/dashboard/cursos', label: 'Cursos', icon: Chalkboard, roles: ['DIRECTOR'] },
   { href: '/dashboard/niveles', label: 'Niveles', icon: GraduationCap, roles: ['DIRECTOR'] },
   { href: '/dashboard/asistencias', label: 'Asistencias', icon: CalendarCheck, roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE'] },
@@ -229,9 +231,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <p className="text-neutral-500 text-sm mt-2">
                 No tenés permisos para ver esta sección del panel.
               </p>
-              <Link href="/dashboard" className="inline-block mt-6">
-                <Button>Volver al panel</Button>
-              </Link>
+              {/* Un solo control: un enlace con aspecto de botón, no un botón dentro de un enlace. */}
+              <EnlaceBoton href="/dashboard" className="mt-6">
+                Volver al panel
+              </EnlaceBoton>
             </div>
           )}
         </main>
