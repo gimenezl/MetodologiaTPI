@@ -385,6 +385,41 @@ setInterval(() => {}, 1000)
       afirmar(Boolean(nieto) && !procesoVivo(nieto), 'árbol bloqueado: el nieto quedó terminado')
     })
 
+    await conDirectorioTemporal('ept9-padre-termina-', async (directorio) => {
+      const pids = join(directorio, 'pids.json')
+      writeFileSync(join(directorio, 'descendiente.cjs'), 'setInterval(() => {}, 1000)\n')
+      writeFileSync(
+        join(directorio, 'padre.cjs'),
+        `const { spawn } = require('node:child_process')
+const { writeFileSync } = require('node:fs')
+const path = require('node:path')
+const descendiente = spawn(process.execPath, [path.join(__dirname, 'descendiente.cjs')], {
+  detached: process.platform === 'win32',
+  stdio: 'ignore',
+  windowsHide: true,
+})
+descendiente.unref()
+writeFileSync(process.env.EPT_PIDS, JSON.stringify({ descendiente: descendiente.pid }))
+// El padre termina bien antes que su descendiente y deja las tuberías abiertas.
+`
+      )
+
+      const resultado = await ejecutarConLimite(process.execPath, [join(directorio, 'padre.cjs')], {
+        cwd: directorio,
+        env: entornoAcotado({ EPT_PIDS: pids }),
+        limiteMs: 5000,
+      })
+      const aparecieron = await esperarArchivo(pids, 1000)
+      const { descendiente } = aparecieron ? JSON.parse(readFileSync(pids, 'utf8')) : {}
+
+      afirmar(aparecieron, 'padre terminado: el descendiente llegó a arrancar')
+      afirmar(resultado.codigo === 0 && !resultado.vencido, 'padre terminado: se conserva el código de éxito del padre')
+      afirmar(
+        Boolean(descendiente) && !procesoVivo(descendiente),
+        'padre terminado: el descendiente también queda terminado antes de resolver'
+      )
+    })
+
     const inexistente = await ejecutarConLimite('comando-que-no-existe-ept9', [], { limiteMs: 5000 })
     afirmar(
       inexistente.error !== null && inexistente.error !== undefined && !inexistente.vencido,
@@ -469,9 +504,9 @@ setInterval(() => {}, 1000)
     }
     afirmar(propagado && rutaFallo !== '' && !existsSync(rutaFallo), 'limpieza: también se borra cuando el trabajo falla, y el error se propaga')
 
-    const ajeno = { pid: process.pid, exitCode: 0, signalCode: null, once: () => {} }
-    await detener(ajeno)
-    afirmar(procesoVivo(process.pid), 'cierre: un proceso que ya figura terminado no se vuelve a matar')
+    const inexistente = { pid: 2_147_483_647, exitCode: 0, signalCode: null, once: () => {} }
+    await detener(inexistente)
+    afirmar(procesoVivo(process.pid), 'cierre: un PID inexistente no amplía la búsqueda ni afecta procesos ajenos')
   }
 } catch (error) {
   fallos += 1

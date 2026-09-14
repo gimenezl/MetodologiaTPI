@@ -344,6 +344,80 @@ test.describe('La auditoría de contraste falla cerrada', () => {
     expect(medicion.ilegibles.some((i) => i.texto === 'Alumnos' && i.motivo.includes('cubierto'))).toBe(true)
   })
 
+  test('mide cada nodo de texto aunque compartan el mismo elemento', async ({ page }) => {
+    const raiz = await insertarCaso(
+      page,
+      '<div style="background:rgb(255,255,255);padding:16px">' +
+        '<p id="dos-nodos" style="color:rgb(0,0,0);font-size:16px;margin:0">Primero<!-- separación -->Segundo</p>' +
+        '</div>'
+    )
+
+    const medicion = await medirContraste(page, { raiz, esenciales: ['#dos-nodos'] })
+    const esencial = medicion.esenciales.find((resultado) => resultado.selector === '#dos-nodos')
+
+    expect(medicion.inspeccionados, 'cada nodo de texto es una unidad de inspección').toBe(2)
+    expect(medicion.medidos, 'los dos nodos se miden aunque tengan el mismo parentElement').toBe(2)
+    expect(esencial?.textos, 'el selector esencial conserva ambos nodos').toBe(2)
+    expect(esencial?.medidos, 'ninguno queda cubierto por la deduplicación del padre').toBe(2)
+  })
+
+  test('mide todas las líneas y detecta contraste insuficiente después de la tercera', async ({ page }) => {
+    await page.setContent(`
+      <main id="caso-de-contraste" style="background:white">
+        <p id="cuatro-lineas" style="color:black;background:transparent;font-size:16px">Texto distribuido en cuatro líneas</p>
+        <div id="fondo-oscuro" style="background:rgb(17,24,39)"></div>
+      </main>
+    `)
+    await page.evaluate(() => {
+      const texto = document.querySelector('#cuatro-lineas')!
+      const fondoOscuro = document.querySelector('#fondo-oscuro')!
+      const originalCrearRango = document.createRange.bind(document)
+      document.createRange = (() => {
+        const rango = originalCrearRango()
+        rango.getClientRects = (() =>
+          [10, 20, 30, 40].map((top) => ({
+            x: 10,
+            y: top,
+            top,
+            left: 10,
+            right: 110,
+            bottom: top + 8,
+            width: 100,
+            height: 8,
+            toJSON: () => ({}),
+          })) as unknown as DOMRectList) as typeof rango.getClientRects
+        return rango
+      }) as typeof document.createRange
+      document.elementsFromPoint = ((_, y) =>
+        y >= 40 ? [texto, fondoOscuro, document.body, document.documentElement] : [texto, document.body, document.documentElement]
+      ) as typeof document.elementsFromPoint
+    })
+
+    const medicion = await medirContraste(page, {
+      raiz: '#caso-de-contraste',
+      esenciales: ['#cuatro-lineas'],
+    })
+    expect(
+      medicion.hallazgos.some((hallazgo) => hallazgo.selector.startsWith('p#cuatro-lineas')),
+      'la cuarta línea oscura no puede quedar fuera de la auditoría'
+    ).toBe(true)
+  })
+
+  test('rechaza un contraste apenas inferior a 4,5 sin tolerancia oculta', async ({ page }) => {
+    const raiz = await insertarCaso(
+      page,
+      '<div style="background:rgb(255,255,255);padding:16px">' +
+        '<p id="borde-wcag" style="color:rgb(100,122,134);font-size:16px;margin:0">Contraste en el borde</p>' +
+        '</div>'
+    )
+
+    const medicion = await medirContraste(page, { raiz, esenciales: ['#borde-wcag'] })
+    const hallazgo = medicion.hallazgos.find((item) => item.selector.startsWith('p#borde-wcag'))
+
+    expect(hallazgo?.ratio, '4,496 es menor que 4,5 y WCAG no define una tolerancia de 0,005').toBe(4.5)
+    expect(hallazgo, 'el valor redondeado no debe cambiar el veredicto calculado con precisión completa').toBeTruthy()
+  })
+
   test('afirmar que no hay texto visible falla si lo hay', async ({ page }) => {
     await expect(exigirSinTextoVisible(page, 'listado con texto')).rejects.toThrow(/hay texto visible/)
   })

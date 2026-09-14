@@ -184,6 +184,53 @@ export function procesoVivo(pid) {
 }
 
 /**
+ * Recupera los descendientes que Windows todavía atribuye al PID raíz.
+ *
+ * `taskkill /T` no siempre puede reconstruir el árbol si el padre ya terminó.
+ * Win32_Process conserva `ParentProcessId`, así que se toma una foto acotada y
+ * solo se devuelven procesos cuya cadena llega al hijo lanzado por este arnés.
+ */
+function descendientesWindows(pid, graciaMs) {
+  try {
+    const script = [
+      '$ErrorActionPreference = "Stop"',
+      '$p = Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId',
+      '$p | ConvertTo-Json -Compress',
+    ].join('; ')
+    const salida = execFileSync(
+      'powershell.exe',
+      ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
+      { encoding: 'utf8', timeout: graciaMs, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }
+    ).trim()
+    if (!salida) return []
+    const procesos = JSON.parse(salida)
+    const lista = Array.isArray(procesos) ? procesos : [procesos]
+    const porPadre = new Map()
+    for (const item of lista) {
+      const procesoId = Number(item.ProcessId)
+      const padreId = Number(item.ParentProcessId)
+      if (!Number.isInteger(procesoId) || !Number.isInteger(padreId)) continue
+      const hijos = porPadre.get(padreId) ?? []
+      hijos.push(procesoId)
+      porPadre.set(padreId, hijos)
+    }
+    const pendientes = [...(porPadre.get(pid) ?? [])]
+    const encontrados = []
+    while (pendientes.length > 0) {
+      const actual = pendientes.pop()
+      if (encontrados.includes(actual)) continue
+      encontrados.push(actual)
+      pendientes.push(...(porPadre.get(actual) ?? []))
+    }
+    return encontrados
+  } catch {
+    // La eliminación principal todavía se intenta; el llamador verificará el
+    // resultado. No se amplía el alcance a búsquedas por nombre ni por puerto.
+    return []
+  }
+}
+
+/**
  * Detiene un proceso lanzado por este arnés y todo lo que colgó de él.
  *
  * Solo actúa sobre el PID de un hijo propio que todavía no terminó: nunca busca
@@ -196,18 +243,37 @@ export function procesoVivo(pid) {
  */
 export async function detener(proceso, { graciaMs = GRACIA_DE_CIERRE_MS } = {}) {
   if (!proceso || typeof proceso.pid !== 'number') return
-  if (proceso.exitCode !== null || proceso.signalCode !== null) return
-
-  const terminado = new Promise((resolver) => proceso.once('exit', resolver))
+  const raizViva = proceso.exitCode === null && proceso.signalCode === null
+  const terminado = raizViva
+    ? new Promise((resolver) => proceso.once('exit', resolver))
+    : Promise.resolve()
   if (process.platform === 'win32') {
-    try {
-      execFileSync('taskkill', ['/pid', String(proceso.pid), '/T', '/F'], {
-        stdio: 'ignore',
-        timeout: graciaMs,
-        windowsHide: true,
-      })
-    } catch {
-      // Ya había terminado, o `taskkill` no pudo: se verifica abajo.
+    const descendientes = descendientesWindows(proceso.pid, graciaMs)
+    // Nunca se señala un PID raíz que ya terminó: podría haber sido reutilizado
+    // por un proceso ajeno. Si sigue vivo, `/T` es la vía primaria.
+    if (raizViva) {
+      try {
+        execFileSync('taskkill', ['/pid', String(proceso.pid), '/T', '/F'], {
+          stdio: 'ignore',
+          timeout: graciaMs,
+          windowsHide: true,
+        })
+      } catch {
+        // Puede haber terminado entre la comprobación y `taskkill`.
+      }
+    }
+    // Si la raíz ya murió, `/T` puede no encontrarla. Se eliminan solamente los
+    // PID que la foto de Win32_Process vinculó con ese hijo propio.
+    for (const pid of descendientes.reverse()) {
+      try {
+        execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], {
+          stdio: 'ignore',
+          timeout: graciaMs,
+          windowsHide: true,
+        })
+      } catch {
+        // Ya terminó o fue eliminado junto con un ancestro.
+      }
     }
   } else {
     try {
@@ -297,6 +363,9 @@ export function ejecutarConLimite(
         new Promise((r) => proceso.once('close', r)),
         Math.min(graciaMs, 2000)
       )
+      // El código del padre puede ser 0 aunque haya dejado trabajadores vivos.
+      // Se conserva el grupo y se baja antes de resolver como éxito.
+      await detener(proceso, { graciaMs })
       proceso.stdout.destroy()
       proceso.stderr.destroy()
       terminar({ codigo, error: null })

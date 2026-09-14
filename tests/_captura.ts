@@ -1,3 +1,4 @@
+import { rm } from 'node:fs/promises'
 import type { Page } from '@playwright/test'
 
 /**
@@ -16,30 +17,45 @@ import type { Page } from '@playwright/test'
  * el menú de herramientas, que no forman parte de la interfaz de la aplicación.
  */
 export async function capturarSinHerramientas(page: Page, ruta: string) {
-  const errorAbierto = await page.evaluate(() => {
+  const revisarYOcultarIndicadores = () => page.evaluate(() => {
     const portales = Array.from(document.querySelectorAll('nextjs-portal'))
     for (const portal of portales) {
       const dialogo = portal.shadowRoot?.querySelector(
         '[data-nextjs-dialog], [data-nextjs-dialog-overlay], [data-nextjs-error-overlay]'
       )
       if (dialogo) return (dialogo.textContent ?? '').replace(/\s+/gu, ' ').trim().slice(0, 600) || '(sin texto)'
+
+      // No se oculta el portal: un error que aparezca después debe seguir
+      // visible y detectable. Solo se retiran controles inocuos del framework.
+      for (const indicador of portal.shadowRoot?.querySelectorAll(
+        '[data-nextjs-toast], [data-nextjs-dev-tools-button], #__next-build-watcher'
+      ) ?? []) {
+        ;(indicador as HTMLElement).style.setProperty('display', 'none', 'important')
+      }
     }
     return null
   })
-  if (errorAbierto !== null) {
+
+  const exigirSinError = async () => {
+    const errorAbierto = await revisarYOcultarIndicadores()
+    if (errorAbierto === null) return
     throw new Error(
       `Next muestra un diálogo de error abierto: la captura ${ruta} no documentaría el producto. ` +
         `Contenido del diálogo: ${errorAbierto}`
     )
   }
 
-  await page.addStyleTag({
-    content: `
-      nextjs-portal,
-      [data-nextjs-toast],
-      [data-nextjs-dev-tools-button],
-      #__next-build-watcher { display: none !important; }
-    `,
-  })
+  // La lectura ocurre inmediatamente antes de componer la captura.
+  await exigirSinError()
+
   await page.screenshot({ path: ruta, fullPage: true })
+
+  try {
+    // Un overlay puede aparecer mientras Chromium compone la imagen. En ese
+    // caso la captura ya escrita no es evidencia y se elimina.
+    await exigirSinError()
+  } catch (error) {
+    await rm(ruta, { force: true })
+    throw error
+  }
 }

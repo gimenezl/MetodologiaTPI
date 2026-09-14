@@ -248,30 +248,30 @@ export async function medirContraste(page: Page, opciones: OpcionesMedicion = {}
       const esquemaRaiz = String(leerEstilo(document.documentElement).colorScheme ?? '')
       const lienzoOscuro = /\bdark\b/u.test(esquemaRaiz) && !/\blight\b/u.test(esquemaRaiz)
 
-      const estados = new Map<Element, Estado>()
+      // La unidad de auditoría es el nodo de texto, no su elemento padre. Un
+      // mismo elemento puede contener varios nodos con cajas y fondos distintos
+      // (por saltos, pseudomaquetado o contenido intercalado).
+      const estados = new Map<Text, Estado>()
       const res = { ...resultadoVacio, hallazgos: [...resultadoVacio.hallazgos] }
 
       try {
         const recorrido = document.createTreeWalker(raiz, NodeFilter.SHOW_TEXT)
-        const vistos = new Set<Element>()
-
         while (recorrido.nextNode()) {
           const nodo = recorrido.currentNode as Text
           const contenido = (nodo.textContent ?? '').trim()
           if (contenido.length === 0) continue
           const elemento = nodo.parentElement
-          if (!elemento || vistos.has(elemento)) continue
-          vistos.add(elemento)
+          if (!elemento) continue
           res.inspeccionados += 1
 
           const texto = contenido.slice(0, 60)
           const selector = describir(elemento)
           const omitir = (motivo: string) => {
-            estados.set(elemento, { estado: 'omitido', motivo })
+            estados.set(nodo, { estado: 'omitido', motivo })
             res.omitidos.push({ texto, selector, motivo })
           }
           const rechazar = (motivo: string) => {
-            estados.set(elemento, { estado: 'ilegible', motivo })
+            estados.set(nodo, { estado: 'ilegible', motivo })
             res.ilegibles.push({ texto, selector, motivo })
           }
 
@@ -354,12 +354,13 @@ export async function medirContraste(page: Page, opciones: OpcionesMedicion = {}
             continue
           }
 
-          // 4. Pila de pintado real en el centro de cada línea (hasta tres).
+          // 4. Pila de pintado real en el centro de cada línea. No se muestrea:
+          // una línea posterior puede cruzar un fondo distinto de las primeras.
           let peor = Infinity
           let fondoPeor: Rgb = [255, 255, 255]
           let problema: string | null = null
 
-          for (const linea of lineas.slice(0, 3)) {
+          for (const linea of lineas) {
             const x = linea.left + linea.width / 2
             const y = linea.top + linea.height / 2
             if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) {
@@ -459,7 +460,7 @@ export async function medirContraste(page: Page, opciones: OpcionesMedicion = {}
             continue
           }
 
-          estados.set(elemento, { estado: 'medido' })
+          estados.set(nodo, { estado: 'medido' })
           res.medidos += 1
 
           const tamano = parseFloat(String(estilo.fontSize))
@@ -467,7 +468,9 @@ export async function medirContraste(page: Page, opciones: OpcionesMedicion = {}
           // WCAG considera «grande» desde 18,66 px en negrita o 24 px.
           const grande = tamano >= 24 || (negrita && tamano >= 18.66)
           const minimo = grande ? minimoGrande : minimoNormal
-          if (peor + 0.005 < minimo) {
+          // WCAG define el umbral, no una banda de tolerancia. Se conserva toda
+          // la precisión para decidir y solo se redondea el valor informado.
+          if (peor < minimo) {
             res.hallazgos.push({
               texto,
               selector,
@@ -501,19 +504,20 @@ export async function medirContraste(page: Page, opciones: OpcionesMedicion = {}
               faltantes.push({ texto: '', selector: describir(coincidencia), motivo: 'fuera de la región auditada' })
               continue
             }
-            const portadores = new Set<Element>()
+            const portadores: Text[] = []
             const caminante = document.createTreeWalker(coincidencia, NodeFilter.SHOW_TEXT)
             while (caminante.nextNode()) {
               const nodo = caminante.currentNode as Text
-              if ((nodo.textContent ?? '').trim() && nodo.parentElement) portadores.add(nodo.parentElement)
+              if ((nodo.textContent ?? '').trim() && nodo.parentElement) portadores.push(nodo)
             }
-            if (portadores.size === 0) {
+            if (portadores.length === 0) {
               faltantes.push({ texto: '', selector: describir(coincidencia), motivo: 'el elemento esencial no tiene texto' })
               continue
             }
-            for (const portador of portadores) {
+            for (const nodo of portadores) {
               textos += 1
-              const estado = estados.get(portador)
+              const estado = estados.get(nodo)
+              const portador = nodo.parentElement!
               if (estado?.estado === 'medido') {
                 medidosEsenciales += 1
               } else {
