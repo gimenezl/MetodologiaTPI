@@ -1,10 +1,9 @@
 /**
  * Los bancos de pruebas de interfaz no existen en producción. Se comprueba.
  *
- * La revisión objetó, con razón, que la evidencia anterior miraba el código
- * fuente: leía la condición `NODE_ENV === 'production' || EPT_UI_HARNESS !== '1'`
- * y daba por demostrado el resultado. Eso no prueba nada sobre el binario que
- * se despliega; prueba que alguien escribió una condición.
+ * La evidencia de una revisión anterior miraba el código fuente: leía la
+ * condición que excluye los bancos y daba por demostrado el resultado. Eso no
+ * prueba nada sobre el binario que se despliega.
  *
  * Acá se compila la aplicación en modo producción sobre un directorio limpio,
  * se levanta con `EPT_UI_HARNESS=1` —el peor escenario: la variable encendida
@@ -15,7 +14,8 @@
  *   1. La respuesta de cada banco es idéntica, byte a byte, a la de una ruta
  *      que nunca existió. Comparar longitudes no alcanzaba.
  *   2. Los manifiestos de rutas no registran los bancos.
- *   3. Ningún artefacto compilado es un `page.banco` ni contiene sus datos.
+ *   3. Ningún artefacto compilado es un `page.banco` ni contiene sus datos, y
+ *      todos los artefactos del servidor se pudieron leer.
  *   4. Ningún cuerpo filtra rastros del banco ni los segmentos de su URL.
  *
  * Para que un 404 signifique algo, primero se comprueba que el servidor sirve
@@ -23,19 +23,29 @@
  *
  *     node supabase/tests/harness_produccion.mjs
  *
- * Todas las peticiones tienen límite de espera, el arranque también, y el
- * servidor se cierra siempre: ante éxito, error, tiempo agotado o excepción.
- * Las piezas que esto usa se prueban aparte, en `harness_produccion_negativas.mjs`.
+ * Límites: `next build` tiene un techo configurable con `EPT_LIMITE_BUILD_MS`
+ * (por defecto 15 minutos); al vencer se detiene el árbol completo de procesos
+ * y la prueba falla mostrando la salida acumulada. El arranque, cada petición y
+ * el cierre también tienen límite. El servidor se cierra siempre: ante éxito,
+ * error, tiempo agotado o excepción. Las piezas se prueban aparte, en
+ * `harness_produccion_negativas.mjs`.
  */
 
 import { spawn } from 'node:child_process'
 import { rmSync } from 'node:fs'
+import { join } from 'node:path'
 import {
+  CLI_NEXT,
+  LIMITE_BUILD_POR_DEFECTO_MS,
+  RAIZ,
   compararConControl,
   detener,
+  ejecutarConLimite,
   entornoAcotado,
   esperarAlServidor,
+  exigirPuertoLibre,
   filtracionesEn,
+  leerLimite,
   pedir,
   puertoOcupado,
   revisarArtefactos,
@@ -69,77 +79,68 @@ function afirmar(condicion, descripcion) {
   console.error(`FALLO  ${descripcion}`)
 }
 
-function ejecutar(comando, argumentos) {
-  return new Promise((resolver, rechazar) => {
-    const proceso = spawn(comando, argumentos, {
-      env: entornoAcotado(),
-      shell: process.platform === 'win32',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    let salida = ''
-    proceso.stdout.on('data', (fragmento) => {
-      salida += fragmento
-    })
-    proceso.stderr.on('data', (fragmento) => {
-      salida += fragmento
-    })
-    proceso.on('error', rechazar)
-    proceso.on('close', (codigo) => resolver({ codigo, salida }))
-  })
-}
-
 let servidor = null
 
 async function principal() {
-  // Nadie puede estar escuchando ya en el puerto. Si un servidor de una corrida
-  // anterior sigue vivo, `next start` no lo consigue y el arnés termina midiendo
-  // ese binario viejo sin enterarse.
-  if (await puertoOcupado(`${BASE}${RUTA_LEGITIMA}`)) {
-    throw new Error(
-      `el puerto ${PUERTO} ya está ocupado. Cerrá ese proceso antes de correr esta ` +
-        'prueba: de lo contrario mediría un servidor que no corresponde a este código.'
-    )
-  }
+  const limiteBuildMs = leerLimite('EPT_LIMITE_BUILD_MS', LIMITE_BUILD_POR_DEFECTO_MS)
+
+  await exigirPuertoLibre(`${BASE}${RUTA_LEGITIMA}`)
 
   // El build se hace sobre un directorio limpio. Una corrida de Playwright deja
   // un build de desarrollo bajo `.next/dev` que sí contiene los bancos: para eso
   // existe. Medir sobre esos restos hacía que el arnés hablara de otro build.
-  rmSync('.next', { recursive: true, force: true })
+  const salidaDelBuild = join(RAIZ, '.next')
+  rmSync(salidaDelBuild, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
 
-  console.log('Compilando en modo producción. Puede tardar varios minutos.')
-  const compilacion = await ejecutar('npx', ['next', 'build'])
-  if (compilacion.codigo !== 0) {
-    console.error(compilacion.salida.slice(-4000))
-    throw new Error('la compilación de producción no terminó bien')
+  console.log(`Compilando en modo producción (límite: ${limiteBuildMs} ms).`)
+  const compilacion = await ejecutarConLimite(process.execPath, [CLI_NEXT, 'build'], {
+    cwd: RAIZ,
+    env: entornoAcotado(),
+    limiteMs: limiteBuildMs,
+  })
+  if (compilacion.vencido) {
+    console.error(compilacion.registro.slice(-4000))
+    throw new Error(
+      `la compilación superó el límite de ${limiteBuildMs} ms; se detuvo con todo su árbol de procesos`
+    )
   }
-  console.log('OK  la aplicación compila en modo producción')
+  if (compilacion.error || compilacion.codigo !== 0) {
+    console.error(compilacion.registro.slice(-4000))
+    throw new Error(
+      `la compilación de producción no terminó bien (código ${compilacion.codigo}` +
+        `${compilacion.error ? `, ${compilacion.error.message}` : ''})`
+    )
+  }
+  afirmar(true, `la aplicación compila en modo producción (${compilacion.duracionMs} ms)`)
 
-  const { problemas, manifiestosRevisados } = revisarArtefactos('.next')
+  const { problemas, manifiestosRevisados, artefactosLeidos } = revisarArtefactos(salidaDelBuild)
   afirmar(
     manifiestosRevisados > 0,
-    `se encontró al menos un manifiesto de rutas (${manifiestosRevisados})`
+    `se encontró al menos un manifiesto de rutas legible (${manifiestosRevisados})`
   )
+  afirmar(artefactosLeidos > 0, `se leyeron los artefactos del servidor (${artefactosLeidos})`)
   afirmar(
     problemas.length === 0,
-    `ningún artefacto de producción corresponde al banco ni contiene sus datos${
+    `ningún artefacto de producción corresponde al banco, contiene sus datos o quedó sin leer${
       problemas.length ? `\n       ${problemas.slice(0, 5).join('\n       ')}` : ''
     }`
   )
 
-  servidor = spawn('npx', ['next', 'start', '--port', String(PUERTO)], {
+  servidor = spawn(process.execPath, [CLI_NEXT, 'start', '--port', String(PUERTO)], {
+    cwd: RAIZ,
     env: entornoAcotado(),
-    shell: process.platform === 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
+    detached: process.platform !== 'win32',
+    windowsHide: true,
   })
   let registro = ''
-  servidor.stdout.on('data', (t) => {
-    registro += t
-  })
-  servidor.stderr.on('data', (t) => {
-    registro += t
-  })
+  const acumular = (t) => {
+    registro = (registro + t).slice(-16_000)
+  }
+  servidor.stdout.on('data', acumular)
+  servidor.stderr.on('data', acumular)
 
-  if (!(await esperarAlServidor(`${BASE}${RUTA_LEGITIMA}`))) {
+  if (!(await esperarAlServidor(`${BASE}${RUTA_LEGITIMA}`, { proceso: servidor }))) {
     console.error(registro.slice(-4000))
     throw new Error('el servidor de producción no llegó a atender peticiones a tiempo')
   }
@@ -208,8 +209,11 @@ try {
   console.error(`FALLO  ${error instanceof Error ? error.message : String(error)}`)
 } finally {
   await detener(servidor)
-  const sigueVivo = await puertoOcupado(`${BASE}${RUTA_LEGITIMA}`)
-  afirmar(!sigueVivo, `el puerto ${PUERTO} quedó libre al terminar`)
+  afirmar(
+    !servidor || servidor.exitCode !== null || servidor.signalCode !== null,
+    'el proceso del servidor terminó al cerrar'
+  )
+  afirmar(!(await puertoOcupado(`${BASE}${RUTA_LEGITIMA}`)), `el puerto ${PUERTO} quedó libre al terminar`)
 }
 
 if (fallos > 0) {
