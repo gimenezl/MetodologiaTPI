@@ -9,14 +9,20 @@ la semántica de controles interactivos, la auditoría de contraste y el arnés 
 compilación. Este documento registra qué se ejecutó, con qué comando exacto, con
 qué código de salida y con qué resultado.
 
-**Estado.** El candidato funcional es `c3aaba0394bbdea59cd848a67f38d30fbab7b0be`.
-Se verificó completo sobre Supabase local y bucle local: 29 pasos, con las
-salidas esperadas en todos. Los siete bloqueantes de la cuarta revisión están
-corregidos. Cada uno tiene prueba positiva, prueba negativa y una mutación que
-demuestra que la prueba falla si la corrección se revierte. La verificación
-final encontró además dos defectos propios y una afirmación sin respaldo en un
-comentario de la migración 010. Los tres se corrigieron en commits nuevos antes
-de congelar el candidato.
+**Estado.** El candidato verificado de extremo a extremo fue
+`c3aaba0394bbdea59cd848a67f38d30fbab7b0be`. El candidato endurecido para revisión
+es `72d5fb6f323aefc154d0e725b0ec7f30edb4f754`: conserva ese código productivo y
+agrega el cierre de tres defectos del instrumental de prueba. Los 29 pasos de la
+verificación integral tuvieron las salidas esperadas sobre `c3aaba0`; el delta
+de `72d5fb6` pasó sus pruebas focalizadas, TypeScript, ESLint y `diff --check`.
+
+Los siete bloqueantes de la cuarta revisión están corregidos, pero su evidencia
+no tiene una forma uniforme y no se presenta como si la tuviera. Los bloqueantes
+1, 2, 3 y 6 tienen mutaciones reproducibles; el 1 también tiene la prueba inversa
+N. Los bloqueantes 4 y 5 tienen casos positivos y negativos directos, incluida la
+carrera donde el padre termina antes que su descendiente y tres discriminadores
+del medidor anterior. El bloqueante 7 se verifica por lectura estructural y
+trazabilidad, no mediante una mutación artificial del documento.
 
 **Jira.** EPT-9 y EPT-20 a EPT-25 siguen `En curso`. **Git.** No hubo push, pull
 request ni merge, y `main` no cambió. **Revisión independiente del nuevo SHA:
@@ -33,8 +39,9 @@ distintas, y conviene no confundirlos:
 
 | Commit | Qué contiene |
 |---|---|
-| **Candidato funcional** `c3aaba0394bbdea59cd848a67f38d30fbab7b0be` | Todo el código, las migraciones y las pruebas. Todas las ejecuciones de este documento corrieron sobre este SHA, salvo donde se indica otro |
-| **Commits documentales** (todos los posteriores al candidato) | Solo este documento y las capturas de `docs/evidence/EPT-9/`. No tocan código, migraciones ni pruebas |
+| **Candidato integral** `c3aaba0394bbdea59cd848a67f38d30fbab7b0be` | Código productivo, migraciones y pruebas de la cuarta ronda; sobre este SHA corrieron los 29 pasos integrales de la sección 12.1 |
+| **Candidato endurecido** `72d5fb6f323aefc154d0e725b0ec7f30edb4f754` | Incorpora dos commits documentales previos y el commit funcional `72d5fb6`, que corrige contraste, capturas y cierre de procesos. Sus verificaciones focalizadas están en 12.1 bis |
+| **Commit documental posterior** | Actualiza únicamente este documento con el SHA y los resultados definitivos del endurecimiento |
 
 Un archivo no puede contener el SHA del commit que lo introduce, porque ese SHA
 depende del contenido del archivo. Los SHA de los commits documentales quedan en
@@ -42,26 +49,25 @@ los comentarios de Jira y en el informe final. Para comprobar que esos commits n
 tocan nada más:
 
 ```bash
-git diff --stat c3aaba0394bbdea59cd848a67f38d30fbab7b0be HEAD
+git diff --stat 72d5fb6f323aefc154d0e725b0ec7f30edb4f754 HEAD
 ```
 
-La salida esperada lista únicamente `docs/evidence/EPT-9.md` y archivos
-`docs/evidence/EPT-9/*.png`.
+La salida esperada lista únicamente `docs/evidence/EPT-9.md`.
 
-### Métricas del candidato funcional, calculadas con Git
+### Métricas del candidato endurecido, calculadas con Git
 
 | Métrica | Comando | Resultado |
 |---|---|---|
-| Commits desde la base | `git rev-list --count e31bdf250e06ca9aae1233c2ee737a0443f4df51..c3aaba0394bbdea59cd848a67f38d30fbab7b0be` | `29` |
-| Diferencia contra la base | `git diff --shortstat e31bdf250e06ca9aae1233c2ee737a0443f4df51 c3aaba0394bbdea59cd848a67f38d30fbab7b0be` | `131 files changed, 17511 insertions(+), 612 deletions(-)` |
-| Commits de la cuarta ronda | `git rev-list --count 4b593a70aa2030c6d1f3051f47d5131b6d41292c..c3aaba0394bbdea59cd848a67f38d30fbab7b0be` | `6` |
-| Diferencia de la cuarta ronda | `git diff --shortstat 4b593a70aa2030c6d1f3051f47d5131b6d41292c c3aaba0394bbdea59cd848a67f38d30fbab7b0be` | `37 files changed, 5469 insertions(+), 1930 deletions(-)` |
-| Migraciones en el candidato | `git ls-tree -r --name-only c3aaba0394bbdea59cd848a67f38d30fbab7b0be supabase/migrations` | 10 archivos, de `001` a `010` |
+| Commits desde la base | `git rev-list --count e31bdf250e06ca9aae1233c2ee737a0443f4df51..72d5fb6f323aefc154d0e725b0ec7f30edb4f754` | `32` |
+| Diferencia contra la base | `git diff --shortstat e31bdf250e06ca9aae1233c2ee737a0443f4df51 72d5fb6f323aefc154d0e725b0ec7f30edb4f754` | `132 files changed, 18241 insertions(+), 612 deletions(-)` |
+| Commits desde el inicio de la cuarta ronda | `git rev-list --count 4b593a70aa2030c6d1f3051f47d5131b6d41292c..72d5fb6f323aefc154d0e725b0ec7f30edb4f754` | `9` |
+| Diferencia desde el inicio de la cuarta ronda | `git diff --shortstat 4b593a70aa2030c6d1f3051f47d5131b6d41292c 72d5fb6f323aefc154d0e725b0ec7f30edb4f754` | `73 files changed, 7094 insertions(+), 2825 deletions(-)` |
+| Migraciones en el candidato | `git ls-tree -r --name-only 72d5fb6f323aefc154d0e725b0ec7f30edb4f754 supabase/migrations` | 10 archivos, de `001` a `010` |
 
-De los 131 archivos, 61 son capturas PNG de `docs/evidence/EPT-9/` y 70 son
+De los 132 archivos, 61 son capturas PNG de `docs/evidence/EPT-9/` y 71 son
 código, migraciones, pruebas, configuración y este documento en su versión
 anterior. Las cifras de rondas previas **no** se copiaron: todas se volvieron a
-calcular sobre `c3aaba0`.
+calcular sobre `72d5fb6`.
 
 ### Requisitos para copiar los comandos
 
@@ -100,14 +106,16 @@ dos cosas, la matriz de la sección 8 cita las dos.
 | Base integrada | `e31bdf250e06ca9aae1233c2ee737a0443f4df51` (merge del PR #3, EPT-55; contiene EPT-8 y EPT-55) | `git ls-remote origin refs/heads/main` devolvió ese SHA |
 | Rama | `codex/ept-9-academic-students` | `git branch --show-current` |
 | Worktree | `E:\Escritorio\codigo\MetodologiaTPI-ept9` | — |
-| HEAD al iniciar la cuarta ronda | `4b593a70aa2030c6d1f3051f47d5131b6d41292c` | Es ancestro del candidato: `git merge-base --is-ancestor 4b593a70aa2030c6d1f3051f47d5131b6d41292c c3aaba0394bbdea59cd848a67f38d30fbab7b0be` terminó con salida 0 |
-| Candidato funcional | `c3aaba0394bbdea59cd848a67f38d30fbab7b0be` | Paso 00 de la sección 12 |
+| HEAD al iniciar la cuarta ronda | `4b593a70aa2030c6d1f3051f47d5131b6d41292c` | Es ancestro del candidato: `git merge-base --is-ancestor 4b593a70aa2030c6d1f3051f47d5131b6d41292c 72d5fb6f323aefc154d0e725b0ec7f30edb4f754` terminó con salida 0 |
+| Candidato integral | `c3aaba0394bbdea59cd848a67f38d30fbab7b0be` | Paso 00 de la sección 12.1 |
+| HEAD al iniciar el endurecimiento final | `0fcd853fb27f93f9ad5bd5fa608e981bd9259f11` | Árbol limpio; ancestro directo del candidato endurecido |
+| Candidato endurecido | `72d5fb6f323aefc154d0e725b0ec7f30edb4f754` | Commit funcional adicional y pruebas focalizadas de 12.1 bis |
 | Rama remota | No existe | `git ls-remote origin 'refs/heads/codex/ept-9-*'` no devolvió nada |
 | Pull requests | Ninguno | `gh pr list --head codex/ept-9-academic-students --state all --json number,state,url` devolvió `[]` |
 | Checkout original `E:\Escritorio\codigo\MetodologiaTPI` | No se modificó, ni se limpió, ni se reseteó, ni se usó para implementar | — |
 
 Los 23 commits anteriores a esta ronda conservan su SHA: no hubo amend, rebase
-ni squash. Los seis commits de la cuarta ronda, en orden:
+ni squash. Los nueve commits posteriores al inicio de la cuarta ronda, en orden:
 
 | Commit | Asunto | Alcance |
 |---|---|---|
@@ -117,6 +125,9 @@ ni squash. Los seis commits de la cuarta ronda, en orden:
 | `d639e87` | `test(pruebas): acotar el build y ampliar negativos` | 3 archivos, +394 / −199 |
 | `3c13a66` | `fix(usuarios): registrar la carga fallida como aviso y esperar los roles` | 3 archivos, +62 / −17 |
 | `c3aaba0` | `fix(usuarios): verificar el perfil después de un alta confirmada` | 3 archivos, +75 / −5 |
+| `a88aa64` | `docs(alumnos): reconciliar la evidencia final con el candidato` | Documento y capturas de evidencia |
+| `0fcd853` | `docs(alumnos): corregir una fila de la matriz de evidencia` | Solo este documento |
+| `72d5fb6` | `test(pruebas): cerrar carreras en contraste capturas y procesos` | 6 archivos, +262 / −40 |
 
 ---
 
@@ -185,15 +196,15 @@ ronda sustituyó por una solución más fuerte.
 
 ### 3.2 Cuarta ronda: los siete bloqueantes
 
-| # | Bloqueante | Causa raíz | Corrección | Pruebas positivas | Negativas, inversa y mutación |
+| # | Bloqueante | Causa raíz | Corrección | Pruebas positivas | Evidencia negativa, inversa o de mutación |
 |---|---|---|---|---|---|
 | 1 | Reconciliación ambigua | La ruta leía una vez por `user_id` tras un error de transporte y, si no encontraba nada, borraba la cuenta. Una lectura vacía no prueba ausencia: la escritura podía seguir en vuelo | Migración 010: el perfil nace en la misma transacción que la cuenta. El `id` de la cuenta es la clave de idempotencia. `cuentas.service.ts` no borra en ningún camino y verifica el perfil después de confirmar | Reconciliación A, C, D (confirmación tardía), E, F, I, L, M; SQL de alta atómica 6 a 11 y 20 a 23 | Reconciliación B, G, H, J, K y O; SQL de alta atómica 12 a 19; **inversa** N (el código de `4b593a70` borra la cuenta y deja un perfil huérfano); mutaciones M2 y M5 |
 | 2 | Errores técnicos visibles | Los servicios relanzaban el mensaje de PostgREST o de Auth y la pantalla lo mostraba | Catálogo `src/lib/errores.ts` con estados 400, 401, 403, 409, 422, 500 y 503; traducción por nombre exacto de restricción; la interfaz solo muestra mensajes con código de dominio | `usuarios-auth.spec.ts` (50 casos) y `alumnos-auth.spec.ts` | Guardia `tests/_sin-detalle-tecnico.ts` sobre texto visible, nombres accesibles y respuestas; «la respuesta no contiene detalle técnico» en 11 comprobaciones de la reconciliación; mutación M1 |
 | 3 | Clasificador permisivo | `padres_hijos_backup` o `padres_hijos_old` pasaban por la ausencia documentada | `src/lib/vinculos.ts`: 404, código `PGRST205` o `42P01`, mensaje completo anclado y exactamente `public.padres_hijos` | 2 casos tolerados | 14 casos no tolerados, más la conexión cortada; mutación M3 |
-| 4 | Build sin límite | `next build` podía colgarse para siempre | `ejecutarConLimite` con techo configurable (`EPT_LIMITE_BUILD_MS`), cierre del árbol completo de procesos, lista blanca de variables | `harness_produccion.mjs` (21 afirmaciones) | `harness_produccion_negativas.mjs` (55 afirmaciones): build colgado, árbol con hijo y nieto bloqueados, arranque sin respuesta, puerto ocupado, secretos, limpieza |
-| 5 | Contraste | El medidor omitía lo que no entendía y dividía otra vez por alfa sobre valores ya no premultiplicados | `tests/_contraste.ts` falla cerrado, informa elementos inspeccionados, medidos y omitidos, y compone con la pila real de pintura | 7 casos de estados por perfil | 13 casos negativos por perfil, entre ellos el que la cuenta de alfa anterior aprobaba en falso |
+| 4 | Build sin límite | `next build` podía colgarse para siempre | `ejecutarConLimite` con techo configurable (`EPT_LIMITE_BUILD_MS`), cierre del árbol completo de procesos, lista blanca de variables | `harness_produccion.mjs` (21 afirmaciones) | `harness_produccion_negativas.mjs` (58 afirmaciones): build colgado, árbol con hijo y nieto, padre que termina antes que su descendiente, arranque sin respuesta, puerto ocupado, secretos y limpieza. Son negativos directos; no se registró una mutación separada |
+| 5 | Contraste | El medidor omitía lo que no entendía y dividía otra vez por alfa sobre valores ya no premultiplicados | `tests/_contraste.ts` falla cerrado, inspecciona cada nodo de texto y todas sus líneas, informa elementos inspeccionados, medidos y omitidos, compone con la pila real de pintura y aplica el umbral exacto | 7 casos de estados por perfil | 16 casos negativos por perfil: incluyen la cuenta de alfa anterior, dos nodos con el mismo padre, contraste insuficiente después de la tercera línea y un ratio 4,496. Son discriminadores directos del código anterior; no se ejecutó una mutación de repositorio adicional |
 | 6 | Controles anidados | Cinco composiciones `Link → Button` en pantallas de EPT-9 | `EnlaceBoton`: un único `<a>` con el estilo de botón | Enlace único con nombre, destino, Tab y Enter en `alumnos-auth.spec.ts:700`, `:724` y `:942` | Guardia estática sobre la superficie de EPT-9, con caso sintético negativo; mutación M4 |
-| 7 | Evidencia | Métricas copiadas, comandos incompletos, filas agrupadas, afirmaciones sin ejecución | Este documento, reescrito sobre `c3aaba0` | Secciones 8 y 12 | — |
+| 7 | Evidencia | Métricas copiadas, comandos incompletos, filas agrupadas, afirmaciones sin ejecución | Este documento, reconciliado primero sobre `c3aaba0` y actualizado con el candidato `72d5fb6` | Matrices individuales, comandos copiables y lectura estructural de las secciones 0, 8 y 12 | No corresponde inventar una mutación documental: la comprobación es la consistencia entre Git, comandos, resultados y filas |
 
 ### 3.3 Hallazgos de la verificación final de esta ronda
 
@@ -214,7 +225,7 @@ con el trigger realmente deshabilitado.
 
 ### 3.4 Cada corrección falla si se revierte
 
-Cada mutación se aplicó a mano sobre un solo archivo, se corrió la prueba que
+Las mutaciones que sí se ejecutaron se aplicaron a mano sobre un solo archivo, se corrió la prueba que
 debía detectarla y se restauró el archivo. La restauración se comprobó por
 SHA-256. Las mutaciones M1, M3 y M4 corrieron sobre archivos que son idénticos
 byte a byte en `c3aaba0`, porque ese commit no los toca.
@@ -764,7 +775,7 @@ En todas las filas de Playwright la corrida completa terminó con
 | EPT-24 C17: reset, tipos, TypeScript, ESLint focalizado, build y E2E completa | Todo en verde o clasificado | `supabase/migrations/*`; `src/*`; `tests/*` | Pasos 04, 15, 17, 18, 21 y 26 | `npx supabase db reset --local`; `node supabase/tests/tipos-generados.mjs`; `npx tsc --noEmit --incremental false`; `npx eslint $(git diff --name-only --diff-filter=d 4b593a70aa2030c6d1f3051f47d5131b6d41292c HEAD -- '*.ts' '*.tsx' '*.mjs' '*.js')`; `ENTORNO_LOCAL="$(npx supabase status -o env)" && NEXT_PUBLIC_SUPABASE_URL="$(printf '%s\n' "$ENTORNO_LOCAL" \| rg -o -r '$1' '^API_URL="(.*)"$')" NEXT_PUBLIC_SUPABASE_ANON_KEY="$(printf '%s\n' "$ENTORNO_LOCAL" \| rg -o -r '$1' '^ANON_KEY="(.*)"$')" npx next build`; `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | Salida 0 en los seis; `✖ 2 problems (0 errors, 2 warnings)`; `(20/20)`; `309 passed (4.7m)` | Cumple |
 | EPT-24 regla 1: comando, código de salida y resultado exacto | Sección 12 | — | — | No aplica | Registrados para los 29 pasos, las mutaciones y las corridas focalizadas | Cumple |
 | EPT-24 regla 2: preexistentes solo si se reproducen sobre la base integrada | Comparación real | — | ESLint de cada archivo contra su versión en la base; asesores con la base reconstruida | `node "$TEMP/eslint-contra-base.mjs" e31bdf250e06ca9aae1233c2ee737a0443f4df51 "$TEMP/eslint-contra-base.json"` (guion completo en 13.1); `npx supabase db reset --local --version 007 --no-seed`; `npx supabase db advisors --local --type all --level info --fail-on none --output-format json` | `{"totalCandidato":{"errores":15,"avisos":109},"totalBaseMismosArchivos":{"errores":15,"avisos":109}}` y `igual a la base` en los 28 archivos; asesores: 32 en la base, 35 en el candidato, 4 nuevos y 1 desaparecido (13.2). El build sin variables **no** se declara preexistente (13.3) | Cumple |
-| EPT-24 regla 3: no modificar pruebas para reducir garantías | Cambios que agregan o endurecen aserciones | `tests/*`; `supabase/tests/*` | Diferencias de la cuarta ronda | `git diff --stat 4b593a70aa2030c6d1f3051f47d5131b6d41292c c3aaba0394bbdea59cd848a67f38d30fbab7b0be -- tests supabase/tests` | `15 files changed, 3624 insertions(+), 1435 deletions(-)`. Las supresiones corresponden a reescrituras con más casos (`usuarios-auth.spec.ts`, `_contraste.ts`, `usuarios_reconciliacion.mjs`, arnés). Las dos modificaciones puntuales son un nombre accesible nuevo que contiene la etiqueta visible (`alumnos-ui.spec.ts`, `alumnos-correcciones.spec.ts`) y el reemplazo de `allTextContents()` por una aserción que reintenta la misma opción (`usuarios-auth.spec.ts`). Las pruebas de Cursos y Niveles no cambiaron en esta ronda | Cumple |
+| EPT-24 regla 3: no modificar pruebas para reducir garantías | Cambios que agregan o endurecen aserciones | `tests/*`; `supabase/tests/*` | Diferencias desde el inicio de la cuarta ronda | `git diff --stat 4b593a70aa2030c6d1f3051f47d5131b6d41292c 72d5fb6f323aefc154d0e725b0ec7f30edb4f754 -- tests supabase/tests` | `16 files changed, 3854 insertions(+), 1443 deletions(-)`. Las supresiones corresponden a reescrituras con más casos (`usuarios-auth.spec.ts`, `_contraste.ts`, `usuarios_reconciliacion.mjs`, arnés). El endurecimiento final agrega tres discriminadores de contraste, la carrera de captura y el padre que termina antes que su descendiente. Las pruebas de Cursos y Niveles no cambiaron en esta ronda | Cumple |
 | EPT-24 cierre | Pruebas ejecutadas y trazables | — | Secciones 8 y 12 | No aplica | Ejecutadas; la incidencia sigue En curso | Cumple la condición; transición pendiente |
 
 ### 8.7 EPT-25: entregables y reglas de cierre
@@ -773,7 +784,7 @@ En todas las filas de Playwright la corrida completa terminó con
 |---|---|---|---|---|---|---|
 | EPT-25 E1: `docs/evidence/EPT-9.md` en español profesional | Este archivo | `docs/evidence/EPT-9.md` | Lectura | No aplica | — | Cumple |
 | EPT-25 E2: matriz completa de EPT-9 y EPT-20..EPT-25 | Una fila por criterio | Sección 8 | — | No aplica | 24 + 14 + 14 + 14 + 14 + 21 + 16 filas | Cumple |
-| EPT-25 E3: baseline remoto, rama, worktree, commits y estado final limpio | Sección 1 | Git | Paso 00 | `git rev-parse HEAD origin/main && git branch --show-current && git status --porcelain=v1 \| wc -l && git ls-remote origin refs/heads/main 'refs/heads/codex/ept-9-*' && gh pr list --head codex/ept-9-academic-students --state all --json number,state,url` | `c3aaba0394bbdea59cd848a67f38d30fbab7b0be`; `e31bdf250e06ca9aae1233c2ee737a0443f4df51`; `codex/ept-9-academic-students`; `0`; solo `refs/heads/main`; `[]` | Cumple. El estado después de los commits documentales se informa fuera de este archivo |
+| EPT-25 E3: baseline remoto, rama, worktree, commits y estado final limpio | Sección 1 | Git | Candidato endurecido | `git rev-parse HEAD origin/main && git branch --show-current && git status --porcelain=v1 \| wc -l && git ls-remote origin refs/heads/main 'refs/heads/codex/ept-9-*' && gh pr list --head codex/ept-9-academic-students --state all --json number,state,url` | Al congelar `72d5fb6`: candidato `72d5fb6f323aefc154d0e725b0ec7f30edb4f754`; base `e31bdf250e06ca9aae1233c2ee737a0443f4df51`; rama correcta; `0` archivos modificados; solo `refs/heads/main`; `[]` | Cumple. El commit de este documento queda después y se comprueba en el informe final |
 | EPT-25 E4: migraciones y tipos con su procedencia | Secciones 6 y 12 | `supabase/migrations/*`; `src/types/database.generated.ts` | Pasos 04, 06 y 15 | `npx supabase db reset --local`; `npx supabase migration list --local`; `node supabase/tests/tipos-generados.mjs` | 10 migraciones aplicadas; lista de `001` a `010`; `OK  src/types/database.generated.ts coincide byte a byte con la salida normalizada` | Cumple |
 | EPT-25 E5: matrices de autorización de página, API, función, tabla y fila | Sección 7 | Este documento | Consultas de 7.3 a 7.5 | No aplica: entregable documental. Las tres consultas completas están en 7.3, 7.4 y 7.5 | Resultados transcritos en esas secciones | Cumple |
 | EPT-25 E6: resultados exactos de reset, SQL/RLS, concurrencia, TypeScript, lint, build, Playwright focalizado y completo, y regresiones | Sección 12 | Este documento | 29 pasos; corridas focalizadas de 12.3 | No aplica: entregable documental. Los comandos completos están en 12.1 a 12.4 | Resultados transcritos en esas secciones | Cumple |
@@ -781,12 +792,12 @@ En todas las filas de Playwright la corrida completa terminó con
 | EPT-25 E8: seguridad, privacidad, secretos, accesibilidad e idioma | Secciones 11 y 15 | Rama completa | Paso 28 | `git diff e31bdf250e06ca9aae1233c2ee737a0443f4df51 HEAD \| rg '^\+' \| rg -n --pcre2 'eyJhbGciOi[A-Za-z0-9_-]{20,}\|sb_secret_[A-Za-z0-9_-]{10,}\|sb_publishable_[A-Za-z0-9_-]{10,}\|-----BEGIN [A-Z ]*PRIVATE KEY\|SUPABASE_SERVICE_ROLE_KEY\s*=\s*["\x27]?[A-Za-z0-9]\|postgres(ql)?://[^:\s]+:[^@\s]+@(?!127\.0\.0\.1)\|[a-z0-9]{20}\.supabase\.co' \|\| echo 'sin coincidencias'`; `git ls-files \| rg '(^\|/)\.env' \|\| echo 'ninguno'` | Dos líneas, las del valor sintético del arnés (sección 15); `ninguno` | Cumple |
 | EPT-25 E9: decisiones, riesgos fuera de alcance, retrospectiva y siguiente unidad | Secciones 4, 18, 19 y 20 | — | — | No aplica | — | Cumple |
 | EPT-25 E10: límite de reversión | Sección 17 | — | — | No aplica | — | Cumple |
-| EPT-25 E11: commits convencionales sin `Co-Authored-By` ni atribución | Asuntos y trailers | Git | Estáticas | `git log --format='%s' e31bdf250e06ca9aae1233c2ee737a0443f4df51..c3aaba0394bbdea59cd848a67f38d30fbab7b0be \| rg -v '^(feat\|fix\|docs\|test\|refactor\|chore\|style\|perf\|build\|ci)(\([a-z0-9-]+\))?!?: '`; `git log e31bdf250e06ca9aae1233c2ee737a0443f4df51..HEAD --format=%B \| rg -n -i 'co-authored\|generated with\|claude\|anthropic\|openai\|chatgpt\|copilot\|🤖' \|\| echo 'sin coincidencias'`; `git log e31bdf250e06ca9aae1233c2ee737a0443f4df51..HEAD --format='%(trailers:only)' \| rg -v '^$' \|\| echo 'sin trailers'` | Sin salida (salida 1): los 29 asuntos son convencionales; `sin coincidencias`; `sin trailers` | Cumple |
+| EPT-25 E11: commits convencionales sin `Co-Authored-By` ni atribución | Asuntos y trailers | Git | Estáticas | `git log --format='%s' e31bdf250e06ca9aae1233c2ee737a0443f4df51..72d5fb6f323aefc154d0e725b0ec7f30edb4f754 \| rg -v '^(feat\|fix\|docs\|test\|refactor\|chore\|style\|perf\|build\|ci)(\([a-z0-9-]+\))?!?: '`; `git log e31bdf250e06ca9aae1233c2ee737a0443f4df51..HEAD --format=%B \| rg -n -i 'co-authored\|generated with\|claude\|anthropic\|openai\|chatgpt\|copilot\|🤖' \|\| echo 'sin coincidencias'`; `git log e31bdf250e06ca9aae1233c2ee737a0443f4df51..HEAD --format='%(trailers:only)' \| rg -v '^$' \|\| echo 'sin trailers'` | Sin salida (salida 1): los 32 asuntos hasta el candidato endurecido son convencionales; `sin coincidencias`; `sin trailers` | Cumple |
 | EPT-25 E12: revisión independiente documentada antes de push o PR | Revisión del nuevo SHA | — | — | No aplica | No realizada todavía | **Pendiente** |
 | EPT-25 E13: PR en español cuando exista autorización posterior | — | — | — | No aplica | No hay PR: esta ronda lo prohíbe | No aplica todavía |
 | EPT-25 E14: comentario de evidencia en cada incidencia antes de cualquier transición a Listo | Comentarios en las siete | Jira | Consulta en vivo (sección 2) | No aplica | Publicados después del primer commit documental: EPT-9 `10125`, EPT-20 `10126`, EPT-21 `10127`, EPT-22 `10128`, EPT-23 `10129`, EPT-24 `10130` y EPT-25 `10131`; las siete siguen `En curso` | Cumple; ninguna transición ocurrió |
 | EPT-25 política de Jira | Subtareas a Listo solo con evidencia; EPT-9 En curso hasta hijas, revisión e integración | Jira | Sección 2 | No aplica | Las siete `En curso` | Cumple |
-| EPT-25 cierre | Evidencia igual a los bytes finales; Jira real; ninguna afirmación sin demostrar | — | Secciones 0 y 12 | `git diff --stat c3aaba0394bbdea59cd848a67f38d30fbab7b0be HEAD` | Esperado después de los commits documentales: solo `docs/evidence/EPT-9.md` y capturas de `docs/evidence/EPT-9/`. El resultado se verifica en el informe final, porque este archivo no puede contener su propio commit | Cumple la condición; transición pendiente |
+| EPT-25 cierre | Evidencia igual a los bytes finales; Jira real; ninguna afirmación sin demostrar | — | Secciones 0 y 12 | `git diff --stat 72d5fb6f323aefc154d0e725b0ec7f30edb4f754 HEAD` | Después del candidato endurecido solo debe aparecer este documento. El resultado se verifica en el informe final, porque el archivo no puede contener el SHA del commit que lo introduce | Cumple la condición; transición pendiente |
 
 ---
 
@@ -947,13 +958,22 @@ Casos negativos, en tres perfiles cada uno (`alumnos-contraste.spec.ts`):
 | 280 | Texto esencial omitido | Bloquea aunque todo lo demás pase |
 | 289 | Caso donde la cuenta de alfa anterior aprobaba en falso | Fallo con la cuenta correcta |
 | 327 | Texto cubierto por otro elemento | No se da por medido |
-| 347 | Afirmar que no hay texto visible cuando lo hay | Fallo |
+| 347 | Dos nodos de texto con el mismo `parentElement` | Ambos se inspeccionan y miden |
+| 364 | Contraste insuficiente recién después de la tercera línea | Se inspeccionan todas las líneas y falla |
+| 406 | Ratio real 4,496:1 | Falla contra 4,5:1 sin tolerancia oculta; el redondeo solo afecta el informe |
+| 421 | Afirmar que no hay texto visible cuando lo hay | Fallo |
 
 Los siete casos positivos miden el listado, el formulario en sus dos estados, los
 errores de validación, el diálogo de cambio de curso, el listado vacío y sin
 cursos activos, y los mensajes de error y éxito. El estado de carga se comprueba
 sin texto visible que medir. Con base real miden además el detalle
 (`alumnos-auth.spec.ts:661`) y la vista propia (`:829`).
+
+`tests/captura.spec.ts` agrega un caso de carrera: inyecta un overlay de error de
+Next dentro de la propia operación de `screenshot`. `tests/_captura.ts` ya no
+oculta globalmente `nextjs-portal`; retira solo los indicadores inocuos dentro
+del shadow root, comprueba inmediatamente antes y después de capturar, elimina
+el PNG inválido y falla con el texto del overlay si aparece durante la captura.
 
 ### 11.2 Un único control interactivo
 
@@ -1120,6 +1140,36 @@ no comprueban el producto.
 Una verificación completa anterior, con los mismos 29 pasos, corrió sobre
 `3c13a66`, con resultados idénticos salvo la reconciliación (167 afirmaciones, sin
 el escenario O). La del candidato `c3aaba0` es la de esta tabla.
+
+### 12.1 bis Endurecimiento final sobre `72d5fb6`
+
+El commit `72d5fb6` no cambia código productivo ni migraciones. Antes de corregir
+el instrumental, la primera corrida de las nuevas pruebas de contraste y captura
+terminó con salida 1: `20 passed, 4 failed`. Fallaron exactamente la deduplicación
+por `parentElement`, la cuarta línea no inspeccionada, el ratio 4,496 aceptado por
+la tolerancia y el overlay de Next aparecido dentro de `screenshot`.
+
+Después de la corrección se ejecutaron estos comandos sobre `72d5fb6`:
+
+```bash
+npx playwright test tests/alumnos-contraste.spec.ts tests/captura.spec.ts --project=chromium --retries=0
+node supabase/tests/harness_produccion_negativas.mjs
+npx tsc --noEmit --incremental false
+npx eslint --no-cache tests/_contraste.ts tests/alumnos-contraste.spec.ts tests/_captura.ts tests/captura.spec.ts supabase/tests/_arnes-produccion.mjs supabase/tests/harness_produccion_negativas.mjs
+git diff --check
+```
+
+| Comando | Salida | Resultado exacto |
+|---|---:|---|
+| Playwright focalizado | 0 | `24 passed`; incluye 23 casos de contraste y la carrera de captura |
+| Negativas del arnés | 0 | `58 afirmaciones, 0 incumplida(s)`; el padre conserva su código 0 y el descendiente queda terminado antes de resolver |
+| TypeScript | 0 | Sin salida |
+| ESLint focalizado | 0 | Sin errores ni advertencias |
+| `git diff --check` | 0 | Sin errores; Git solo avisó la conversión futura LF→CRLF del worktree |
+
+No se presenta el caso del padre que termina primero como una mutación: es una
+prueba negativa directa del cierre de grupo. La revisión final debe volver a
+ejecutar la suite integral sobre el candidato completo antes del PR.
 
 ### 12.2 Mutaciones
 
@@ -1364,7 +1414,7 @@ Detalle de las `real-*`:
 ### 14.2 Inspección visual
 
 Las 61 se inspeccionaron una por una en esta ronda. Frente a la corrida anterior
-sobre `3c13a66`, 26 conservaron los bytes y 35 cambiaron píxeles. Las diferencias
+sobre `3c13a66`, 27 conservaron los bytes y 34 cambiaron píxeles. Las diferencias
 se concentran en animaciones: esqueletos de carga, avisos flotantes, indicadores
 de envío y el cursor. Las 57 que no tenían bytes ya inspeccionados se revisaron
 sobre los archivos definitivos.
@@ -1405,7 +1455,7 @@ sobre los archivos definitivos.
 | Uso de `service_role` en la aplicación | Solo `src/services/supabase.admin.ts`, usado por `POST /api/usuarios` después de `requerirDirector`, para la API administrativa de Auth y las lecturas de verificación del alta. Nunca en `/api/alumnos` |
 | Límite de las peticiones administrativas | 4 s por petición y 15 s por alta |
 | Variables en procesos hijos | El arnés de producción y la reconciliación pasan una lista blanca; `SUPABASE_SERVICE_ROLE_KEY` se elimina siempre. Probado con un proceso hijo real (negativas: `OK  secretos: el proceso hijo real no ve ninguno (ausente,ausente)`) |
-| Secretos en líneas agregadas por la rama | Dos coincidencias, las dos en `supabase/tests/harness_produccion_negativas.mjs:400` y `:422`: el valor sintético `'secreto-de-prueba-que-no-debe-viajar'` y su restauración `= previo`. No hay claves reales |
+| Secretos en líneas agregadas por la rama | Dos coincidencias, las dos en `supabase/tests/harness_produccion_negativas.mjs:435` y `:457`: el valor sintético `'secreto-de-prueba-que-no-debe-viajar'` y su restauración `= previo`. No hay claves reales |
 | Archivos de entorno versionados | Ninguno |
 | Atribución en commits | Sin coincidencias; sin trailers |
 | Datos personales en `auth.users` y en el JWT | `ept_alta` se retira antes de guardar la fila (alta atómica 8, 10 y 23) |
@@ -1421,9 +1471,11 @@ los anula. Se registra como observación, no como hallazgo de EPT-9.
 ## 16. Commits
 
 La cadena completa se obtiene con `git log --oneline e31bdf250e06ca9aae1233c2ee737a0443f4df51..HEAD`.
-Hasta el candidato funcional son 29 commits: los 23 de las rondas 1 a 3, con sus
-SHA intactos, y los seis de la cuarta ronda listados en la sección 1. Después del
-candidato solo hay commits documentales, que tocan este archivo y las capturas.
+Hasta `c3aaba0` son 29 commits: los 23 de las rondas 1 a 3 y los seis de la
+cuarta ronda original, con sus SHA intactos. Después se agregaron `a88aa64` y
+`0fcd853` para reconciliar la evidencia, y `72d5fb6` para cerrar los tres
+hallazgos finales del instrumental. El commit documental que contiene esta
+actualización queda después del candidato endurecido y solo toca este archivo.
 
 Todos los asuntos son convencionales y ningún mensaje lleva `Co-Authored-By` ni
 atribución de IA (paso 28 y fila E11 de la sección 8.7). No hubo push, pull
@@ -1437,9 +1489,10 @@ Orden sugerido para la revisión independiente:
 3. `supabase/tests/usuarios_reconciliacion.mjs`, en especial los escenarios D, L,
    M, N y O.
 4. `src/lib/errores.ts`, `src/lib/vinculos.ts` y `tests/usuarios-auth.spec.ts`.
-5. `tests/_contraste.ts`, `tests/_semantica.ts` y
-   `tests/semantica-estatica.spec.ts`.
-6. `supabase/tests/_arnes-produccion.mjs` y las negativas del arnés.
+5. `tests/_contraste.ts`, `tests/alumnos-contraste.spec.ts`, `tests/_captura.ts`,
+   `tests/captura.spec.ts`, `tests/_semantica.ts` y `tests/semantica-estatica.spec.ts`.
+6. `supabase/tests/_arnes-produccion.mjs` y las 58 negativas del arnés, en
+   especial el padre que termina antes que su descendiente.
 7. Las migraciones 008 y 009, que no cambiaron en esta ronda.
 
 ---
@@ -1454,12 +1507,13 @@ aplicó, ni su fila en `supabase_migrations.schema_migrations`.
 
 | Orden | Commit | Qué vuelve si se revierte | Esquema |
 |---|---|---|---|
-| 1 | `c3aaba0` | El alta confirmada vuelve a informarse sin verificar el perfil | Ninguno |
-| 2 | `3c13a66` | `console.error` en la carga fallida, que en desarrollo abre el diálogo de Next, y la carrera al leer los roles | Ninguno |
-| 3 | `d639e87` | `next build` sin límite y el arnés sin negativas de árbol de procesos | Ninguno |
-| 4 | `81ff960` | El clasificador por subcadena y los mensajes crudos de PostgREST | Ninguno |
-| 5 | `029eb1d` | Los controles `Link → Button` y el medidor de contraste que falla abierto | Ninguno |
-| 6 | `02e5ea6` | La ruta que compensa borrando la cuenta tras una lectura vacía: el defecto que la prueba inversa N reproduce | Quita el **archivo** de la 010; el trigger sigue aplicado donde ya se aplicó |
+| 1 | `72d5fb6` | Vuelven la deduplicación por padre, el límite de tres líneas, la tolerancia de 0,005, el ocultamiento global del portal y la posibilidad de resolver tras morir el padre sin controlar descendientes | Ninguno |
+| 2 | `c3aaba0` | El alta confirmada vuelve a informarse sin verificar el perfil | Ninguno |
+| 3 | `3c13a66` | `console.error` en la carga fallida, que en desarrollo abre el diálogo de Next, y la carrera al leer los roles | Ninguno |
+| 4 | `d639e87` | `next build` sin límite y el arnés sin negativas de árbol de procesos | Ninguno |
+| 5 | `81ff960` | El clasificador por subcadena y los mensajes crudos de PostgREST | Ninguno |
+| 6 | `029eb1d` | Los controles `Link → Button` y el medidor de contraste que falla abierto | Ninguno |
+| 7 | `02e5ea6` | La ruta que compensa borrando la cuenta tras una lectura vacía: el defecto que la prueba inversa N reproduce | Quita el **archivo** de la 010; el trigger sigue aplicado donde ya se aplicó |
 
 Los reverts se hacen en ese orden porque los commits posteriores tocan los mismos
 archivos (`tests/usuarios-auth.spec.ts`, `src/app/dashboard/usuarios/page.tsx`,
@@ -1574,7 +1628,7 @@ ocurrir en una sola transacción.
 
 ## 20. Próximo paso
 
-1. **Revisión independiente del candidato `c3aaba0` y de los commits documentales**,
+1. **Revisión independiente del candidato endurecido `72d5fb6` y del commit documental posterior**,
    con el orden de la sección 16. Conviene empezar por la migración 010, el
    servicio de cuentas y los escenarios D, L, M, N y O.
 2. Verificar en especial lo que las revisiones pidieron no dar por bueno sin
