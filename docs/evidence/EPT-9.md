@@ -26,19 +26,20 @@ pendiente.**
 
 ## 0. Cómo leer este documento
 
-### Candidato funcional y commit documental
+### Candidato funcional y commits documentales
 
-Hay dos commits distintos, y conviene no confundirlos:
+El candidato funcional y los commits documentales que lo siguen son cosas
+distintas, y conviene no confundirlos:
 
 | Commit | Qué contiene |
 |---|---|
 | **Candidato funcional** `c3aaba0394bbdea59cd848a67f38d30fbab7b0be` | Todo el código, las migraciones y las pruebas. Todas las ejecuciones de este documento corrieron sobre este SHA, salvo donde se indica otro |
-| **Commit documental** (el que agrega este archivo) | Solo este documento y las capturas de `docs/evidence/EPT-9/`. No toca código, migraciones ni pruebas |
+| **Commits documentales** (todos los posteriores al candidato) | Solo este documento y las capturas de `docs/evidence/EPT-9/`. No tocan código, migraciones ni pruebas |
 
 Un archivo no puede contener el SHA del commit que lo introduce, porque ese SHA
-depende del contenido del archivo. El SHA del commit documental queda en el
-comentario de Jira y en el informe final. Para comprobar que ese commit no toca
-nada más:
+depende del contenido del archivo. Los SHA de los commits documentales quedan en
+los comentarios de Jira y en el informe final. Para comprobar que esos commits no
+tocan nada más:
 
 ```bash
 git diff --stat c3aaba0394bbdea59cd848a67f38d30fbab7b0be HEAD
@@ -135,8 +136,12 @@ Consultado el 14/09/2026 por la API de Atlassian con
 | EPT-25 «Actualizar el tablero Kanban, la evidencia y la retrospectiva» | Subtarea | **En curso** | EPT-9 | Lucas Gimenez | 13/09/2026 13:43 |
 
 Ninguna incidencia se movió de estado en esta ronda y no se tocó ninguna fuera
-de estas siete. La evidencia se comenta en cada una después del commit
-documental; los identificadores de esos comentarios quedan en el informe final.
+de estas siete. La tabla es anterior a los comentarios de evidencia, publicados
+después del primer commit documental: EPT-9 `10125`, EPT-20 `10126`, EPT-21
+`10127`, EPT-22 `10128`, EPT-23 `10129`, EPT-24 `10130` y EPT-25 `10131`. Una
+consulta posterior a esos comentarios devolvió las siete `En curso`, con última
+actualización el 14/09/2026 entre las 06:51 y las 06:52. Los comentarios sobre
+commits documentales posteriores quedan en el informe final.
 
 ---
 
@@ -725,7 +730,7 @@ En todas las filas de Playwright la corrida completa terminó con
 | EPT-23 A2: unicidad global, incluidos INACTIVOS | UNIQUE | 001, 008 | RLS 20 | `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/alumnos_academicos_rls.sql` | `OK 20: DNI duplicado rechazado (23505), incluso reservado por un inactivo` | Cumple |
 | EPT-23 A3: corregir el DNI conservando identificador y relaciones | Misma PK | 008 (`corregir_identidad_alumno`) | RLS 32; `alumnos-auth.spec.ts:449` | `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/alumnos_academicos_rls.sql`; `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | `OK 32: el DIRECTOR corrige el DNI conservando el identificador interno y sus relaciones`; `ok … corrige el DNI conservando el identificador interno y el historial` | Cumple |
 | EPT-23 A4: altas y correcciones concurrentes con el mismo DNI: una sola confirma | UNIQUE bajo carrera | 008 | Concurrencia 18 y 18bis | `node supabase/tests/alumnos_academicos_concurrencia.mjs` | `OK CONCURRENCIA 18: dos altas simultáneas con el mismo DNI dejan una sola (23505)` | Cumple |
-| EPT-23 A5: legajo manual, único y obligatorio para activar | Sin numeración automática | 008, 009 | RLS 22, 24.2 y 54 a 56; concurrencia 18ter; estática sin secuencias | `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/alumnos_academicos_rls.sql`; `node supabase/tests/alumnos_academicos_concurrencia.mjs`; `rg -n -i "nextval|create sequence" supabase/migrations/008_alumnos_estado_academico.sql supabase/migrations/009_correcciones_revision_alumnos.sql supabase/migrations/010_alta_atomica_de_cuentas.sql` | `OK CONCURRENCIA 18ter: el mismo legajo con distinta caja no se duplica bajo concurrencia (23505)`; el `rg` no devolvió coincidencias (salida 1) | Cumple |
+| EPT-23 A5: legajo manual, único y obligatorio para activar | Sin numeración automática | 008, 009 | RLS 22, 24.2 y 54 a 56; concurrencia 18ter; estática sin secuencias | `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/alumnos_academicos_rls.sql`; `node supabase/tests/alumnos_academicos_concurrencia.mjs`; `rg -n -i "nextval\|create sequence" supabase/migrations/008_alumnos_estado_academico.sql supabase/migrations/009_correcciones_revision_alumnos.sql supabase/migrations/010_alta_atomica_de_cuentas.sql` | `OK CONCURRENCIA 18ter: el mismo legajo con distinta caja no se duplica bajo concurrencia (23505)`; el `rg` no devolvió coincidencias (salida 1) | Cumple |
 | EPT-23 A6: estado explícito al crear | ACTIVO con curso y legajo; INACTIVO sin matrícula | 008; `GestionAlumnos.tsx` | RLS 13 y 15; `alumnos-ui.spec.ts:115` y `:166` | `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/alumnos_academicos_rls.sql`; `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | `OK 15: alta INACTIVO válida, sin matrícula y sin nivel, con DNI de 7 dígitos` | Cumple |
 | EPT-23 A7: legajo sin cuenta Auth | `user_id` nulo | 008 | RLS 13; captura `real-escritorio-detalle-historial.png` («Cuenta de acceso: Sin vincular») | `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/alumnos_academicos_rls.sql`; `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | `OK 13 …sin cuenta de acceso` | Cumple |
 | EPT-23 A8: tutor no requerido; no se escribe `padres_hijos` | Vínculos rechazados con 400 | `src/app/api/usuarios/route.ts` | `usuarios-auth.spec.ts:246`, `:253`, `:271`; RLS 60 | `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list`; `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/alumnos_academicos_rls.sql` | `ok … pedir un vínculo parental se rechaza con un mensaje claro y no escribe nada`; `OK 60: padres_hijos sigue fuera del esquema y nada de EPT-9 la usa` | Cumple |
@@ -768,7 +773,7 @@ En todas las filas de Playwright la corrida completa terminó con
 |---|---|---|---|---|---|---|
 | EPT-25 E1: `docs/evidence/EPT-9.md` en español profesional | Este archivo | `docs/evidence/EPT-9.md` | Lectura | No aplica | — | Cumple |
 | EPT-25 E2: matriz completa de EPT-9 y EPT-20..EPT-25 | Una fila por criterio | Sección 8 | — | No aplica | 24 + 14 + 14 + 14 + 14 + 21 + 16 filas | Cumple |
-| EPT-25 E3: baseline remoto, rama, worktree, commits y estado final limpio | Sección 1 | Git | Paso 00 | `git rev-parse HEAD origin/main && git branch --show-current && git status --porcelain=v1 \| wc -l && git ls-remote origin refs/heads/main 'refs/heads/codex/ept-9-*' && gh pr list --head codex/ept-9-academic-students --state all --json number,state,url` | `c3aaba0394bbdea59cd848a67f38d30fbab7b0be`; `e31bdf250e06ca9aae1233c2ee737a0443f4df51`; `codex/ept-9-academic-students`; `0`; solo `refs/heads/main`; `[]` | Cumple. El estado después del commit documental se informa fuera de este archivo |
+| EPT-25 E3: baseline remoto, rama, worktree, commits y estado final limpio | Sección 1 | Git | Paso 00 | `git rev-parse HEAD origin/main && git branch --show-current && git status --porcelain=v1 \| wc -l && git ls-remote origin refs/heads/main 'refs/heads/codex/ept-9-*' && gh pr list --head codex/ept-9-academic-students --state all --json number,state,url` | `c3aaba0394bbdea59cd848a67f38d30fbab7b0be`; `e31bdf250e06ca9aae1233c2ee737a0443f4df51`; `codex/ept-9-academic-students`; `0`; solo `refs/heads/main`; `[]` | Cumple. El estado después de los commits documentales se informa fuera de este archivo |
 | EPT-25 E4: migraciones y tipos con su procedencia | Secciones 6 y 12 | `supabase/migrations/*`; `src/types/database.generated.ts` | Pasos 04, 06 y 15 | `npx supabase db reset --local`; `npx supabase migration list --local`; `node supabase/tests/tipos-generados.mjs` | 10 migraciones aplicadas; lista de `001` a `010`; `OK  src/types/database.generated.ts coincide byte a byte con la salida normalizada` | Cumple |
 | EPT-25 E5: matrices de autorización de página, API, función, tabla y fila | Sección 7 | Este documento | Consultas de 7.3 a 7.5 | No aplica: entregable documental. Las tres consultas completas están en 7.3, 7.4 y 7.5 | Resultados transcritos en esas secciones | Cumple |
 | EPT-25 E6: resultados exactos de reset, SQL/RLS, concurrencia, TypeScript, lint, build, Playwright focalizado y completo, y regresiones | Sección 12 | Este documento | 29 pasos; corridas focalizadas de 12.3 | No aplica: entregable documental. Los comandos completos están en 12.1 a 12.4 | Resultados transcritos en esas secciones | Cumple |
@@ -779,9 +784,9 @@ En todas las filas de Playwright la corrida completa terminó con
 | EPT-25 E11: commits convencionales sin `Co-Authored-By` ni atribución | Asuntos y trailers | Git | Estáticas | `git log --format='%s' e31bdf250e06ca9aae1233c2ee737a0443f4df51..c3aaba0394bbdea59cd848a67f38d30fbab7b0be \| rg -v '^(feat\|fix\|docs\|test\|refactor\|chore\|style\|perf\|build\|ci)(\([a-z0-9-]+\))?!?: '`; `git log e31bdf250e06ca9aae1233c2ee737a0443f4df51..HEAD --format=%B \| rg -n -i 'co-authored\|generated with\|claude\|anthropic\|openai\|chatgpt\|copilot\|🤖' \|\| echo 'sin coincidencias'`; `git log e31bdf250e06ca9aae1233c2ee737a0443f4df51..HEAD --format='%(trailers:only)' \| rg -v '^$' \|\| echo 'sin trailers'` | Sin salida (salida 1): los 29 asuntos son convencionales; `sin coincidencias`; `sin trailers` | Cumple |
 | EPT-25 E12: revisión independiente documentada antes de push o PR | Revisión del nuevo SHA | — | — | No aplica | No realizada todavía | **Pendiente** |
 | EPT-25 E13: PR en español cuando exista autorización posterior | — | — | — | No aplica | No hay PR: esta ronda lo prohíbe | No aplica todavía |
-| EPT-25 E14: comentario de evidencia en cada incidencia antes de cualquier transición a Listo | Comentarios en las siete | Jira | — | No aplica | Se publican después del commit documental | Cumple al publicarse; ninguna transición ocurre antes |
+| EPT-25 E14: comentario de evidencia en cada incidencia antes de cualquier transición a Listo | Comentarios en las siete | Jira | Consulta en vivo (sección 2) | No aplica | Publicados después del primer commit documental: EPT-9 `10125`, EPT-20 `10126`, EPT-21 `10127`, EPT-22 `10128`, EPT-23 `10129`, EPT-24 `10130` y EPT-25 `10131`; las siete siguen `En curso` | Cumple; ninguna transición ocurrió |
 | EPT-25 política de Jira | Subtareas a Listo solo con evidencia; EPT-9 En curso hasta hijas, revisión e integración | Jira | Sección 2 | No aplica | Las siete `En curso` | Cumple |
-| EPT-25 cierre | Evidencia igual a los bytes finales; Jira real; ninguna afirmación sin demostrar | — | Secciones 0 y 12 | `git diff --stat c3aaba0394bbdea59cd848a67f38d30fbab7b0be HEAD` | Esperado después del commit documental: solo `docs/evidence/EPT-9.md` y capturas de `docs/evidence/EPT-9/`. El resultado se verifica en el informe final, porque este archivo no puede contener su propio commit | Cumple la condición; transición pendiente |
+| EPT-25 cierre | Evidencia igual a los bytes finales; Jira real; ninguna afirmación sin demostrar | — | Secciones 0 y 12 | `git diff --stat c3aaba0394bbdea59cd848a67f38d30fbab7b0be HEAD` | Esperado después de los commits documentales: solo `docs/evidence/EPT-9.md` y capturas de `docs/evidence/EPT-9/`. El resultado se verifica en el informe final, porque este archivo no puede contener su propio commit | Cumple la condición; transición pendiente |
 
 ---
 
@@ -1417,8 +1422,8 @@ los anula. Se registra como observación, no como hallazgo de EPT-9.
 
 La cadena completa se obtiene con `git log --oneline e31bdf250e06ca9aae1233c2ee737a0443f4df51..HEAD`.
 Hasta el candidato funcional son 29 commits: los 23 de las rondas 1 a 3, con sus
-SHA intactos, y los seis de la cuarta ronda listados en la sección 1. El commit
-documental agrega este archivo y las capturas.
+SHA intactos, y los seis de la cuarta ronda listados en la sección 1. Después del
+candidato solo hay commits documentales, que tocan este archivo y las capturas.
 
 Todos los asuntos son convencionales y ningún mensaje lleva `Co-Authored-By` ni
 atribución de IA (paso 28 y fila E11 de la sección 8.7). No hubo push, pull
@@ -1569,7 +1574,7 @@ ocurrir en una sola transacción.
 
 ## 20. Próximo paso
 
-1. **Revisión independiente del candidato `c3aaba0` y del commit documental**,
+1. **Revisión independiente del candidato `c3aaba0` y de los commits documentales**,
    con el orden de la sección 16. Conviene empezar por la migración 010, el
    servicio de cuentas y los escenarios D, L, M, N y O.
 2. Verificar en especial lo que las revisiones pidieron no dar por bueno sin
