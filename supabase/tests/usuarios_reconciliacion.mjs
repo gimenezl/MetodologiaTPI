@@ -86,6 +86,25 @@ function sql(sentencia) {
   ).trim()
 }
 
+/**
+ * SQL como `supabase_admin`. Solo para deshabilitar y volver a habilitar el
+ * trigger de la migración 010: `auth.users` pertenece a `supabase_auth_admin`,
+ * y `postgres` no puede alterarla.
+ */
+function sqlComoAdministrador(sentencia) {
+  return execFileSync(
+    'docker',
+    ['exec', '-i', CONTENEDOR, 'psql', '-X', '-q', '-A', '-t', '-U', 'supabase_admin',
+     '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'],
+    { input: sentencia, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
+  ).trim()
+}
+
+const estadoDelTriggerDeAlta = () =>
+  sqlComoAdministrador(`SELECT tgenabled FROM pg_catalog.pg_trigger
+                        WHERE tgname = 'registrar_perfil_al_crear_cuenta'
+                          AND tgrelid = 'auth.users'::regclass;`)
+
 const contar = (consulta) => Number(sql(`SELECT pg_catalog.count(*) ${consulta};`))
 const rolId = (nombre) => Number(sql(`SELECT id FROM public.roles WHERE nombre = '${nombre}';`))
 
@@ -784,6 +803,35 @@ async function escenarios(token) {
     exigirRespuestaLimpia('K', r)
     sql(`DELETE FROM auth.users WHERE email = '${datos.email}';`)
     exigirInvariantes('K')
+  }
+
+  // ---------------------------------------------------------------
+  // O. GoTrue confirma, pero la garantía de la migración 010 no está: con el
+  //    trigger deshabilitado la cuenta nace sin perfil. La ruta no puede
+  //    informar eso como un alta exitosa, ni borrar la cuenta, ni inventar el
+  //    perfil.
+  // ---------------------------------------------------------------
+  {
+    const datos = datosDeAlta('000017')
+    afirmar(estadoDelTriggerDeAlta() === 'O', 'O: el trigger de alta estaba habilitado antes del escenario')
+    let r
+    try {
+      sqlComoAdministrador('ALTER TABLE auth.users DISABLE TRIGGER registrar_perfil_al_crear_cuenta;')
+      r = await crearUsuario(datos)
+    } finally {
+      sqlComoAdministrador('ALTER TABLE auth.users ENABLE TRIGGER registrar_perfil_al_crear_cuenta;')
+    }
+    afirmar(estadoDelTriggerDeAlta() === 'O', 'O: el trigger quedó habilitado otra vez')
+    afirmar(r.estado === 500 && r.cuerpo?.codigo === 'ESTADO_INCONSISTENTE',
+      `O: sin el trigger, la ruta no afirma éxito: responde 500 ESTADO_INCONSISTENTE (${r.estado} ${r.cuerpo?.codigo})`)
+    afirmar(/^[0-9a-f-]{36}$/u.test(r.cuerpo?.referencia ?? ''), 'O: trae una referencia técnica aleatoria')
+    afirmar(cuentas(datos.email) === 1, 'O: la cuenta que GoTrue confirmó NO se borró')
+    afirmar(perfilesConDni(datos.dni) === 0, 'O: tampoco se le inventó un perfil')
+    exigirRespuestaLimpia('O', r)
+    // Sin el trigger nadie retiró `ept_alta`: la cuenta de prueba guarda los
+    // datos del alta en `app_metadata` y se borra antes de las invariantes.
+    sql(`DELETE FROM auth.users WHERE email = '${datos.email}';`)
+    exigirInvariantes('O')
   }
 
   // ---------------------------------------------------------------

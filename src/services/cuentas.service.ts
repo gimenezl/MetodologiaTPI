@@ -48,7 +48,8 @@ import type { createAdminClient } from '@/services/supabase.admin'
  *
  * | Observación                                   | Resultado                          |
  * | --------------------------------------------- | ---------------------------------- |
- * | Alta confirmada por GoTrue                    | confirmada                          |
+ * | Alta confirmada por GoTrue + perfil verificado | confirmada                         |
+ * | Alta confirmada por GoTrue + cuenta sin perfil | ESTADO_INCONSISTENTE (nada se borró) |
  * | Respuesta explícita + cuenta y perfil propios | confirmada (reconciliada)           |
  * | Respuesta explícita + datos distintos         | OPERACION_REUTILIZADA               |
  * | Respuesta explícita + cuenta sin perfil       | ESTADO_INCONSISTENTE                |
@@ -126,8 +127,8 @@ const normalizarEmail = (email: string) => email.trim().toLowerCase()
  * Pregunta qué existe para el `id` de la operación.
  *
  * Es una lectura: no modifica nada y se puede repetir. Solo se llama después de
- * una respuesta explícita de GoTrue, cuando la transacción de ese intento ya
- * terminó.
+ * una respuesta de GoTrue —de éxito o de error—, cuando la transacción de ese
+ * intento ya terminó.
  */
 export async function consultarOperacion(
   admin: ClienteAdministrativo,
@@ -440,8 +441,23 @@ export async function registrarCuentaConPerfil(
     diagnostico.intentos.push(registro)
 
     switch (observacion.clase) {
-      case 'confirmada':
-        return { tipo: 'confirmada', userId: observacion.userId, reconciliada: false }
+      case 'confirmada': {
+        // GoTrue confirmó la cuenta, y el trigger de la migración 010 crea el
+        // perfil en esa misma transacción. Esta lectura no reemplaza esa
+        // garantía: la comprueba. Si el trigger faltara, o si una versión de
+        // GoTrue escribiera `app_metadata` fuera de la transacción, la cuenta
+        // quedaría sin perfil, y eso no puede informarse como un alta exitosa.
+        const estado = await consultarOperacion(admin, solicitud)
+        registro.reconciliacion = estado
+        if (estado === 'coherente' || estado === 'desconocido') {
+          // Con la lectura sin respuesta, la confirmación de GoTrue y la
+          // transacción siguen siendo la garantía. La ruta registra el caso.
+          return { tipo: 'confirmada', userId: observacion.userId, reconciliada: false }
+        }
+        // Ausente, incompatible o inconsistente justo después de confirmar: la
+        // garantía se rompió. Se informa sin borrar ni inventar nada.
+        return { tipo: 'error', codigo: 'ESTADO_INCONSISTENTE' }
+      }
 
       case 'datos':
         // GoTrue valida antes de abrir la transacción: un intento en vuelo con

@@ -200,6 +200,12 @@ export async function POST(request: Request) {
         operacion: solicitud.operacionId,
         diagnostico,
       })
+    } else if (diagnostico.intentos.some((intento) => intento.reconciliacion === 'desconocido')) {
+      console.warn('[usuarios] el alta se confirmó, pero no se pudo verificar el perfil', {
+        referencia,
+        operacion: solicitud.operacionId,
+        diagnostico,
+      })
     }
     return NextResponse.json({
       ok: true,
