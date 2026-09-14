@@ -1,8 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { CATALOGO_DE_ERRORES, type CodigoDeError } from '@/lib/errores'
 import { dniAlumnoSchema, legajoAlumnoSchema } from '@/lib/validations'
-import { createServerSupabaseClient } from '@/services/supabase.server'
+import { requerirDirector } from '@/services/autorizacion'
+import {
+  registrarCuentaConPerfil,
+  type DiagnosticoDelAlta,
+  type SolicitudDeAlta,
+} from '@/services/cuentas.service'
 import { createAdminClient } from '@/services/supabase.admin'
 
 export const dynamic = 'force-dynamic'
@@ -12,340 +18,216 @@ export const dynamic = 'force-dynamic'
  *
  * Orden de operaciones, deliberado:
  *
- *   1. Autorizar.
+ *   1. Autorizar en el servidor: sesión válida y rol DIRECTOR.
  *   2. Validar el cuerpo completo.
  *   3. Rechazar los vínculos parentales, que esta historia no soporta.
- *   4. Comprobar que el DNI y el legajo estén libres.
- *   5. Crear la cuenta en Auth.
- *   6. Persistir el perfil en una única sentencia.
- *   7. Si esa sentencia parece fallar, reconciliar antes de compensar.
+ *   4. Resolver el rol pedido.
+ *   5. Registrar cuenta y perfil con `registrarCuentaConPerfil`.
  *
- * Los pasos 3 y 4 existen para que ningún rechazo previsible ocurra después de
- * haber creado la cuenta de Auth. El paso 6 es una sola escritura en
- * PostgreSQL: el trigger de la migración 008 crea la fila de `alumnos` dentro
- * de esa misma sentencia, así que perfil y legajo académico se confirman o se
- * descartan juntos. No hay ninguna segunda escritura que pueda dejar el
- * conjunto a medias.
+ * El paso 5 es una sola escritura: la migración 010 crea el perfil —y, para un
+ * ESTUDIANTE, su legajo académico— dentro de la misma transacción de PostgreSQL
+ * en la que GoTrue crea la cuenta. No hay compensación ni borrado en ningún
+ * camino; cómo se resuelven los resultados ambiguos está explicado en
+ * `src/services/cuentas.service.ts`.
  *
- * ## Sobre la atomicidad
- *
- * Acá no hay ni puede haber una transacción distribuida: Auth y PostgreSQL son
- * dos sistemas y no comparten confirmación. Lo que sí hay es una estrategia de
- * reconciliación explícita, y conviene decir exactamente cuál es.
- *
- * Un error devuelto por el cliente de PostgREST significa una de dos cosas muy
- * distintas: que PostgreSQL rechazó la escritura, o que no sabemos qué pasó
- * porque la respuesta no llegó. La versión anterior las trataba igual y
- * compensaba en los dos casos. Si el INSERT se había confirmado y sólo se
- * perdió la respuesta, esa compensación borraba la cuenta de Auth y dejaba el
- * perfil y su legajo académico huérfanos: exactamente el estado que la
- * compensación existe para evitar.
- *
- * Antes de borrar nada se pregunta a PostgreSQL qué pasó de verdad, buscando
- * por `user_id`, que es el único identificador que ya conocemos:
- *
- * - **Persistencia confirmada** (existe el perfil y, si corresponde, su fila de
- *   `alumnos`): el alta se da por buena. No se compensa.
- * - **Ausencia confirmada** (no existe ninguna fila): se compensa Auth y se
- *   verifica el borrado.
- * - **Estado parcial o contradictorio**, o una reconciliación que tampoco
- *   responde: no se borra nada a ciegas. Se registra con un identificador de
- *   correlación y se devuelve un error operativo que pide intervención.
- *
- * El identificador de correlación es aleatorio y no lleva datos personales:
- * sirve para encontrar el episodio en el registro del servidor.
+ * Toda respuesta de error sale del catálogo de `src/lib/errores.ts`: mensaje en
+ * español, código de dominio y, cuando hace falta investigar, una referencia
+ * aleatoria que permite encontrar el episodio en el registro del servidor. El
+ * detalle técnico se queda en ese registro.
  */
 
-const VINCULOS_NO_SOPORTADOS =
-  'Los vínculos entre padres o tutores e hijos todavía no están disponibles. ' +
-  'Creá la cuenta sin vincular y registrá la relación cuando la funcionalidad esté publicada.'
+/** UUID versión 4, que es el formato que GoTrue exige para el `id` de una cuenta. */
+const PATRON_UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
+
+/** Mensaje para cualquier dato que el esquema no describa con un mensaje propio. */
+const MENSAJE_DATO_INVALIDO = 'Revisá los datos ingresados.'
 
 const crearUsuarioSchema = z.object({
-  email: z.string().email('Email inválido'),
-  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
-  nombre: z.string().min(2, 'Nombre inválido').max(100),
-  apellido: z.string().min(2, 'Apellido inválido').max(100),
+  /**
+   * Clave de idempotencia del envío. El formulario la genera una vez y la
+   * conserva mientras reintenta; es también el `id` de la cuenta. Si falta, se
+   * genera una acá y el envío no es reintentable.
+   */
+  operacion_id: z
+    .string()
+    .regex(PATRON_UUID_V4, 'El envío no tiene un identificador válido. Recargá la página.')
+    .optional(),
+  email: z.string().email('Email inválido').max(255, 'El email es demasiado largo'),
+  password: z
+    .string()
+    .min(6, 'La contraseña debe tener al menos 6 caracteres')
+    .max(72, 'La contraseña no puede superar los 72 caracteres'),
+  nombre: z.string().min(2, 'Nombre inválido').max(100, 'Nombre inválido'),
+  apellido: z.string().min(2, 'Apellido inválido').max(100, 'Apellido inválido'),
   dni: dniAlumnoSchema,
-  rol_id: z.number().int().positive('Rol inválido'),
-  telefono: z.string().max(20).optional().or(z.literal('')),
-  direccion: z.string().max(255).optional().or(z.literal('')),
+  rol_id: z.number('Rol inválido').int('Rol inválido').positive('Rol inválido'),
+  telefono: z.string().max(20, 'Teléfono inválido').optional().or(z.literal('')),
+  direccion: z.string().max(255, 'Dirección inválida').optional().or(z.literal('')),
   legajo_nro: legajoAlumnoSchema.optional().or(z.literal('')),
   // Vínculos familiares: se aceptan en el contrato solo para poder rechazarlos
   // con un mensaje propio en lugar de un error genérico de campo desconocido.
-  hijos_ids: z.array(z.string().uuid()).optional(),
-  tutor_id: z.string().uuid().optional().or(z.literal('')),
+  hijos_ids: z.array(z.string().uuid('Vínculo inválido')).optional(),
+  tutor_id: z.string().uuid('Vínculo inválido').optional().or(z.literal('')),
 })
 
-/**
- * Un error del cliente de PostgREST que corresponde a un rechazo de PostgreSQL.
- *
- * Los SQLSTATE tienen cinco caracteres alfanuméricos. Cuando el error trae uno,
- * la base habló: rechazó la escritura y no persistió nada. Cuando no lo trae
- * —una falla de red, un intermediario que corta, una respuesta ilegible— no
- * sabemos si la escritura ocurrió, y esa diferencia decide si se puede
- * compensar.
- */
-function esRechazoDePostgreSQL(error: { code?: string }) {
-  return typeof error.code === 'string' && /^[0-9A-Z]{5}$/u.test(error.code)
+function responderError(
+  codigo: CodigoDeError,
+  extra: { mensaje?: string; referencia?: string; campo?: string } = {}
+) {
+  const entrada = CATALOGO_DE_ERRORES[codigo]
+  return NextResponse.json(
+    {
+      error: extra.mensaje ?? entrada.mensaje,
+      codigo,
+      ...(extra.referencia ? { referencia: extra.referencia } : {}),
+      ...(extra.campo ? { campo: extra.campo } : {}),
+    },
+    { status: entrada.estado }
+  )
 }
 
-/** Qué encontró la reconciliación en PostgreSQL. */
-type EstadoDelAlta =
-  /** El perfil existe y su legajo académico es el esperado. */
-  | { clase: 'persistido' }
-  /** No hay ninguna fila: la escritura no ocurrió. */
-  | { clase: 'ausente' }
-  /** El perfil existe pero su legajo académico no coincide. */
-  | { clase: 'parcial'; detalle: string }
-  /** La reconciliación tampoco pudo responder. */
-  | { clase: 'desconocido'; detalle: string }
-
-/**
- * Pregunta a PostgreSQL qué pasó realmente con el alta.
- *
- * Busca por `user_id`, que es el único identificador que ya se conoce con
- * certeza. Es una lectura: no modifica nada y se puede repetir.
- */
-async function reconciliarAlta(
-  admin: ReturnType<typeof createAdminClient>,
-  userId: string,
-  esperaLegajoAcademico: boolean
-): Promise<EstadoDelAlta> {
-  const { data, error } = await admin
-    .from('perfiles')
-    .select('id, rol_id')
-    .eq('user_id', userId)
-
-  if (error) {
-    return { clase: 'desconocido', detalle: error.message }
-  }
-
-  const filas = data ?? []
-  if (filas.length === 0) return { clase: 'ausente' }
-  if (filas.length > 1) {
-    return { clase: 'parcial', detalle: `${filas.length} perfiles para el mismo user_id` }
-  }
-
-  if (!esperaLegajoAcademico) return { clase: 'persistido' }
-
-  // Un ESTUDIANTE tiene que tener su fila de `alumnos`, que el disparador de la
-  // migración 008 crea junto con el perfil. Si falta, el conjunto quedó a
-  // medias y no corresponde borrar nada sin mirarlo.
-  const { data: academico, error: errorAcademico } = await admin
-    .from('alumnos')
-    .select('perfil_id')
-    .eq('perfil_id', filas[0].id)
-
-  if (errorAcademico) {
-    return { clase: 'desconocido', detalle: errorAcademico.message }
-  }
-  if ((academico ?? []).length !== 1) {
-    return {
-      clase: 'parcial',
-      detalle: `el perfil existe pero tiene ${(academico ?? []).length} legajos académicos`,
-    }
-  }
-  return { clase: 'persistido' }
-}
+/** Resultados que merecen una referencia: alguien puede tener que investigarlos. */
+const CODIGOS_CON_REFERENCIA = new Set<CodigoDeError>([
+  'ALTA_RECHAZADA',
+  'ALTA_SIN_CONFIRMAR',
+  'ESTADO_INCONSISTENTE',
+  'SERVICIO_NO_DISPONIBLE',
+])
 
 export async function POST(request: Request) {
-  // 1. Verificar que quien llama esté autenticado y sea DIRECTOR
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  // 1. Autorizar. La identidad sale de la sesión, nunca del cuerpo.
+  const autorizacion = await requerirDirector('Solo el director puede crear usuarios.')
+  if (!autorizacion.autorizado) {
+    if (autorizacion.estado === 401) return responderError('NO_AUTENTICADO')
+    if (autorizacion.estado === 403) {
+      return responderError('SIN_PERMISO', { mensaje: autorizacion.mensaje })
+    }
+    return responderError('SERVICIO_NO_DISPONIBLE')
   }
 
-  const { data: perfil } = await supabase
-    .from('perfiles')
-    .select('rol:roles(nombre)')
-    .eq('user_id', user.id)
-    .single()
-
-  const rolNombre = (perfil as { rol: { nombre: string } | null } | null)?.rol?.nombre
-  if (rolNombre !== 'DIRECTOR') {
-    return NextResponse.json({ error: 'Solo el director puede crear usuarios' }, { status: 403 })
-  }
-
-  // 2. Validar el cuerpo
-  let body: unknown
+  // 2. Validar el cuerpo.
+  let cuerpo: unknown
   try {
-    body = await request.json()
+    cuerpo = await request.json()
   } catch {
-    return NextResponse.json({ error: 'Cuerpo inválido' }, { status: 400 })
+    return responderError('CUERPO_INVALIDO')
   }
 
-  const parsed = crearUsuarioSchema.safeParse(body)
-  if (!parsed.success) {
-    const msg = parsed.error.issues[0]?.message ?? 'Datos inválidos'
-    return NextResponse.json({ error: msg }, { status: 400 })
+  // Los mensajes por defecto de Zod están en inglés. Todo campo del esquema
+  // declara el suyo; cualquier caso no previsto recibe este respaldo.
+  const analisis = crearUsuarioSchema.safeParse(cuerpo, { error: () => MENSAJE_DATO_INVALIDO })
+  if (!analisis.success) {
+    const problema = analisis.error.issues[0]
+    const campo = typeof problema?.path[0] === 'string' ? problema.path[0] : undefined
+    return responderError('DATOS_INVALIDOS', {
+      mensaje: problema?.message || MENSAJE_DATO_INVALIDO,
+      campo,
+    })
   }
-  const {
-    email, password, nombre, apellido, dni, rol_id,
-    telefono, direccion, legajo_nro, hijos_ids, tutor_id,
-  } = parsed.data
+  const datos = analisis.data
 
   // 3. Rechazar los vínculos parentales ANTES de escribir nada.
   //
-  // `padres_hijos` no existe en el esquema versionado. La versión anterior de
-  // esta ruta intentaba insertar ahí después de haber creado la cuenta de Auth
-  // y el perfil; la inserción fallaba, el borrado compensatorio del perfil
-  // chocaba con la clave foránea `ON DELETE RESTRICT` de `alumnos`, su error se
-  // ignoraba y quedaban filas huérfanas reservando el DNI y el legajo.
-  //
-  // Se rechaza en vez de ignorarse: un director que eligió un tutor tiene que
-  // enterarse de que ese vínculo no se guardó, no creerlo registrado. El
-  // vínculo parental pertenece a EPT-13.
-  const pidioVinculo = Boolean(tutor_id) || (hijos_ids?.length ?? 0) > 0
-  if (pidioVinculo) {
-    return NextResponse.json({ error: VINCULOS_NO_SOPORTADOS }, { status: 400 })
+  // `padres_hijos` no existe en el esquema versionado. Un director que eligió
+  // un tutor tiene que enterarse de que ese vínculo no se guardaría, no creerlo
+  // registrado. El vínculo parental pertenece a EPT-13.
+  if (datos.tutor_id || (datos.hijos_ids?.length ?? 0) > 0) {
+    return responderError('VINCULO_NO_DISPONIBLE')
   }
 
-  const admin = createAdminClient()
-  const legajoNormalizado = legajo_nro || null
+  const referencia = randomUUID()
 
-  // 4. Comprobar que la identidad esté libre antes de crear la cuenta.
-  //
-  // No reemplaza a las restricciones únicas, que siguen siendo la autoridad
-  // ante dos altas simultáneas; evita el caso habitual de crear y borrar una
-  // cuenta de Auth por un duplicado que se podía detectar antes.
-  // Se consultan por separado en lugar de con un filtro `or`. El filtro `or` de
-  // PostgREST se arma concatenando texto, y el legajo es una cadena libre: uno
-  // que contenga una coma o un paréntesis —«LEG,2027» es un legajo válido según
-  // el contrato— rompería la expresión y el alta terminaría en un 500 que
-  // culpa al sistema de un dato correcto. `eq` codifica el valor por su cuenta.
-  const [porDni, porLegajo] = await Promise.all([
-    admin.from('perfiles').select('id').eq('dni', dni).limit(1),
-    legajoNormalizado
-      ? admin.from('perfiles').select('id').eq('legajo_nro', legajoNormalizado).limit(1)
-      : Promise.resolve({ data: [] as { id: string }[], error: null }),
-  ])
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch {
+    console.error('[usuarios] falta la configuración del cliente administrativo', { referencia })
+    return responderError('SERVICIO_NO_DISPONIBLE', { referencia })
+  }
 
-  const errorConsulta = porDni.error ?? porLegajo.error
-  if (errorConsulta) {
-    console.error('[usuarios] no se pudo verificar la identidad', {
-      code: errorConsulta.code,
-      message: errorConsulta.message,
+  // 4. Resolver el rol. Un rol inexistente se explica acá, antes de intentar
+  // nada, y no como un rechazo genérico de la base.
+  const rol = await admin.from('roles').select('nombre').eq('id', datos.rol_id).maybeSingle()
+  if (rol.error) {
+    console.error('[usuarios] no se pudo resolver el rol pedido', {
+      referencia,
+      code: rol.error.code,
+      message: rol.error.message,
     })
-    return NextResponse.json(
-      { error: 'No pudimos verificar los datos. Volvé a intentarlo en unos minutos.' },
-      { status: 500 }
-    )
+    return responderError('SERVICIO_NO_DISPONIBLE', { referencia })
+  }
+  if (!rol.data) {
+    return responderError('ROL_INEXISTENTE', { campo: 'rol_id' })
   }
 
-  if ((porDni.data ?? []).length > 0) {
-    return NextResponse.json(
-      { error: 'Ya existe una persona registrada con ese DNI.' },
-      { status: 409 }
-    )
-  }
-  if ((porLegajo.data ?? []).length > 0) {
-    return NextResponse.json(
-      { error: 'Ya existe un legajo con ese número.' },
-      { status: 409 }
-    )
-  }
-
-  // 5. Crear el usuario de autenticación (con email ya confirmado)
-  const { data: created, error: createErr } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  })
-  if (createErr || !created?.user) {
-    const m = createErr?.message ?? ''
-    const friendly = m.toLowerCase().includes('already') || m.toLowerCase().includes('registered')
-      ? 'Ya existe un usuario con ese email.'
-      : (m || 'No se pudo crear el usuario')
-    return NextResponse.json({ error: friendly }, { status: 400 })
+  // 5. Registrar cuenta y perfil.
+  const solicitud: SolicitudDeAlta = {
+    operacionId: datos.operacion_id?.toLowerCase() ?? randomUUID(),
+    email: datos.email,
+    password: datos.password,
+    perfil: {
+      nombre: datos.nombre,
+      apellido: datos.apellido,
+      dni: datos.dni,
+      rol_id: datos.rol_id,
+      telefono: datos.telefono || null,
+      direccion: datos.direccion || null,
+      legajo_nro: datos.legajo_nro || null,
+    },
+    esEstudiante: (rol.data as { nombre: string }).nombre === 'ESTUDIANTE',
   }
 
-  // Se resuelve antes del INSERT: la reconciliación necesita saber si este rol
-  // debe tener legajo académico, y preguntarlo después complicaría el análisis.
-  const { data: rolPedido } = await admin
-    .from('roles')
-    .select('nombre')
-    .eq('id', rol_id)
-    .maybeSingle()
-  const esEstudiante = (rolPedido as { nombre: string } | null)?.nombre === 'ESTUDIANTE'
-
-  // 6. Persistir el perfil. Única escritura en PostgreSQL de esta ruta.
-  const { error: perfilErr } = await admin.from('perfiles').insert({
-    user_id: created.user.id,
-    nombre,
-    apellido,
-    dni,
-    rol_id,
-    telefono: telefono || null,
-    direccion: direccion || null,
-    legajo_nro: legajoNormalizado,
-  })
-
-  if (perfilErr) {
-    // 7. Reconciliar antes de compensar.
-    const correlacion = randomUUID()
-    const rechazoConfirmado = esRechazoDePostgreSQL(perfilErr)
-
-    const estado = await reconciliarAlta(admin, created.user.id, esEstudiante)
-
-    console.error('[usuarios] el alta devolvió un error; se reconcilió el estado', {
-      correlacion,
-      user_id: created.user.id,
-      clasificacion: rechazoConfirmado
-        ? 'rechazo confirmado de PostgreSQL'
-        : 'resultado de transporte desconocido',
-      sqlstate: perfilErr.code ?? null,
-      estado: estado.clase,
+  const diagnostico: DiagnosticoDelAlta = { intentos: [] }
+  let resultado: Awaited<ReturnType<typeof registrarCuentaConPerfil>>
+  try {
+    resultado = await registrarCuentaConPerfil(admin, solicitud, diagnostico)
+  } catch (error) {
+    // Una excepción después de haber intentado escribir no prueba nada: el alta
+    // pudo haber confirmado. Se informa como no confirmada y no se toca nada.
+    console.error('[usuarios] excepción no controlada durante el alta', {
+      referencia,
+      operacion: solicitud.operacionId,
+      diagnostico,
+      excepcion: error instanceof Error ? error.name : typeof error,
     })
+    return responderError('ALTA_SIN_CONFIRMAR', { referencia })
+  }
 
-    // 7a. La escritura sí se había confirmado: la respuesta se perdió en el
-    // camino. Borrar Auth acá dejaría el perfil y su legajo huérfanos.
-    if (estado.clase === 'persistido') {
-      return NextResponse.json({ ok: true, user_id: created.user.id, reconciliado: true })
-    }
-
-    // 7b. No se sabe qué pasó, o quedó a medias. No se borra a ciegas.
-    if (estado.clase !== 'ausente') {
-      return NextResponse.json(
-        {
-          error:
-            'El alta quedó en un estado que no pudimos confirmar y no la revertimos ' +
-            'automáticamente para no perder datos. Avisale al equipo técnico con esta ' +
-            `referencia: ${correlacion}.`,
-        },
-        { status: 500 }
-      )
-    }
-
-    // 7c. Ausencia confirmada: se compensa y se verifica el borrado.
-    const { error: errorCompensacion } = await admin.auth.admin.deleteUser(created.user.id)
-
-    if (errorCompensacion) {
-      console.error('[usuarios] la compensación de Auth falló tras un alta incompleta', {
-        correlacion,
-        user_id: created.user.id,
-        perfil: perfilErr.message,
-        compensacion: errorCompensacion.message,
+  if (resultado.tipo === 'confirmada') {
+    if (resultado.reconciliada || diagnostico.intentos.length > 1) {
+      console.warn('[usuarios] el alta se confirmó después de un resultado ambiguo', {
+        referencia,
+        operacion: solicitud.operacionId,
+        diagnostico,
       })
-      return NextResponse.json(
-        {
-          error:
-            'No se pudo completar el alta y tampoco revertirla por completo. ' +
-            'Avisale al equipo técnico antes de reintentar con el mismo email. ' +
-            `Referencia: ${correlacion}.`,
-        },
-        { status: 500 }
-      )
     }
-
-    const m = perfilErr.message ?? ''
-    const friendly = m.includes('perfiles_dni')
-      ? 'Ya existe una persona registrada con ese DNI.'
-      : m.includes('legajo')
-        ? 'Ya existe un legajo con ese número.'
-        : 'No se pudo crear el perfil'
-    return NextResponse.json({ error: friendly }, { status: 400 })
+    return NextResponse.json({
+      ok: true,
+      user_id: resultado.userId,
+      reconciliada: resultado.reconciliada,
+    })
   }
 
-  return NextResponse.json({ ok: true, user_id: created.user.id })
+  if (CODIGOS_CON_REFERENCIA.has(resultado.codigo)) {
+    console.error('[usuarios] el alta no se pudo completar', {
+      referencia,
+      operacion: solicitud.operacionId,
+      codigo: resultado.codigo,
+      diagnostico,
+    })
+    return responderError(resultado.codigo, { referencia })
+  }
+
+  return responderError(resultado.codigo, {
+    campo:
+      resultado.codigo === 'DNI_DUPLICADO'
+        ? 'dni'
+        : resultado.codigo === 'LEGAJO_DUPLICADO'
+          ? 'legajo_nro'
+          : resultado.codigo === 'EMAIL_DUPLICADO'
+            ? 'email'
+            : resultado.codigo === 'CONTRASENA_RECHAZADA'
+              ? 'password'
+              : undefined,
+  })
 }

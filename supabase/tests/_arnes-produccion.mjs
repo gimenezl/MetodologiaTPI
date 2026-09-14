@@ -3,22 +3,41 @@
  *
  * Viven aparte para que las pruebas negativas puedan ejercitarlas sin compilar
  * la aplicación entera. Un arnés que nadie prueba es una afirmación más, y este
- * ya falló dos veces por medir el artefacto equivocado: un servidor de una
- * corrida anterior escuchando en el puerto, y el build de desarrollo que deja
- * Playwright bajo `.next/dev`.
+ * ya falló por medir el artefacto equivocado —un servidor de una corrida
+ * anterior escuchando en el puerto, el build de desarrollo que deja Playwright
+ * bajo `.next/dev`— y por poder quedar colgado para siempre en `next build`.
  */
 
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path, { join } from 'node:path'
 import { setTimeout as esperar } from 'node:timers/promises'
+import { fileURLToPath } from 'node:url'
+
+/** Raíz del worktree, independiente del directorio desde el que se invoque. */
+export const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+
+/**
+ * CLI de Next, ejecutado directamente con Node.
+ *
+ * Sin `npx` ni intérprete de comandos: así el proceso raíz del árbol es Node, y
+ * detenerlo no depende de que el intérprete propague la señal a sus hijos.
+ */
+export const CLI_NEXT = join(RAIZ, 'node_modules', 'next', 'dist', 'bin', 'next')
 
 /** Cuánto se espera cada respuesta HTTP. */
 export const LIMITE_PETICION_MS = 10_000
 
 /** Cuánto se espera, como máximo, a que el servidor empiece a atender. */
 export const LIMITE_ARRANQUE_MS = 120_000
+
+/** Cuánto puede durar, como máximo, `next build`. Configurable con `EPT_LIMITE_BUILD_MS`. */
+export const LIMITE_BUILD_POR_DEFECTO_MS = 15 * 60_000
+
+/** Cuánto se espera a que un árbol de procesos termine después de matarlo. */
+export const GRACIA_DE_CIERRE_MS = 10_000
 
 /** Identidades sintéticas que sólo existen en los bancos. */
 export const IDENTIDADES_DEL_BANCO = [
@@ -33,44 +52,89 @@ export const IDENTIDADES_DEL_BANCO = [
 /** Rastros que no deben aparecer en la respuesta de un 404. */
 export const RASTROS_EN_RESPUESTA = [...IDENTIDADES_DEL_BANCO, 'Nuevo legajo académico']
 
+/**
+ * Espera `ms` o hasta que se cancele.
+ *
+ * El temporizador mantiene vivo el proceso mientras corre —así una espera nunca
+ * termina con Node saliendo a mitad de camino— y se cancela en cuanto la
+ * carrera la gana otra promesa, para no retrasar la salida del arnés.
+ */
+export async function carreraConPlazo(promesa, ms) {
+  const controlador = new AbortController()
+  try {
+    return await Promise.race([
+      promesa,
+      esperar(ms, undefined, { signal: controlador.signal }).then(
+        () => undefined,
+        () => undefined
+      ),
+    ])
+  } finally {
+    controlador.abort()
+  }
+}
+
 /** Huella de un cuerpo, para compararlo byte a byte sin volcarlo. */
 export function digerir(texto) {
   return createHash('sha256').update(texto, 'utf8').digest('hex')
 }
 
 /**
+ * Lee un límite en milisegundos desde una variable de entorno.
+ *
+ * Un valor presente pero inválido es un error, no una excusa para usar el valor
+ * por defecto en silencio: quien lo configuró cree que rige.
+ */
+export function leerLimite(nombre, porDefecto, entorno = process.env) {
+  const crudo = entorno[nombre]
+  if (crudo === undefined || crudo === '') return porDefecto
+  if (!/^\d+$/u.test(crudo)) {
+    throw new Error(`${nombre} debe ser un entero positivo de milisegundos (recibido: «${crudo}»)`)
+  }
+  const valor = Number(crudo)
+  if (!Number.isSafeInteger(valor) || valor <= 0) {
+    throw new Error(`${nombre} debe ser un entero positivo de milisegundos (recibido: «${crudo}»)`)
+  }
+  return valor
+}
+
+/**
  * Pide una URL con un límite de espera explícito.
  *
  * Sin esto, un servidor que acepta la conexión y nunca contesta dejaba el arnés
- * colgado para siempre: ni pasaba, ni fallaba, ni liberaba el puerto. Un
- * proceso que no termina es peor que uno que falla, porque no avisa.
+ * colgado para siempre: ni pasaba, ni fallaba, ni liberaba el puerto.
  */
 export async function pedir(url, opciones = {}) {
-  const limite = opciones.limiteMs ?? LIMITE_PETICION_MS
-  const respuesta = await fetch(url, {
+  const { limiteMs = LIMITE_PETICION_MS, ...resto } = opciones
+  return fetch(url, {
     redirect: 'manual',
-    ...opciones,
-    signal: AbortSignal.timeout(limite),
+    ...resto,
+    signal: AbortSignal.timeout(limiteMs),
   })
-  return respuesta
 }
 
 /**
  * Espera a que el servidor empiece a atender, con un techo global.
  *
- * Devuelve `true` si contestó a tiempo. Nunca se queda esperando de más: cada
- * intento tiene su propio límite y el conjunto también.
+ * Devuelve `true` si contestó a tiempo. Cada intento tiene su propio límite y
+ * el conjunto también. Si se le pasa el proceso, deja de esperar en cuanto el
+ * proceso termina: esperar a un servidor muerto es perder el tiempo del límite.
  */
-export async function esperarAlServidor(url, { limiteMs = LIMITE_ARRANQUE_MS } = {}) {
+export async function esperarAlServidor(url, { limiteMs = LIMITE_ARRANQUE_MS, proceso } = {}) {
   const vence = Date.now() + limiteMs
   while (Date.now() < vence) {
+    if (proceso && (proceso.exitCode !== null || proceso.signalCode !== null)) return false
     try {
-      const respuesta = await pedir(url, { limiteMs: 3000 })
+      const restante = Math.max(1, Math.min(3000, vence - Date.now()))
+      const respuesta = await pedir(url, { limiteMs: restante })
       if (respuesta.status > 0) return true
     } catch {
       // Todavía no atiende, o no contestó a tiempo.
     }
-    await esperar(1000)
+    // Este temporizador SÍ mantiene vivo el proceso: es la espera principal.
+    // Sin referencia, si el proceso observado ya murió no queda nada pendiente
+    // y Node terminaría a mitad de la espera.
+    await esperar(Math.max(0, Math.min(1000, vence - Date.now())))
   }
   return false
 }
@@ -81,7 +145,9 @@ export async function esperarAlServidor(url, { limiteMs = LIMITE_ARRANQUE_MS } =
  * Es una lista blanca a propósito. Heredar el entorno completo le pasaría al
  * servidor cualquier secreto que hubiera en la sesión —empezando por
  * `SUPABASE_SERVICE_ROLE_KEY`— sin que lo necesite para nada: este arnés sólo
- * pide páginas y mira códigos de estado.
+ * compila, pide páginas y mira códigos de estado.
+ *
+ * `extra` no puede reintroducir la clave de servicio: se descarta aunque se pida.
  */
 export function entornoAcotado(extra = {}) {
   const base = {
@@ -102,33 +168,158 @@ export function entornoAcotado(extra = {}) {
     NEXT_PUBLIC_SUPABASE_ANON_KEY: 'placeholder-anon-key-solo-para-pruebas',
     ...extra,
   }
+  delete base.SUPABASE_SERVICE_ROLE_KEY
   return Object.fromEntries(Object.entries(base).filter(([, valor]) => valor !== undefined))
 }
 
+/** ¿Sigue vivo un proceso? No envía ninguna señal: solo pregunta. */
+export function procesoVivo(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return error?.code === 'EPERM'
+  }
+}
+
 /**
- * Detiene un proceso y todo lo que colgó de él.
+ * Detiene un proceso lanzado por este arnés y todo lo que colgó de él.
  *
- * En Windows el proceso se lanza a través del intérprete, así que `kill()`
- * termina el intérprete y deja vivo al servidor: el puerto queda ocupado, las
- * tuberías abiertas y el arnés no llega nunca a salir. `taskkill /T` baja el
- * árbol completo.
+ * Solo actúa sobre el PID de un hijo propio que todavía no terminó: nunca busca
+ * procesos por nombre ni por puerto, de modo que no puede matar nada ajeno al
+ * worktree. En Windows `taskkill /T` baja el árbol completo; en POSIX el hijo se
+ * lanza como líder de su propio grupo y se mata el grupo.
+ *
+ * Termina en tiempo acotado aunque un descendiente retenga las tuberías: si
+ * después de la gracia el proceso no informó su fin, se cortan sus flujos.
  */
-export async function detener(proceso) {
-  if (!proceso || proceso.exitCode !== null) return
+export async function detener(proceso, { graciaMs = GRACIA_DE_CIERRE_MS } = {}) {
+  if (!proceso || typeof proceso.pid !== 'number') return
+  if (proceso.exitCode !== null || proceso.signalCode !== null) return
+
   const terminado = new Promise((resolver) => proceso.once('exit', resolver))
   if (process.platform === 'win32') {
     try {
-      execFileSync('taskkill', ['/pid', String(proceso.pid), '/T', '/F'], { stdio: 'ignore' })
+      execFileSync('taskkill', ['/pid', String(proceso.pid), '/T', '/F'], {
+        stdio: 'ignore',
+        timeout: graciaMs,
+        windowsHide: true,
+      })
     } catch {
-      // Ya no estaba.
+      // Ya había terminado, o `taskkill` no pudo: se verifica abajo.
     }
   } else {
-    proceso.kill('SIGTERM')
+    try {
+      process.kill(-proceso.pid, 'SIGKILL')
+    } catch {
+      try {
+        proceso.kill('SIGKILL')
+      } catch {
+        // Ya no estaba.
+      }
+    }
   }
-  await Promise.race([terminado, esperar(5000)])
+
+  await carreraConPlazo(terminado, graciaMs)
+  proceso.stdout?.destroy()
+  proceso.stderr?.destroy()
 }
 
-/** Lista recursiva de archivos, tolerante a directorios ausentes. */
+/**
+ * Lanza un proceso con un límite de duración y conserva su salida.
+ *
+ * - `limiteMs` es obligatorio: no existe un proceso sin límite.
+ * - Al vencer, se detiene el árbol completo con `detener`.
+ * - stdout y stderr se conservan (los últimos `maximoRegistro` caracteres), así
+ *   una compilación que falla o se cuelga deja ver por qué.
+ * - Se resuelve siempre, en tiempo acotado: `limiteMs` más la gracia de cierre.
+ *
+ * Devuelve `{ codigo, vencido, error, registro, duracionMs, pid }`.
+ */
+export function ejecutarConLimite(
+  comando,
+  argumentos,
+  { limiteMs, cwd = RAIZ, env = entornoAcotado(), maximoRegistro = 64_000, graciaMs = GRACIA_DE_CIERRE_MS } = {}
+) {
+  if (!Number.isSafeInteger(limiteMs) || limiteMs <= 0) {
+    throw new Error('ejecutarConLimite exige un límite positivo en milisegundos')
+  }
+
+  return new Promise((resolver) => {
+    const inicio = Date.now()
+    let registro = ''
+    let vencido = false
+    let resuelto = false
+    let proceso
+
+    const terminar = (resultado) => {
+      if (resuelto) return
+      resuelto = true
+      clearTimeout(temporizador)
+      resolver({ registro, vencido, duracionMs: Date.now() - inicio, pid: proceso?.pid ?? null, ...resultado })
+    }
+
+    try {
+      proceso = spawn(comando, argumentos, {
+        cwd,
+        env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: process.platform !== 'win32',
+        windowsHide: true,
+      })
+    } catch (error) {
+      resolver({ codigo: null, vencido: false, error, registro, duracionMs: 0, pid: null })
+      return
+    }
+
+    const acumular = (fragmento) => {
+      registro = (registro + fragmento).slice(-maximoRegistro)
+    }
+    proceso.stdout.on('data', acumular)
+    proceso.stderr.on('data', acumular)
+
+    const temporizador = setTimeout(async () => {
+      vencido = true
+      await detener(proceso, { graciaMs })
+      terminar({ codigo: proceso.exitCode, error: null })
+    }, limiteMs)
+
+    proceso.once('error', (error) => terminar({ codigo: null, error }))
+    proceso.once('exit', async (codigo) => {
+      if (vencido) return
+      // Terminó por su cuenta: el límite ya no corre, aunque la lectura final
+      // de las tuberías tarde un poco.
+      clearTimeout(temporizador)
+      // Un descendiente puede seguir con las tuberías abiertas: se da una gracia
+      // corta para leer lo último y después se cortan.
+      await carreraConPlazo(
+        new Promise((r) => proceso.once('close', r)),
+        Math.min(graciaMs, 2000)
+      )
+      proceso.stdout.destroy()
+      proceso.stderr.destroy()
+      terminar({ codigo, error: null })
+    })
+  })
+}
+
+/**
+ * Ejecuta `trabajo` con un directorio temporal que se borra siempre.
+ *
+ * Se borra ante éxito, excepción o tiempo agotado: el `finally` no depende de
+ * que el trabajo termine bien.
+ */
+export async function conDirectorioTemporal(prefijo, trabajo) {
+  const directorio = mkdtempSync(join(tmpdir(), prefijo))
+  try {
+    return await trabajo(directorio)
+  } finally {
+    rmSync(directorio, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+  }
+}
+
+/** Lista recursiva de archivos. Un directorio ilegible es un error, no un vacío. */
 export function archivosDe(raiz) {
   if (!existsSync(raiz)) return []
   const pendientes = [raiz]
@@ -150,9 +341,13 @@ export function archivosDe(raiz) {
  * Son dos preguntas distintas y las dos importan: un banco presente en el build
  * es una ruta a un paso de quedar accesible por un cambio de configuración.
  *
+ * Falla cerrado: un artefacto que no se puede leer es un problema, no un
+ * archivo que se saltea. La versión anterior lo ignoraba en silencio, y un
+ * artefacto ilegible es justamente uno que no se revisó.
+ *
  * Devuelve una lista de problemas; vacía significa que está limpio.
  */
-export function revisarArtefactos(raiz = '.next') {
+export function revisarArtefactos(raiz = join(RAIZ, '.next'), { leer = readFileSync } = {}) {
   const problemas = []
 
   const manifiestos = [
@@ -162,40 +357,62 @@ export function revisarArtefactos(raiz = '.next') {
   ]
 
   let revisados = 0
-  for (const relativo of manifiestos) {
-    if (!existsSync(relativo)) continue
+  for (const manifiesto of manifiestos) {
+    if (!existsSync(manifiesto)) continue
+    let contenido
+    try {
+      contenido = leer(manifiesto, 'utf8')
+    } catch {
+      problemas.push(`no se pudo leer el manifiesto ${manifiesto}`)
+      continue
+    }
     revisados += 1
-    if (readFileSync(relativo, 'utf8').includes('pruebas-ui')) {
-      problemas.push(`${relativo} registra una ruta de banco`)
+    if (contenido.includes('pruebas-ui')) {
+      problemas.push(`${manifiesto} registra una ruta de banco`)
     }
   }
   if (revisados === 0) {
-    problemas.push('no se encontró ningún manifiesto de rutas: el build no se puede auditar')
+    problemas.push('no se encontró ningún manifiesto de rutas legible: el build no se puede auditar')
+  }
+
+  let archivos
+  try {
+    archivos = archivosDe(raiz)
+  } catch (error) {
+    problemas.push(`no se pudo recorrer ${raiz}: ${error instanceof Error ? error.message : String(error)}`)
+    return { problemas, manifiestosRevisados: revisados, artefactosLeidos: 0 }
   }
 
   // Se excluyen `dev` y `cache`, que no son salida de producción: el build de
   // desarrollo sí contiene los bancos, y confundirlos sería medir otra cosa.
-  const modulos = archivosDe(raiz)
-    .filter((archivo) => !/[\\/](dev|cache)[\\/]/.test(archivo))
-    .filter((archivo) => archivo.includes('page.banco') || archivo.includes('pruebas-ui'))
+  const deProduccion = archivos.filter((archivo) => !/[\\/](dev|cache)[\\/]/u.test(archivo))
+
+  const modulos = deProduccion.filter(
+    (archivo) => archivo.includes('page.banco') || archivo.includes('pruebas-ui')
+  )
   for (const modulo of modulos.slice(0, 5)) {
     problemas.push(`el artefacto ${modulo} corresponde a un banco`)
   }
 
-  for (const archivo of archivosDe(join(raiz, 'server'))) {
-    if (!/\.(js|json|html|rsc)$/.test(archivo)) continue
+  let leidos = 0
+  const servidor = join(raiz, 'server')
+  for (const archivo of deProduccion) {
+    if (!archivo.startsWith(servidor)) continue
+    if (!/\.(js|json|html|rsc)$/u.test(archivo)) continue
     let contenido
     try {
-      contenido = readFileSync(archivo, 'utf8')
+      contenido = leer(archivo, 'utf8')
     } catch {
+      problemas.push(`no se pudo leer el artefacto ${archivo}`)
       continue
     }
+    leidos += 1
     if (IDENTIDADES_DEL_BANCO.some((rastro) => contenido.includes(rastro))) {
       problemas.push(`el artefacto ${archivo} contiene datos del banco`)
     }
   }
 
-  return { problemas, manifiestosRevisados: revisados }
+  return { problemas, manifiestosRevisados: revisados, artefactosLeidos: leidos }
 }
 
 /**
@@ -232,5 +449,21 @@ export async function puertoOcupado(url) {
     return true
   } catch {
     return false
+  }
+}
+
+/**
+ * Exige que nadie esté escuchando ya en la URL.
+ *
+ * Si un servidor de una corrida anterior sigue vivo, el nuevo no consigue el
+ * puerto y el arnés termina midiendo ese binario viejo sin enterarse. No se
+ * mata a quien lo ocupa: podría no ser de este worktree.
+ */
+export async function exigirPuertoLibre(url) {
+  if (await puertoOcupado(url)) {
+    throw new Error(
+      `${url} ya está ocupado. Cerrá ese proceso antes de correr esta prueba: ` +
+        'de lo contrario mediría un servidor que no corresponde a este código.'
+    )
   }
 }
