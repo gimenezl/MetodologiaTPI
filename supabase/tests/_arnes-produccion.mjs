@@ -8,7 +8,7 @@
  * bajo `.next/dev`— y por poder quedar colgado para siempre en `next build`.
  */
 
-import { execFileSync, spawn } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -425,10 +425,11 @@ public static class EptJobSupervisor {
 /**
  * Detiene un proceso lanzado por este arnés y todo lo que colgó de él.
  *
- * Solo actúa sobre el PID de un hijo propio que todavía no terminó: nunca busca
- * procesos por nombre ni por puerto, de modo que no puede matar nada ajeno al
- * worktree. En Windows `taskkill /T` baja el árbol completo; en POSIX el hijo se
- * lanza como líder de su propio grupo y se mata el grupo.
+ * En Windows solo señala el handle que conserva `ChildProcess` para el supervisor
+ * propio que todavía no terminó. Al cerrarse ese supervisor, el Job Object baja
+ * el árbol completo. Nunca vuelve a abrir un proceso por PID ni reconstruye la
+ * descendencia. En POSIX el hijo se lanza como líder de su propio grupo y se mata
+ * el grupo.
  *
  * Termina en tiempo acotado aunque un descendiente retenga las tuberías: si
  * después de la gracia el proceso no informó su fin, se cortan sus flujos.
@@ -445,13 +446,11 @@ export async function detener(proceso, { graciaMs = GRACIA_DE_CIERRE_MS } = {}) 
     : Promise.resolve()
   if (process.platform === 'win32') {
     try {
-      execFileSync('taskkill', ['/pid', String(proceso.pid), '/T', '/F'], {
-        stdio: 'ignore',
-        timeout: graciaMs,
-        windowsHide: true,
-      })
+      // `ChildProcess.kill` opera sobre el handle abierto del hijo exacto. Aun
+      // si Windows reutilizara su PID, nunca puede alcanzar al nuevo proceso.
+      proceso.kill('SIGKILL')
     } catch {
-      // Puede haber terminado entre la comprobación y `taskkill`.
+      // Puede haber terminado entre la comprobación y la señal.
     }
   } else {
     try {

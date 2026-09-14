@@ -10,11 +10,19 @@ compilación. Este documento registra qué se ejecutó, con qué comando exacto,
 qué código de salida y con qué resultado.
 
 **Estado.** El candidato verificado de extremo a extremo fue
-`c3aaba0394bbdea59cd848a67f38d30fbab7b0be`. El candidato endurecido para revisión
-es `72d5fb6f323aefc154d0e725b0ec7f30edb4f754`: conserva ese código productivo y
-agrega el cierre de tres defectos del instrumental de prueba. Los 29 pasos de la
-verificación integral tuvieron las salidas esperadas sobre `c3aaba0`; el delta
-de `72d5fb6` pasó sus pruebas focalizadas, TypeScript, ESLint y `diff --check`.
+`c3aaba0394bbdea59cd848a67f38d30fbab7b0be`. `72d5fb6f323aefc154d0e725b0ec7f30edb4f754`
+endureció contraste, capturas y cierre de procesos; después,
+`ab05c0bccb7421e09828e64a77d7f5499226894e` reemplazó la reconstrucción tardía
+de descendientes por un supervisor vivo con Job Object. El commit que contiene
+esta actualización elimina además la última apertura por PID: la cancelación
+señala el handle del supervisor exacto que conserva `ChildProcess`. El SHA de ese
+commit se registra en el informe de entrega porque un archivo no puede contener
+el SHA que depende de sus propios bytes.
+
+Los 29 pasos de la verificación integral tuvieron las salidas esperadas sobre
+`c3aaba0`. La revisión de `0c44245` volvió a ejecutar la suite autenticada completa:
+`319 passed`. Sobre la frontera final se ejecutaron los dos arneses, TypeScript,
+ESLint focalizado y los dos `diff --check`; los resultados están en 12.1 ter.
 
 Los siete bloqueantes de la cuarta revisión están corregidos, pero su evidencia
 no tiene una forma uniforme y no se presenta como si la tuviera. Los bloqueantes
@@ -40,8 +48,9 @@ distintas, y conviene no confundirlos:
 | Commit | Qué contiene |
 |---|---|
 | **Candidato integral** `c3aaba0394bbdea59cd848a67f38d30fbab7b0be` | Código productivo, migraciones y pruebas de la cuarta ronda; sobre este SHA corrieron los 29 pasos integrales de la sección 12.1 |
-| **Candidato endurecido** `72d5fb6f323aefc154d0e725b0ec7f30edb4f754` | Incorpora dos commits documentales previos y el commit funcional `72d5fb6`, que corrige contraste, capturas y cierre de procesos. Sus verificaciones focalizadas están en 12.1 bis |
-| **Commit documental posterior** | Actualiza únicamente este documento con el SHA y los resultados definitivos del endurecimiento |
+| **Primer endurecimiento** `72d5fb6f323aefc154d0e725b0ec7f30edb4f754` | Corrige contraste, capturas y el caso donde el padre termina primero. Sus verificaciones focalizadas están en 12.1 bis |
+| **Supervisor de Windows** `ab05c0bccb7421e09828e64a77d7f5499226894e` | Crea el proceso real suspendido, lo asigna a un Job Object con `KILL_ON_JOB_CLOSE` y recién entonces lo reanuda. El supervisor permanece vivo hasta terminar el árbol |
+| **Cierre de propiedad** (commit que contiene este documento) | Deja de invocar `taskkill` por PID: usa el handle retenido por `ChildProcess`; agrega la negativa de identidad reutilizada y registra la verificación de 12.1 ter |
 
 Un archivo no puede contener el SHA del commit que lo introduce, porque ese SHA
 depende del contenido del archivo. Los SHA de los commits documentales quedan en
@@ -49,25 +58,25 @@ los comentarios de Jira y en el informe final. Para comprobar que esos commits n
 tocan nada más:
 
 ```bash
-git diff --stat 72d5fb6f323aefc154d0e725b0ec7f30edb4f754 HEAD
+git diff --stat ab05c0bccb7421e09828e64a77d7f5499226894e HEAD
 ```
 
-La salida esperada lista únicamente `docs/evidence/EPT-9.md`.
+La salida esperada lista los dos archivos del arnés y este documento.
 
 ### Métricas del candidato endurecido, calculadas con Git
 
 | Métrica | Comando | Resultado |
 |---|---|---|
-| Commits desde la base | `git rev-list --count e31bdf250e06ca9aae1233c2ee737a0443f4df51..72d5fb6f323aefc154d0e725b0ec7f30edb4f754` | `32` |
-| Diferencia contra la base | `git diff --shortstat e31bdf250e06ca9aae1233c2ee737a0443f4df51 72d5fb6f323aefc154d0e725b0ec7f30edb4f754` | `132 files changed, 18241 insertions(+), 612 deletions(-)` |
-| Commits desde el inicio de la cuarta ronda | `git rev-list --count 4b593a70aa2030c6d1f3051f47d5131b6d41292c..72d5fb6f323aefc154d0e725b0ec7f30edb4f754` | `9` |
-| Diferencia desde el inicio de la cuarta ronda | `git diff --shortstat 4b593a70aa2030c6d1f3051f47d5131b6d41292c 72d5fb6f323aefc154d0e725b0ec7f30edb4f754` | `73 files changed, 7094 insertions(+), 2825 deletions(-)` |
-| Migraciones en el candidato | `git ls-tree -r --name-only 72d5fb6f323aefc154d0e725b0ec7f30edb4f754 supabase/migrations` | 10 archivos, de `001` a `010` |
+| Commits desde la base | `git rev-list --count e31bdf250e06ca9aae1233c2ee737a0443f4df51..HEAD` | `35` |
+| Diferencia contra la base | `git diff --shortstat e31bdf250e06ca9aae1233c2ee737a0443f4df51 HEAD` | `132 files changed, 18567 insertions(+), 612 deletions(-)` |
+| Commits desde el inicio de la cuarta ronda | `git rev-list --count 4b593a70aa2030c6d1f3051f47d5131b6d41292c..HEAD` | `12` |
+| Diferencia desde el inicio de la cuarta ronda | `git diff --shortstat 4b593a70aa2030c6d1f3051f47d5131b6d41292c HEAD` | `73 files changed, 7419 insertions(+), 2824 deletions(-)` |
+| Migraciones en el candidato | `git ls-tree -r --name-only HEAD supabase/migrations` | 10 archivos, de `001` a `010` |
 
 De los 132 archivos, 61 son capturas PNG de `docs/evidence/EPT-9/` y 71 son
 código, migraciones, pruebas, configuración y este documento en su versión
 anterior. Las cifras de rondas previas **no** se copiaron: todas se volvieron a
-calcular sobre `72d5fb6`.
+calcular sobre el candidato final.
 
 ### Requisitos para copiar los comandos
 
@@ -109,13 +118,15 @@ dos cosas, la matriz de la sección 8 cita las dos.
 | HEAD al iniciar la cuarta ronda | `4b593a70aa2030c6d1f3051f47d5131b6d41292c` | Es ancestro del candidato: `git merge-base --is-ancestor 4b593a70aa2030c6d1f3051f47d5131b6d41292c 72d5fb6f323aefc154d0e725b0ec7f30edb4f754` terminó con salida 0 |
 | Candidato integral | `c3aaba0394bbdea59cd848a67f38d30fbab7b0be` | Paso 00 de la sección 12.1 |
 | HEAD al iniciar el endurecimiento final | `0fcd853fb27f93f9ad5bd5fa608e981bd9259f11` | Árbol limpio; ancestro directo del candidato endurecido |
-| Candidato endurecido | `72d5fb6f323aefc154d0e725b0ec7f30edb4f754` | Commit funcional adicional y pruebas focalizadas de 12.1 bis |
+| Primer candidato endurecido | `72d5fb6f323aefc154d0e725b0ec7f30edb4f754` | Commit funcional adicional y pruebas focalizadas de 12.1 bis |
+| Supervisor con Job Object | `ab05c0bccb7421e09828e64a77d7f5499226894e` | Padre directo del commit de cierre; auditado en 12.1 ter |
+| Candidato final | `HEAD` del informe de entrega | Su SHA exacto se informa fuera de este archivo para evitar una autorreferencia imposible |
 | Rama remota | No existe | `git ls-remote origin 'refs/heads/codex/ept-9-*'` no devolvió nada |
 | Pull requests | Ninguno | `gh pr list --head codex/ept-9-academic-students --state all --json number,state,url` devolvió `[]` |
 | Checkout original `E:\Escritorio\codigo\MetodologiaTPI` | No se modificó, ni se limpió, ni se reseteó, ni se usó para implementar | — |
 
 Los 23 commits anteriores a esta ronda conservan su SHA: no hubo amend, rebase
-ni squash. Los nueve commits posteriores al inicio de la cuarta ronda, en orden:
+ni squash. Los doce commits posteriores al inicio de la cuarta ronda, en orden:
 
 | Commit | Asunto | Alcance |
 |---|---|---|
@@ -128,6 +139,9 @@ ni squash. Los nueve commits posteriores al inicio de la cuarta ronda, en orden:
 | `a88aa64` | `docs(alumnos): reconciliar la evidencia final con el candidato` | Documento y capturas de evidencia |
 | `0fcd853` | `docs(alumnos): corregir una fila de la matriz de evidencia` | Solo este documento |
 | `72d5fb6` | `test(pruebas): cerrar carreras en contraste capturas y procesos` | 6 archivos, +262 / −40 |
+| `0c44245` | `docs(alumnos): registrar el endurecimiento final de la evidencia` | Solo este documento |
+| `ab05c0b` | `fix(pruebas): supervisar procesos de Windows con un job object` | 2 archivos, +280 / −76 |
+| **Commit de cierre** | `fix(pruebas): cerrar la propiedad del supervisor de Windows` | 2 archivos del arnés y este documento; SHA en el informe de entrega |
 
 ---
 
@@ -201,7 +215,7 @@ ronda sustituyó por una solución más fuerte.
 | 1 | Reconciliación ambigua | La ruta leía una vez por `user_id` tras un error de transporte y, si no encontraba nada, borraba la cuenta. Una lectura vacía no prueba ausencia: la escritura podía seguir en vuelo | Migración 010: el perfil nace en la misma transacción que la cuenta. El `id` de la cuenta es la clave de idempotencia. `cuentas.service.ts` no borra en ningún camino y verifica el perfil después de confirmar | Reconciliación A, C, D (confirmación tardía), E, F, I, L, M; SQL de alta atómica 6 a 11 y 20 a 23 | Reconciliación B, G, H, J, K y O; SQL de alta atómica 12 a 19; **inversa** N (el código de `4b593a70` borra la cuenta y deja un perfil huérfano); mutaciones M2 y M5 |
 | 2 | Errores técnicos visibles | Los servicios relanzaban el mensaje de PostgREST o de Auth y la pantalla lo mostraba | Catálogo `src/lib/errores.ts` con estados 400, 401, 403, 409, 422, 500 y 503; traducción por nombre exacto de restricción; la interfaz solo muestra mensajes con código de dominio | `usuarios-auth.spec.ts` (50 casos) y `alumnos-auth.spec.ts` | Guardia `tests/_sin-detalle-tecnico.ts` sobre texto visible, nombres accesibles y respuestas; «la respuesta no contiene detalle técnico» en 11 comprobaciones de la reconciliación; mutación M1 |
 | 3 | Clasificador permisivo | `padres_hijos_backup` o `padres_hijos_old` pasaban por la ausencia documentada | `src/lib/vinculos.ts`: 404, código `PGRST205` o `42P01`, mensaje completo anclado y exactamente `public.padres_hijos` | 2 casos tolerados | 14 casos no tolerados, más la conexión cortada; mutación M3 |
-| 4 | Build sin límite | `next build` podía colgarse para siempre | `ejecutarConLimite` con techo configurable (`EPT_LIMITE_BUILD_MS`), cierre del árbol completo de procesos, lista blanca de variables | `harness_produccion.mjs` (21 afirmaciones) | `harness_produccion_negativas.mjs` (58 afirmaciones): build colgado, árbol con hijo y nieto, padre que termina antes que su descendiente, arranque sin respuesta, puerto ocupado, secretos y limpieza. Son negativos directos; no se registró una mutación separada |
+| 4 | Build sin límite | `next build` podía colgarse para siempre | `ejecutarConLimite` con techo configurable (`EPT_LIMITE_BUILD_MS`), lista blanca de variables y, en Windows, supervisor vivo con Job Object; la cancelación usa el handle exacto del supervisor, nunca un PID reabierto | `harness_produccion.mjs` (21 afirmaciones) | `harness_produccion_negativas.mjs` (58 afirmaciones): build colgado, árbol con hijo y nieto, padre que termina antes que su descendiente e identidad/PID reutilizados sin matar el proceso ajeno. Son negativos directos; no se registró una mutación separada |
 | 5 | Contraste | El medidor omitía lo que no entendía y dividía otra vez por alfa sobre valores ya no premultiplicados | `tests/_contraste.ts` falla cerrado, inspecciona cada nodo de texto y todas sus líneas, informa elementos inspeccionados, medidos y omitidos, compone con la pila real de pintura y aplica el umbral exacto | 7 casos de estados por perfil | 16 casos negativos por perfil: incluyen la cuenta de alfa anterior, dos nodos con el mismo padre, contraste insuficiente después de la tercera línea y un ratio 4,496. Son discriminadores directos del código anterior; no se ejecutó una mutación de repositorio adicional |
 | 6 | Controles anidados | Cinco composiciones `Link → Button` en pantallas de EPT-9 | `EnlaceBoton`: un único `<a>` con el estilo de botón | Enlace único con nombre, destino, Tab y Enter en `alumnos-auth.spec.ts:700`, `:724` y `:942` | Guardia estática sobre la superficie de EPT-9, con caso sintético negativo; mutación M4 |
 | 7 | Evidencia | Métricas copiadas, comandos incompletos, filas agrupadas, afirmaciones sin ejecución | Este documento, reconciliado primero sobre `c3aaba0` y actualizado con el candidato `72d5fb6` | Matrices individuales, comandos copiables y lectura estructural de las secciones 0, 8 y 12 | No corresponde inventar una mutación documental: la comprobación es la consistencia entre Git, comandos, resultados y filas |
@@ -644,8 +658,9 @@ Una fila por criterio, sin agrupar. Todos los resultados provienen de la
 verificación de la sección 12 sobre `c3aaba0`, salvo las filas que citan otra
 ejecución. Abreviaturas de resultado: «RLS n» es la línea
 `NOTICE:  OK n: …` del guion de alumnos; «Alta n», la del guion de alta atómica.
-En todas las filas de Playwright la corrida completa terminó con
-`309 passed (…)` y salida 0.
+En todas las filas de Playwright, la corrida integral original terminó con
+`309 passed (…)` y salida 0. La revisión posterior sobre `0c44245`, que ya incluía
+las nuevas pruebas de contraste y captura, terminó con `319 passed` y salida 0.
 
 ### 8.1 EPT-9: criterios de aceptación
 
@@ -668,7 +683,7 @@ En todas las filas de Playwright la corrida completa terminó con
 | EPT-9 CA15: rechazos con mensajes claros en español y cero persistencia parcial | Mensajes de dominio y transacción única | `src/services/alumnos.service.ts`; `src/lib/errores.ts` | RLS 25; `alumnos-auth.spec.ts:329`, `:393`, `:484`, `:495`; concurrencia | `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/alumnos_academicos_rls.sql`; `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | `OK 25: ninguno de los rechazos persistió una fila (cero persistencia parcial)`; `ok … traduce el DNI y el legajo duplicados reales de PostgreSQL` | Cumple |
 | EPT-9 CA16: un reinicio limpio reproduce todo | Migraciones 001 → 010 aplican en limpio | `supabase/migrations/*` | Pasos 04, 06 y 07; autoverificaciones de 009 y 010 | `npx supabase db reset --local`; `npx supabase migration list --local`; `npx supabase db lint --local --level warning` | `Applying migration 010_alta_atomica_de_cuentas.sql...`, salida 0; lista 001 a 010; `No schema errors found` | Cumple |
 | EPT-9 CA17: tipos generados iguales al esquema; los manuales no dicen ser generados | Salida normalizada idéntica | `src/types/database.generated.ts`; `src/types/database.types.ts` | `tipos-generados.mjs`; estática del encabezado | `node supabase/tests/tipos-generados.mjs`; `rg -n "ESTE ARCHIVO NO ES GENERADO" src/types/database.types.ts` | `OK  src/types/database.generated.ts coincide byte a byte con la salida normalizada`; `4: * ESTE ARCHIVO NO ES GENERADO.` | Cumple |
-| EPT-9 CA18: pruebas SQL/RLS, API, UI y navegador autenticado, permitidas y denegadas | Cobertura por frontera | `supabase/tests/*`; `tests/*` | 69 + 39 + 73 + 23 aserciones SQL; `alumnos.spec.ts` (10); `alumnos-ui.spec.ts` (48); proyectos por actor | `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/alumnos_academicos_rls.sql`; `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/cursos_rls.sql`; `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/niveles_rls.sql`; `docker exec -i supabase_db_educar-para-transformar psql -X -U supabase_admin -d postgres -v ON_ERROR_STOP=1 < supabase/tests/usuarios_alta_atomica.sql`; `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | Todas en salida 0; `309 passed` | Cumple |
+| EPT-9 CA18: pruebas SQL/RLS, API, UI y navegador autenticado, permitidas y denegadas | Cobertura por frontera | `supabase/tests/*`; `tests/*` | 69 + 39 + 73 + 23 aserciones SQL; `alumnos.spec.ts` (10); `alumnos-ui.spec.ts` (48); proyectos por actor | `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/alumnos_academicos_rls.sql`; `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/cursos_rls.sql`; `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/niveles_rls.sql`; `docker exec -i supabase_db_educar-para-transformar psql -X -U supabase_admin -d postgres -v ON_ERROR_STOP=1 < supabase/tests/usuarios_alta_atomica.sql`; `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | SQL y Playwright en salida 0; revisión final: `319 passed` sobre `0c44245` | Cumple |
 | EPT-9 CA19: concurrencia con conexiones PostgreSQL reales | Dos procesos `psql` y `pg_blocking_pids` | `supabase/tests/_sesion-psql.mjs`; `alumnos_academicos_concurrencia.mjs` | Escenarios 17, 17bis, 19, 20a y 20b | `node supabase/tests/alumnos_academicos_concurrencia.mjs` | 8 líneas `OK CONCURRENCIA`, salida 0; `OK CONCURRENCIA 19: la asignación concurrente a un estudiante inactivado se rechaza (P5513)` | Cumple |
 | EPT-9 CA20: responsive y accesible en tres perfiles, con teclado, foco y estados | Sin desplazamiento horizontal; foco contenido | `GestionAlumnos.tsx`; `src/components/ui/*` | `alumnos-ui.spec.ts` (16 casos × 3 perfiles), `alumnos-contraste.spec.ts` (20 × 3), `alumnos-correcciones.spec.ts` (11, escritorio) | `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | `chromium` 106, `pixel-5-chromium` 38 e `iphone-13-webkit` 38 casos, todos `ok`; `ok … muestra los estados de carga, vacío, error y éxito` en los tres | Cumple, con el límite de que `alumnos-correcciones.spec.ts` corre solo en escritorio |
 | EPT-9 CA21: la evidencia documenta matriz, comandos, capturas, seguridad, decisiones, riesgos, retrospectiva y reversión | Este documento | `docs/evidence/EPT-9.md` | Secciones 3 a 20 | No aplica | — | Cumple |
@@ -692,7 +707,7 @@ En todas las filas de Playwright la corrida completa terminó con
 | EPT-20 A10: privilegios mínimos, RLS y funciones ligadas a `auth.uid()`; sin `service_role` en el CRUD normal | Solo SELECT; funciones DEFINER con `search_path` vacío | 008, 009 | RLS 7 a 10, 43, 52 y 53; consulta de funciones (7.3); estática de `service_role` | `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/alumnos_academicos_rls.sql`; `rg -n "createAdminClient\(\|SUPABASE_SERVICE_ROLE_KEY" src` | `OK 10: toda función SECURITY DEFINER de app_private fija search_path vacío`; `OK 53: un DIRECTOR autenticado crea un legajo sin privilegios extra`; el `rg` solo encontró `supabase.admin.ts` y `src/app/api/usuarios/route.ts:142` | Cumple |
 | EPT-20 A11: no se edita ninguna migración aplicada; se usa el siguiente identificador | Solo migraciones agregadas | `supabase/migrations` | Estática | `git diff --name-status e31bdf250e06ca9aae1233c2ee737a0443f4df51 c3aaba0394bbdea59cd848a67f38d30fbab7b0be -- supabase/migrations` | `A 008…`, `A 009…`, `A 010…` | Cumple. La 009 nació en la primera ronda (`0e11fc5`) y se corrigió en su lugar en la segunda (`9179c86`), antes de publicarse (sección 17.4) |
 | EPT-20 A12: sin eliminación física en la superficie normal | Sin DELETE ni TRUNCATE | 008 | RLS 46 y 47; `alumnos.spec.ts:103` y `:108` | `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/alumnos_academicos_rls.sql`; `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | `OK 47: ni authenticated ni anon pueden truncar perfiles ni el historial académico` | Cumple |
-| EPT-20 evidencia requerida | Reset, lista, SQL/RLS por actor, dos conexiones, tipos, asesores y lint, regresión | `supabase/migrations/*`; `supabase/tests/*` | Pasos 04 a 15 y 26 | `npx supabase db reset --local`; `npx supabase migration list --local`; `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/alumnos_academicos_rls.sql`; `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/cursos_rls.sql`; `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/niveles_rls.sql`; `node supabase/tests/alumnos_academicos_concurrencia.mjs`; `node supabase/tests/niveles_concurrencia.mjs`; `node supabase/tests/tipos-generados.mjs`; `npx supabase db advisors --local --type all --level info --fail-on none --output-format json`; `npx supabase db lint --local --level warning`; `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | Reset con 10 migraciones y salida 0; lista de `001` a `010`; 69, 39 y 73 líneas OK; 8 y 4 escenarios OK; 4 afirmaciones de tipos; 35 hallazgos de asesores, clasificados en 13.2; `No schema errors found`; `309 passed (4.7m)` | Cumple |
+| EPT-20 evidencia requerida | Reset, lista, SQL/RLS por actor, dos conexiones, tipos, asesores y lint, regresión | `supabase/migrations/*`; `supabase/tests/*` | Pasos 04 a 15 y 26 | `npx supabase db reset --local`; `npx supabase migration list --local`; `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/alumnos_academicos_rls.sql`; `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/cursos_rls.sql`; `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/niveles_rls.sql`; `node supabase/tests/alumnos_academicos_concurrencia.mjs`; `node supabase/tests/niveles_concurrencia.mjs`; `node supabase/tests/tipos-generados.mjs`; `npx supabase db advisors --local --type all --level info --fail-on none --output-format json`; `npx supabase db lint --local --level warning`; `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | Reset con 10 migraciones y salida 0; lista de `001` a `010`; 69, 39 y 73 líneas OK; 8 y 4 escenarios OK; 4 afirmaciones de tipos; 35 hallazgos de asesores, clasificados en 13.2; `No schema errors found`; la revisión final posterior obtuvo `319 passed` sobre `0c44245` | Cumple |
 | EPT-20 cierre | Esquema e invariantes ejecutados y documentados | — | Secciones 6 y 12 | No aplica | Ejecutados y documentados; la incidencia sigue En curso hasta la revisión independiente | Cumple la condición; transición pendiente |
 
 ### 8.3 EPT-21: tipos, autorización, servicios y API
@@ -730,7 +745,7 @@ En todas las filas de Playwright la corrida completa terminó con
 | EPT-22 A10: teclado, foco inicial, contención y devolución, etiquetas, errores descritos, alertas y regiones vivas | Diálogo accesible; enlaces únicos | `GestionAlumnos.tsx`; `Input.tsx`; `EnlaceBoton.tsx` | `alumnos-ui.spec.ts:378` y `:452`; `alumnos-correcciones.spec.ts:232`, `:288`, `:403`, `:425`, `:453`, `:472`; `alumnos-auth.spec.ts:700`, `:724`, `:942` | `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | `ok … el tabulador no escapa del diálogo ocupado, ni con Tab ni con Shift+Tab`; `ok … el acceso restringido es un único enlace para volver` en cuatro actores | Cumple |
 | EPT-22 A11: sin desplazamiento horizontal en escritorio, Pixel 5 e iPhone 13 | `scrollWidth <= clientWidth + 1` | `GestionAlumnos.tsx` | `alumnos-ui.spec.ts:59` (aserción en `:84`) y `:378` (aserción en `:411`), en tres perfiles | `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | `ok` en `chromium`, `pixel-5-chromium` e `iphone-13-webkit` | Cumple |
 | EPT-22 A12: identidad institucional y reutilización sin copiar componentes gigantes | Mismos tokens y clases | `estilosDeBoton.ts`; `EnlaceBoton.tsx`; `Button.tsx` | Revisión de código | `rg -n "estilosDeBoton" src/components/ui` | `Button.tsx:23` y `EnlaceBoton.tsx:34` llaman a `estilosDeBoton`, definida en `estilosDeBoton.ts:33` | Cumple, con el riesgo de tamaño de `GestionAlumnos.tsx` (1033 líneas, sección 18) |
-| EPT-22 evidencia requerida | Pruebas UI controladas, autenticadas reales, capturas de tres perfiles, inspección visual y guardia de idioma | — | `alumnos-ui.spec.ts` (48), `alumnos-auth.spec.ts` (40), 61 capturas, `alumnos-ui.spec.ts:452` | `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | `309 passed (4.7m)`; 61 capturas generadas sobre `c3aaba0` e inspeccionadas una por una (sección 14) | Cumple |
+| EPT-22 evidencia requerida | Pruebas UI controladas, autenticadas reales, capturas de tres perfiles, inspección visual y guardia de idioma | — | `alumnos-ui.spec.ts` (48), `alumnos-auth.spec.ts` (40), 61 capturas, `alumnos-ui.spec.ts:452` | `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | la revisión final posterior obtuvo `319 passed` sobre `0c44245`; 61 capturas generadas sobre `c3aaba0` e inspeccionadas una por una (sección 14) | Cumple |
 | EPT-22 cierre | Listado, detalle, historial, vista propia, accesibilidad, responsive y persistencia demostrados | — | Filas anteriores | No aplica | Demostrados; la incidencia sigue En curso | Cumple la condición; transición pendiente |
 
 ### 8.5 EPT-23: altas y correcciones sin duplicados
@@ -772,10 +787,10 @@ En todas las filas de Playwright la corrida completa terminó con
 | EPT-24 C14: teclado, foco, alertas y región viva | Diálogos y región `aria-live` | `GestionAlumnos.tsx` | `alumnos-ui.spec.ts:378` y `:452`; `alumnos-correcciones.spec.ts:288` y `:425` | `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | `ok … retiene el foco en el diálogo, cierra con Escape y lo devuelve` en tres perfiles | Cumple |
 | EPT-24 C15: escritorio, Pixel 5/Chromium e iPhone 13/WebKit | Tres proyectos | `playwright.config.ts` | Proyectos `chromium`, `pixel-5-chromium`, `iphone-13-webkit` | `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | 106, 38 y 38 casos `ok` | Cumple |
 | EPT-24 C16: regresión exacta de Cursos y Niveles | Suites sin relajar | Sección 13.4 | SQL, concurrencia y Playwright de Cursos y Niveles | `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/cursos_rls.sql`; `docker exec -i supabase_db_educar-para-transformar psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/tests/niveles_rls.sql`; `node supabase/tests/niveles_concurrencia.mjs`; `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | 39 y 73 OK; 4 OK; 75 casos `ok` | Cumple |
-| EPT-24 C17: reset, tipos, TypeScript, ESLint focalizado, build y E2E completa | Todo en verde o clasificado | `supabase/migrations/*`; `src/*`; `tests/*` | Pasos 04, 15, 17, 18, 21 y 26 | `npx supabase db reset --local`; `node supabase/tests/tipos-generados.mjs`; `npx tsc --noEmit --incremental false`; `npx eslint $(git diff --name-only --diff-filter=d 4b593a70aa2030c6d1f3051f47d5131b6d41292c HEAD -- '*.ts' '*.tsx' '*.mjs' '*.js')`; `ENTORNO_LOCAL="$(npx supabase status -o env)" && NEXT_PUBLIC_SUPABASE_URL="$(printf '%s\n' "$ENTORNO_LOCAL" \| rg -o -r '$1' '^API_URL="(.*)"$')" NEXT_PUBLIC_SUPABASE_ANON_KEY="$(printf '%s\n' "$ENTORNO_LOCAL" \| rg -o -r '$1' '^ANON_KEY="(.*)"$')" npx next build`; `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | Salida 0 en los seis; `✖ 2 problems (0 errors, 2 warnings)`; `(20/20)`; `309 passed (4.7m)` | Cumple |
+| EPT-24 C17: reset, tipos, TypeScript, ESLint focalizado, build y E2E completa | Todo en verde o clasificado | `supabase/migrations/*`; `src/*`; `tests/*` | Pasos 04, 15, 17, 18, 21 y 26 | `npx supabase db reset --local`; `node supabase/tests/tipos-generados.mjs`; `npx tsc --noEmit --incremental false`; `npx eslint $(git diff --name-only --diff-filter=d 4b593a70aa2030c6d1f3051f47d5131b6d41292c HEAD -- '*.ts' '*.tsx' '*.mjs' '*.js')`; `ENTORNO_LOCAL="$(npx supabase status -o env)" && NEXT_PUBLIC_SUPABASE_URL="$(printf '%s\n' "$ENTORNO_LOCAL" \| rg -o -r '$1' '^API_URL="(.*)"$')" NEXT_PUBLIC_SUPABASE_ANON_KEY="$(printf '%s\n' "$ENTORNO_LOCAL" \| rg -o -r '$1' '^ANON_KEY="(.*)"$')" npx next build`; `EPT_CAPTURAS=1 node supabase/tests/correr-autenticadas.mjs --retries=0 --reporter=list` | Salida 0 en los seis; `✖ 2 problems (0 errors, 2 warnings)`; `(20/20)`; la revisión final posterior obtuvo `319 passed` sobre `0c44245` | Cumple |
 | EPT-24 regla 1: comando, código de salida y resultado exacto | Sección 12 | — | — | No aplica | Registrados para los 29 pasos, las mutaciones y las corridas focalizadas | Cumple |
 | EPT-24 regla 2: preexistentes solo si se reproducen sobre la base integrada | Comparación real | — | ESLint de cada archivo contra su versión en la base; asesores con la base reconstruida | `node "$TEMP/eslint-contra-base.mjs" e31bdf250e06ca9aae1233c2ee737a0443f4df51 "$TEMP/eslint-contra-base.json"` (guion completo en 13.1); `npx supabase db reset --local --version 007 --no-seed`; `npx supabase db advisors --local --type all --level info --fail-on none --output-format json` | `{"totalCandidato":{"errores":15,"avisos":109},"totalBaseMismosArchivos":{"errores":15,"avisos":109}}` y `igual a la base` en los 28 archivos; asesores: 32 en la base, 35 en el candidato, 4 nuevos y 1 desaparecido (13.2). El build sin variables **no** se declara preexistente (13.3) | Cumple |
-| EPT-24 regla 3: no modificar pruebas para reducir garantías | Cambios que agregan o endurecen aserciones | `tests/*`; `supabase/tests/*` | Diferencias desde el inicio de la cuarta ronda | `git diff --stat 4b593a70aa2030c6d1f3051f47d5131b6d41292c 72d5fb6f323aefc154d0e725b0ec7f30edb4f754 -- tests supabase/tests` | `16 files changed, 3854 insertions(+), 1443 deletions(-)`. Las supresiones corresponden a reescrituras con más casos (`usuarios-auth.spec.ts`, `_contraste.ts`, `usuarios_reconciliacion.mjs`, arnés). El endurecimiento final agrega tres discriminadores de contraste, la carrera de captura y el padre que termina antes que su descendiente. Las pruebas de Cursos y Niveles no cambiaron en esta ronda | Cumple |
+| EPT-24 regla 3: no modificar pruebas para reducir garantías | Cambios que agregan o endurecen aserciones | `tests/*`; `supabase/tests/*` | Diferencias desde el inicio de la cuarta ronda | `git diff --stat 4b593a70aa2030c6d1f3051f47d5131b6d41292c HEAD -- tests supabase/tests` | `16 files changed, 4062 insertions(+), 1442 deletions(-)`. Las supresiones corresponden a reescrituras con más casos (`usuarios-auth.spec.ts`, `_contraste.ts`, `usuarios_reconciliacion.mjs`, arnés). El cierre final agrega tres discriminadores de contraste, la carrera de captura, el padre que termina antes que su descendiente y la negativa de identidad reutilizada. Las pruebas de Cursos y Niveles no cambiaron en esta ronda | Cumple |
 | EPT-24 cierre | Pruebas ejecutadas y trazables | — | Secciones 8 y 12 | No aplica | Ejecutadas; la incidencia sigue En curso | Cumple la condición; transición pendiente |
 
 ### 8.7 EPT-25: entregables y reglas de cierre
@@ -792,12 +807,12 @@ En todas las filas de Playwright la corrida completa terminó con
 | EPT-25 E8: seguridad, privacidad, secretos, accesibilidad e idioma | Secciones 11 y 15 | Rama completa | Paso 28 | `git diff e31bdf250e06ca9aae1233c2ee737a0443f4df51 HEAD \| rg '^\+' \| rg -n --pcre2 'eyJhbGciOi[A-Za-z0-9_-]{20,}\|sb_secret_[A-Za-z0-9_-]{10,}\|sb_publishable_[A-Za-z0-9_-]{10,}\|-----BEGIN [A-Z ]*PRIVATE KEY\|SUPABASE_SERVICE_ROLE_KEY\s*=\s*["\x27]?[A-Za-z0-9]\|postgres(ql)?://[^:\s]+:[^@\s]+@(?!127\.0\.0\.1)\|[a-z0-9]{20}\.supabase\.co' \|\| echo 'sin coincidencias'`; `git ls-files \| rg '(^\|/)\.env' \|\| echo 'ninguno'` | Dos líneas, las del valor sintético del arnés (sección 15); `ninguno` | Cumple |
 | EPT-25 E9: decisiones, riesgos fuera de alcance, retrospectiva y siguiente unidad | Secciones 4, 18, 19 y 20 | — | — | No aplica | — | Cumple |
 | EPT-25 E10: límite de reversión | Sección 17 | — | — | No aplica | — | Cumple |
-| EPT-25 E11: commits convencionales sin `Co-Authored-By` ni atribución | Asuntos y trailers | Git | Estáticas | `git log --format='%s' e31bdf250e06ca9aae1233c2ee737a0443f4df51..72d5fb6f323aefc154d0e725b0ec7f30edb4f754 \| rg -v '^(feat\|fix\|docs\|test\|refactor\|chore\|style\|perf\|build\|ci)(\([a-z0-9-]+\))?!?: '`; `git log e31bdf250e06ca9aae1233c2ee737a0443f4df51..HEAD --format=%B \| rg -n -i 'co-authored\|generated with\|claude\|anthropic\|openai\|chatgpt\|copilot\|🤖' \|\| echo 'sin coincidencias'`; `git log e31bdf250e06ca9aae1233c2ee737a0443f4df51..HEAD --format='%(trailers:only)' \| rg -v '^$' \|\| echo 'sin trailers'` | Sin salida (salida 1): los 32 asuntos hasta el candidato endurecido son convencionales; `sin coincidencias`; `sin trailers` | Cumple |
+| EPT-25 E11: commits convencionales sin `Co-Authored-By` ni atribución | Asuntos y trailers | Git | Estáticas | `git log --format='%s' e31bdf250e06ca9aae1233c2ee737a0443f4df51..HEAD \| rg -v '^(feat\|fix\|docs\|test\|refactor\|chore\|style\|perf\|build\|ci)(\([a-z0-9-]+\))?!?: '`; `git log e31bdf250e06ca9aae1233c2ee737a0443f4df51..HEAD --format=%B \| rg -n -i 'co-authored\|generated with\|claude\|anthropic\|openai\|chatgpt\|copilot\|🤖' \|\| echo 'sin coincidencias'`; `git log e31bdf250e06ca9aae1233c2ee737a0443f4df51..HEAD --format='%(trailers:only)' \| rg -v '^$' \|\| echo 'sin trailers'` | Sin salida (salida 1): los 35 asuntos son convencionales; `sin coincidencias`; `sin trailers` | Cumple |
 | EPT-25 E12: revisión independiente documentada antes de push o PR | Revisión del nuevo SHA | — | — | No aplica | No realizada todavía | **Pendiente** |
 | EPT-25 E13: PR en español cuando exista autorización posterior | — | — | — | No aplica | No hay PR: esta ronda lo prohíbe | No aplica todavía |
 | EPT-25 E14: comentario de evidencia en cada incidencia antes de cualquier transición a Listo | Comentarios en las siete | Jira | Consulta en vivo (sección 2) | No aplica | Publicados después del primer commit documental: EPT-9 `10125`, EPT-20 `10126`, EPT-21 `10127`, EPT-22 `10128`, EPT-23 `10129`, EPT-24 `10130` y EPT-25 `10131`; las siete siguen `En curso` | Cumple; ninguna transición ocurrió |
 | EPT-25 política de Jira | Subtareas a Listo solo con evidencia; EPT-9 En curso hasta hijas, revisión e integración | Jira | Sección 2 | No aplica | Las siete `En curso` | Cumple |
-| EPT-25 cierre | Evidencia igual a los bytes finales; Jira real; ninguna afirmación sin demostrar | — | Secciones 0 y 12 | `git diff --stat 72d5fb6f323aefc154d0e725b0ec7f30edb4f754 HEAD` | Después del candidato endurecido solo debe aparecer este documento. El resultado se verifica en el informe final, porque el archivo no puede contener el SHA del commit que lo introduce | Cumple la condición; transición pendiente |
+| EPT-25 cierre | Evidencia igual a los bytes finales; Jira real; ninguna afirmación sin demostrar | — | Secciones 0 y 12 | `git diff --stat ab05c0bccb7421e09828e64a77d7f5499226894e HEAD` | El cierre final contiene solo los dos archivos del arnés y este documento. El SHA y el árbol limpio se verifican en el informe final, porque el archivo no puede contener el SHA del commit que lo introduce | Cumple la condición; transición pendiente |
 
 ---
 
@@ -1124,7 +1139,7 @@ echo '== secretos en líneas agregadas por la rama'; git diff e31bdf250e06ca9aae
 | 23 | 0 | 14 s | 55 líneas `OK`; `OK  árbol bloqueado: termina en tiempo acotado aunque el nieto retenga las tuberías (4098 ms)`; `OK  no quedó ningún proceso lanzado por la prueba` |
 | 24 | 0 | 51 s | `180 afirmaciones, 0 incumplida(s).` |
 | 25 | 0 | 0 s | Hashes previos de 97 capturas (61 de EPT-9, 16 de EPT-8 y 20 de EPT-55) |
-| 26 | 0 | 290 s | `309 passed (4.7m)`, sin reintentos. Por proyecto: `setup` 9, `chromium` 106, `pixel-5-chromium` 38, `iphone-13-webkit` 38, `chromium-directora` 84, `chromium-estudiante` 14, `chromium-estudiante-ajeno` 3, `chromium-docente` 5, `chromium-padre` 4, `chromium-personal` 4, `chromium-sin-perfil` 4 |
+| 26 | 0 | 290 s | la revisión final posterior obtuvo `319 passed` sobre `0c44245`, sin reintentos. Por proyecto: `setup` 9, `chromium` 106, `pixel-5-chromium` 38, `iphone-13-webkit` 38, `chromium-directora` 84, `chromium-estudiante` 14, `chromium-estudiante-ajeno` 3, `chromium-docente` 5, `chromium-padre` 4, `chromium-personal` 4, `chromium-sin-perfil` 4 |
 | 27 | 0 | 0 s | 34 capturas de EPT-9 cambiaron de bytes y 27 no. Las de EPT-8 y EPT-55 también se regeneraron: se restauraron con `git restore --source=HEAD --worktree -- docs/evidence/EPT-8 docs/evidence/EPT-55`, porque no pertenecen a esta unidad |
 | 28 | 0 | 1 s | Secretos: dos líneas del valor sintético del arnés (sección 15); `ninguno`; `sin coincidencias`; `sin trailers` |
 
@@ -1170,6 +1185,46 @@ git diff --check
 No se presenta el caso del padre que termina primero como una mutación: es una
 prueba negativa directa del cierre de grupo. La revisión final debe volver a
 ejecutar la suite integral sobre el candidato completo antes del PR.
+
+La revisión read-only siguiente la ejecutó sobre `0c44245` y obtuvo `319 passed`
+con reintentos desactivados: 10 casos más que los 309 de `c3aaba0` porque tres
+pruebas nuevas de contraste corren en tres perfiles y una prueba nueva de captura
+corre en Chromium. También repitió las 24 focalizadas, las 58 negativas,
+TypeScript, ESLint focalizado y `diff --check` del rango, todos con salida 0.
+
+### 12.1 ter Frontera de propiedad de procesos de Windows
+
+`ab05c0b` sustituyó la reconstrucción de `ParentProcessId` por un supervisor
+PowerShell que crea el proceso real suspendido, lo asigna a un Job Object con
+`KILL_ON_JOB_CLOSE` y recién entonces lo reanuda. Así el supervisor permanece
+vivo hasta que el proceso principal terminó y el job eliminó cualquier
+descendiente. La auditoría posterior encontró una última carrera: ante un límite,
+`taskkill` todavía reabría al supervisor por su PID. El cierre actual usa
+`ChildProcess.kill`, que señala el handle abierto del hijo exacto, y no enumera,
+abre ni mata ningún proceso a partir de un PID muerto o reutilizable.
+
+La negativa determinista usa el PID del propio arnés como una identidad vieja y
+lanza debajo de ese PID un proceso ajeno nacido después. Demuestra a la vez que no
+se intenta señalar la identidad terminada y que el proceso ajeno sobrevive; el
+caso anterior donde el padre termina primero sigue demostrando que su descendiente
+queda terminado antes de resolver.
+
+```bash
+node supabase/tests/harness_produccion_negativas.mjs
+node supabase/tests/harness_produccion.mjs
+npx tsc --noEmit --incremental false
+npx eslint --no-cache supabase/tests/_arnes-produccion.mjs supabase/tests/harness_produccion_negativas.mjs
+git diff --check
+git diff --check e31bdf250e06ca9aae1233c2ee737a0443f4df51 HEAD
+```
+
+| Comando | Salida | Resultado exacto |
+|---|---:|---|
+| Negativas del arnés | 0 | `58 afirmaciones, 0 incumplida(s)`; pasan el árbol bloqueado, el padre que termina primero, la identidad reutilizada y la limpieza final |
+| Arnés de producción | 0 | `Todas las afirmaciones se cumplieron.`; build de producción en `80768 ms`, 625 artefactos leídos, servidor terminado y puerto 3123 libre |
+| TypeScript | 0 | Sin salida |
+| ESLint focalizado | 0 | Sin errores ni advertencias |
+| Ambos `git diff --check` | 0 | Sin errores; solo avisos de conversión futura LF→CRLF del worktree |
 
 ### 12.2 Mutaciones
 
@@ -1473,9 +1528,10 @@ los anula. Se registra como observación, no como hallazgo de EPT-9.
 La cadena completa se obtiene con `git log --oneline e31bdf250e06ca9aae1233c2ee737a0443f4df51..HEAD`.
 Hasta `c3aaba0` son 29 commits: los 23 de las rondas 1 a 3 y los seis de la
 cuarta ronda original, con sus SHA intactos. Después se agregaron `a88aa64` y
-`0fcd853` para reconciliar la evidencia, y `72d5fb6` para cerrar los tres
-hallazgos finales del instrumental. El commit documental que contiene esta
-actualización queda después del candidato endurecido y solo toca este archivo.
+`0fcd853` para reconciliar la evidencia, `72d5fb6` para cerrar tres hallazgos del
+instrumental y `0c44245` para documentarlos. `ab05c0b` introdujo el supervisor
+con Job Object. El commit que contiene esta actualización cierra la propiedad de
+la cancelación por handle y conserva con ella su negativa y evidencia.
 
 Todos los asuntos son convencionales y ningún mensaje lleva `Co-Authored-By` ni
 atribución de IA (paso 28 y fila E11 de la sección 8.7). No hubo push, pull
@@ -1492,7 +1548,8 @@ Orden sugerido para la revisión independiente:
 5. `tests/_contraste.ts`, `tests/alumnos-contraste.spec.ts`, `tests/_captura.ts`,
    `tests/captura.spec.ts`, `tests/_semantica.ts` y `tests/semantica-estatica.spec.ts`.
 6. `supabase/tests/_arnes-produccion.mjs` y las 58 negativas del arnés, en
-   especial el padre que termina antes que su descendiente.
+   especial el padre que termina antes que su descendiente y la identidad
+   reutilizada cuyo proceso ajeno debe sobrevivir.
 7. Las migraciones 008 y 009, que no cambiaron en esta ronda.
 
 ---
@@ -1507,13 +1564,15 @@ aplicó, ni su fila en `supabase_migrations.schema_migrations`.
 
 | Orden | Commit | Qué vuelve si se revierte | Esquema |
 |---|---|---|---|
-| 1 | `72d5fb6` | Vuelven la deduplicación por padre, el límite de tres líneas, la tolerancia de 0,005, el ocultamiento global del portal y la posibilidad de resolver tras morir el padre sin controlar descendientes | Ninguno |
-| 2 | `c3aaba0` | El alta confirmada vuelve a informarse sin verificar el perfil | Ninguno |
-| 3 | `3c13a66` | `console.error` en la carga fallida, que en desarrollo abre el diálogo de Next, y la carrera al leer los roles | Ninguno |
-| 4 | `d639e87` | `next build` sin límite y el arnés sin negativas de árbol de procesos | Ninguno |
-| 5 | `81ff960` | El clasificador por subcadena y los mensajes crudos de PostgREST | Ninguno |
-| 6 | `029eb1d` | Los controles `Link → Button` y el medidor de contraste que falla abierto | Ninguno |
-| 7 | `02e5ea6` | La ruta que compensa borrando la cuenta tras una lectura vacía: el defecto que la prueba inversa N reproduce | Quita el **archivo** de la 010; el trigger sigue aplicado donde ya se aplicó |
+| 1 | Commit de cierre de este documento | La cancelación vuelve a abrir por PID al supervisor de `ab05c0b` y desaparece la negativa de identidad reutilizada | Ninguno |
+| 2 | `ab05c0b` | Vuelve la reconstrucción de descendientes mediante `ParentProcessId` después de morir el padre | Ninguno |
+| 3 | `72d5fb6` | Vuelven la deduplicación por padre, el límite de tres líneas, la tolerancia de 0,005, el ocultamiento global del portal y la posibilidad de resolver tras morir el padre sin controlar descendientes | Ninguno |
+| 4 | `c3aaba0` | El alta confirmada vuelve a informarse sin verificar el perfil | Ninguno |
+| 5 | `3c13a66` | `console.error` en la carga fallida, que en desarrollo abre el diálogo de Next, y la carrera al leer los roles | Ninguno |
+| 6 | `d639e87` | `next build` sin límite y el arnés sin negativas de árbol de procesos | Ninguno |
+| 7 | `81ff960` | El clasificador por subcadena y los mensajes crudos de PostgREST | Ninguno |
+| 8 | `029eb1d` | Los controles `Link → Button` y el medidor de contraste que falla abierto | Ninguno |
+| 9 | `02e5ea6` | La ruta que compensa borrando la cuenta tras una lectura vacía: el defecto que la prueba inversa N reproduce | Quita el **archivo** de la 010; el trigger sigue aplicado donde ya se aplicó |
 
 Los reverts se hacen en ese orden porque los commits posteriores tocan los mismos
 archivos (`tests/usuarios-auth.spec.ts`, `src/app/dashboard/usuarios/page.tsx`,
@@ -1617,6 +1676,10 @@ ocurrir en una sola transacción.
 - **Un proceso que no termina no avisa.** `next build` colgado, un nieto que
   retiene las tuberías o un temporizador sin referencia pueden dejar una prueba
   esperando para siempre. Todo tiene límite, y el cierre baja el árbol completo.
+- **Un PID no es una identidad.** Después de morir un padre, Windows puede
+  reutilizar su número. La frontera segura se establece antes de reanudar el
+  proceso mediante un Job Object y se cancela por el handle retenido del
+  supervisor, nunca reconstruyendo descendencia desde un PID.
 - **Un preexistente se demuestra, no se supone.** El build sin variables quedó sin
   clasificar porque no pudo reproducirse sobre la base.
 - **Verificar el entorno antes de medirlo.** `.env.local` apuntaba a un proyecto
@@ -1628,9 +1691,9 @@ ocurrir en una sola transacción.
 
 ## 20. Próximo paso
 
-1. **Revisión independiente del candidato endurecido `72d5fb6` y del commit documental posterior**,
-   con el orden de la sección 16. Conviene empezar por la migración 010, el
-   servicio de cuentas y los escenarios D, L, M, N y O.
+1. **Revisión independiente del SHA final informado en la entrega**, con el orden
+   de la sección 16. Conviene empezar por la migración 010, el servicio de cuentas,
+   los escenarios D, L, M, N y O y la frontera de procesos de 12.1 ter.
 2. Verificar en especial lo que las revisiones pidieron no dar por bueno sin
    ejecutarlo: que la suite SQL falle de verdad (M2), que la concurrencia use dos
    conexiones reales, que el 404 de producción se mida sobre la aplicación

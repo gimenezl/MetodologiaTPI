@@ -511,18 +511,24 @@ writeFileSync(process.env.EPT_PIDS, JSON.stringify({ descendiente: descendiente.
       const ajeno = lanzar(['-e', 'setInterval(() => {}, 1000)'])
       await esperar(250)
       // Simula un registro viejo cuyo PID raíz ya murió y fue reutilizado por
-      // este proceso. `ajeno` nació después: no pertenece al árbol registrado.
+      // este arnés. `ajeno` nació después bajo el PID reutilizado: no pertenece
+      // al árbol registrado y el cierre no debe reconstruir esa descendencia.
+      let seIntentoSenalarLaIdentidadVieja = false
       const identidadReutilizada = {
         pid: process.pid,
         exitCode: 0,
         signalCode: null,
         once: () => {},
+        kill: () => {
+          seIntentoSenalarLaIdentidadVieja = true
+          return true
+        },
         stdout: null,
         stderr: null,
       }
       await detener(identidadReutilizada)
       afirmar(
-        procesoVivo(ajeno.pid),
+        !seIntentoSenalarLaIdentidadVieja && procesoVivo(ajeno.pid),
         'identidad reutilizada: no se enumera ni mata un proceso ajeno nacido después de morir la raíz registrada'
       )
       await detener(ajeno)
