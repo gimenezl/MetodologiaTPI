@@ -95,6 +95,26 @@ function rolId(nombre: string) {
   return Number(sql(`SELECT id FROM public.roles WHERE nombre = '${nombre}';`))
 }
 
+/**
+ * Opción del selector de rol con ese nombre exacto.
+ *
+ * La pantalla dibuja el formulario antes de terminar la carga, así que las
+ * opciones se esperan con una aserción que reintenta: una lectura instantánea
+ * puede encontrar solo «Seleccionar rol...».
+ */
+function opcionDeRol(page: Page, nombre: string) {
+  return page.getByLabel(/^Rol/).locator('option', { hasText: new RegExp(`^${nombre}$`, 'u') })
+}
+
+type MensajeDeConsola = { tipo: string; texto: string }
+
+/** Registra los mensajes de consola del navegador. Se llama antes de navegar. */
+function registrarConsola(page: Page) {
+  const mensajes: MensajeDeConsola[] = []
+  page.on('console', (mensaje) => mensajes.push({ tipo: mensaje.type(), texto: mensaje.text() }))
+  return mensajes
+}
+
 /** Deja la base como estaba: borra todo lo que creó esta suite. */
 function limpiar() {
   retirarFalloDePersistencia()
@@ -526,10 +546,9 @@ test.describe('DIRECTOR autenticado: el panel de usuarios carga, da de alta y ex
     await page.goto('/dashboard/usuarios')
     await expect(page.getByRole('heading', { name: 'Gestión de usuarios' })).toBeVisible()
 
-    const opciones = await page.getByLabel(/^Rol/).locator('option').allTextContents()
-    expect(opciones).toContain('ESTUDIANTE')
-    expect(opciones).toContain('DOCENTE')
-    expect(opciones).toContain('DIRECTOR')
+    for (const nombre of ['ESTUDIANTE', 'DOCENTE', 'DIRECTOR']) {
+      await expect(opcionDeRol(page, nombre)).toHaveCount(1)
+    }
 
     const listado = page.getByLabel('Usuarios registrados')
     await expect(listado).toContainText('Directora')
@@ -841,8 +860,7 @@ test.describe('DIRECTOR autenticado: solo la ausencia exacta de public.padres_hi
 
   async function esperarPantallaSana(page: Page) {
     await expect(page.getByRole('heading', { name: 'Gestión de usuarios' })).toBeVisible()
-    const opciones = await page.getByLabel(/^Rol/).locator('option').allTextContents()
-    expect(opciones).toContain('ESTUDIANTE')
+    await expect(opcionDeRol(page, 'ESTUDIANTE')).toHaveCount(1)
     await expect(page.getByLabel('Usuarios registrados')).toContainText('Directora')
     await expect(page.getByRole('alert').filter({ hasText: AVISO })).toHaveCount(0)
   }
@@ -853,6 +871,22 @@ test.describe('DIRECTOR autenticado: solo la ausencia exacta de public.padres_hi
     await expect(aviso).toContainText(MENSAJE_ESTABLE)
     await expect(aviso.getByRole('button', { name: 'Reintentar' })).toBeVisible()
     await exigirPantallaSinDetalleTecnico(page, 'estado de error de carga')
+  }
+
+  const REGISTRO_DE_CARGA = '[usuarios] no se pudo cargar la pantalla'
+
+  /**
+   * Un fallo de carga manejado se registra como aviso y nunca como error.
+   *
+   * En desarrollo, Next trata cada `console.error` del navegador como un
+   * defecto del código y abre su diálogo de error encima de la pantalla. La
+   * falla ya se muestra con un reintento: no es un defecto. El mensaje llega
+   * antes de que la pantalla muestre el aviso, así que al verlo ya se registró.
+   */
+  function exigirFalloRegistradoComoAviso(consola: MensajeDeConsola[]) {
+    const registros = consola.filter((mensaje) => mensaje.texto.startsWith(REGISTRO_DE_CARGA))
+    expect(registros.length, 'el fallo de carga no quedó registrado').toBeGreaterThan(0)
+    expect(registros.filter((mensaje) => mensaje.tipo !== 'warning')).toEqual([])
   }
 
   const ausenciaPostgrest = (tabla: string) =>
@@ -888,17 +922,21 @@ test.describe('DIRECTOR autenticado: solo la ausencia exacta de public.padres_hi
 
   for (const positivo of POSITIVOS) {
     test(`tolera ${positivo.nombre} y la pantalla carga`, async ({ page }) => {
+      const consola = registrarConsola(page)
       await interceptarVinculos(page, positivo.respuesta)
       await page.goto('/dashboard/usuarios')
       await esperarPantallaSana(page)
+      expect(consola.filter((mensaje) => mensaje.texto.startsWith(REGISTRO_DE_CARGA))).toEqual([])
     })
   }
 
   for (const [nombre, respuesta] of NEGATIVOS) {
     test(`no tolera ${nombre}: muestra el estado de error sin detalle técnico`, async ({ page }) => {
+      const consola = registrarConsola(page)
       await interceptarVinculos(page, respuesta)
       await page.goto('/dashboard/usuarios')
       await esperarEstadoDeError(page)
+      exigirFalloRegistradoComoAviso(consola)
 
       if (nombre === 'roles' && process.env.EPT_CAPTURAS === '1') {
         await capturarSinHerramientas(page, 'docs/evidence/EPT-9/real-escritorio-usuarios-error-de-carga.png')

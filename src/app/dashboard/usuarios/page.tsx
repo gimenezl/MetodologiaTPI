@@ -168,7 +168,12 @@ export default function UsuariosPage() {
       // Nunca el mensaje técnico, ni en pantalla ni en la consola: solo el
       // código de dominio. Un mensaje de PostgREST o de PostgreSQL está en
       // inglés, nombra tablas y columnas internas y trae códigos como SQLSTATE.
-      console.error('[usuarios] no se pudo cargar la pantalla', registroSeguro(error))
+      //
+      // Es un aviso y no un error de consola: la falla ya está manejada y la
+      // pantalla la muestra con un reintento. En desarrollo, Next trata cada
+      // `console.error` del navegador como un defecto del código y abre su
+      // diálogo de error encima de la pantalla.
+      console.warn('[usuarios] no se pudo cargar la pantalla', registroSeguro(error))
       setErrorCarga(MENSAJE_CARGA_FALLIDA)
       toast.error('Error al cargar los datos')
     } finally {
