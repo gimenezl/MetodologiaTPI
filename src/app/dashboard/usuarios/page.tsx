@@ -142,7 +142,6 @@ export default function UsuariosPage() {
   // --- Estado del modal de edición ---
   const [editando, setEditando] = useState<PerfilRow | null>(null)
   const [editForm, setEditForm] = useState({ nombre: '', apellido: '', dni: '', telefono: '', direccion: '', legajo_nro: '' })
-  const [editRolId, setEditRolId] = useState<string>('')
   const [guardando, setGuardando] = useState(false)
 
   const {
@@ -205,8 +204,8 @@ export default function UsuariosPage() {
 
   const onSubmit = async (data: UsuarioForm) => {
     // El tutor no es requisito para dar de alta a un alumno (EPT-9), y el
-    // vínculo parental no se envía: `padres_hijos` no existe en el esquema
-    // versionado y la API lo rechaza antes de escribir nada.
+    // vínculo parental no se envía: aunque `padres_hijos` ya forma parte del
+    // esquema, todavía no existe un alta atómica de cuenta, perfil y vínculo.
     setErrorAlta(null)
     operacionRef.current ??= nuevoIdentificadorDeOperacion()
     try {
@@ -250,18 +249,13 @@ export default function UsuariosPage() {
       nombre: p.nombre, apellido: p.apellido, dni: p.dni,
       telefono: p.telefono ?? '', direccion: p.direccion ?? '', legajo_nro: p.legajo_nro ?? '',
     })
-    setEditRolId(p.rol_id ? String(p.rol_id) : '')
   }
-
-  const editRolNombre = roles.find((r) => String(r.id) === editRolId)?.nombre
 
   const guardarEdicion = async () => {
     if (!editando) return
     if (!soloLetras.test(editForm.nombre) || editForm.nombre.trim().length < longitudMinimaNombre) { toast.error('Nombre inválido'); return }
     if (!soloLetras.test(editForm.apellido) || editForm.apellido.trim().length < longitudMinimaNombre) { toast.error('Apellido inválido'); return }
     if (!patronDni.test(editForm.dni)) { toast.error(mensajeDniInvalido); return }
-    if (!editRolId) { toast.error('Seleccioná un rol'); return }
-
     setGuardando(true)
     try {
       await actualizarPerfil(editando.id, {
@@ -271,11 +265,10 @@ export default function UsuariosPage() {
         telefono: editForm.telefono.trim() || null,
         direccion: editForm.direccion.trim() || null,
         legajo_nro: editForm.legajo_nro.trim() || null,
-        rol_id: Number(editRolId),
       })
 
-      // No se sincroniza ningún vínculo parental: la escritura sobre
-      // `padres_hijos` se retiró porque la tabla no existe en las migraciones.
+      // No se sincroniza ningún vínculo parental: esa escritura necesita una
+      // operación atómica propia, planificada para EPT-13.
       toast.success('Usuario actualizado')
       setEditando(null)
       await cargar()
@@ -511,31 +504,33 @@ export default function UsuariosPage() {
 
             <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
               <div className="grid sm:grid-cols-2 gap-4">
-                <Input label="Nombre" value={editForm.nombre} onChange={(e) => setEditForm((f) => ({ ...f, nombre: e.target.value }))} />
-                <Input label="Apellido" value={editForm.apellido} onChange={(e) => setEditForm((f) => ({ ...f, apellido: e.target.value }))} />
+                <Input id="editar-nombre" label="Nombre" value={editForm.nombre} onChange={(e) => setEditForm((f) => ({ ...f, nombre: e.target.value }))} />
+                <Input id="editar-apellido" label="Apellido" value={editForm.apellido} onChange={(e) => setEditForm((f) => ({ ...f, apellido: e.target.value }))} />
               </div>
               <div className="grid sm:grid-cols-2 gap-4">
-                <Input label="DNI" maxLength={8} value={editForm.dni} onChange={(e) => setEditForm((f) => ({ ...f, dni: e.target.value }))} />
-                <Select
-                  label="Rol"
-                  placeholder="Seleccionar rol..."
-                  options={roles.map((r) => ({ value: r.id, label: r.nombre }))}
-                  value={editRolId}
-                  onChange={(e) => setEditRolId(e.target.value)}
-                />
+                <Input id="editar-dni" label="DNI" maxLength={8} value={editForm.dni} onChange={(e) => setEditForm((f) => ({ ...f, dni: e.target.value }))} />
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-sm font-semibold text-neutral-700">Rol</span>
+                  <p className="min-h-10 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+                    {editando.rol?.nombre ?? 'Sin rol asignado'}
+                  </p>
+                  <p className="text-xs text-neutral-500">
+                    El cambio de rol requiere una transición administrativa específica.
+                  </p>
+                </div>
               </div>
               <div className="grid sm:grid-cols-3 gap-4">
-                <Input label="Teléfono" value={editForm.telefono} onChange={(e) => setEditForm((f) => ({ ...f, telefono: e.target.value }))} />
-                <Input label="Dirección" value={editForm.direccion} onChange={(e) => setEditForm((f) => ({ ...f, direccion: e.target.value }))} />
-                <Input label="Legajo" value={editForm.legajo_nro} onChange={(e) => setEditForm((f) => ({ ...f, legajo_nro: e.target.value }))} />
+                <Input id="editar-telefono" label="Teléfono" value={editForm.telefono} onChange={(e) => setEditForm((f) => ({ ...f, telefono: e.target.value }))} />
+                <Input id="editar-direccion" label="Dirección" value={editForm.direccion} onChange={(e) => setEditForm((f) => ({ ...f, direccion: e.target.value }))} />
+                <Input id="editar-legajo" label="Legajo" value={editForm.legajo_nro} onChange={(e) => setEditForm((f) => ({ ...f, legajo_nro: e.target.value }))} />
               </div>
 
-              {/* Vínculo parental: pertenece a EPT-13 y todavía no tiene migración. */}
-              {(editRolNombre === 'PADRE' || editRolNombre === 'ESTUDIANTE') && (
+              {/* La escritura atómica del vínculo parental pertenece a EPT-13. */}
+              {(editando.rol?.nombre === 'PADRE' || editando.rol?.nombre === 'ESTUDIANTE') && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex gap-3 items-start">
                   <Warning size={18} weight="fill" className="text-amber-600 shrink-0 mt-0.5" />
                   <p className="text-sm text-amber-800">
-                    {VINCULO_PARENTAL_NO_DISPONIBLE} Los datos personales y el rol sí se guardan.
+                    {VINCULO_PARENTAL_NO_DISPONIBLE} Los datos personales sí se guardan; el rol permanece sin cambios.
                   </p>
                 </div>
               )}

@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import { createClient } from '@supabase/supabase-js'
 import { capturarSinHerramientas } from './_captura'
 import { exigirMensajeSinDetalleTecnico, exigirPantallaSinDetalleTecnico } from './_sin-detalle-tecnico'
 import { exigirSinControlesAnidados } from './_semantica'
@@ -61,6 +62,43 @@ function sql(sentencia: string) {
 
 function contar(consulta: string) {
   return Number(sql(`SELECT pg_catalog.count(*) ${consulta};`))
+}
+
+async function exigirCambioRolDenegado({
+  email,
+  password,
+  dni,
+  rolDestino,
+}: {
+  email: string
+  password: string
+  dni: string
+  rolDestino: 'DOCENTE' | 'ESTUDIANTE'
+}) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const claveAnonima = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !claveAnonima) throw new Error('Falta la configuración del stack local.')
+
+  const perfilId = sql(`SELECT id FROM public.perfiles WHERE dni = '${dni}';`)
+  const rolAntes = sql(`SELECT r.nombre FROM public.perfiles p
+    JOIN public.roles r ON r.id = p.rol_id WHERE p.id = '${perfilId}';`)
+  const rolDestinoId = Number(sql(`SELECT id FROM public.roles WHERE nombre = '${rolDestino}';`))
+  const supabase = createClient(url, claveAnonima, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  })
+  const { error: errorSesion } = await supabase.auth.signInWithPassword({ email, password })
+  expect(errorSesion).toBeNull()
+
+  const { error } = await supabase
+    .from('perfiles')
+    .update({ rol_id: rolDestinoId })
+    .eq('id', perfilId)
+    .select('id, rol_id')
+
+  expect(error?.code).toBe('42501')
+  expect(sql(`SELECT r.nombre FROM public.perfiles p
+    JOIN public.roles r ON r.id = p.rol_id WHERE p.id = '${perfilId}';`)).toBe(rolAntes)
+  return perfilId
 }
 
 function instalarFalloDePersistencia() {
@@ -268,14 +306,12 @@ test.describe('DIRECTOR autenticado: el alta de cuentas es atómica y no deja es
     expect(contar(`FROM auth.users WHERE email = 'alta.prueba.${dni}@${DOMINIO}'`)).toBe(0)
   })
 
-  test('ni el alta ni el esquema tocan padres_hijos', async ({ request }) => {
+  test('el alta sin tutor no modifica los vínculos familiares', async ({ request }) => {
     const dni = `${PREFIJO_DNI}100004`
-    const tablas = `FROM information_schema.tables
-                    WHERE table_schema = 'public' AND table_name = 'padres_hijos'`
-    expect(contar(tablas)).toBe(0)
+    const relacionesAntes = contar('FROM public.padres_hijos')
     const respuesta = await crear(request, { dni, apellido: 'SinPadresHijos' })
     expect(respuesta.status(), await respuesta.text()).toBe(200)
-    expect(contar(tablas)).toBe(0)
+    expect(contar('FROM public.padres_hijos')).toBe(relacionesAntes)
   })
 
   test('una petición inválida no crea cuenta, ni perfil, ni legajo académico', async ({
@@ -506,6 +542,28 @@ test.describe('DOCENTE autenticado: el alta de cuentas', () => {
     expect((await errorDeDominio(respuesta, 'docente')).codigo).toBe('SIN_PERMISO')
     expect(contar(`FROM auth.users WHERE email = 'alta.prueba.${dni}@${DOMINIO}'`)).toBe(0)
   })
+
+  test('no puede convertirse directamente en ESTUDIANTE ni crear un alumno incompleto', async () => {
+    const perfilId = await exigirCambioRolDenegado({
+      email: 'docente.prueba@ept.local',
+      password: 'prueba-ept-9-docente',
+      dni: '99900004',
+      rolDestino: 'ESTUDIANTE',
+    })
+    expect(contar(`FROM public.alumnos WHERE perfil_id = '${perfilId}'`)).toBe(0)
+  })
+})
+
+test.describe('ESTUDIANTE autenticado: el rol no se edita directamente', () => {
+  test('no puede cambiar su rol a DOCENTE y conserva su legajo académico', async () => {
+    const perfilId = await exigirCambioRolDenegado({
+      email: 'estudiante.prueba@ept.local',
+      password: 'prueba-ept-8-estudiante',
+      dni: '99900002',
+      rolDestino: 'DOCENTE',
+    })
+    expect(contar(`FROM public.alumnos WHERE perfil_id = '${perfilId}'`)).toBe(1)
+  })
 })
 
 // ================================================================
@@ -523,16 +581,16 @@ async function completarFormulario(page: Page, dni: string, apellido: string) {
 const AVISO_ALTA = 'No se completó el alta'
 
 test.describe('DIRECTOR autenticado: el panel de usuarios carga, da de alta y explica los fallos', () => {
-  test('la tabla de vínculos no existe en el esquema reproducible', () => {
+  test('la tabla de vínculos existe en el esquema reproducible', () => {
     expect(
       contar(
         `FROM information_schema.tables
          WHERE table_schema = 'public' AND table_name = 'padres_hijos'`
       )
-    ).toBe(0)
+    ).toBe(1)
   })
 
-  test('carga roles y perfiles pese a la ausencia de padres_hijos', async ({ page }) => {
+  test('carga roles, perfiles y vínculos familiares', async ({ page }) => {
     const peticiones: { metodo: string; url: string; estado: number }[] = []
     page.on('response', (respuesta) => {
       if (!respuesta.url().includes('padres_hijos')) return
@@ -559,7 +617,7 @@ test.describe('DIRECTOR autenticado: el panel de usuarios carga, da de alta y ex
     expect(peticiones.length).toBeGreaterThan(0)
     for (const peticion of peticiones) {
       expect(peticion.metodo, `no debe escribir en padres_hijos: ${peticion.url}`).toBe('GET')
-      expect(peticion.estado, 'la lectura no debe prosperar').toBe(404)
+      expect(peticion.estado, 'la lectura autenticada debe prosperar').toBe(200)
     }
 
     await exigirSinControlesAnidados(page, 'panel de usuarios')
@@ -698,24 +756,51 @@ test.describe('DIRECTOR autenticado: el panel de usuarios carga, da de alta y ex
     await exigirPantallaSinDetalleTecnico(page, 'conexión cortada al crear')
   })
 
-  test('editar un usuario sin permiso de actualización informa que no se guardó', async ({
-    page,
-  }) => {
-    // `perfiles` no tiene política UPDATE: la edición afecta cero filas y
-    // PostgREST responde PGRST116. La pantalla no puede decir «actualizado».
-    const antes = sql(`SELECT nombre FROM public.perfiles WHERE dni = '99900004';`)
+  test('el DIRECTOR edita los campos permitidos y el cambio persiste', async ({ page }) => {
+    // La reconciliación otorga UPDATE solo sobre los campos editables y la
+    // política RLS exige DIRECTOR. La interfaz debe confirmar la escritura real.
+    const nombreNuevo = 'CambioPermitido'
     await page.goto('/dashboard/usuarios')
     const fila = page.getByLabel('Usuarios registrados').getByRole('row').filter({ hasText: '99900004' })
     await fila.getByRole('button', { name: 'Editar' }).click()
-    await page.getByLabel('Nombre', { exact: true }).last().fill('CambioNoPermitido')
+    await expect(page.getByText('El cambio de rol requiere una transición administrativa específica.')).toBeVisible()
+    await expect(page.getByRole('combobox', { name: 'Rol' })).toHaveCount(1)
+    await page.getByLabel('Nombre', { exact: true }).last().fill(nombreNuevo)
+    const respuestaGuardado = page.waitForResponse(
+      (respuesta) =>
+        respuesta.request().method() === 'PATCH' &&
+        respuesta.url().includes('/rest/v1/perfiles?')
+    )
     await page.getByRole('button', { name: 'Guardar cambios' }).click()
+    const respuesta = await respuestaGuardado
 
-    await expect(
-      page.getByText('No se guardaron los cambios: el registro ya no existe o tu perfil no puede modificarlo desde este panel.')
-    ).toBeVisible()
-    await expect(page.getByText('Usuario actualizado')).toHaveCount(0)
-    await exigirPantallaSinDetalleTecnico(page, 'edición sin permiso')
-    expect(sql(`SELECT nombre FROM public.perfiles WHERE dni = '99900004';`)).toBe(antes)
+    expect(respuesta.request().postDataJSON()).toMatchObject({ nombre: nombreNuevo })
+    expect(respuesta.request().postDataJSON()).not.toHaveProperty('rol_id')
+    expect(respuesta.status(), await respuesta.text()).toBe(200)
+    await expect(page.getByText('Usuario actualizado')).toBeVisible()
+    await expect(page.getByText('Editar usuario')).toHaveCount(0)
+    expect(sql(`SELECT nombre FROM public.perfiles WHERE dni = '99900004';`)).toBe(nombreNuevo)
+  })
+
+  test('Legajos muestra el rol como solo lectura y no lo envía al editar', async ({ page }) => {
+    await page.goto('/dashboard/legajos')
+    const fila = page.getByRole('row').filter({ hasText: '99900004' })
+    await fila.click()
+    await page.getByRole('button', { name: 'Editar' }).click()
+
+    await expect(page.getByText('El cambio de rol requiere una transición administrativa específica.')).toBeVisible()
+    await expect(page.getByRole('combobox', { name: 'Rol' })).toHaveCount(0)
+    const respuestaGuardado = page.waitForResponse(
+      (respuesta) =>
+        respuesta.request().method() === 'PATCH' &&
+        respuesta.url().includes('/rest/v1/perfiles?')
+    )
+    await page.getByRole('button', { name: 'Guardar cambios' }).click()
+    const respuesta = await respuestaGuardado
+
+    expect(respuesta.request().postDataJSON()).not.toHaveProperty('rol_id')
+    expect(respuesta.status(), await respuesta.text()).toBe(200)
+    await expect(page.getByText('Legajo actualizado')).toBeVisible()
   })
 
   for (const caso of [

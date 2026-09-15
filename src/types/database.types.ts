@@ -6,19 +6,14 @@
  * reconstruida desde cero con la cadena completa de migraciones. Se conserva
  * como artefacto de referencia para poder comparar.
  *
- * Diferencias verificadas entre este archivo y el esquema real (EPT-8):
+ * Reconciliación verificada entre este archivo y el esquema real (011):
  *
- * - `cursos` y la función `es_director_actual` coinciden exactamente con el
- *   esquema generado.
- * - `padres_hijos` existe solo acá. No hay ninguna migración que lo cree, pero
- *   `usuarios.service.ts` y `api/usuarios/route.ts` lo usan.
- * - `opiniones.aprobado` existe solo acá. Tampoco hay migración que lo cree, y
- *   `noticias.service.ts` lo usa.
- *
- * Esas dos últimas son deriva preexistente entre las migraciones y la base que
- * la aplicación asume. No se borran acá a propósito: quitarlas rompería la
- * compilación y escondería el problema. Corresponde a EPT-66 decidir si la
- * deriva se documenta en migraciones nuevas o si el código se corrige.
+ * - `cursos`, `padres_hijos`, `opiniones.aprobado` y las funciones públicas de
+ *   la aplicación están representados por las migraciones y por los tipos
+ *   generados.
+ * - Este archivo continúa siendo el contrato manual importado por la
+ *   aplicación; `database.generated.ts` es la evidencia reproducible del
+ *   esquema y no se edita a mano.
  */
 export type Json =
   | string

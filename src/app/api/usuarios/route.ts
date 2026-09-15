@@ -128,9 +128,10 @@ export async function POST(request: Request) {
 
   // 3. Rechazar los vínculos parentales ANTES de escribir nada.
   //
-  // `padres_hijos` no existe en el esquema versionado. Un director que eligió
-  // un tutor tiene que enterarse de que ese vínculo no se guardaría, no creerlo
-  // registrado. El vínculo parental pertenece a EPT-13.
+  // La reconciliación 011 incorporó `padres_hijos`, pero todavía no existe una
+  // operación que cree cuenta, perfil y vínculo en una única confirmación. Un
+  // director que eligió un tutor tiene que enterarse de que ese vínculo no se
+  // guardaría, no creerlo registrado. Esa operación pertenece a EPT-13.
   if (datos.tutor_id || (datos.hijos_ids?.length ?? 0) > 0) {
     return responderError('VINCULO_NO_DISPONIBLE')
   }

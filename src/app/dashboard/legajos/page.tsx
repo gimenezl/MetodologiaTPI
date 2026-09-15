@@ -163,7 +163,15 @@ export default function LegajosPage() {
         await crearPerfil(datos)
         toast.success('Legajo creado')
       } else if (modoFormulario === 'editar' && perfilSeleccionado) {
-        await actualizarPerfil(perfilSeleccionado.id, datos)
+        await actualizarPerfil(perfilSeleccionado.id, {
+          nombre: datos.nombre,
+          apellido: datos.apellido,
+          dni: datos.dni,
+          fecha_nacimiento: datos.fecha_nacimiento,
+          telefono: datos.telefono,
+          direccion: datos.direccion,
+          legajo_nro: datos.legajo_nro,
+        })
         toast.success('Legajo actualizado')
       }
       setModoFormulario(null)
@@ -220,14 +228,26 @@ export default function LegajosPage() {
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <Input label="DNI" required {...registrarCampo('dni')} error={errores.dni?.message} />
-              <Select
-                label="Rol"
-                required
-                placeholder="Seleccionar rol"
-                options={roles.map((rol) => ({ value: rol.id, label: rol.nombre }))}
-                {...registrarCampo('rol_id', { valueAsNumber: true })}
-                error={errores.rol_id?.message}
-              />
+              {modoFormulario === 'crear' ? (
+                <Select
+                  label="Rol"
+                  required
+                  placeholder="Seleccionar rol"
+                  options={roles.map((rol) => ({ value: rol.id, label: rol.nombre }))}
+                  {...registrarCampo('rol_id', { valueAsNumber: true })}
+                  error={errores.rol_id?.message}
+                />
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-sm font-semibold text-neutral-700">Rol</span>
+                  <p className="min-h-10 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+                    {perfilSeleccionado?.rol?.nombre ?? 'Sin rol asignado'}
+                  </p>
+                  <p className="text-xs text-neutral-500">
+                    El cambio de rol requiere una transición administrativa específica.
+                  </p>
+                </div>
+              )}
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <Input

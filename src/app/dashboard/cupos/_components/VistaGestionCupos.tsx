@@ -17,14 +17,12 @@ type RolNombre = 'DIRECTOR' | 'DOCENTE' | 'PADRE' | 'ESTUDIANTE' | 'PERSONAL' | 
 
 type PropiedadesVistaGestion = PropiedadesVistaCupos & {
   rol: RolNombre
-  quitarActividad: (actividadId: number) => void
 }
 
 export function VistaGestionCupos({
   actividades,
   cargando,
   recargarActividades,
-  quitarActividad,
   rol,
 }: PropiedadesVistaGestion) {
   const [filtroTipo, setFiltroTipo] = useState('TODOS')
@@ -39,10 +37,8 @@ export function VistaGestionCupos({
   const [editandoCupoId, setEditandoCupoId] = useState<number | null>(null)
   const [nuevoCupo, setNuevoCupo] = useState('')
   const [guardandoCupo, setGuardandoCupo] = useState(false)
-  const [eliminandoActividadId, setEliminandoActividadId] = useState<number | null>(null)
 
   const puedeGestionar = rol === 'DIRECTOR' || rol === 'DOCENTE'
-  const esDirector = rol === 'DIRECTOR'
 
   useEffect(() => {
     if (!puedeGestionar) return
@@ -151,25 +147,6 @@ export function VistaGestionCupos({
       toast.error(mensaje)
     } finally {
       setGuardandoCupo(false)
-    }
-  }
-
-  const eliminarActividad = async (actividadId: number) => {
-    if (!confirm('¿Eliminar esta actividad? Se perderán todas las inscripciones asociadas.')) return
-
-    setEliminandoActividadId(actividadId)
-    try {
-      const supabase = createClient()
-      const { error } = await (supabase.from('actividades').delete().eq('id', actividadId) as any)
-      if (error) throw new Error(error.message)
-      toast.success('Actividad eliminada')
-      quitarActividad(actividadId)
-      if (actividadExpandidaId === actividadId) setActividadExpandidaId(null)
-    } catch (error) {
-      const mensaje = error instanceof Error ? error.message : 'No se pudo eliminar'
-      toast.error(mensaje)
-    } finally {
-      setEliminandoActividadId(null)
     }
   }
 
@@ -358,17 +335,6 @@ export function VistaGestionCupos({
                             </Button>
                           )}
 
-                          {esDirector && (
-                            <button
-                              onClick={() => eliminarActividad(actividad.id)}
-                              disabled={eliminandoActividadId === actividad.id}
-                              className="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-                              title="Eliminar actividad"
-                              aria-label="Eliminar actividad"
-                            >
-                              <Trash size={15} weight="fill" />
-                            </button>
-                          )}
                         </div>
                       </div>
 

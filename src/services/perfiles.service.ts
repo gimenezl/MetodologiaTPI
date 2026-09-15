@@ -79,6 +79,16 @@ export async function crearPerfil(perfil: Record<string, unknown>) {
   return data
 }
 
+type DatosActualizablesDePerfil = {
+  nombre?: string
+  apellido?: string
+  dni?: string
+  fecha_nacimiento?: string | null
+  telefono?: string | null
+  direccion?: string | null
+  legajo_nro?: string | null
+}
+
 /**
  * Modifica un perfil y devuelve la fila guardada.
  *
@@ -86,11 +96,24 @@ export async function crearPerfil(perfil: Record<string, unknown>) {
  * la sentencia afecta cero filas y PostgREST responde `PGRST116`. Eso se informa
  * como `SIN_CAMBIOS` en lugar de confirmarse un cambio que no ocurrió.
  */
-export async function actualizarPerfil(id: string, updates: Record<string, unknown>) {
+export async function actualizarPerfil(id: string, updates: DatosActualizablesDePerfil) {
   const supabase = createClient()
+  // La identidad y el rol no forman parte del contrato de esta operación. La
+  // lista explícita también evita enviarlos si un llamador sin tipos agrega
+  // propiedades extra. Los cambios de rol pertenecen a EPT-59 y requieren una
+  // transición atómica que mantenga `alumnos` consistente.
+  const cambios: DatosActualizablesDePerfil = {
+    nombre: updates.nombre,
+    apellido: updates.apellido,
+    dni: updates.dni,
+    fecha_nacimiento: updates.fecha_nacimiento,
+    telefono: updates.telefono,
+    direccion: updates.direccion,
+    legajo_nro: updates.legajo_nro,
+  }
   const { data, error } = await (supabase
     .from('perfiles')
-    .update(updates as any)
+    .update(cambios as any)
     .eq('id', id)
     .select()
     .abortSignal(AbortSignal.timeout(LIMITE_DE_ESCRITURA_MS))
