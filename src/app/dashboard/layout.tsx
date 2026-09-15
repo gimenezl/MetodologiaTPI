@@ -84,7 +84,14 @@ function SidebarContent({
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5" aria-label="Menú del dashboard">
+      {/* `min-h-0` + `overflow-y-auto`: sin ellos, un menú más largo que la
+          ventana empuja el bloque de usuario y el botón de cerrar sesión fuera
+          de la pantalla, sin ninguna forma de alcanzarlos. Verificado a 1280x900
+          con el menú completo del rol DIRECTOR. */}
+      <nav
+        className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-0.5"
+        aria-label="Menú del dashboard"
+      >
         {visibleItems.map((item) => {
           const Icon = item.icon
           const active = pathname === item.href
@@ -109,7 +116,7 @@ function SidebarContent({
       </nav>
 
       {/* User info */}
-      <div className="px-3 py-4 border-t border-neutral-100">
+      <div className="shrink-0 px-3 py-4 border-t border-neutral-100">
         {perfil && (
           <div className="flex items-center gap-3 px-3 py-2 mb-2">
             <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold text-sm shrink-0">
@@ -146,15 +153,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const pathname = usePathname()
   const [headerHidden, setHeaderHidden] = useState(false)
+  const [cerrandoSesion, setCerrandoSesion] = useState(false)
 
   const permitido = rutaPermitida(pathname, rol)
 
+  // Durante un cierre de sesión deliberado esta guarda no debe actuar: la
+  // sesión desaparece por decisión del usuario, y redirigir al login con
+  // `redirect` al panel lo devolvería a la ruta protegida que acaba de dejar.
+  // El destino de ese caso lo decide `handleSignOut`.
   useEffect(() => {
-    if (!isLoading && !user) {
+    if (!isLoading && !user && !cerrandoSesion) {
       const redirect = pathname.startsWith('/dashboard') ? pathname : '/dashboard'
       router.replace(`/login?redirect=${encodeURIComponent(redirect)}`)
     }
-  }, [isLoading, user, pathname, router])
+  }, [isLoading, user, pathname, router, cerrandoSesion])
 
   useEffect(() => {
     let lastY = window.scrollY
@@ -181,8 +193,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
    * dos botones quedan deshabilitados, de modo que un doble clic no dispara dos
    * cierres de sesión.
    */
-  const [cerrandoSesion, setCerrandoSesion] = useState(false)
-
   const handleSignOut = async () => {
     if (cerrandoSesion) return
     setCerrandoSesion(true)

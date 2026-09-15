@@ -31,16 +31,16 @@ const entornoServidor: Record<string, string> = {
  */
 const conBaseLocal = process.env.EPT_SUPABASE_LOCAL === '1'
 
-const PRUEBAS_AUTENTICADAS = /(?:cursos|niveles|alumnos|usuarios)-auth\.spec\.ts/
+const PRUEBAS_AUTENTICADAS = /(?:cursos|niveles|alumnos|usuarios|materias)-auth\.spec\.ts/
 const PRUEBAS_SETUP = /auth\.setup\.ts/
 
 // `niveles-responsive` existe únicamente para los perfiles móviles.
 const PRUEBAS_SOLO_MOVIL = /niveles-responsive\.spec\.ts/
 
-// `alumnos-ui` corre en los tres perfiles: escritorio, Pixel 5 e iPhone 13. Sus
-// aserciones se adaptan al ancho de la ventana, de modo que un mismo archivo
-// demuestra la tabla de escritorio y las tarjetas móviles.
-const PRUEBAS_MULTIPERFIL = /alumnos-(?:ui|contraste)\.spec\.ts/
+// `alumnos-ui` y `materias-ui` corren en los tres perfiles: escritorio, Pixel 5
+// e iPhone 13. Sus aserciones se adaptan al ancho de la ventana, de modo que un
+// mismo archivo demuestra la presentación de escritorio y la móvil.
+const PRUEBAS_MULTIPERFIL = /(?:alumnos-(?:ui|contraste)|materias-ui)\.spec\.ts/
 
 const proyectoBase: Project = {
   name: 'chromium',

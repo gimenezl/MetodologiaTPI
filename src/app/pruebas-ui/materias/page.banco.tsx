@@ -14,10 +14,11 @@ import type {
  */
 export const dynamic = 'force-dynamic'
 
+/** Mismo orden alfabético por nombre que devuelve `listarMaterias`. */
 const MATERIAS: Materia[] = [
-  { id: 1, nombre: 'Matemática', activo: true },
-  { id: 2, nombre: 'Lengua y Literatura', activo: true },
   { id: 3, nombre: 'Historia', activo: false },
+  { id: 2, nombre: 'Lengua y Literatura', activo: true },
+  { id: 1, nombre: 'Matemática', activo: true },
 ]
 
 const ASIGNACIONES: AsignacionMateria[] = [
