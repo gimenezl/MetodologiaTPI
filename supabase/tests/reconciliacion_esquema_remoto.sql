@@ -172,7 +172,8 @@ BEGIN
     END LOOP;
     IF NOT pg_catalog.has_column_privilege('authenticated', 'public.perfiles', 'nombre', 'UPDATE')
        OR pg_catalog.has_column_privilege('authenticated', 'public.perfiles', 'id', 'UPDATE')
-       OR pg_catalog.has_column_privilege('authenticated', 'public.perfiles', 'user_id', 'UPDATE') THEN
+       OR pg_catalog.has_column_privilege('authenticated', 'public.perfiles', 'user_id', 'UPDATE')
+       OR pg_catalog.has_column_privilege('authenticated', 'public.perfiles', 'rol_id', 'UPDATE') THEN
         RAISE EXCEPTION 'FALLO 14: UPDATE de perfiles no quedó limitado a datos editables';
     END IF;
     RAISE NOTICE 'OK 14: perfiles permite lectura, alta y edición acotada sin borrado';
@@ -344,6 +345,7 @@ SELECT pg_catalog.set_config('request.jwt.claims',
 DO $$
 DECLARE
     v_afectadas BIGINT;
+    v_rol_antes BIGINT;
 BEGIN
     UPDATE public.perfiles SET telefono = '111111'
     WHERE id = 'a3333333-3333-4333-8333-333333333333';
@@ -351,7 +353,23 @@ BEGIN
     IF v_afectadas <> 0 THEN
         RAISE EXCEPTION 'FALLO 26bis: un estudiante modificó su perfil directamente';
     END IF;
-    RAISE NOTICE 'OK 26bis: un estudiante no puede modificar perfiles directamente';
+
+    SELECT rol_id INTO v_rol_antes
+    FROM public.perfiles
+    WHERE id = 'a3333333-3333-4333-8333-333333333333';
+    BEGIN
+        UPDATE public.perfiles
+        SET rol_id = (SELECT id FROM public.roles WHERE nombre = 'DOCENTE')
+        WHERE id = 'a3333333-3333-4333-8333-333333333333';
+        RAISE EXCEPTION 'FALLO 26bis: un estudiante cambió su propio rol';
+    EXCEPTION WHEN insufficient_privilege THEN
+        NULL;
+    END;
+    IF (SELECT rol_id FROM public.perfiles
+        WHERE id = 'a3333333-3333-4333-8333-333333333333') <> v_rol_antes THEN
+        RAISE EXCEPTION 'FALLO 26bis: cambió el rol del estudiante pese a la denegación';
+    END IF;
+    RAISE NOTICE 'OK 26bis: un estudiante no edita perfiles ni cambia su rol';
 END $$;
 
 RESET ROLE;
@@ -359,6 +377,8 @@ SET LOCAL ROLE authenticated;
 SELECT pg_catalog.set_config('request.jwt.claims',
     '{"sub":"a1111111-1111-4111-8111-111111111111"}', true);
 DO $$
+DECLARE
+    v_rol_docente BIGINT;
 BEGIN
     UPDATE public.perfiles SET telefono = '222222'
     WHERE id = 'a3333333-3333-4333-8333-333333333333';
@@ -375,7 +395,27 @@ BEGIN
     EXCEPTION WHEN insufficient_privilege THEN
         NULL;
     END;
-    RAISE NOTICE 'OK 26ter: el director edita datos permitidos sin poder cambiar user_id';
+
+    SELECT rol_id INTO v_rol_docente
+    FROM public.perfiles
+    WHERE id = 'a2222222-2222-4222-8222-222222222222';
+    BEGIN
+        UPDATE public.perfiles
+        SET rol_id = (SELECT id FROM public.roles WHERE nombre = 'ESTUDIANTE')
+        WHERE id = 'a2222222-2222-4222-8222-222222222222';
+        RAISE EXCEPTION 'FALLO 26ter: el director cambió DOCENTE a ESTUDIANTE directamente';
+    EXCEPTION WHEN insufficient_privilege THEN
+        NULL;
+    END;
+    IF (SELECT rol_id FROM public.perfiles
+        WHERE id = 'a2222222-2222-4222-8222-222222222222') <> v_rol_docente
+       OR EXISTS (
+           SELECT 1 FROM public.alumnos
+           WHERE perfil_id = 'a2222222-2222-4222-8222-222222222222'
+       ) THEN
+        RAISE EXCEPTION 'FALLO 26ter: la transición denegada dejó perfil o alumno inconsistente';
+    END IF;
+    RAISE NOTICE 'OK 26ter: el director edita datos personales sin cambiar identidad ni rol';
 END $$;
 
 RESET ROLE;

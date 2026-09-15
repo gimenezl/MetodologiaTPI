@@ -30,7 +30,7 @@ $hashesEsperados = [ordered]@{
   '008_alumnos_estado_academico.sql'         = '006E7ADF87228172BA80CAEC4DF42AFC1D14BCC9C9DE7A8CB2560D706B4CDFE1'
   '009_correcciones_revision_alumnos.sql'    = 'B269BB36CB6672429293F73649E4835BFC2D23FD0A3629085886F19465DE2650'
   '010_alta_atomica_de_cuentas.sql'           = '858F6B21B5255FF49C97D183CACB3142AA6089FC21D5FA3CCC0D429EE9B0BAD9'
-  '011_reconciliacion_esquema_remoto.sql'     = '50910303CF429AF64A007F7A474187E5B18F5EC8C0A45BFA3AC24CFA5C9DC732'
+  '011_reconciliacion_esquema_remoto.sql'     = 'F010EFD7983F7211649931FED478B31F8C18C252B49422399CAB295F717099D1'
 }
 
 foreach ($entrada in $hashesEsperados.GetEnumerator()) {

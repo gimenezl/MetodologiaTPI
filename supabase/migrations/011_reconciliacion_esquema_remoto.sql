@@ -348,12 +348,13 @@ CREATE POLICY "Solo directores desvinculan familias" ON public.padres_hijos
     USING ((SELECT app_private.rol_actual()) = 'DIRECTOR');
 
 -- PERFILES. 005 conserva la lectura propia y la lectura de staff; 008 conserva
--- las operaciones administrativas por RPC. Solo se agrega la lectura parental
--- recuperada, sin reabrir UPDATE ni DELETE.
+-- las operaciones académicas por RPC. Se agrega la lectura parental recuperada
+-- y se permite al director editar solo datos personales. `rol_id` queda fuera:
+-- cambiar un rol exige una transición atómica planificada para EPT-59.
 REVOKE ALL ON public.perfiles FROM PUBLIC, anon, authenticated;
 GRANT SELECT, INSERT ON public.perfiles TO authenticated;
 GRANT UPDATE (
-    rol_id, nombre, apellido, dni, direccion, telefono, legajo_nro, fecha_nacimiento
+    nombre, apellido, dni, direccion, telefono, legajo_nro, fecha_nacimiento
 ) ON public.perfiles TO authenticated;
 
 DROP POLICY IF EXISTS "Directores modifican perfiles" ON public.perfiles;
@@ -547,6 +548,7 @@ BEGIN
     IF NOT pg_catalog.has_column_privilege('authenticated', 'public.perfiles', 'nombre', 'UPDATE')
        OR pg_catalog.has_column_privilege('authenticated', 'public.perfiles', 'id', 'UPDATE')
        OR pg_catalog.has_column_privilege('authenticated', 'public.perfiles', 'user_id', 'UPDATE')
+       OR pg_catalog.has_column_privilege('authenticated', 'public.perfiles', 'rol_id', 'UPDATE')
     THEN
         RAISE EXCEPTION
             'Autoverificación 011: el UPDATE de perfiles no quedó limitado a datos editables.';

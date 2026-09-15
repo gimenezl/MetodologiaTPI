@@ -119,6 +119,8 @@ se conecta a ninguna base y falla cerrado ante cualquier byte inesperado.
 
 `011_reconciliacion_esquema_remoto.sql`:
 
+SHA-256: `F010EFD7983F7211649931FED478B31F8C18C252B49422399CAB295F717099D1`.
+
 - crea o valida `padres_hijos`, sus FKs, PK, check e índice inverso;
 - crea `opiniones.aprobado` solo cuando falta y preserva los estados remotos;
 - mueve `mis_hijos_ids()` a `app_private` con `search_path = ''`;
@@ -126,8 +128,9 @@ se conecta a ninguna base y falla cerrado ante cualquier byte inesperado.
 - retira políticas `ALL` y grants residuales;
 - limita `actividades` a SELECT y UPDATE de `cupo_maximo` para staff;
 - limita el INSERT público de opiniones a nombre y comentario;
-- permite a DIRECTOR editar únicamente columnas de perfil permitidas, sin
-  cambiar `id` ni `user_id`;
+- permite a DIRECTOR editar únicamente datos personales del perfil, sin
+  cambiar `id`, `user_id` ni `rol_id`; el cambio de rol queda para EPT-59 y su
+  transición atómica con `alumnos`;
 - conserva las reglas funcionales remotas de asistencias, inscripciones,
   moderación y vínculos familiares;
 - autoverifica privilegios y preservación de conteos.
@@ -200,13 +203,19 @@ postulaciones/solicitudes con `WITH CHECK (true)`. No se amplió su superficie.
 | TypeScript | código 0 |
 | ESLint focalizado | código 0; una advertencia preexistente del compilador React |
 | Build de Next.js con variables públicas de relleno | código 0; 20 páginas generadas |
-| Usuarios con Auth y PostgreSQL reales | 59 pruebas correctas, código 0 |
+| Usuarios con Auth y PostgreSQL reales | 62 pruebas correctas, código 0 |
 
 La primera corrida autenticada detectó que el formulario de alta y el modal de
 edición reutilizaban identificadores HTML. El navegador asociaba ambas etiquetas
 al primer control y el modal enviaba el valor anterior aunque mostrara éxito. Se
 asignaron identificadores únicos al modal y la corrida completa posterior quedó
 en verde, incluyendo persistencia directa verificada en PostgreSQL.
+
+La edición de Usuarios y Legajos muestra el rol como dato de solo lectura. El
+servicio filtra una lista explícita de campos personales y la base deniega
+`rol_id` incluso al DIRECTOR. Las pruebas autenticadas confirman que un DOCENTE
+no puede convertirse en ESTUDIANTE y que un ESTUDIANTE no puede convertirse en
+DOCENTE; `public.alumnos` permanece coherente en ambos intentos.
 
 ## Procedimiento remoto propuesto
 
@@ -215,9 +224,12 @@ separada inmediatamente antes del primer cambio remoto.
 
 ### Fase A — reversible: identidad, respaldo y ledger
 
-1. Confirmar que `supabase/.temp/project-ref` contiene exactamente
-   `ycvrpmrogvjnntnoosbh` y que `migration list` todavía muestra únicamente las
-   siete versiones históricas.
+1. Con el perfil predeterminado de la CLI, confirmar que `projects list` muestra
+   exactamente `ycvrpmrogvjnntnoosbh` como `linked: true`, que
+   `supabase/.temp/project-ref` contiene esa misma referencia y que
+   `migration list` todavía muestra únicamente las siete versiones históricas.
+   Esta comprobación se repite antes de cada fase; no se usa el perfil roto
+   `ept-production`.
 2. Crear un respaldo fresco de schema, roles y datos; aplicar ACL restrictiva y
    calcular SHA-256 antes de continuar.
 3. Preparar el paquete sin conexión remota:
@@ -261,34 +273,63 @@ el worktree de recuperación y únicamente tras la autorización final.
 
 ```powershell
 $ref = 'ycvrpmrogvjnntnoosbh'
-$perfil = 'ept-production'
 $historico = 'E:\Escritorio\codigo\MetodologiaTPI-db-backups\20260914-235344\remote-ledger-fetch'
 
-npx.cmd supabase migration repair 001 002 --status applied --project-ref $ref --profile $perfil
-npx.cmd supabase migration repair 20260618220833 20260618223803 20260619030640 20260619031241 20260619032638 20260619032842 20260619145152 --status reverted --project-ref $ref --profile $perfil --workdir $historico
+function Confirmar-ProyectoObjetivo {
+  $salida = & npx.cmd supabase projects list --output-format json
+  if ($LASTEXITCODE -ne 0) { throw 'No se pudo verificar la cuenta predeterminada de Supabase.' }
+  $respuesta = $salida | ConvertFrom-Json
+  $proyectos = @($respuesta.projects | Where-Object { $_.id -eq $ref })
+  if ($proyectos.Count -ne 1 -or -not $proyectos[0].linked) {
+    throw 'El proyecto objetivo no aparece exactamente una vez y vinculado en projects list.'
+  }
+  $vinculo = (Get-Content .\supabase\.temp\project-ref -Raw).Trim()
+  if ($vinculo -ne $ref) { throw 'El vínculo local no coincide con el proyecto objetivo.' }
+}
 
-npx.cmd supabase db push --dry-run --project-ref $ref --profile $perfil --workdir (Join-Path $paquete 'fase-1-003-a-007')
-npx.cmd supabase migration up --project-ref $ref --profile $perfil --workdir (Join-Path $paquete 'fase-1-003-a-007')
+Confirmar-ProyectoObjetivo # Fase A: ledger
+npx.cmd supabase migration repair 001 002 --status applied --project-ref $ref
+if ($LASTEXITCODE -ne 0) { throw 'Falló el registro de 001/002; detener la fase A.' }
+npx.cmd supabase migration repair 20260618220833 20260618223803 20260619030640 20260619031241 20260619032638 20260619032842 20260619145152 --status reverted --project-ref $ref --workdir $historico
+if ($LASTEXITCODE -ne 0) { throw 'Falló el retiro del ledger histórico; restaurar el ledger.' }
+
+Confirmar-ProyectoObjetivo # Fase B.1: migraciones 003–007
+npx.cmd supabase db push --dry-run --project-ref $ref --workdir (Join-Path $paquete 'fase-1-003-a-007')
+if ($LASTEXITCODE -ne 0) { throw 'Falló el dry-run de 003–007; no aplicar.' }
+npx.cmd supabase migration up --project-ref $ref --workdir (Join-Path $paquete 'fase-1-003-a-007')
+if ($LASTEXITCODE -ne 0) { throw 'Falló la aplicación de 003–007; detener y evaluar restauración.' }
 ```
 
 Para `008`, el archivo se pasa por stdin al cliente PostgreSQL del contenedor.
 La contraseña solo vive en el entorno durante ese bloque:
 
 ```powershell
+Confirmar-ProyectoObjetivo # Fase B.2: migración operacional 008
+$archivo008 = Join-Path $paquete '008_alumnos_estado_academico_operacional.sql'
+$hash008 = (Get-FileHash $archivo008 -Algorithm SHA256).Hash
+if ($hash008 -ne '53A0E2D0BC8FA626A35C8705DB1C1B77C57E2C02873159E2A300B0C5B6C1600D') {
+  throw 'El hash del derivado 008 no coincide; no continuar.'
+}
 $url = (Get-Content .\supabase\.temp\pooler-url -Raw).Trim()
 $env:PGPASSWORD = Read-Host 'Contraseña PostgreSQL' -MaskInput
 try {
-  Get-Content -Raw (Join-Path $paquete '008_alumnos_estado_academico_operacional.sql') |
+  Get-Content -Raw $archivo008 |
     docker run --rm -i -e PGPASSWORD postgres:17-alpine `
       psql $url -v ON_ERROR_STOP=1
+  $codigoPsql = $LASTEXITCODE
 } finally {
   Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
 }
 
-if ($LASTEXITCODE -ne 0) { throw '008 falló: no reparar el ledger ni continuar.' }
-npx.cmd supabase migration repair 008 --status applied --project-ref $ref --profile $perfil
-npx.cmd supabase db push --dry-run --project-ref $ref --profile $perfil
-npx.cmd supabase migration up --project-ref $ref --profile $perfil
+if ($codigoPsql -ne 0) { throw '008 falló: no reparar el ledger ni continuar.' }
+npx.cmd supabase migration repair 008 --status applied --project-ref $ref
+if ($LASTEXITCODE -ne 0) { throw 'No se pudo registrar 008; no continuar.' }
+
+Confirmar-ProyectoObjetivo # Fase B.3: migraciones 009–011
+npx.cmd supabase db push --dry-run --project-ref $ref
+if ($LASTEXITCODE -ne 0) { throw 'Falló el dry-run de 009–011; no aplicar.' }
+npx.cmd supabase migration up --project-ref $ref
+if ($LASTEXITCODE -ne 0) { throw 'Falló la aplicación de 009–011; detener y evaluar restauración.' }
 ```
 
 Antes de reparar `008` se debe comprobar además que el SHA-256 del archivo es
