@@ -26,10 +26,6 @@ export default function CuposPage() {
     }
   }, [])
 
-  const quitarActividad = useCallback((actividadId: number) => {
-    setActividades((anteriores) => anteriores.filter((actividad) => actividad.id !== actividadId))
-  }, [])
-
   useEffect(() => {
     // La carga inicial comparte la misma operación usada por el botón Actualizar.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -62,7 +58,6 @@ export default function CuposPage() {
       actividades={actividades}
       cargando={cargando}
       recargarActividades={cargarActividades}
-      quitarActividad={quitarActividad}
       rol={rol}
     />
   )

@@ -106,9 +106,8 @@ export type RelacionFamiliar = { padre_id: string; hijo_id: string }
 /**
  * Mensaje único del vínculo parental, compartido por la lectura y la escritura.
  *
- * `padres_hijos` no existe en el esquema versionado: ninguna migración la crea.
- * Sobre una base reproducida desde cero, cualquier consulta a esa tabla falla.
- * La funcionalidad completa pertenece a EPT-13.
+ * `padres_hijos` existe desde la reconciliación 011, pero la escritura completa
+ * y su interfaz pertenecen a EPT-13.
  */
 export const VINCULO_PARENTAL_NO_DISPONIBLE =
   'Los vínculos entre padres o tutores e hijos todavía no están disponibles.'
@@ -116,10 +115,11 @@ export const VINCULO_PARENTAL_NO_DISPONIBLE =
 /**
  * Devuelve los vínculos padre/tutor ↔ hijo que existan.
  *
- * Degrada a una lista vacía únicamente ante la ausencia exacta y documentada de
- * `public.padres_hijos` (ver `src/lib/vinculos.ts`). La pantalla de usuarios
- * carga roles, perfiles y vínculos juntos, así que sin esta degradación la
- * directora no podría dar de alta a nadie.
+ * Degrada a una lista vacía únicamente ante la ausencia exacta de
+ * `public.padres_hijos` durante una transición de despliegue (ver
+ * `src/lib/vinculos.ts`). La pantalla de usuarios carga roles, perfiles y
+ * vínculos juntos, así que una caché todavía desactualizada no debe impedir un
+ * alta que no solicita tutor.
  *
  * Cualquier otro error se propaga como error de dominio: un problema de red, de
  * permisos, de configuración o la ausencia de otra tabla tienen que llegar a la
@@ -146,9 +146,8 @@ export async function obtenerRelacionesFamiliares(): Promise<RelacionFamiliar[]>
 /*
  * No existen `setHijosDePadre` ni `setTutorDeHijo` (EPT-9).
  *
- * Escribían en `padres_hijos`, que no existe en ninguna migración: la operación
- * fallaba siempre y, en el alta de usuarios, lo hacía después de haber creado la
- * cuenta de Auth y el perfil, dejando filas huérfanas que reservaban el DNI y el
- * legajo. La escritura del vínculo parental vuelve cuando EPT-13 aporte su
- * migración; hasta entonces la interfaz lo informa en lugar de intentarlo.
+ * Escribían el vínculo después de crear la cuenta de Auth y el perfil, de modo
+ * que cualquier falla dejaba un alta parcial. La escritura parental vuelve con
+ * EPT-13 cuando exista una operación atómica completa; hasta entonces la
+ * interfaz la informa en lugar de intentarla.
  */

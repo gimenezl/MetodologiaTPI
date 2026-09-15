@@ -1,17 +1,17 @@
 import { esErrorDeConsulta } from '@/lib/errores'
 
 /**
- * Clasificador de la ausencia conocida de `public.padres_hijos` (EPT-9).
+ * Clasificador defensivo de la ausencia de `public.padres_hijos` (EPT-9/011).
  *
- * `padres_hijos` no existe en el esquema versionado: ninguna migración la crea
- * y la funcionalidad pertenece a EPT-13. La pantalla de Usuarios consulta esa
- * tabla y tiene que poder cargar igual, así que esa ausencia —y solo esa— se
- * degrada a «no hay vínculos».
+ * La migración 011 incorporó `padres_hijos` al esquema versionado. Se conserva
+ * este clasificador como compatibilidad acotada durante el despliegue en el que
+ * el código de EPT-9 puede preceder por minutos a la migración 011; la
+ * funcionalidad de escritura completa continúa perteneciendo a EPT-13.
  *
- * Todo lo demás tiene que fallar cerrado. Una tabla que falta por error, una
- * caché de esquema desactualizada después de un despliegue o un permiso
- * revocado no pueden terminar convertidos en una lista vacía silenciosa: harían
- * creer que no hay vínculos cuando en realidad no se pudo leer.
+ * Todo lo demás tiene que fallar cerrado. Un permiso revocado, otra relación o
+ * cualquier error de transporte no pueden terminar convertidos en una lista
+ * vacía silenciosa: harían creer que no hay vínculos cuando en realidad no se
+ * pudo leer.
  *
  * La versión anterior aceptaba cualquier mensaje que *contuviera* `padres_hijos`,
  * de modo que `padres_hijos_backup`, `padres_hijos_old` u `otra_padres_hijos`

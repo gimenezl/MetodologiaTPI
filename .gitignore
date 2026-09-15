@@ -82,6 +82,7 @@ supabase/functions/.cache/
 # ===========================
 # MISC
 # ===========================
+/.tmp-*
 *.pem
 .yarn/cache
 .yarn/unplugged

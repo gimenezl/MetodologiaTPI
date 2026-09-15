@@ -397,24 +397,60 @@ export type Database = {
       }
       opiniones: {
         Row: {
+          aprobado: boolean
           comentario: string
           fecha: string | null
           id: number
           nombre_usuario: string | null
         }
         Insert: {
+          aprobado?: boolean
           comentario: string
           fecha?: string | null
           id?: number
           nombre_usuario?: string | null
         }
         Update: {
+          aprobado?: boolean
           comentario?: string
           fecha?: string | null
           id?: number
           nombre_usuario?: string | null
         }
         Relationships: []
+      }
+      padres_hijos: {
+        Row: {
+          fecha_creacion: string
+          hijo_id: string
+          padre_id: string
+        }
+        Insert: {
+          fecha_creacion?: string
+          hijo_id: string
+          padre_id: string
+        }
+        Update: {
+          fecha_creacion?: string
+          hijo_id?: string
+          padre_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "padres_hijos_hijo_id_fkey"
+            columns: ["hijo_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "padres_hijos_padre_id_fkey"
+            columns: ["padre_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       perfiles: {
         Row: {

@@ -19,18 +19,31 @@ CROSS JOIN app_private.niveles_orden_seq AS orden_seq
 BEGIN;
 
 -- Identidades sintéticas. `auth.uid()` obtiene `sub` desde estos claims.
+WITH base_libre AS (
+    SELECT base
+    FROM generate_series(93000000, 99999990, 10) AS g(base)
+    WHERE NOT EXISTS (
+        SELECT 1 FROM public.perfiles p
+        WHERE p.dni = ANY (ARRAY[
+            (base + 1)::TEXT, (base + 2)::TEXT, (base + 3)::TEXT,
+            (base + 4)::TEXT, (base + 5)::TEXT
+        ])
+    )
+    ORDER BY base
+    LIMIT 1
+), identidades(user_id, rol, apellido, desplazamiento) AS (
+    VALUES
+        ('61111111-1111-4111-8111-111111111111'::UUID, 'DIRECTOR',   'Directora',  1),
+        ('62222222-2222-4222-8222-222222222222'::UUID, 'DOCENTE',    'Docente',    2),
+        ('63333333-3333-4333-8333-333333333333'::UUID, 'ESTUDIANTE', 'Estudiante', 3),
+        ('64444444-4444-4444-8444-444444444444'::UUID, 'PADRE',      'Padre',      4),
+        ('65555555-5555-4555-8555-555555555555'::UUID, 'PERSONAL',   'Personal',   5)
+)
 INSERT INTO public.perfiles (user_id, rol_id, nombre, apellido, dni)
-VALUES
-    ('61111111-1111-4111-8111-111111111111',
-     (SELECT id FROM public.roles WHERE nombre = 'DIRECTOR'),   'Prueba', 'Directora',  '90000001'),
-    ('62222222-2222-4222-8222-222222222222',
-     (SELECT id FROM public.roles WHERE nombre = 'DOCENTE'),    'Prueba', 'Docente',    '90000002'),
-    ('63333333-3333-4333-8333-333333333333',
-     (SELECT id FROM public.roles WHERE nombre = 'ESTUDIANTE'), 'Prueba', 'Estudiante', '90000003'),
-    ('64444444-4444-4444-8444-444444444444',
-     (SELECT id FROM public.roles WHERE nombre = 'PADRE'),      'Prueba', 'Padre',      '90000004'),
-    ('65555555-5555-4555-8555-555555555555',
-     (SELECT id FROM public.roles WHERE nombre = 'PERSONAL'),   'Prueba', 'Personal',   '90000005');
+SELECT i.user_id, r.id, 'Prueba', i.apellido, (b.base + i.desplazamiento)::TEXT
+FROM identidades i
+JOIN public.roles r ON r.nombre = i.rol
+CROSS JOIN base_libre b;
 
 -- ================================================================
 -- 1–9. ESTRUCTURA, SEMILLAS Y ORDEN
@@ -136,7 +149,6 @@ DECLARE
     creado public.niveles;
     renombrado public.niveles;
     curso_id UUID;
-    actividad_id INTEGER;
 BEGIN
     EXECUTE 'SET LOCAL ROLE authenticated';
     PERFORM set_config('request.jwt.claims',
@@ -163,10 +175,6 @@ BEGIN
     INSERT INTO public.cursos (nivel_id, denominacion, division)
     VALUES (creado.id, 'Trayecto de prueba', 'A')
     RETURNING id INTO curso_id;
-
-    INSERT INTO public.actividades (nombre, tipo, cupo_maximo, nivel_id)
-    VALUES ('Actividad histórica de prueba', 'TALLER', 20, creado.id)
-    RETURNING id INTO actividad_id;
 
     renombrado := public.renombrar_nivel(creado.id, 'TERCIARIO');
     IF renombrado.nombre <> 'TERCIARIO' THEN
@@ -200,20 +208,50 @@ BEGIN
     END IF;
     RAISE NOTICE 'OK 17: la lectura histórica conserva el nivel inactivo relacionado';
 
-    UPDATE public.actividades
-    SET cupo_maximo = 21
-    WHERE id = actividad_id;
-    IF (SELECT nivel_id FROM public.actividades WHERE id = actividad_id) <> creado.id
-       OR (SELECT cupo_maximo FROM public.actividades WHERE id = actividad_id) <> 21 THEN
-        RAISE EXCEPTION 'FALLO 17bis: la actividad histórica perdió el nivel o no pudo actualizar otros datos';
-    END IF;
-    RAISE NOTICE 'OK 17bis: una actividad histórica conserva el nivel inactivo y puede actualizar otros datos';
-
     PERFORM public.cambiar_estado_nivel(creado.id, TRUE);
     IF NOT (SELECT activo FROM public.niveles WHERE id = creado.id) THEN
         RAISE EXCEPTION 'FALLO 18: el nivel no volvió a activo';
     END IF;
     RAISE NOTICE 'OK 18: un DIRECTOR reactiva un nivel';
+END $$;
+
+RESET ROLE;
+
+-- Desde 011 el alta directa de actividades está cerrada para los roles de
+-- aplicación. El dato de soporte se crea como propietario y después se prueba
+-- que el DIRECTOR conserva el único UPDATE directo admitido: `cupo_maximo`.
+INSERT INTO public.actividades (nombre, tipo, cupo_maximo, nivel_id)
+VALUES (
+    'Actividad histórica de prueba',
+    'TALLER',
+    20,
+    (SELECT id FROM public.niveles WHERE nombre = 'TERCIARIO')
+);
+
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims',
+                  '{"sub":"61111111-1111-4111-8111-111111111111"}', true);
+
+DO $$
+DECLARE
+    v_nivel_id INTEGER := (SELECT id FROM public.niveles WHERE nombre = 'TERCIARIO');
+    v_actividad_id INTEGER := (
+        SELECT id FROM public.actividades WHERE nombre = 'Actividad histórica de prueba'
+    );
+BEGIN
+    PERFORM public.cambiar_estado_nivel(v_nivel_id, FALSE);
+
+    UPDATE public.actividades
+    SET cupo_maximo = 21
+    WHERE id = v_actividad_id;
+
+    IF (SELECT nivel_id FROM public.actividades WHERE id = v_actividad_id) <> v_nivel_id
+       OR (SELECT cupo_maximo FROM public.actividades WHERE id = v_actividad_id) <> 21 THEN
+        RAISE EXCEPTION 'FALLO 17bis: la actividad histórica perdió el nivel o no pudo actualizar el cupo';
+    END IF;
+    RAISE NOTICE 'OK 17bis: una actividad histórica conserva el nivel inactivo y permite actualizar su cupo';
+
+    PERFORM public.cambiar_estado_nivel(v_nivel_id, TRUE);
 END $$;
 
 RESET ROLE;
@@ -230,7 +268,6 @@ DECLARE
         SELECT id FROM public.niveles WHERE nombre = 'INICIAL'
     );
     curso_id UUID;
-    actividad_id INTEGER;
 BEGIN
     EXECUTE 'SET LOCAL ROLE authenticated';
     PERFORM set_config('request.jwt.claims',
@@ -365,6 +402,31 @@ BEGIN
         RAISE NOTICE 'OK 24bis: tampoco se puede reasignar un curso a un nivel inactivo (P5504)';
     END;
 
+    SELECT id INTO curso_id FROM public.cursos
+    WHERE nivel_id = administrativo_id AND denominacion = 'Trayecto de prueba';
+    UPDATE public.cursos SET division = 'C' WHERE id = curso_id;
+    IF (SELECT division FROM public.cursos WHERE id = curso_id) <> 'C' THEN
+        RAISE EXCEPTION 'FALLO 25: no se pudo actualizar el registro histórico';
+    END IF;
+    RAISE NOTICE 'OK 25: un curso histórico conserva y puede actualizar datos sin reasignar el nivel inactivo';
+END $$;
+
+RESET ROLE;
+
+-- 011 cerró el alta y la reasignación directas de actividades para la
+-- aplicación. Estos tres casos ejercen exclusivamente el trigger de integridad
+-- como propietario, sin confundirlo con las ACL que se prueban en la suite de
+-- reconciliación.
+DO $$
+DECLARE
+    administrativo_id INTEGER := (
+        SELECT id FROM public.niveles WHERE nombre = 'TERCIARIO'
+    );
+    institucional_id INTEGER := (
+        SELECT id FROM public.niveles WHERE nombre = 'INICIAL'
+    );
+    actividad_id INTEGER;
+BEGIN
     BEGIN
         INSERT INTO public.actividades (nombre, tipo, cupo_maximo, nivel_id)
         VALUES ('Actividad nueva inactiva', 'TALLER', 20, administrativo_id);
@@ -393,17 +455,7 @@ BEGIN
         RAISE EXCEPTION 'FALLO 24act.3: una actividad sin nivel dejó de aceptar NULL';
     END IF;
     RAISE NOTICE 'OK 24act.3: actividades conserva nivel_id NULL en altas y actualizaciones';
-
-    SELECT id INTO curso_id FROM public.cursos
-    WHERE nivel_id = administrativo_id AND denominacion = 'Trayecto de prueba';
-    UPDATE public.cursos SET division = 'C' WHERE id = curso_id;
-    IF (SELECT division FROM public.cursos WHERE id = curso_id) <> 'C' THEN
-        RAISE EXCEPTION 'FALLO 25: no se pudo actualizar el registro histórico';
-    END IF;
-    RAISE NOTICE 'OK 25: un curso histórico conserva y puede actualizar datos sin reasignar el nivel inactivo';
 END $$;
-
-RESET ROLE;
 
 -- La tabla aplica el mismo contrato aun fuera de las RPC. Estos casos se
 -- ejecutan como propietario para aislar la restricción CHECK de las ACL.
@@ -475,8 +527,8 @@ BEGIN
                 (SELECT id FROM public.niveles WHERE nombre = 'TERCIARIO')
             );
             RAISE EXCEPTION 'FALLO 26act: % asignó un nivel inactivo a una actividad', actor.rol;
-        EXCEPTION WHEN SQLSTATE 'P5504' THEN
-            RAISE NOTICE 'OK 26act: % tampoco puede asignar un nivel inactivo a actividades (P5504)', actor.rol;
+        EXCEPTION WHEN insufficient_privilege THEN
+            RAISE NOTICE 'OK 26act: % no puede crear actividades por la ACL cerrada de 011 (42501)', actor.rol;
         END;
     END LOOP;
 

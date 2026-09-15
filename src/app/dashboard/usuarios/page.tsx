@@ -205,8 +205,8 @@ export default function UsuariosPage() {
 
   const onSubmit = async (data: UsuarioForm) => {
     // El tutor no es requisito para dar de alta a un alumno (EPT-9), y el
-    // vínculo parental no se envía: `padres_hijos` no existe en el esquema
-    // versionado y la API lo rechaza antes de escribir nada.
+    // vínculo parental no se envía: aunque `padres_hijos` ya forma parte del
+    // esquema, todavía no existe un alta atómica de cuenta, perfil y vínculo.
     setErrorAlta(null)
     operacionRef.current ??= nuevoIdentificadorDeOperacion()
     try {
@@ -274,8 +274,8 @@ export default function UsuariosPage() {
         rol_id: Number(editRolId),
       })
 
-      // No se sincroniza ningún vínculo parental: la escritura sobre
-      // `padres_hijos` se retiró porque la tabla no existe en las migraciones.
+      // No se sincroniza ningún vínculo parental: esa escritura necesita una
+      // operación atómica propia, planificada para EPT-13.
       toast.success('Usuario actualizado')
       setEditando(null)
       await cargar()
@@ -511,12 +511,13 @@ export default function UsuariosPage() {
 
             <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
               <div className="grid sm:grid-cols-2 gap-4">
-                <Input label="Nombre" value={editForm.nombre} onChange={(e) => setEditForm((f) => ({ ...f, nombre: e.target.value }))} />
-                <Input label="Apellido" value={editForm.apellido} onChange={(e) => setEditForm((f) => ({ ...f, apellido: e.target.value }))} />
+                <Input id="editar-nombre" label="Nombre" value={editForm.nombre} onChange={(e) => setEditForm((f) => ({ ...f, nombre: e.target.value }))} />
+                <Input id="editar-apellido" label="Apellido" value={editForm.apellido} onChange={(e) => setEditForm((f) => ({ ...f, apellido: e.target.value }))} />
               </div>
               <div className="grid sm:grid-cols-2 gap-4">
-                <Input label="DNI" maxLength={8} value={editForm.dni} onChange={(e) => setEditForm((f) => ({ ...f, dni: e.target.value }))} />
+                <Input id="editar-dni" label="DNI" maxLength={8} value={editForm.dni} onChange={(e) => setEditForm((f) => ({ ...f, dni: e.target.value }))} />
                 <Select
+                  id="editar-rol"
                   label="Rol"
                   placeholder="Seleccionar rol..."
                   options={roles.map((r) => ({ value: r.id, label: r.nombre }))}
@@ -525,9 +526,9 @@ export default function UsuariosPage() {
                 />
               </div>
               <div className="grid sm:grid-cols-3 gap-4">
-                <Input label="Teléfono" value={editForm.telefono} onChange={(e) => setEditForm((f) => ({ ...f, telefono: e.target.value }))} />
-                <Input label="Dirección" value={editForm.direccion} onChange={(e) => setEditForm((f) => ({ ...f, direccion: e.target.value }))} />
-                <Input label="Legajo" value={editForm.legajo_nro} onChange={(e) => setEditForm((f) => ({ ...f, legajo_nro: e.target.value }))} />
+                <Input id="editar-telefono" label="Teléfono" value={editForm.telefono} onChange={(e) => setEditForm((f) => ({ ...f, telefono: e.target.value }))} />
+                <Input id="editar-direccion" label="Dirección" value={editForm.direccion} onChange={(e) => setEditForm((f) => ({ ...f, direccion: e.target.value }))} />
+                <Input id="editar-legajo" label="Legajo" value={editForm.legajo_nro} onChange={(e) => setEditForm((f) => ({ ...f, legajo_nro: e.target.value }))} />
               </div>
 
               {/* Vínculo parental: pertenece a EPT-13 y todavía no tiene migración. */}

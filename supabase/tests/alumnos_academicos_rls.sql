@@ -1194,18 +1194,27 @@ BEGIN
     RAISE NOTICE 'OK 59bis: el DIRECTOR conserva la lectura administrativa completa';
 END $$;
 
--- 60. `padres_hijos` sigue sin existir: ninguna corrección la creó por la puerta
--- de atrás y ninguna operación académica la necesita.
+-- 60. La reconciliación 011 incorporó `padres_hijos` al esquema canónico sin
+-- abrir escrituras a la unidad académica ni a usuarios anónimos.
 RESET ROLE;
 DO $$
 BEGIN
-    IF EXISTS (
+    IF NOT EXISTS (
         SELECT 1 FROM information_schema.tables
         WHERE table_schema = 'public' AND table_name = 'padres_hijos'
     ) THEN
-        RAISE EXCEPTION 'FALLO 60: esta unidad no debe crear padres_hijos';
+        RAISE EXCEPTION 'FALLO 60: la reconciliación no creó padres_hijos';
     END IF;
-    RAISE NOTICE 'OK 60: padres_hijos sigue fuera del esquema y nada de EPT-9 la usa';
+    IF has_table_privilege('anon', 'public.padres_hijos', 'SELECT')
+       OR has_table_privilege('anon', 'public.padres_hijos', 'INSERT')
+       OR has_table_privilege('anon', 'public.padres_hijos', 'UPDATE')
+       OR has_table_privilege('anon', 'public.padres_hijos', 'DELETE')
+       OR has_table_privilege('anon', 'public.padres_hijos', 'TRUNCATE')
+       OR has_table_privilege('authenticated', 'public.padres_hijos', 'UPDATE')
+       OR has_table_privilege('authenticated', 'public.padres_hijos', 'TRUNCATE') THEN
+        RAISE EXCEPTION 'FALLO 60: padres_hijos conserva privilegios incompatibles';
+    END IF;
+    RAISE NOTICE 'OK 60: padres_hijos existe con RLS y privilegios acotados por 011';
 END $$;
 
 ROLLBACK;

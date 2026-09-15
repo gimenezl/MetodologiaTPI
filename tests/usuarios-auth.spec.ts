@@ -268,14 +268,12 @@ test.describe('DIRECTOR autenticado: el alta de cuentas es atómica y no deja es
     expect(contar(`FROM auth.users WHERE email = 'alta.prueba.${dni}@${DOMINIO}'`)).toBe(0)
   })
 
-  test('ni el alta ni el esquema tocan padres_hijos', async ({ request }) => {
+  test('el alta sin tutor no modifica los vínculos familiares', async ({ request }) => {
     const dni = `${PREFIJO_DNI}100004`
-    const tablas = `FROM information_schema.tables
-                    WHERE table_schema = 'public' AND table_name = 'padres_hijos'`
-    expect(contar(tablas)).toBe(0)
+    const relacionesAntes = contar('FROM public.padres_hijos')
     const respuesta = await crear(request, { dni, apellido: 'SinPadresHijos' })
     expect(respuesta.status(), await respuesta.text()).toBe(200)
-    expect(contar(tablas)).toBe(0)
+    expect(contar('FROM public.padres_hijos')).toBe(relacionesAntes)
   })
 
   test('una petición inválida no crea cuenta, ni perfil, ni legajo académico', async ({
@@ -523,16 +521,16 @@ async function completarFormulario(page: Page, dni: string, apellido: string) {
 const AVISO_ALTA = 'No se completó el alta'
 
 test.describe('DIRECTOR autenticado: el panel de usuarios carga, da de alta y explica los fallos', () => {
-  test('la tabla de vínculos no existe en el esquema reproducible', () => {
+  test('la tabla de vínculos existe en el esquema reproducible', () => {
     expect(
       contar(
         `FROM information_schema.tables
          WHERE table_schema = 'public' AND table_name = 'padres_hijos'`
       )
-    ).toBe(0)
+    ).toBe(1)
   })
 
-  test('carga roles y perfiles pese a la ausencia de padres_hijos', async ({ page }) => {
+  test('carga roles, perfiles y vínculos familiares', async ({ page }) => {
     const peticiones: { metodo: string; url: string; estado: number }[] = []
     page.on('response', (respuesta) => {
       if (!respuesta.url().includes('padres_hijos')) return
@@ -559,7 +557,7 @@ test.describe('DIRECTOR autenticado: el panel de usuarios carga, da de alta y ex
     expect(peticiones.length).toBeGreaterThan(0)
     for (const peticion of peticiones) {
       expect(peticion.metodo, `no debe escribir en padres_hijos: ${peticion.url}`).toBe('GET')
-      expect(peticion.estado, 'la lectura no debe prosperar').toBe(404)
+      expect(peticion.estado, 'la lectura autenticada debe prosperar').toBe(200)
     }
 
     await exigirSinControlesAnidados(page, 'panel de usuarios')
@@ -698,24 +696,27 @@ test.describe('DIRECTOR autenticado: el panel de usuarios carga, da de alta y ex
     await exigirPantallaSinDetalleTecnico(page, 'conexión cortada al crear')
   })
 
-  test('editar un usuario sin permiso de actualización informa que no se guardó', async ({
-    page,
-  }) => {
-    // `perfiles` no tiene política UPDATE: la edición afecta cero filas y
-    // PostgREST responde PGRST116. La pantalla no puede decir «actualizado».
-    const antes = sql(`SELECT nombre FROM public.perfiles WHERE dni = '99900004';`)
+  test('el DIRECTOR edita los campos permitidos y el cambio persiste', async ({ page }) => {
+    // La reconciliación otorga UPDATE solo sobre los campos editables y la
+    // política RLS exige DIRECTOR. La interfaz debe confirmar la escritura real.
+    const nombreNuevo = 'CambioPermitido'
     await page.goto('/dashboard/usuarios')
     const fila = page.getByLabel('Usuarios registrados').getByRole('row').filter({ hasText: '99900004' })
     await fila.getByRole('button', { name: 'Editar' }).click()
-    await page.getByLabel('Nombre', { exact: true }).last().fill('CambioNoPermitido')
+    await page.getByLabel('Nombre', { exact: true }).last().fill(nombreNuevo)
+    const respuestaGuardado = page.waitForResponse(
+      (respuesta) =>
+        respuesta.request().method() === 'PATCH' &&
+        respuesta.url().includes('/rest/v1/perfiles?')
+    )
     await page.getByRole('button', { name: 'Guardar cambios' }).click()
+    const respuesta = await respuestaGuardado
 
-    await expect(
-      page.getByText('No se guardaron los cambios: el registro ya no existe o tu perfil no puede modificarlo desde este panel.')
-    ).toBeVisible()
-    await expect(page.getByText('Usuario actualizado')).toHaveCount(0)
-    await exigirPantallaSinDetalleTecnico(page, 'edición sin permiso')
-    expect(sql(`SELECT nombre FROM public.perfiles WHERE dni = '99900004';`)).toBe(antes)
+    expect(respuesta.request().postDataJSON()).toMatchObject({ nombre: nombreNuevo })
+    expect(respuesta.status(), await respuesta.text()).toBe(200)
+    await expect(page.getByText('Usuario actualizado')).toBeVisible()
+    await expect(page.getByText('Editar usuario')).toHaveCount(0)
+    expect(sql(`SELECT nombre FROM public.perfiles WHERE dni = '99900004';`)).toBe(nombreNuevo)
   })
 
   for (const caso of [
