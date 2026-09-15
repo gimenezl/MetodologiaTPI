@@ -6,11 +6,19 @@
  * reconstruida desde cero con la cadena completa de migraciones. Se conserva
  * como artefacto de referencia para poder comparar.
  *
- * Reconciliación verificada entre este archivo y el esquema real (011):
+ * Reconciliación verificada entre este archivo y el esquema real (012):
  *
  * - `cursos`, `padres_hijos`, `opiniones.aprobado` y las funciones públicas de
  *   la aplicación están representados por las migraciones y por los tipos
  *   generados.
+ * - 012 (EPT-56) agrega `actividades.activo`, `materias_cursos`, las vistas
+ *   `materias` y `materias_cursos_detalle` y seis funciones de materias. Las
+ *   vistas se declaran solo con `Row`: el generador también les asigna
+ *   `Insert`/`Update` porque PostgREST las considera actualizables, pero ningún
+ *   rol de aplicación tiene privilegios de escritura sobre ellas.
+ * - `cambiar_profesor_asignacion.p_profesor_id` admite `null` para quitar el
+ *   profesor responsable. El generador lo tipa como `string` porque PostgreSQL
+ *   no declara nulabilidad en argumentos; acá se refleja el contrato real.
  * - Este archivo continúa siendo el contrato manual importado por la
  *   aplicación; `database.generated.ts` es la evidencia reproducible del
  *   esquema y no se edita a mano.
@@ -128,6 +136,7 @@ export type Database = {
           tipo: string | null
           cupo_maximo: number
           nivel_id: number | null
+          activo: boolean
         }
         Insert: {
           id?: number
@@ -135,6 +144,7 @@ export type Database = {
           tipo?: string | null
           cupo_maximo?: number
           nivel_id?: number | null
+          activo?: boolean
         }
         Update: {
           id?: number
@@ -142,6 +152,36 @@ export type Database = {
           tipo?: string | null
           cupo_maximo?: number
           nivel_id?: number | null
+          activo?: boolean
+        }
+      }
+      materias_cursos: {
+        Row: {
+          id: string
+          materia_id: number
+          curso_id: string
+          profesor_id: string | null
+          activo: boolean
+          fecha_creacion: string
+          fecha_actualizacion: string
+        }
+        Insert: {
+          id?: string
+          materia_id: number
+          curso_id: string
+          profesor_id?: string | null
+          activo?: boolean
+          fecha_creacion?: string
+          fecha_actualizacion?: string
+        }
+        Update: {
+          id?: string
+          materia_id?: number
+          curso_id?: string
+          profesor_id?: string | null
+          activo?: boolean
+          fecha_creacion?: string
+          fecha_actualizacion?: string
         }
       }
       inscripciones: {
@@ -349,10 +389,62 @@ export type Database = {
         }
       }
     }
+    Views: {
+      materias: {
+        Row: {
+          id: number | null
+          nombre: string | null
+          activo: boolean | null
+        }
+      }
+      materias_cursos_detalle: {
+        Row: {
+          id: string | null
+          materia_id: number | null
+          materia_nombre: string | null
+          materia_activa: boolean | null
+          curso_id: string | null
+          curso_denominacion: string | null
+          curso_division: string | null
+          curso_activo: boolean | null
+          nivel_nombre: string | null
+          profesor_id: string | null
+          profesor_nombre: string | null
+          profesor_apellido: string | null
+          activo: boolean | null
+          fecha_creacion: string | null
+          fecha_actualizacion: string | null
+        }
+      }
+    }
     Functions: {
+      asignar_materia_curso: {
+        Args: { p_curso_id: string; p_materia_id: number; p_profesor_id?: string | null }
+        Returns: Database['public']['Tables']['materias_cursos']['Row']
+      }
       calcular_porcentaje_asistencia: {
         Args: { p_estudiante_id: string }
         Returns: number
+      }
+      cambiar_estado_asignacion: {
+        Args: { p_activo: boolean; p_asignacion_id: string }
+        Returns: Database['public']['Tables']['materias_cursos']['Row']
+      }
+      cambiar_estado_materia: {
+        Args: { p_activo: boolean; p_materia_id: number }
+        Returns: Database['public']['Views']['materias']['Row']
+      }
+      cambiar_profesor_asignacion: {
+        Args: { p_asignacion_id: string; p_profesor_id: string | null }
+        Returns: Database['public']['Tables']['materias_cursos']['Row']
+      }
+      crear_materia: {
+        Args: { p_nombre: string }
+        Returns: Database['public']['Views']['materias']['Row']
+      }
+      renombrar_materia: {
+        Args: { p_materia_id: number; p_nombre: string }
+        Returns: Database['public']['Views']['materias']['Row']
       }
       cambiar_estado_nivel: {
         Args: { p_activo: boolean; p_nivel_id: number }
@@ -406,3 +498,4 @@ export type Rol = Tables<'roles'>
 export type Nivel = Tables<'niveles'>
 export type Curso = Tables<'cursos'>
 export type Postulacion = Tables<'postulaciones'>
+export type MateriaCurso = Tables<'materias_cursos'>
