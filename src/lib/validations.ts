@@ -255,6 +255,148 @@ export function primerErrorNivel(error: z.ZodError): {
   return { mensaje: issue.message, campo }
 }
 
+// ---- Materias (EPT-56) ----
+/**
+ * Recorte canónico del nombre de una materia.
+ *
+ * Cubre exactamente el mismo conjunto de espacios en blanco que
+ * `app_private.nombre_materia_valido` en PostgreSQL. `String.prototype.trim()`
+ * no alcanza: no quita `U+0085` (next line), que la base sí recorta, así que un
+ * nombre aceptado acá terminaría rechazado por la base.
+ *
+ * A diferencia del nombre de nivel, acá el valor se recorta y no se rechaza: la
+ * decisión funcional aprobada define la identidad de la materia como su nombre
+ * sin espacios laterales, de modo que recortar no cambia lo que el director
+ * quiso escribir.
+ */
+export function recortarNombreMateria(valor: string): string {
+  return valor.replace(/^[\s﻿]+|[\s﻿]+$/gu, '')
+}
+
+/**
+ * Normalización de comparación, idéntica a la expresión del índice único
+ * (`UPPER(BTRIM(nombre))`). Se usa solo para anticipar mensajes en la interfaz;
+ * la autoridad ante concurrencia sigue siendo la restricción de la base.
+ */
+export function normalizarNombreMateria(valor: string): string {
+  return recortarNombreMateria(valor).toUpperCase()
+}
+
+export const nombreMateriaSchema = z
+  .string({ message: 'El nombre de la materia es requerido' })
+  .transform(recortarNombreMateria)
+  .refine((nombre) => nombre.length >= 1, 'El nombre de la materia es requerido')
+  .refine(
+    (nombre) => nombre.length <= 100,
+    'El nombre de la materia no puede superar los 100 caracteres'
+  )
+
+export const crearMateriaSchema = z.object({ nombre: nombreMateriaSchema }).strict()
+
+export type CrearMateriaData = z.infer<typeof crearMateriaSchema>
+
+const renombrarMateriaSchema = z
+  .object({ accion: z.literal('renombrar'), nombre: nombreMateriaSchema })
+  .strict()
+
+const cambiarEstadoMateriaSchema = z
+  .object({
+    accion: z.literal('cambiar_estado'),
+    activo: z.boolean({ message: 'El estado de la materia debe ser verdadero o falso' }),
+  })
+  .strict()
+
+/** Contrato PATCH discriminado: una sola operación por petición. */
+export const actualizarMateriaSchema = z.discriminatedUnion('accion', [
+  renombrarMateriaSchema,
+  cambiarEstadoMateriaSchema,
+])
+
+export type ActualizarMateriaData = z.infer<typeof actualizarMateriaSchema>
+
+/** Identificador serial de PostgreSQL representado como segmento de URL. */
+export const materiaIdSchema = z
+  .string()
+  .regex(/^[1-9]\d*$/, 'Identificador de materia inválido')
+  .transform(Number)
+  .refine(
+    (id) => Number.isSafeInteger(id) && id <= 2147483647,
+    'Identificador de materia inválido'
+  )
+
+export const asignacionIdSchema = z
+  .string()
+  .uuid('Identificador de asignación inválido')
+
+const cursoAsignableMateriaSchema = z
+  .string({ message: 'Seleccioná un curso activo' })
+  .uuid('Seleccioná un curso activo')
+
+/**
+ * El profesor responsable es opcional. `null` es una elección explícita
+ * («sin profesor asignado»); la ausencia de la clave equivale a lo mismo.
+ */
+const profesorResponsableSchema = z
+  .string({ message: 'Seleccioná un profesor con rol DOCENTE' })
+  .uuid('Seleccioná un profesor con rol DOCENTE')
+  .nullable()
+
+export const asignarMateriaSchema = z
+  .object({
+    materia_id: z
+      .number({ message: 'Seleccioná una materia' })
+      .int('Seleccioná una materia')
+      .positive('Seleccioná una materia'),
+    curso_id: cursoAsignableMateriaSchema,
+    profesor_id: profesorResponsableSchema.optional(),
+  })
+  .strict()
+
+export type AsignarMateriaData = z.infer<typeof asignarMateriaSchema>
+
+const cambiarProfesorSchema = z
+  .object({
+    accion: z.literal('cambiar_profesor'),
+    profesor_id: profesorResponsableSchema,
+  })
+  .strict()
+
+const cambiarEstadoAsignacionSchema = z
+  .object({
+    accion: z.literal('cambiar_estado'),
+    activo: z.boolean({ message: 'El estado de la asignación debe ser verdadero o falso' }),
+  })
+  .strict()
+
+export const actualizarAsignacionSchema = z.discriminatedUnion('accion', [
+  cambiarProfesorSchema,
+  cambiarEstadoAsignacionSchema,
+])
+
+export type ActualizarAsignacionData = z.infer<typeof actualizarAsignacionSchema>
+
+/** Misma traducción estructural que `primerErrorNivel`, para materias. */
+export function primerErrorMateria(error: z.ZodError): {
+  mensaje: string
+  campo?: string
+} {
+  const issue = error.issues[0]
+  const campo = typeof issue?.path?.[0] === 'string' ? issue.path[0] : undefined
+
+  if (!issue) return { mensaje: 'Datos inválidos' }
+  if (issue.code === 'unrecognized_keys') {
+    return { mensaje: 'La petición contiene campos no permitidos' }
+  }
+  if (issue.code === 'invalid_union') {
+    return { mensaje: 'Seleccioná una acción válida', campo: 'accion' }
+  }
+  if (issue.code === 'invalid_type' && !campo) {
+    return { mensaje: 'Datos inválidos' }
+  }
+
+  return { mensaje: issue.message, campo }
+}
+
 // ---- Alumnos y estado académico (EPT-9) ----
 /**
  * El contrato del DNI se rechaza, nunca se recorta. Un DNI con espacios o con
