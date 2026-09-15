@@ -29,7 +29,7 @@ la preparación de este candidato.
 - Línea base: `8926ea96ec2ae001d329305045e92b8f6ade1caa`.
 - Worktree exclusivo: `E:/Escritorio/codigo/MetodologiaTPI-db-recovery`.
 - Proyecto remoto: `ycvrpmrogvjnntnoosbh`.
-- Perfil de CLI: `ept-production`.
+- Perfil de CLI: predeterminado, autenticado con acceso al proyecto objetivo.
 - El checkout original no fue limpiado, actualizado ni utilizado para editar.
 
 ## Respaldo de preflight
