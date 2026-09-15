@@ -6,7 +6,8 @@ import { useEffect, useState } from 'react'
 import {
   House, Users, CalendarCheck, Pulse, FileText,
   SignOut, List, X, Briefcase, ChatCenteredText, UserPlus, Lock,
-  Newspaper, UserCircle, Chalkboard, GraduationCap, Student, IdentificationCard
+  Newspaper, UserCircle, Chalkboard, GraduationCap, Student, IdentificationCard,
+  BookOpen
 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
@@ -27,6 +28,7 @@ const navItems: NavItem[] = [
   { href: '/dashboard/mi-legajo', label: 'Mi legajo', icon: IdentificationCard, roles: ['ESTUDIANTE'] },
   { href: '/dashboard/cursos', label: 'Cursos', icon: Chalkboard, roles: ['DIRECTOR'] },
   { href: '/dashboard/niveles', label: 'Niveles', icon: GraduationCap, roles: ['DIRECTOR'] },
+  { href: '/dashboard/materias', label: 'Materias', icon: BookOpen, roles: ['DIRECTOR'] },
   { href: '/dashboard/asistencias', label: 'Asistencias', icon: CalendarCheck, roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE'] },
   { href: '/dashboard/cupos', label: 'Actividades', icon: Pulse, roles: ['DIRECTOR', 'DOCENTE', 'ESTUDIANTE', 'PADRE'] },
   { href: '/dashboard/solicitudes', label: 'Solicitudes', icon: FileText, roles: ['DIRECTOR'] },
@@ -53,7 +55,15 @@ function rutaPermitida(pathname: string, rol: string | null): boolean {
   return rol ? match.roles.includes(rol) : false
 }
 
-function SidebarContent({ onClose, onSignOut }: { onClose?: () => void; onSignOut: () => void }) {
+function SidebarContent({
+  onClose,
+  onSignOut,
+  cerrandoSesion,
+}: {
+  onClose?: () => void
+  onSignOut: () => void
+  cerrandoSesion: boolean
+}) {
   const pathname = usePathname()
   const { perfil, rol } = useAuth()
 
@@ -113,12 +123,17 @@ function SidebarContent({ onClose, onSignOut }: { onClose?: () => void; onSignOu
             </div>
           </div>
         )}
+        {/* Único disparador de cierre de sesión del panel junto al del encabezado
+            móvil: los dos usan el mismo manejador y quedan deshabilitados
+            mientras la operación está en curso, para no dispararla dos veces. */}
         <button
           onClick={onSignOut}
-          className="flex items-center gap-2.5 px-3 py-2 w-full rounded-xl text-sm text-neutral-600 hover:bg-red-50 hover:text-red-600 transition-colors duration-150"
+          disabled={cerrandoSesion}
+          aria-busy={cerrandoSesion}
+          className="flex items-center gap-2.5 px-3 py-2 w-full rounded-xl text-sm text-neutral-600 hover:bg-red-50 hover:text-red-600 transition-colors duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <SignOut size={16} />
-          Cerrar sesión
+          {cerrandoSesion ? 'Cerrando sesión…' : 'Cerrar sesión'}
         </button>
       </div>
     </div>
@@ -153,10 +168,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => window.removeEventListener('scroll', handler)
   }, [])
 
+  /**
+   * Cierre de sesión real.
+   *
+   * `signOut()` del contexto invalida la sesión en Supabase y borra las cookies.
+   * La navegación usa `replace` y no `push`: con `push`, volver atrás dejaba la
+   * ruta protegida en el historial y el navegador podía mostrarla desde su
+   * caché antes de que `src/proxy.ts` redirigiera al login. `refresh()` descarta
+   * además el contenido de servidor ya renderizado para esa sesión.
+   *
+   * El indicador de progreso no es decorativo: mientras dura la operación los
+   * dos botones quedan deshabilitados, de modo que un doble clic no dispara dos
+   * cierres de sesión.
+   */
+  const [cerrandoSesion, setCerrandoSesion] = useState(false)
+
   const handleSignOut = async () => {
-    await signOut()
-    router.push('/')
-    router.refresh()
+    if (cerrandoSesion) return
+    setCerrandoSesion(true)
+    try {
+      await signOut()
+      router.replace('/')
+      router.refresh()
+    } catch (error) {
+      console.warn('[dashboard] no se pudo cerrar la sesión', error)
+      setCerrandoSesion(false)
+    }
   }
 
   if (isLoading) {
@@ -174,7 +211,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-[100dvh] bg-neutral-50">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex flex-col w-60 bg-white border-r border-neutral-200 fixed top-0 bottom-0 left-0">
-        <SidebarContent onSignOut={handleSignOut} />
+        <SidebarContent onSignOut={handleSignOut} cerrandoSesion={cerrandoSesion} />
       </aside>
 
       {/* Mobile sidebar overlay */}
@@ -193,7 +230,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             >
               <X size={18} />
             </button>
-            <SidebarContent onClose={() => setMobileOpen(false)} onSignOut={handleSignOut} />
+            <SidebarContent
+              onClose={() => setMobileOpen(false)}
+              onSignOut={handleSignOut}
+              cerrandoSesion={cerrandoSesion}
+            />
           </aside>
         </div>
       )}
@@ -214,10 +255,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           >
             <List size={20} />
           </button>
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-3 ml-auto">
             <Link href="/" className="text-xs text-neutral-500 hover:text-neutral-700 transition-colors">
               Ver sitio web
             </Link>
+            {/* En móvil el botón del panel lateral queda detrás del menú. Esta
+                acción repite el mismo manejador para que cerrar sesión siempre
+                esté a un toque de distancia. */}
+            <button
+              onClick={handleSignOut}
+              disabled={cerrandoSesion}
+              aria-busy={cerrandoSesion}
+              className="lg:hidden flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-neutral-600 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <SignOut size={16} />
+              {cerrandoSesion ? 'Cerrando sesión…' : 'Cerrar sesión'}
+            </button>
           </div>
         </header>
 
