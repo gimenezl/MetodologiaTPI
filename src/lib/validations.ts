@@ -581,3 +581,59 @@ export function primerErrorAlumno(error: z.ZodError): {
 
   return { mensaje: issue.message, campo }
 }
+
+// ---- Inscripción a servicios escolares (EPT-10) ----
+
+/**
+ * El cuerpo del alta solo transporta QUÉ servicio se solicita. Nunca el alumno,
+ * el perfil, el usuario ni el legajo: esa identidad la deriva PostgreSQL desde
+ * `auth.uid()`. `.strict()` rechaza cualquier intento de agregarla.
+ */
+export const inscribirEnServicioSchema = z
+  .object({
+    servicio_id: z
+      .string({ message: 'Seleccioná un servicio escolar' })
+      .uuid('Seleccioná un servicio escolar'),
+  })
+  .strict()
+
+export type InscribirEnServicioData = z.infer<typeof inscribirEnServicioSchema>
+
+/**
+ * La única acción admitida sobre una inscripción existente es la baja lógica.
+ * Se expresa igual que el resto del proyecto, con una unión discriminada, para
+ * que agregar otra acción sea una decisión explícita y no un efecto colateral.
+ */
+export const actualizarInscripcionServicioSchema = z.discriminatedUnion('accion', [
+  z.object({ accion: z.literal('cancelar') }).strict(),
+])
+
+export type ActualizarInscripcionServicioData = z.infer<
+  typeof actualizarInscripcionServicioSchema
+>
+
+export const inscripcionServicioIdSchema = z
+  .string()
+  .uuid('Identificador de inscripción inválido')
+
+/** Misma traducción estructural que `primerErrorMateria`, para el comedor. */
+export function primerErrorComedor(error: z.ZodError): {
+  mensaje: string
+  campo?: string
+} {
+  const issue = error.issues[0]
+  const campo = typeof issue?.path?.[0] === 'string' ? issue.path[0] : undefined
+
+  if (!issue) return { mensaje: 'Datos inválidos' }
+  if (issue.code === 'unrecognized_keys') {
+    return { mensaje: 'La petición contiene campos no permitidos' }
+  }
+  if (issue.code === 'invalid_union') {
+    return { mensaje: 'Seleccioná una acción válida', campo: 'accion' }
+  }
+  if (issue.code === 'invalid_type' && !campo) {
+    return { mensaje: 'Datos inválidos' }
+  }
+
+  return { mensaje: issue.message, campo }
+}
