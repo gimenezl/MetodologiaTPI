@@ -485,6 +485,11 @@ END $$;
 -- ================================================================
 -- 5. NO SE INVENTA UNA UNICIDAD DE ACTIVIDADES
 -- ================================================================
+-- Hasta 011 este caso usaba `CURRICULAR`. Desde 012 (EPT-56) las materias
+-- tienen identidad por nombre normalizado por decisión funcional aprobada, así
+-- que esa unicidad ya no es "inventada": la prueba `materias_rls.sql` la exige.
+-- La garantía que protege esta sección sigue vigente para deportes y talleres,
+-- cuyos duplicados históricos continúan sin fusionarse.
 RESET ROLE;
 DO $$
 DECLARE
@@ -492,16 +497,16 @@ DECLARE
 BEGIN
     INSERT INTO public.actividades (nombre, tipo, cupo_maximo, nivel_id)
     VALUES
-        ('Duplicada intencional 011', 'CURRICULAR', 20, v_nivel),
-        (' duplicada intencional 011 ', 'CURRICULAR', 20, v_nivel);
+        ('Duplicada intencional 011', 'TALLER', 20, v_nivel),
+        (' duplicada intencional 011 ', 'TALLER', 20, v_nivel);
 
     IF (SELECT COUNT(*) FROM public.actividades
-        WHERE tipo = 'CURRICULAR'
+        WHERE tipo = 'TALLER'
           AND nivel_id = v_nivel
           AND UPPER(BTRIM(nombre)) = 'DUPLICADA INTENCIONAL 011') <> 2 THEN
         RAISE EXCEPTION 'FALLO 34: 011 fusionó o rechazó actividades ambiguas';
     END IF;
-    RAISE NOTICE 'OK 34: 011 preserva duplicados de actividades para resolución funcional posterior';
+    RAISE NOTICE 'OK 34: 011 preserva duplicados de actividades no curriculares sin fusionarlos';
 END $$;
 
 -- ================================================================

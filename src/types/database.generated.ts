@@ -36,6 +36,7 @@ export type Database = {
     Tables: {
       actividades: {
         Row: {
+          activo: boolean
           cupo_maximo: number | null
           id: number
           nivel_id: number | null
@@ -43,6 +44,7 @@ export type Database = {
           tipo: string | null
         }
         Insert: {
+          activo?: boolean
           cupo_maximo?: number | null
           id?: number
           nivel_id?: number | null
@@ -50,6 +52,7 @@ export type Database = {
           tipo?: string | null
         }
         Update: {
+          activo?: boolean
           cupo_maximo?: number | null
           id?: number
           nivel_id?: number | null
@@ -249,8 +252,88 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "inscripciones_actividad_id_fkey"
+            columns: ["actividad_id"]
+            isOneToOne: false
+            referencedRelation: "materias"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "inscripciones_estudiante_id_fkey"
             columns: ["estudiante_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      materias_cursos: {
+        Row: {
+          activo: boolean
+          curso_id: string
+          fecha_actualizacion: string
+          fecha_creacion: string
+          id: string
+          materia_id: number
+          profesor_id: string | null
+        }
+        Insert: {
+          activo?: boolean
+          curso_id: string
+          fecha_actualizacion?: string
+          fecha_creacion?: string
+          id?: string
+          materia_id: number
+          profesor_id?: string | null
+        }
+        Update: {
+          activo?: boolean
+          curso_id?: string
+          fecha_actualizacion?: string
+          fecha_creacion?: string
+          id?: string
+          materia_id?: number
+          profesor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "materias_cursos_curso_id_fkey"
+            columns: ["curso_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos_academicos"
+            referencedColumns: ["curso_id"]
+          },
+          {
+            foreignKeyName: "materias_cursos_curso_id_fkey"
+            columns: ["curso_id"]
+            isOneToOne: false
+            referencedRelation: "cursos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "materias_cursos_curso_id_fkey"
+            columns: ["curso_id"]
+            isOneToOne: false
+            referencedRelation: "matriculas_historial"
+            referencedColumns: ["curso_id"]
+          },
+          {
+            foreignKeyName: "materias_cursos_materia_id_fkey"
+            columns: ["materia_id"]
+            isOneToOne: false
+            referencedRelation: "actividades"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "materias_cursos_materia_id_fkey"
+            columns: ["materia_id"]
+            isOneToOne: false
+            referencedRelation: "materias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "materias_cursos_profesor_id_fkey"
+            columns: ["profesor_id"]
             isOneToOne: false
             referencedRelation: "perfiles"
             referencedColumns: ["id"]
@@ -608,6 +691,87 @@ export type Database = {
           },
         ]
       }
+      materias: {
+        Row: {
+          activo: boolean | null
+          id: number | null
+          nombre: string | null
+        }
+        Insert: {
+          activo?: boolean | null
+          id?: number | null
+          nombre?: string | null
+        }
+        Update: {
+          activo?: boolean | null
+          id?: number | null
+          nombre?: string | null
+        }
+        Relationships: []
+      }
+      materias_cursos_detalle: {
+        Row: {
+          activo: boolean | null
+          curso_activo: boolean | null
+          curso_denominacion: string | null
+          curso_division: string | null
+          curso_id: string | null
+          fecha_actualizacion: string | null
+          fecha_creacion: string | null
+          id: string | null
+          materia_activa: boolean | null
+          materia_id: number | null
+          materia_nombre: string | null
+          nivel_nombre: string | null
+          profesor_apellido: string | null
+          profesor_id: string | null
+          profesor_nombre: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "materias_cursos_curso_id_fkey"
+            columns: ["curso_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos_academicos"
+            referencedColumns: ["curso_id"]
+          },
+          {
+            foreignKeyName: "materias_cursos_curso_id_fkey"
+            columns: ["curso_id"]
+            isOneToOne: false
+            referencedRelation: "cursos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "materias_cursos_curso_id_fkey"
+            columns: ["curso_id"]
+            isOneToOne: false
+            referencedRelation: "matriculas_historial"
+            referencedColumns: ["curso_id"]
+          },
+          {
+            foreignKeyName: "materias_cursos_materia_id_fkey"
+            columns: ["materia_id"]
+            isOneToOne: false
+            referencedRelation: "actividades"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "materias_cursos_materia_id_fkey"
+            columns: ["materia_id"]
+            isOneToOne: false
+            referencedRelation: "materias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "materias_cursos_profesor_id_fkey"
+            columns: ["profesor_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       matriculas_historial: {
         Row: {
           alumno_id: string | null
@@ -643,6 +807,28 @@ export type Database = {
       }
     }
     Functions: {
+      asignar_materia_curso: {
+        Args: {
+          p_curso_id: string
+          p_materia_id: number
+          p_profesor_id?: string
+        }
+        Returns: {
+          activo: boolean
+          curso_id: string
+          fecha_actualizacion: string
+          fecha_creacion: string
+          id: string
+          materia_id: number
+          profesor_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "materias_cursos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       calcular_porcentaje_asistencia: {
         Args: { p_estudiante_id: string }
         Returns: number
@@ -650,6 +836,38 @@ export type Database = {
       cambiar_curso_alumno: {
         Args: { p_alumno_id: string; p_curso_id: string }
         Returns: string
+      }
+      cambiar_estado_asignacion: {
+        Args: { p_activo: boolean; p_asignacion_id: string }
+        Returns: {
+          activo: boolean
+          curso_id: string
+          fecha_actualizacion: string
+          fecha_creacion: string
+          id: string
+          materia_id: number
+          profesor_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "materias_cursos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      cambiar_estado_materia: {
+        Args: { p_activo: boolean; p_materia_id: number }
+        Returns: {
+          activo: boolean | null
+          id: number | null
+          nombre: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "materias"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       cambiar_estado_nivel: {
         Args: { p_activo: boolean; p_nivel_id: number }
@@ -663,6 +881,24 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "niveles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      cambiar_profesor_asignacion: {
+        Args: { p_asignacion_id: string; p_profesor_id: string }
+        Returns: {
+          activo: boolean
+          curso_id: string
+          fecha_actualizacion: string
+          fecha_creacion: string
+          id: string
+          materia_id: number
+          profesor_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "materias_cursos"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -685,6 +921,20 @@ export type Database = {
         }
         Returns: string
       }
+      crear_materia: {
+        Args: { p_nombre: string }
+        Returns: {
+          activo: boolean | null
+          id: number | null
+          nombre: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "materias"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       crear_nivel: {
         Args: { p_nombre: string }
         Returns: {
@@ -706,6 +956,20 @@ export type Database = {
       reactivar_alumno: {
         Args: { p_alumno_id: string; p_curso_id: string }
         Returns: string
+      }
+      renombrar_materia: {
+        Args: { p_materia_id: number; p_nombre: string }
+        Returns: {
+          activo: boolean | null
+          id: number | null
+          nombre: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "materias"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       renombrar_nivel: {
         Args: { p_nivel_id: number; p_nombre: string }

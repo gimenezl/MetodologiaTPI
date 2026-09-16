@@ -91,6 +91,26 @@ export const PERSONAL = {
   archivoSesion: 'tests/.auth/personal.json',
 }
 
+/**
+ * Identidad exclusiva de las pruebas de cierre de sesión (EPT-56).
+ *
+ * `signOut()` revoca las sesiones del usuario en Supabase, así que probar el
+ * cierre con la directora compartida dejaría sin sesión a las pruebas de
+ * Cursos, Niveles, Alumnos y Materias que corren después. Esta cuenta tiene el
+ * mismo rol y no la usa ninguna otra prueba.
+ */
+export const DIRECTORA_CIERRE = {
+  email: 'directora.cierre.prueba@ept.local',
+  password: 'prueba-ept-56-cierre',
+  rol: 'DIRECTOR',
+  etiqueta: 'DIRECTOR CIERRE',
+  dni: '99900007',
+  nombre: 'Ana',
+  apellido: 'Cierre',
+  legajo: null as string | null,
+  archivoSesion: 'tests/.auth/directora-cierre.json',
+}
+
 /** Cuenta autenticada sin perfil: prueba el actor "usuario sin perfil". */
 export const SIN_PERFIL = {
   etiqueta: 'SIN PERFIL',
@@ -99,7 +119,15 @@ export const SIN_PERFIL = {
   archivoSesion: 'tests/.auth/sin-perfil.json',
 }
 
-const IDENTIDADES = [DIRECTORA, ESTUDIANTE, ESTUDIANTE_AJENO, DOCENTE, PADRE, PERSONAL]
+const IDENTIDADES = [
+  DIRECTORA,
+  DIRECTORA_CIERRE,
+  ESTUDIANTE,
+  ESTUDIANTE_AJENO,
+  DOCENTE,
+  PADRE,
+  PERSONAL,
+]
 const CORREOS_DE_PRUEBA = [...IDENTIDADES.map((i) => i.email), SIN_PERFIL.email]
 
 /** Cursos de partida deterministas, para que las aserciones no dependan del orden. */
@@ -155,6 +183,12 @@ function clienteAdmin() {
  * (un alumno activo sin matrícula, o uno inactivo con una). Eso es exactamente
  * lo que la invariante debe impedir, así que la limpieza usa una transacción
  * real contra el contenedor local descartable.
+ *
+ * Desde EPT-56 también limpia las asignaciones Curso–Materia y las materias que
+ * crean las pruebas. Sus claves foráneas son ON DELETE RESTRICT, de modo que sin
+ * esta limpieza la siembra siguiente no podría borrar los cursos ni los perfiles
+ * docentes de prueba. Las dos materias sembradas por la migración 001 se
+ * conservan, igual que los deportes y los talleres.
  */
 function vaciarModeloAcademico() {
   const contenedor =
@@ -169,6 +203,14 @@ function vaciarModeloAcademico() {
         BEGIN;
         DELETE FROM public.matriculas;
         DELETE FROM public.alumnos;
+        DELETE FROM public.materias_cursos;
+        DELETE FROM public.actividades a
+        WHERE a.tipo = 'CURRICULAR'
+          AND a.nombre NOT IN ('Laboratorio de Ciencias', 'Inglés Avanzado')
+          AND NOT EXISTS (
+            SELECT 1 FROM public.inscripciones i WHERE i.actividad_id = a.id
+          );
+        UPDATE public.actividades SET activo = TRUE WHERE NOT activo;
         COMMIT;
       `,
       stdio: ['pipe', 'pipe', 'pipe'],
