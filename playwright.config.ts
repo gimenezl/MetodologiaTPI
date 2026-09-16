@@ -31,16 +31,18 @@ const entornoServidor: Record<string, string> = {
  */
 const conBaseLocal = process.env.EPT_SUPABASE_LOCAL === '1'
 
-const PRUEBAS_AUTENTICADAS = /(?:cursos|niveles|alumnos|usuarios|materias)-auth\.spec\.ts/
+const PRUEBAS_AUTENTICADAS =
+  /(?:cursos|niveles|alumnos|usuarios|materias|comedor)-auth\.spec\.ts/
 const PRUEBAS_SETUP = /auth\.setup\.ts/
 
 // `niveles-responsive` existe únicamente para los perfiles móviles.
 const PRUEBAS_SOLO_MOVIL = /niveles-responsive\.spec\.ts/
 
-// `alumnos-ui` y `materias-ui` corren en los tres perfiles: escritorio, Pixel 5
-// e iPhone 13. Sus aserciones se adaptan al ancho de la ventana, de modo que un
-// mismo archivo demuestra la presentación de escritorio y la móvil.
-const PRUEBAS_MULTIPERFIL = /(?:alumnos-(?:ui|contraste)|materias-ui)\.spec\.ts/
+// `alumnos-ui`, `materias-ui` y `comedor-ui` corren en los tres perfiles:
+// escritorio, Pixel 5 e iPhone 13. Sus aserciones se adaptan al ancho de la
+// ventana, de modo que un mismo archivo demuestra la presentación de escritorio
+// y la móvil.
+const PRUEBAS_MULTIPERFIL = /(?:alumnos-(?:ui|contraste)|materias-ui|comedor-ui)\.spec\.ts/
 
 const proyectoBase: Project = {
   name: 'chromium',
@@ -85,6 +87,16 @@ const proyectosAutenticados: Project[] = [
     use: { ...devices['Desktop Chrome'], storageState: 'tests/.auth/estudiante.json' },
     testMatch: PRUEBAS_AUTENTICADAS,
     grep: /ESTUDIANTE autenticado/,
+    dependencies: ['setup'],
+  },
+  {
+    name: 'chromium-estudiante-inactivo',
+    use: {
+      ...devices['Desktop Chrome'],
+      storageState: 'tests/.auth/estudiante-inactivo.json',
+    },
+    testMatch: PRUEBAS_AUTENTICADAS,
+    grep: /ESTUDIANTE INACTIVO autenticado/,
     dependencies: ['setup'],
   },
   {
