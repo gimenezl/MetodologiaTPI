@@ -267,6 +267,55 @@ export type Database = {
           },
         ]
       }
+      inscripciones_servicios: {
+        Row: {
+          alumno_id: string
+          estado: Database["public"]["Enums"]["estado_inscripcion_servicio"]
+          fecha_cancelacion: string | null
+          fecha_inscripcion: string
+          id: string
+          servicio_id: string
+        }
+        Insert: {
+          alumno_id: string
+          estado?: Database["public"]["Enums"]["estado_inscripcion_servicio"]
+          fecha_cancelacion?: string | null
+          fecha_inscripcion?: string
+          id?: string
+          servicio_id: string
+        }
+        Update: {
+          alumno_id?: string
+          estado?: Database["public"]["Enums"]["estado_inscripcion_servicio"]
+          fecha_cancelacion?: string | null
+          fecha_inscripcion?: string
+          id?: string
+          servicio_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inscripciones_servicios_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos"
+            referencedColumns: ["perfil_id"]
+          },
+          {
+            foreignKeyName: "inscripciones_servicios_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos_academicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inscripciones_servicios_servicio_id_fkey"
+            columns: ["servicio_id"]
+            isOneToOne: false
+            referencedRelation: "servicios_escolares"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       materias_cursos: {
         Row: {
           activo: boolean
@@ -636,6 +685,36 @@ export type Database = {
         }
         Relationships: []
       }
+      servicios_escolares: {
+        Row: {
+          activo: boolean
+          codigo: string
+          fecha_actualizacion: string
+          fecha_creacion: string
+          id: string
+          nombre: string
+          tipo: Database["public"]["Enums"]["tipo_servicio_escolar"]
+        }
+        Insert: {
+          activo?: boolean
+          codigo: string
+          fecha_actualizacion?: string
+          fecha_creacion?: string
+          id?: string
+          nombre: string
+          tipo: Database["public"]["Enums"]["tipo_servicio_escolar"]
+        }
+        Update: {
+          activo?: boolean
+          codigo?: string
+          fecha_actualizacion?: string
+          fecha_creacion?: string
+          id?: string
+          nombre?: string
+          tipo?: Database["public"]["Enums"]["tipo_servicio_escolar"]
+        }
+        Relationships: []
+      }
       solicitudes_inscripcion: {
         Row: {
           datos_aspirante: Json
@@ -687,6 +766,51 @@ export type Database = {
             columns: ["id"]
             isOneToOne: true
             referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inscripciones_servicios_detalle: {
+        Row: {
+          alumno_apellido: string | null
+          alumno_estado: Database["public"]["Enums"]["estado_alumno"] | null
+          alumno_id: string | null
+          alumno_nombre: string | null
+          estado:
+            | Database["public"]["Enums"]["estado_inscripcion_servicio"]
+            | null
+          fecha_cancelacion: string | null
+          fecha_inscripcion: string | null
+          id: string | null
+          legajo_nro: string | null
+          servicio_activo: boolean | null
+          servicio_codigo: string | null
+          servicio_id: string | null
+          servicio_nombre: string | null
+          servicio_tipo:
+            | Database["public"]["Enums"]["tipo_servicio_escolar"]
+            | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inscripciones_servicios_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos"
+            referencedColumns: ["perfil_id"]
+          },
+          {
+            foreignKeyName: "inscripciones_servicios_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos_academicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inscripciones_servicios_servicio_id_fkey"
+            columns: ["servicio_id"]
+            isOneToOne: false
+            referencedRelation: "servicios_escolares"
             referencedColumns: ["id"]
           },
         ]
@@ -903,6 +1027,23 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      cancelar_inscripcion_servicio: {
+        Args: { p_inscripcion_id: string }
+        Returns: {
+          alumno_id: string
+          estado: Database["public"]["Enums"]["estado_inscripcion_servicio"]
+          fecha_cancelacion: string | null
+          fecha_inscripcion: string
+          id: string
+          servicio_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "inscripciones_servicios"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       corregir_identidad_alumno: {
         Args: { p_alumno_id: string; p_dni: string; p_legajo_nro?: string }
         Returns: string
@@ -953,6 +1094,23 @@ export type Database = {
       }
       es_director_actual: { Args: never; Returns: boolean }
       inactivar_alumno: { Args: { p_alumno_id: string }; Returns: string }
+      inscribir_en_servicio: {
+        Args: { p_servicio_id: string }
+        Returns: {
+          alumno_id: string
+          estado: Database["public"]["Enums"]["estado_inscripcion_servicio"]
+          fecha_cancelacion: string | null
+          fecha_inscripcion: string
+          id: string
+          servicio_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "inscripciones_servicios"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       reactivar_alumno: {
         Args: { p_alumno_id: string; p_curso_id: string }
         Returns: string
@@ -987,10 +1145,13 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      rol_actual: { Args: never; Returns: string }
     }
     Enums: {
       estado_alumno: "ACTIVO" | "INACTIVO"
+      estado_inscripcion_servicio: "ACTIVA" | "CANCELADA"
       motivo_cierre_matricula: "CAMBIO_DE_CURSO" | "INACTIVACION"
+      tipo_servicio_escolar: "COMEDOR" | "TRANSPORTE"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1122,7 +1283,9 @@ export const Constants = {
   public: {
     Enums: {
       estado_alumno: ["ACTIVO", "INACTIVO"],
+      estado_inscripcion_servicio: ["ACTIVA", "CANCELADA"],
       motivo_cierre_matricula: ["CAMBIO_DE_CURSO", "INACTIVACION"],
+      tipo_servicio_escolar: ["COMEDOR", "TRANSPORTE"],
     },
   },
 } as const
