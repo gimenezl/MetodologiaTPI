@@ -112,10 +112,19 @@ export function MisDeportes({
     return { tipo: 'error', texto: respaldo }
   }
 
+  /**
+   * Sin sesión no hay estado que releer: refrescar llevaría al login y borraría
+   * el aviso antes de que la persona lo lea. El aviso ofrece el enlace.
+   */
+  function sesionVencida(problema: unknown) {
+    return problema instanceof ErrorDeportes && problema.estado === 401
+  }
+
   async function inscribirse(grupo: GrupoDeportivo) {
     if (ocupado) return
     setAviso(null)
     setEnviando(grupo.grupo_id)
+    let releer = true
     try {
       await inscribirEnGrupoRemoto(grupo.grupo_id)
       setAviso({
@@ -123,13 +132,14 @@ export function MisDeportes({
         texto: `Te inscribiste en ${grupo.deporte_nombre} (${grupo.grupo_nombre}).`,
       })
     } catch (problema) {
+      releer = !sesionVencida(problema)
       setAviso(avisoDeError(problema, 'No pudimos completar tu inscripción. Volvé a intentarlo.'))
     } finally {
       setEnviando(null)
       setResultados((cantidad) => cantidad + 1)
       // Éxito o rechazo, se vuelve a leer el estado real: un rechazo por cupo o
       // por límite puede deberse a otra pestaña o a otro alumno.
-      reconciliar()
+      if (releer) reconciliar()
     }
   }
 
@@ -137,6 +147,7 @@ export function MisDeportes({
     if (ocupado) return
     setAviso(null)
     setEnviando(inscripcion.id)
+    let releer = true
     try {
       await cancelarInscripcionDeportivaRemota(inscripcion.id)
       setConfirmandoBaja(null)
@@ -145,12 +156,13 @@ export function MisDeportes({
         texto: `Cancelaste tu inscripción en ${inscripcion.deporte_nombre}. La plaza quedó libre.`,
       })
     } catch (problema) {
+      releer = !sesionVencida(problema)
       setConfirmandoBaja(null)
       setAviso(avisoDeError(problema, 'No pudimos cancelar tu inscripción. Volvé a intentarlo.'))
     } finally {
       setEnviando(null)
       setResultados((cantidad) => cantidad + 1)
-      reconciliar()
+      if (releer) reconciliar()
     }
   }
 
