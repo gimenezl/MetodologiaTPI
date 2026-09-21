@@ -1214,30 +1214,31 @@ CREATE POLICY "Los deportes son visibles para las sesiones autenticadas"
 -- ----------------------------------------------------------------
 -- Grupos: el director todos; el estudiante los de su nivel y los propios
 -- ----------------------------------------------------------------
+-- Una sola política por tabla y comando: dos políticas permisivas se evalúan
+-- las dos en cada fila (advisor `multiple_permissive_policies`). El OR explícito
+-- expresa el mismo acceso con una sola evaluación.
 ALTER TABLE public.grupos_deportivos ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.grupos_deportivos FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.grupos_deportivos TO authenticated;
-
-CREATE POLICY "El director consulta todos los grupos deportivos"
-    ON public.grupos_deportivos
-    FOR SELECT TO authenticated
-    USING ((SELECT public.es_director_actual()));
 
 -- El estudiante ve los grupos activos de su nivel derivado y, además, los
 -- grupos donde tiene o tuvo una inscripción, para poder leer su historial aun
 -- si después cambió de curso. La subconsulta respeta la RLS de inscripciones,
 -- que no consulta grupos, así que no hay recursión.
-CREATE POLICY "El estudiante consulta los grupos de su nivel y los propios"
+CREATE POLICY "Grupos deportivos visibles para la dirección y para el estudiante de su nivel"
     ON public.grupos_deportivos
     FOR SELECT TO authenticated
     USING (
-        (SELECT app_private.rol_actual()) = 'ESTUDIANTE'
-        AND (
-            (activo AND nivel_id = (SELECT app_private.nivel_actual()))
-            OR id IN (
-                SELECT i.grupo_id
-                FROM public.inscripciones_deportivas i
-                WHERE i.alumno_id = (SELECT app_private.perfil_actual())
+        (SELECT public.es_director_actual())
+        OR (
+            (SELECT app_private.rol_actual()) = 'ESTUDIANTE'
+            AND (
+                (activo AND nivel_id = (SELECT app_private.nivel_actual()))
+                OR id IN (
+                    SELECT i.grupo_id
+                    FROM public.inscripciones_deportivas i
+                    WHERE i.alumno_id = (SELECT app_private.perfil_actual())
+                )
             )
         )
     );
@@ -1249,18 +1250,17 @@ ALTER TABLE public.inscripciones_deportivas ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.inscripciones_deportivas FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.inscripciones_deportivas TO authenticated;
 
-CREATE POLICY "El estudiante consulta sus propias inscripciones deportivas"
+-- El acceso propio exige además conservar el rol ESTUDIANTE, como 009 y 013.
+CREATE POLICY "Inscripciones deportivas visibles para la dirección y para su alumno"
     ON public.inscripciones_deportivas
     FOR SELECT TO authenticated
     USING (
-        alumno_id = (SELECT app_private.perfil_actual())
-        AND (SELECT app_private.rol_actual()) = 'ESTUDIANTE'
+        (SELECT public.es_director_actual())
+        OR (
+            alumno_id = (SELECT app_private.perfil_actual())
+            AND (SELECT app_private.rol_actual()) = 'ESTUDIANTE'
+        )
     );
-
-CREATE POLICY "El director consulta todas las inscripciones deportivas"
-    ON public.inscripciones_deportivas
-    FOR SELECT TO authenticated
-    USING ((SELECT public.es_director_actual()));
 
 -- No se crea ninguna política INSERT, UPDATE ni DELETE en estas tres tablas.
 -- DOCENTE, PADRE y PERSONAL no reciben ninguna lectura nueva: EPT-11 no les
