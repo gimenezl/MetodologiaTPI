@@ -34,3 +34,17 @@ export const variantePorTipo: Record<string, 'info' | 'success' | 'warning'> = {
   CURRICULAR: 'info',
   TALLER: 'warning',
 }
+
+/**
+ * Desde EPT-11 las inscripciones deportivas se hacen por grupo en
+ * `/dashboard/deportes`. Las actividades DEPORTE de esta pantalla son
+ * históricas: se muestran con sus inscriptos, pero no ofrecen alta, baja ni
+ * ajuste de cupo. La base también rechaza cualquier escritura (P5582); ocultar
+ * los controles solo evita ofrecer una acción que siempre fallaría.
+ */
+export function esDeporteLegado(actividad: Pick<ActividadConCupo, 'tipo'>) {
+  return actividad.tipo === 'DEPORTE'
+}
+
+export const AVISO_DEPORTE_LEGADO =
+  'Histórico: las inscripciones deportivas ahora se hacen por grupo en la sección Deportes.'

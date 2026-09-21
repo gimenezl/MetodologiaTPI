@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Input'
 import { cn, getCupoColor } from '@/lib/utils'
 import type { Estudiante, PropiedadesVistaCupos, Rol } from './types'
-import { variantePorTipo } from './types'
+import { AVISO_DEPORTE_LEGADO, esDeporteLegado, variantePorTipo } from './types'
 
 export function VistaPadre({
   actividades,
@@ -163,6 +163,7 @@ export function VistaPadre({
               : actividadesFiltradas.map((actividad) => {
                   const inscripto = actividadesDelHijo.includes(actividad.id)
                   const lleno = actividad.cupo_disponible <= 0
+                  const legado = esDeporteLegado(actividad)
                   const colorBarra = getCupoColor(actividad.porcentaje_ocupacion)
 
                   return (
@@ -176,9 +177,12 @@ export function VistaPadre({
                             {lleno && !inscripto && <Badge variant="danger">Completo</Badge>}
                           </div>
                           {actividad.nivel && <p className="text-xs text-neutral-400 mt-0.5">{actividad.nivel.nombre}</p>}
+                          {legado && <p className="text-xs text-neutral-500 mt-1">{AVISO_DEPORTE_LEGADO}</p>}
                         </div>
                         <div className="shrink-0">
-                          {!hijoSeleccionado ? (
+                          {legado ? (
+                            <Badge variant="default">Histórico</Badge>
+                          ) : !hijoSeleccionado ? (
                             <span className="text-xs text-neutral-400">Elegí un hijo/a</span>
                           ) : inscripto ? (
                             <Button variant="ghost" size="sm" loading={procesandoActividad === actividad.id} onClick={() => desinscribirHijo(actividad.id)}>

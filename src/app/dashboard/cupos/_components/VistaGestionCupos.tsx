@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Input'
 import { cn, getCupoColor } from '@/lib/utils'
 import type { Estudiante, Inscripcion, PropiedadesVistaCupos, Rol } from './types'
-import { variantePorTipo } from './types'
+import { AVISO_DEPORTE_LEGADO, esDeporteLegado, variantePorTipo } from './types'
 
 type RolNombre = 'DIRECTOR' | 'DOCENTE' | 'PADRE' | 'ESTUDIANTE' | 'PERSONAL' | null
 
@@ -254,6 +254,8 @@ export function VistaGestionCupos({
                 const urgente = actividad.porcentaje_ocupacion >= 90 && !lleno
                 const expandida = actividadExpandidaId === actividad.id
                 const inscriptos = inscripcionesPorActividad[actividad.id] ?? []
+                const legado = esDeporteLegado(actividad)
+                const gestionable = puedeGestionar && !legado
 
                 return (
                   <div
@@ -273,10 +275,12 @@ export function VistaGestionCupos({
                             {urgente && <Badge variant="warning"><Warning size={12} />Casi lleno</Badge>}
                           </div>
                           {actividad.nivel && <p className="text-xs text-neutral-400 mt-0.5">{actividad.nivel.nombre}</p>}
+                          {legado && <p className="text-xs text-neutral-500 mt-1">{AVISO_DEPORTE_LEGADO}</p>}
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
-                          {puedeGestionar && editandoCupoId === actividad.id ? (
+                          {legado && <Badge variant="default">Histórico</Badge>}
+                          {gestionable && editandoCupoId === actividad.id ? (
                             <div className="flex items-center gap-1.5">
                               <input
                                 type="number"
@@ -307,7 +311,7 @@ export function VistaGestionCupos({
                               </button>
                             </div>
                           ) : (
-                            puedeGestionar && (
+                            gestionable && (
                               <button
                                 onClick={() => {
                                   setEditandoCupoId(actividad.id)
@@ -322,7 +326,7 @@ export function VistaGestionCupos({
                             )
                           )}
 
-                          {puedeGestionar && (
+                          {gestionable && (
                             <Button
                               variant={lleno ? 'secondary' : estudianteSeleccionado ? 'accent' : 'outline'}
                               size="sm"
@@ -398,7 +402,7 @@ export function VistaGestionCupos({
                                     )}
                                   </div>
                                 </div>
-                                {puedeGestionar && (
+                                {gestionable && (
                                   <button
                                     onClick={() => darDeBaja(inscripcion.id, actividad.id)}
                                     disabled={bajandoInscripcionId === inscripcion.id}

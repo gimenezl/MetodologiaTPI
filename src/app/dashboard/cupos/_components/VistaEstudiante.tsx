@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Pulse, UserPlus } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import {
@@ -10,7 +11,7 @@ import { Badge, Skeleton } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { cn, getCupoColor } from '@/lib/utils'
 import type { PropiedadesVistaCupos } from './types'
-import { variantePorTipo } from './types'
+import { AVISO_DEPORTE_LEGADO, esDeporteLegado, variantePorTipo } from './types'
 
 type PropiedadesVistaEstudiante = PropiedadesVistaCupos & {
   perfilId?: string
@@ -78,7 +79,13 @@ export function VistaEstudiante({
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">Actividades y talleres</h1>
-        <p className="text-neutral-500 text-sm mt-0.5">Inscribite a las actividades deportivas y talleres con cupo disponible.</p>
+        <p className="text-neutral-500 text-sm mt-0.5">
+          Inscribite a los talleres con cupo disponible. Los deportes se gestionan por grupo en{' '}
+          <Link href="/dashboard/deportes" className="font-semibold text-brand-700 underline underline-offset-2">
+            Deportes
+          </Link>
+          .
+        </p>
       </div>
 
       <div className="flex gap-2 flex-wrap">
@@ -114,6 +121,7 @@ export function VistaEstudiante({
             : actividadesFiltradas.map((actividad) => {
                 const inscripto = misActividades.includes(actividad.id)
                 const lleno = actividad.cupo_disponible <= 0
+                const legado = esDeporteLegado(actividad)
                 const colorBarra = getCupoColor(actividad.porcentaje_ocupacion)
 
                 return (
@@ -127,9 +135,12 @@ export function VistaEstudiante({
                           {lleno && !inscripto && <Badge variant="danger">Completo</Badge>}
                         </div>
                         {actividad.nivel && <p className="text-xs text-neutral-400 mt-0.5">{actividad.nivel.nombre}</p>}
+                        {legado && <p className="text-xs text-neutral-500 mt-1">{AVISO_DEPORTE_LEGADO}</p>}
                       </div>
                       <div className="shrink-0">
-                        {inscripto ? (
+                        {legado ? (
+                          <Badge variant="default">Histórico</Badge>
+                        ) : inscripto ? (
                           <Button variant="ghost" size="sm" loading={procesandoActividad === actividad.id} onClick={() => desinscribirme(actividad.id)}>
                             Darme de baja
                           </Button>

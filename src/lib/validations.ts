@@ -637,3 +637,90 @@ export function primerErrorComedor(error: z.ZodError): {
 
   return { mensaje: issue.message, campo }
 }
+
+// ---- Deportes (EPT-11) ----
+/**
+ * El alta del alumno solo transporta QUÉ grupo se solicita. Nunca el alumno, su
+ * nivel, el cupo ni el estado: PostgreSQL deriva la identidad de `auth.uid()`,
+ * el nivel de la matrícula vigente y la disponibilidad con el grupo bloqueado.
+ * `.strict()` rechaza cualquier intento de agregar esos campos.
+ */
+export const inscribirEnGrupoDeportivoSchema = z
+  .object({
+    grupo_id: z
+      .string({ message: 'Seleccioná un grupo deportivo' })
+      .uuid('Seleccioná un grupo deportivo'),
+  })
+  .strict()
+
+export type InscribirEnGrupoDeportivoData = z.infer<typeof inscribirEnGrupoDeportivoSchema>
+
+/** Única acción sobre una inscripción deportiva existente: la baja lógica. */
+export const actualizarInscripcionDeportivaSchema = z.discriminatedUnion('accion', [
+  z.object({ accion: z.literal('cancelar') }).strict(),
+])
+
+export const inscripcionDeportivaIdSchema = z
+  .string()
+  .uuid('Identificador de inscripción inválido')
+
+/**
+ * Nombre del grupo. Mismo conjunto de espacios laterales que
+ * `app_private.texto_servicio_valido`, que es el que aplica la base; por eso se
+ * reutiliza el recorte de materias, que cubre exactamente esos caracteres.
+ */
+const nombreGrupoDeportivoSchema = z
+  .string({ message: 'El nombre del grupo es requerido' })
+  .transform(recortarNombreMateria)
+  .refine((nombre) => nombre.length >= 1, 'El nombre del grupo es requerido')
+  .refine(
+    (nombre) => nombre.length <= 100,
+    'El nombre del grupo no puede superar los 100 caracteres'
+  )
+
+/** Alta mínima de un grupo por la dirección. Mismos límites que la base. */
+export const crearGrupoDeportivoSchema = z
+  .object({
+    deporte_id: z
+      .string({ message: 'Seleccioná un deporte' })
+      .uuid('Seleccioná un deporte'),
+    nivel_id: z
+      .number({ message: 'Seleccioná un nivel educativo' })
+      .int('Seleccioná un nivel educativo')
+      .positive('Seleccioná un nivel educativo')
+      .max(2147483647, 'Seleccioná un nivel educativo'),
+    nombre: nombreGrupoDeportivoSchema,
+    cupo: z
+      .number({ message: 'Ingresá el cupo del grupo' })
+      .int('El cupo debe ser un número entero')
+      .min(1, 'El cupo debe ser de al menos 1 plaza')
+      .max(100, 'El cupo no puede superar las 100 plazas'),
+    profesor_id: z
+      .string({ message: 'Seleccioná un profesor con rol DOCENTE' })
+      .uuid('Seleccioná un profesor con rol DOCENTE'),
+  })
+  .strict()
+
+export type CrearGrupoDeportivoData = z.infer<typeof crearGrupoDeportivoSchema>
+
+/** Misma traducción estructural que `primerErrorComedor`, para deportes. */
+export function primerErrorDeportes(error: z.ZodError): {
+  mensaje: string
+  campo?: string
+} {
+  const issue = error.issues[0]
+  const campo = typeof issue?.path?.[0] === 'string' ? issue.path[0] : undefined
+
+  if (!issue) return { mensaje: 'Datos inválidos' }
+  if (issue.code === 'unrecognized_keys') {
+    return { mensaje: 'La petición contiene campos no permitidos' }
+  }
+  if (issue.code === 'invalid_union') {
+    return { mensaje: 'Seleccioná una acción válida', campo: 'accion' }
+  }
+  if (issue.code === 'invalid_type' && !campo) {
+    return { mensaje: 'Datos inválidos' }
+  }
+
+  return { mensaje: issue.message, campo }
+}
