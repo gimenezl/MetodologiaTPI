@@ -111,6 +111,44 @@ export const DIRECTORA_CIERRE = {
   archivoSesion: 'tests/.auth/directora-cierre.json',
 }
 
+/**
+ * Estudiante que nunca se activa académicamente (EPT-10).
+ *
+ * El trigger de la migración 008 le da un legajo académico INACTIVO al crear el
+ * perfil, y la siembra de más abajo NO lo activa. Es el actor con el que se
+ * prueba que un alumno inactivo no puede inscribirse al comedor.
+ */
+export const ESTUDIANTE_INACTIVO = {
+  email: 'estudiante.inactivo.prueba@ept.local',
+  password: 'prueba-ept-10-inactivo',
+  rol: 'ESTUDIANTE',
+  etiqueta: 'ESTUDIANTE INACTIVO',
+  dni: '99900008',
+  nombre: 'Ines',
+  apellido: 'Inactiva',
+  legajo: null as string | null,
+  archivoSesion: 'tests/.auth/estudiante-inactivo.json',
+}
+
+/**
+ * Identidad exclusiva de las pruebas de cierre de sesión del comedor (EPT-10).
+ *
+ * Misma razón que `DIRECTORA_CIERRE`: `signOut()` revoca las sesiones del
+ * usuario en Supabase, así que probar el cierre con el estudiante compartido
+ * dejaría sin sesión a las pruebas de Alumnos y de Comedor que corren después.
+ */
+export const ESTUDIANTE_CIERRE = {
+  email: 'estudiante.cierre.prueba@ept.local',
+  password: 'prueba-ept-10-cierre',
+  rol: 'ESTUDIANTE',
+  etiqueta: 'ESTUDIANTE CIERRE',
+  dni: '99900009',
+  nombre: 'Ema',
+  apellido: 'Cierre',
+  legajo: 'LEG-PRUEBA-0009',
+  archivoSesion: 'tests/.auth/estudiante-cierre.json',
+}
+
 /** Cuenta autenticada sin perfil: prueba el actor "usuario sin perfil". */
 export const SIN_PERFIL = {
   etiqueta: 'SIN PERFIL',
@@ -127,6 +165,8 @@ const IDENTIDADES = [
   DOCENTE,
   PADRE,
   PERSONAL,
+  ESTUDIANTE_INACTIVO,
+  ESTUDIANTE_CIERRE,
 ]
 const CORREOS_DE_PRUEBA = [...IDENTIDADES.map((i) => i.email), SIN_PERFIL.email]
 
@@ -184,6 +224,12 @@ function clienteAdmin() {
  * lo que la invariante debe impedir, así que la limpieza usa una transacción
  * real contra el contenedor local descartable.
  *
+ * Desde EPT-10 empieza por `inscripciones_servicios`: sus claves foráneas hacia
+ * `alumnos` son ON DELETE RESTRICT, así que sin ese borrado previo no se podría
+ * vaciar el modelo académico. El catálogo `servicios_escolares` no se toca: el
+ * comedor lo siembra la migración 013 y es parte del esquema, no de la siembra
+ * de pruebas.
+ *
  * Desde EPT-56 también limpia las asignaciones Curso–Materia y las materias que
  * crean las pruebas. Sus claves foráneas son ON DELETE RESTRICT, de modo que sin
  * esta limpieza la siembra siguiente no podría borrar los cursos ni los perfiles
@@ -201,6 +247,7 @@ function vaciarModeloAcademico() {
     {
       input: `
         BEGIN;
+        DELETE FROM public.inscripciones_servicios;
         DELETE FROM public.matriculas;
         DELETE FROM public.alumnos;
         DELETE FROM public.materias_cursos;
@@ -355,7 +402,10 @@ for (const identidad of [...IDENTIDADES, SIN_PERFIL]) {
 }
 
 /**
- * Deja a los dos estudiantes de prueba ACTIVOS con una matrícula vigente.
+ * Deja ACTIVOS y con matrícula vigente a los estudiantes que lo necesitan.
+ *
+ * `ESTUDIANTE_INACTIVO` queda deliberadamente fuera: su legajo académico se
+ * conserva INACTIVO para probar la denegación del comedor (EPT-10).
  *
  * Usa la API real con la sesión de la directora, no la clave de servicio: la
  * activación es una operación atómica de PostgreSQL y sembrarla a mano
@@ -380,7 +430,7 @@ setup('sembrar la situación académica de los estudiantes', async () => {
   })
 
   try {
-    for (const identidad of [ESTUDIANTE, ESTUDIANTE_AJENO]) {
+    for (const identidad of [ESTUDIANTE, ESTUDIANTE_AJENO, ESTUDIANTE_CIERRE]) {
       const perfilId = perfilesCreados.get(identidad.email)
       if (!perfilId) {
         throw new Error(`No se registró el perfil de ${identidad.email} en la primera etapa.`)

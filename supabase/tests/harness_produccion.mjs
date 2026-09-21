@@ -54,7 +54,12 @@ import {
 const PUERTO = 3123
 const BASE = `http://127.0.0.1:${PUERTO}`
 
-const RUTAS_DE_BANCO = ['/pruebas-ui/alumnos', '/pruebas-ui/cursos', '/pruebas-ui/niveles']
+const RUTAS_DE_BANCO = [
+  '/pruebas-ui/alumnos',
+  '/pruebas-ui/cursos',
+  '/pruebas-ui/niveles',
+  '/pruebas-ui/comedor',
+]
 const RUTA_LEGITIMA = '/login'
 
 /**

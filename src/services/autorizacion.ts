@@ -95,3 +95,103 @@ export async function requerirSesion(): Promise<ResultadoAutorizacion> {
 
   return { autorizado: true, userId: user.id }
 }
+
+/**
+ * Exige una sesión válida cuyo perfil tenga exactamente el rol indicado
+ * (EPT-10).
+ *
+ * El rol se resuelve con `public.rol_actual()`, que lo deriva de `auth.uid()`
+ * contra `perfiles` + `roles` dentro de la base. `perfiles.rol_id` no tiene
+ * privilegio de UPDATE para ningún rol de aplicación, de modo que la fuente que
+ * decide la autorización no es editable por quien se autoriza.
+ *
+ * Esta comprobación es la segunda capa, no la única: las operaciones de
+ * PostgreSQL vuelven a exigir el mismo rol antes de escribir. Una sesión que
+ * saltara esta ruta seguiría siendo rechazada por la base.
+ *
+ * Falla cerrado: si el rol no se puede resolver, deniega.
+ */
+export async function requerirRol(
+  rolEsperado: string,
+  mensajeNoAutorizado: string
+): Promise<ResultadoAutorizacion> {
+  const supabase = await createServerSupabaseClient()
+
+  const { data, error } = await supabase.auth.getUser()
+  const user = data?.user
+  if (error || !user) {
+    return {
+      autorizado: false,
+      estado: 401,
+      mensaje: 'Necesitás iniciar sesión para continuar.',
+    }
+  }
+
+  const { data: rol, error: errorRol } = await supabase.rpc('rol_actual')
+
+  if (errorRol) {
+    console.error('[autorizacion] no se pudo resolver el rol del usuario', {
+      code: errorRol.code,
+      message: errorRol.message,
+    })
+    return {
+      autorizado: false,
+      estado: 500,
+      mensaje: 'No pudimos verificar tus permisos. Volvé a intentarlo en unos minutos.',
+    }
+  }
+
+  // Una cuenta autenticada sin perfil devuelve `null` y queda denegada por la
+  // misma vía que un rol equivocado.
+  if (rol !== rolEsperado) {
+    return { autorizado: false, estado: 403, mensaje: mensajeNoAutorizado }
+  }
+
+  return { autorizado: true, userId: user.id }
+}
+
+export type ResultadoSesionConRol =
+  | { autorizado: true; userId: string; rol: string | null }
+  | { autorizado: false; estado: EstadoDenegacion; mensaje: string }
+
+/**
+ * Exige una sesión válida y devuelve además el rol resuelto en la base
+ * (EPT-10).
+ *
+ * La usa la pantalla del comedor, que atiende a dos actores con vistas
+ * distintas y necesita saber cuál es antes de decidir qué renderizar. No es una
+ * frontera de seguridad por sí sola: cada operación y cada lectura vuelven a
+ * resolver la autorización en el servidor y en PostgreSQL. `rol` es `null`
+ * cuando la cuenta autenticada no tiene perfil.
+ *
+ * Falla cerrado: si el rol no se puede resolver, deniega.
+ */
+export async function requerirSesionConRol(): Promise<ResultadoSesionConRol> {
+  const supabase = await createServerSupabaseClient()
+
+  const { data, error } = await supabase.auth.getUser()
+  const user = data?.user
+  if (error || !user) {
+    return {
+      autorizado: false,
+      estado: 401,
+      mensaje: 'Necesitás iniciar sesión para continuar.',
+    }
+  }
+
+  const { data: rol, error: errorRol } = await supabase.rpc('rol_actual')
+
+  if (errorRol) {
+    console.error('[autorizacion] no se pudo resolver el rol del usuario', {
+      code: errorRol.code,
+      message: errorRol.message,
+    })
+    return {
+      autorizado: false,
+      estado: 500,
+      mensaje: 'No pudimos verificar tus permisos. Volvé a intentarlo en unos minutos.',
+    }
+  }
+
+  return { autorizado: true, userId: user.id, rol: typeof rol === 'string' ? rol : null }
+}

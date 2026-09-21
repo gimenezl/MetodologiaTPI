@@ -6,11 +6,17 @@
  * reconstruida desde cero con la cadena completa de migraciones. Se conserva
  * como artefacto de referencia para poder comparar.
  *
- * Reconciliación verificada entre este archivo y el esquema real (012):
+ * Reconciliación verificada entre este archivo y el esquema real (013):
  *
  * - `cursos`, `padres_hijos`, `opiniones.aprobado` y las funciones públicas de
  *   la aplicación están representados por las migraciones y por los tipos
  *   generados.
+ * - 013 (EPT-10) agrega `servicios_escolares`, `inscripciones_servicios`, la
+ *   vista `inscripciones_servicios_detalle`, los tipos enumerados
+ *   `tipo_servicio_escolar` y `estado_inscripcion_servicio`, y las funciones
+ *   públicas `rol_actual`, `inscribir_en_servicio` y
+ *   `cancelar_inscripcion_servicio`. La vista se declara solo con `Row`, por
+ *   la misma razón que las de 012.
  * - 012 (EPT-56) agrega `actividades.activo`, `materias_cursos`, las vistas
  *   `materias` y `materias_cursos_detalle` y seis funciones de materias. Las
  *   vistas se declaran solo con `Row`: el generador también les asigna
@@ -19,6 +25,10 @@
  * - `cambiar_profesor_asignacion.p_profesor_id` admite `null` para quitar el
  *   profesor responsable. El generador lo tipa como `string` porque PostgreSQL
  *   no declara nulabilidad en argumentos; acá se refleja el contrato real.
+ * - `rol_actual` devuelve `null` cuando la sesión autenticada no tiene perfil.
+ *   El generador lo tipa como `string` por la misma razón: PostgreSQL no
+ *   declara la nulabilidad del valor de retorno. Acá se refleja el contrato
+ *   real, del que depende `requerirRol` para denegar a una cuenta sin perfil.
  * - Este archivo continúa siendo el contrato manual importado por la
  *   aplicación; `database.generated.ts` es la evidencia reproducible del
  *   esquema y no se edita a mano.
@@ -182,6 +192,61 @@ export type Database = {
           activo?: boolean
           fecha_creacion?: string
           fecha_actualizacion?: string
+        }
+      }
+      servicios_escolares: {
+        Row: {
+          id: string
+          tipo: 'COMEDOR' | 'TRANSPORTE'
+          codigo: string
+          nombre: string
+          activo: boolean
+          fecha_creacion: string
+          fecha_actualizacion: string
+        }
+        Insert: {
+          id?: string
+          tipo: 'COMEDOR' | 'TRANSPORTE'
+          codigo: string
+          nombre: string
+          activo?: boolean
+          fecha_creacion?: string
+          fecha_actualizacion?: string
+        }
+        Update: {
+          id?: string
+          tipo?: 'COMEDOR' | 'TRANSPORTE'
+          codigo?: string
+          nombre?: string
+          activo?: boolean
+          fecha_creacion?: string
+          fecha_actualizacion?: string
+        }
+      }
+      inscripciones_servicios: {
+        Row: {
+          id: string
+          alumno_id: string
+          servicio_id: string
+          estado: 'ACTIVA' | 'CANCELADA'
+          fecha_inscripcion: string
+          fecha_cancelacion: string | null
+        }
+        Insert: {
+          id?: string
+          alumno_id: string
+          servicio_id: string
+          estado?: 'ACTIVA' | 'CANCELADA'
+          fecha_inscripcion?: string
+          fecha_cancelacion?: string | null
+        }
+        Update: {
+          id?: string
+          alumno_id?: string
+          servicio_id?: string
+          estado?: 'ACTIVA' | 'CANCELADA'
+          fecha_inscripcion?: string
+          fecha_cancelacion?: string | null
         }
       }
       inscripciones: {
@@ -390,6 +455,24 @@ export type Database = {
       }
     }
     Views: {
+      inscripciones_servicios_detalle: {
+        Row: {
+          id: string | null
+          alumno_id: string | null
+          alumno_nombre: string | null
+          alumno_apellido: string | null
+          legajo_nro: string | null
+          alumno_estado: 'ACTIVO' | 'INACTIVO' | null
+          servicio_id: string | null
+          servicio_tipo: 'COMEDOR' | 'TRANSPORTE' | null
+          servicio_codigo: string | null
+          servicio_nombre: string | null
+          servicio_activo: boolean | null
+          estado: 'ACTIVA' | 'CANCELADA' | null
+          fecha_inscripcion: string | null
+          fecha_cancelacion: string | null
+        }
+      }
       materias: {
         Row: {
           id: number | null
@@ -470,6 +553,19 @@ export type Database = {
         Args: Record<string, never>
         Returns: boolean
       }
+      rol_actual: {
+        Args: Record<string, never>
+        // `null` cuando la sesión autenticada no tiene perfil.
+        Returns: string | null
+      }
+      inscribir_en_servicio: {
+        Args: { p_servicio_id: string }
+        Returns: Database['public']['Tables']['inscripciones_servicios']['Row']
+      }
+      cancelar_inscripcion_servicio: {
+        Args: { p_inscripcion_id: string }
+        Returns: Database['public']['Tables']['inscripciones_servicios']['Row']
+      }
       renombrar_nivel: {
         Args: { p_nivel_id: number; p_nombre: string }
         Returns: {
@@ -499,3 +595,5 @@ export type Nivel = Tables<'niveles'>
 export type Curso = Tables<'cursos'>
 export type Postulacion = Tables<'postulaciones'>
 export type MateriaCurso = Tables<'materias_cursos'>
+export type ServicioEscolarFila = Tables<'servicios_escolares'>
+export type InscripcionServicioFila = Tables<'inscripciones_servicios'>
