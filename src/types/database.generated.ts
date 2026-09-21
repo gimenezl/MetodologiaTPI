@@ -200,6 +200,30 @@ export type Database = {
           },
         ]
       }
+      deportes: {
+        Row: {
+          activo: boolean
+          fecha_actualizacion: string
+          fecha_creacion: string
+          id: string
+          nombre: string
+        }
+        Insert: {
+          activo?: boolean
+          fecha_actualizacion?: string
+          fecha_creacion?: string
+          id?: string
+          nombre: string
+        }
+        Update: {
+          activo?: boolean
+          fecha_actualizacion?: string
+          fecha_creacion?: string
+          id?: string
+          nombre?: string
+        }
+        Relationships: []
+      }
       galeria: {
         Row: {
           categoria: string | null
@@ -220,6 +244,78 @@ export type Database = {
           url?: string
         }
         Relationships: []
+      }
+      grupos_deportivos: {
+        Row: {
+          activo: boolean
+          cupo: number
+          deporte_id: string
+          fecha_actualizacion: string
+          fecha_creacion: string
+          id: string
+          nivel_id: number
+          nombre: string
+          profesor_id: string
+        }
+        Insert: {
+          activo?: boolean
+          cupo: number
+          deporte_id: string
+          fecha_actualizacion?: string
+          fecha_creacion?: string
+          id?: string
+          nivel_id: number
+          nombre: string
+          profesor_id: string
+        }
+        Update: {
+          activo?: boolean
+          cupo?: number
+          deporte_id?: string
+          fecha_actualizacion?: string
+          fecha_creacion?: string
+          id?: string
+          nivel_id?: number
+          nombre?: string
+          profesor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grupos_deportivos_deporte_id_fkey"
+            columns: ["deporte_id"]
+            isOneToOne: false
+            referencedRelation: "deportes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grupos_deportivos_nivel_id_fkey"
+            columns: ["nivel_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos_academicos"
+            referencedColumns: ["nivel_id"]
+          },
+          {
+            foreignKeyName: "grupos_deportivos_nivel_id_fkey"
+            columns: ["nivel_id"]
+            isOneToOne: false
+            referencedRelation: "matriculas_historial"
+            referencedColumns: ["nivel_id"]
+          },
+          {
+            foreignKeyName: "grupos_deportivos_nivel_id_fkey"
+            columns: ["nivel_id"]
+            isOneToOne: false
+            referencedRelation: "niveles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grupos_deportivos_profesor_id_fkey"
+            columns: ["profesor_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       inscripciones: {
         Row: {
@@ -264,6 +360,65 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "perfiles"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      inscripciones_deportivas: {
+        Row: {
+          alumno_id: string
+          deporte_id: string
+          estado: Database["public"]["Enums"]["estado_inscripcion_deportiva"]
+          fecha_cancelacion: string | null
+          fecha_inscripcion: string
+          grupo_id: string
+          id: string
+        }
+        Insert: {
+          alumno_id: string
+          deporte_id: string
+          estado?: Database["public"]["Enums"]["estado_inscripcion_deportiva"]
+          fecha_cancelacion?: string | null
+          fecha_inscripcion?: string
+          grupo_id: string
+          id?: string
+        }
+        Update: {
+          alumno_id?: string
+          deporte_id?: string
+          estado?: Database["public"]["Enums"]["estado_inscripcion_deportiva"]
+          fecha_cancelacion?: string | null
+          fecha_inscripcion?: string
+          grupo_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inscripciones_deportivas_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos"
+            referencedColumns: ["perfil_id"]
+          },
+          {
+            foreignKeyName: "inscripciones_deportivas_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos_academicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inscripciones_deportivas_deporte_id_fkey"
+            columns: ["deporte_id"]
+            isOneToOne: false
+            referencedRelation: "deportes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inscripciones_deportivas_grupo_deporte_fk"
+            columns: ["grupo_id", "deporte_id"]
+            isOneToOne: false
+            referencedRelation: "grupos_deportivos"
+            referencedColumns: ["id", "deporte_id"]
           },
         ]
       }
@@ -770,6 +925,77 @@ export type Database = {
           },
         ]
       }
+      inscripciones_deportivas_detalle: {
+        Row: {
+          alumno_apellido: string | null
+          alumno_id: string | null
+          alumno_nombre: string | null
+          deporte_id: string | null
+          deporte_nombre: string | null
+          estado:
+            | Database["public"]["Enums"]["estado_inscripcion_deportiva"]
+            | null
+          fecha_cancelacion: string | null
+          fecha_inscripcion: string | null
+          grupo_id: string | null
+          grupo_nombre: string | null
+          id: string | null
+          legajo_nro: string | null
+          nivel_id: number | null
+          nivel_nombre: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grupos_deportivos_nivel_id_fkey"
+            columns: ["nivel_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos_academicos"
+            referencedColumns: ["nivel_id"]
+          },
+          {
+            foreignKeyName: "grupos_deportivos_nivel_id_fkey"
+            columns: ["nivel_id"]
+            isOneToOne: false
+            referencedRelation: "matriculas_historial"
+            referencedColumns: ["nivel_id"]
+          },
+          {
+            foreignKeyName: "grupos_deportivos_nivel_id_fkey"
+            columns: ["nivel_id"]
+            isOneToOne: false
+            referencedRelation: "niveles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inscripciones_deportivas_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos"
+            referencedColumns: ["perfil_id"]
+          },
+          {
+            foreignKeyName: "inscripciones_deportivas_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos_academicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inscripciones_deportivas_deporte_id_fkey"
+            columns: ["deporte_id"]
+            isOneToOne: false
+            referencedRelation: "deportes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inscripciones_deportivas_grupo_deporte_fk"
+            columns: ["grupo_id", "deporte_id"]
+            isOneToOne: false
+            referencedRelation: "grupos_deportivos"
+            referencedColumns: ["id", "deporte_id"]
+          },
+        ]
+      }
       inscripciones_servicios_detalle: {
         Row: {
           alumno_apellido: string | null
@@ -1027,6 +1253,24 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      cancelar_inscripcion_deportiva: {
+        Args: { p_inscripcion_id: string }
+        Returns: {
+          alumno_id: string
+          deporte_id: string
+          estado: Database["public"]["Enums"]["estado_inscripcion_deportiva"]
+          fecha_cancelacion: string | null
+          fecha_inscripcion: string
+          grupo_id: string
+          id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "inscripciones_deportivas"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       cancelar_inscripcion_servicio: {
         Args: { p_inscripcion_id: string }
         Returns: {
@@ -1062,6 +1306,32 @@ export type Database = {
         }
         Returns: string
       }
+      crear_grupo_deportivo: {
+        Args: {
+          p_cupo: number
+          p_deporte_id: string
+          p_nivel_id: number
+          p_nombre: string
+          p_profesor_id: string
+        }
+        Returns: {
+          activo: boolean
+          cupo: number
+          deporte_id: string
+          fecha_actualizacion: string
+          fecha_creacion: string
+          id: string
+          nivel_id: number
+          nombre: string
+          profesor_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "grupos_deportivos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       crear_materia: {
         Args: { p_nombre: string }
         Returns: {
@@ -1094,6 +1364,24 @@ export type Database = {
       }
       es_director_actual: { Args: never; Returns: boolean }
       inactivar_alumno: { Args: { p_alumno_id: string }; Returns: string }
+      inscribir_en_grupo_deportivo: {
+        Args: { p_grupo_id: string }
+        Returns: {
+          alumno_id: string
+          deporte_id: string
+          estado: Database["public"]["Enums"]["estado_inscripcion_deportiva"]
+          fecha_cancelacion: string | null
+          fecha_inscripcion: string
+          grupo_id: string
+          id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "inscripciones_deportivas"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       inscribir_en_servicio: {
         Args: { p_servicio_id: string }
         Returns: {
@@ -1110,6 +1398,26 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      listar_grupos_deportivos: {
+        Args: never
+        Returns: {
+          activo: boolean
+          cupo: number
+          deporte_activo: boolean
+          deporte_id: string
+          deporte_nombre: string
+          disponibles: number
+          grupo_id: string
+          grupo_nombre: string
+          inscripcion_propia_id: string
+          nivel_id: number
+          nivel_nombre: string
+          ocupados: number
+          profesor_apellido: string
+          profesor_id: string
+          profesor_nombre: string
+        }[]
       }
       reactivar_alumno: {
         Args: { p_alumno_id: string; p_curso_id: string }
@@ -1149,6 +1457,7 @@ export type Database = {
     }
     Enums: {
       estado_alumno: "ACTIVO" | "INACTIVO"
+      estado_inscripcion_deportiva: "ACTIVA" | "CANCELADA"
       estado_inscripcion_servicio: "ACTIVA" | "CANCELADA"
       motivo_cierre_matricula: "CAMBIO_DE_CURSO" | "INACTIVACION"
       tipo_servicio_escolar: "COMEDOR" | "TRANSPORTE"
@@ -1283,6 +1592,7 @@ export const Constants = {
   public: {
     Enums: {
       estado_alumno: ["ACTIVO", "INACTIVO"],
+      estado_inscripcion_deportiva: ["ACTIVA", "CANCELADA"],
       estado_inscripcion_servicio: ["ACTIVA", "CANCELADA"],
       motivo_cierre_matricula: ["CAMBIO_DE_CURSO", "INACTIVACION"],
       tipo_servicio_escolar: ["COMEDOR", "TRANSPORTE"],
