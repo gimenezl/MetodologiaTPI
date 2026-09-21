@@ -119,6 +119,19 @@ async function perfilPorDni(dni: string): Promise<string> {
   return data.id as string
 }
 
+/**
+ * Nombre vigente del docente de prueba. Otra suite (usuarios) corrige sus datos
+ * personales, así que no se supone: se lee de la base.
+ */
+async function nombreDocente(): Promise<{ nombre: string; apellido: string }> {
+  const { data } = await clienteAdmin()
+    .from('perfiles')
+    .select('nombre, apellido')
+    .eq('dni', DOCENTE.dni)
+    .single()
+  return { nombre: data.nombre as string, apellido: data.apellido as string }
+}
+
 async function nivelPorNombre(nombre: string): Promise<number> {
   const { data } = await clienteAdmin().from('niveles').select('id').eq('nombre', nombre).single()
   return data.id as number
@@ -266,7 +279,10 @@ test.describe.serial('ESTUDIANTE autenticado — deportes', () => {
       await expect(tarjetaGrupo(page, clave)).toBeVisible()
     }
     await expect(page.getByText(GRUPOS.voleyPrimario.nombre)).toHaveCount(0)
-    await expect(tarjetaGrupo(page, 'futbolA')).toContainText('Profesor responsable: Darío Docente')
+    const docente = await nombreDocente()
+    await expect(tarjetaGrupo(page, 'futbolA')).toContainText(
+      `Profesor responsable: ${docente.nombre} ${docente.apellido}`
+    )
     await expect(tarjetaGrupo(page, 'futbolA')).toContainText('Plazas disponibles: 5 de 5')
     await exigirPantallaSinDetalleTecnico(page, 'listado del alumno')
     await capturar(page, 'escritorio-alumno-listado')
@@ -600,7 +616,7 @@ test.describe('DIRECTOR autenticado — deportes', () => {
     await dialogo.getByLabel('Nivel educativo').selectOption({ label: 'Inicial' })
     await dialogo.getByLabel('Nombre del grupo').fill('E2E Vóley Inicial')
     await dialogo.getByLabel('Cupo (plazas)').fill('12')
-    await dialogo.getByLabel('Profesor responsable').selectOption({ label: 'Docente, Darío' })
+    await dialogo.getByLabel('Profesor responsable').selectOption(await perfilPorDni(DOCENTE.dni))
     await dialogo.getByLabel('Profesor responsable').press('Tab')
     await page.keyboard.press('Tab')
     await expect(dialogo.getByRole('button', { name: 'Crear grupo' })).toBeFocused()
@@ -613,7 +629,8 @@ test.describe('DIRECTOR autenticado — deportes', () => {
     ).toBeVisible()
     const tarjeta = aplicacion(page).getByRole('listitem').filter({ hasText: 'E2E Vóley Inicial' })
     await expect(tarjeta).toContainText('0 de 12 plazas')
-    await expect(tarjeta).toContainText('Docente, Darío')
+    const docente = await nombreDocente()
+    await expect(tarjeta).toContainText(`${docente.apellido}, ${docente.nombre}`)
     await capturar(page, 'escritorio-director-grupo-creado')
   })
 
@@ -625,7 +642,7 @@ test.describe('DIRECTOR autenticado — deportes', () => {
     await dialogo.getByLabel('Nivel educativo').selectOption({ label: 'Inicial' })
     await dialogo.getByLabel('Nombre del grupo').fill(`  ${GRUPOS.futbolA.nombre.toUpperCase()} `)
     await dialogo.getByLabel('Cupo (plazas)').fill('5')
-    await dialogo.getByLabel('Profesor responsable').selectOption({ label: 'Docente, Darío' })
+    await dialogo.getByLabel('Profesor responsable').selectOption(await perfilPorDni(DOCENTE.dni))
     await dialogo.getByRole('button', { name: 'Crear grupo' }).click()
     await expect(
       dialogo.getByText('Ya existe un grupo con ese nombre para ese deporte y nivel.')
