@@ -362,7 +362,7 @@ export function GestionDeportes({ grupos, inscripciones, catalogo }: GestionDepo
             )}
             {sinProfesores && (
               <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3">
-                No hay personas con rol DOCENTE para asignar como responsables. Dá de alta un
+                No hay personas con rol DOCENTE para asignar como responsables. Da de alta un
                 docente antes de crear el grupo.
               </p>
             )}

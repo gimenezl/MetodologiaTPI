@@ -500,16 +500,19 @@ rango 99.9xx.xxx, legajos `LEG-PRUEBA-*`); no hay claves ni datos personales.
 
 | Clave | Estado recomendado | Texto de evidencia propuesto |
 |---|---|---|
-| EPT-32 | En revisión (Testing) | Modelo `deportes`/`grupos_deportivos`/`inscripciones_deportivas` en `014_inscripcion_deportes.sql`; profesor DOCENTE real; SQL A1–A7, B1–B8, E1–E5 OK. |
-| EPT-33 | En revisión (Testing) | Deporte legado en solo lectura por trigger (P5582) sin tocar las políticas de TALLER; SQL F1–F7, G2 y E2E Data API OK. |
-| EPT-34 | En revisión (Testing) | Listado por nivel, alta, baja y alta mínima de grupos; E2E con sesiones reales 30/30. |
-| EPT-35 | En revisión (Testing) | Límite de dos en trigger con alumno bloqueado e índice único parcial; concurrencia 2, 4 y 8 OK; API 409. |
-| EPT-36 | En revisión (Testing) | SQL 59 OK, concurrencia 8 carreras OK, E2E autenticada, frontera HTTP y fixtures en tres perfiles. |
-| EPT-37 | En revisión (Testing) | `docs/evidence/EPT-11.md`, 38 capturas y retrospectiva; tablero pendiente de mover por una persona. |
-| EPT-11 | En curso → Testing tras revisión | Todos los criterios con evidencia SQL, API y navegador. **No pasar a Listo** hasta revisión independiente, integración en `main`, aplicación remota segura de 014 y verificación final. |
+| EPT-32 | En curso | Modelo `deportes`/`grupos_deportivos`/`inscripciones_deportivas` en `014_inscripcion_deportes.sql`; profesor DOCENTE real; SQL A1–A7, B1–B8, E1–E5 OK. |
+| EPT-33 | En curso | Deporte legado en solo lectura por trigger (P5582) sin tocar las políticas de TALLER; SQL F1–F7, G2 y E2E Data API OK. |
+| EPT-34 | En curso | Listado por nivel, alta, baja y alta mínima de grupos; E2E con sesiones reales 30/30. |
+| EPT-35 | En curso | Límite de dos en trigger con alumno bloqueado e índice único parcial; concurrencia 2, 4 y 8 OK; API 409. |
+| EPT-36 | En curso | SQL 59 OK, concurrencia 8 carreras OK, E2E autenticada, frontera HTTP y fixtures en tres perfiles. |
+| EPT-37 | En curso | `docs/evidence/EPT-11.md`, 38 capturas y retrospectiva; tablero pendiente de mover por una persona. |
+| EPT-11 | En curso | Todos los criterios con evidencia SQL, API y navegador. **No pasar a Listo** hasta revisión independiente, integración en `main`, aplicación remota segura de 014 y verificación final. |
 
-Ningún hijo se recomienda `Listo` todavía: la Definición de Hecho del plan exige
-revisión por otra persona e integración en la rama principal.
+Jira solo dispone de `Por hacer`, `En curso` y `Listo`: no existe una columna de revisión.
+Estos estados son recomendaciones de handoff; esta sesión no modificó Jira. Se
+recomienda pasar EPT-11 y sus hijos a `En curso` al registrar el inicio del trabajo y
+mantenerlos allí durante la revisión independiente y la integración en la rama
+principal. Ningún hijo se recomienda `Listo` todavía.
 
 ---
 
