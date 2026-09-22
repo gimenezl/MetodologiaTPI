@@ -235,6 +235,11 @@ function clienteAdmin() {
  * esta limpieza la siembra siguiente no podría borrar los cursos ni los perfiles
  * docentes de prueba. Las dos materias sembradas por la migración 001 se
  * conservan, igual que los deportes y los talleres.
+ *
+ * Desde EPT-11 empieza además por `inscripciones_deportivas` y
+ * `grupos_deportivos`: sus claves foráneas hacia `alumnos` y hacia el perfil
+ * del profesor son ON DELETE RESTRICT. El catálogo `deportes` no se toca: lo
+ * siembra la migración 014.
  */
 function vaciarModeloAcademico() {
   const contenedor =
@@ -247,6 +252,8 @@ function vaciarModeloAcademico() {
     {
       input: `
         BEGIN;
+        DELETE FROM public.inscripciones_deportivas;
+        DELETE FROM public.grupos_deportivos;
         DELETE FROM public.inscripciones_servicios;
         DELETE FROM public.matriculas;
         DELETE FROM public.alumnos;

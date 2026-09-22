@@ -6,8 +6,17 @@
  * reconstruida desde cero con la cadena completa de migraciones. Se conserva
  * como artefacto de referencia para poder comparar.
  *
- * Reconciliación verificada entre este archivo y el esquema real (013):
+ * Reconciliación verificada entre este archivo y el esquema real (014):
  *
+ * - 014 (EPT-11) agrega `deportes`, `grupos_deportivos`,
+ *   `inscripciones_deportivas`, la vista `inscripciones_deportivas_detalle`, el
+ *   tipo enumerado `estado_inscripcion_deportiva` y las funciones públicas
+ *   `listar_grupos_deportivos`, `crear_grupo_deportivo`,
+ *   `inscribir_en_grupo_deportivo` y `cancelar_inscripcion_deportiva`. En
+ *   `listar_grupos_deportivos`, `profesor_id` e `inscripcion_propia_id` admiten
+ *   `null` (el estudiante no recibe el identificador del profesor y la
+ *   inscripción propia existe solo si la hay); el generador las tipa como
+ *   `string` porque PostgreSQL no declara nulabilidad en columnas de retorno.
  * - `cursos`, `padres_hijos`, `opiniones.aprobado` y las funciones públicas de
  *   la aplicación están representados por las migraciones y por los tipos
  *   generados.
@@ -249,6 +258,93 @@ export type Database = {
           fecha_cancelacion?: string | null
         }
       }
+      deportes: {
+        Row: {
+          id: string
+          nombre: string
+          activo: boolean
+          fecha_creacion: string
+          fecha_actualizacion: string
+        }
+        Insert: {
+          id?: string
+          nombre: string
+          activo?: boolean
+          fecha_creacion?: string
+          fecha_actualizacion?: string
+        }
+        Update: {
+          id?: string
+          nombre?: string
+          activo?: boolean
+          fecha_creacion?: string
+          fecha_actualizacion?: string
+        }
+      }
+      grupos_deportivos: {
+        Row: {
+          id: string
+          deporte_id: string
+          nivel_id: number
+          nombre: string
+          cupo: number
+          profesor_id: string
+          activo: boolean
+          fecha_creacion: string
+          fecha_actualizacion: string
+        }
+        Insert: {
+          id?: string
+          deporte_id: string
+          nivel_id: number
+          nombre: string
+          cupo: number
+          profesor_id: string
+          activo?: boolean
+          fecha_creacion?: string
+          fecha_actualizacion?: string
+        }
+        Update: {
+          id?: string
+          deporte_id?: string
+          nivel_id?: number
+          nombre?: string
+          cupo?: number
+          profesor_id?: string
+          activo?: boolean
+          fecha_creacion?: string
+          fecha_actualizacion?: string
+        }
+      }
+      inscripciones_deportivas: {
+        Row: {
+          id: string
+          alumno_id: string
+          grupo_id: string
+          deporte_id: string
+          estado: 'ACTIVA' | 'CANCELADA'
+          fecha_inscripcion: string
+          fecha_cancelacion: string | null
+        }
+        Insert: {
+          id?: string
+          alumno_id: string
+          grupo_id: string
+          deporte_id?: string
+          estado?: 'ACTIVA' | 'CANCELADA'
+          fecha_inscripcion?: string
+          fecha_cancelacion?: string | null
+        }
+        Update: {
+          id?: string
+          alumno_id?: string
+          grupo_id?: string
+          deporte_id?: string
+          estado?: 'ACTIVA' | 'CANCELADA'
+          fecha_inscripcion?: string
+          fecha_cancelacion?: string | null
+        }
+      }
       inscripciones: {
         Row: {
           id: string
@@ -473,6 +569,24 @@ export type Database = {
           fecha_cancelacion: string | null
         }
       }
+      inscripciones_deportivas_detalle: {
+        Row: {
+          id: string | null
+          alumno_id: string | null
+          alumno_nombre: string | null
+          alumno_apellido: string | null
+          legajo_nro: string | null
+          grupo_id: string | null
+          grupo_nombre: string | null
+          deporte_id: string | null
+          deporte_nombre: string | null
+          nivel_id: number | null
+          nivel_nombre: string | null
+          estado: 'ACTIVA' | 'CANCELADA' | null
+          fecha_inscripcion: string | null
+          fecha_cancelacion: string | null
+        }
+      }
       materias: {
         Row: {
           id: number | null
@@ -566,6 +680,46 @@ export type Database = {
         Args: { p_inscripcion_id: string }
         Returns: Database['public']['Tables']['inscripciones_servicios']['Row']
       }
+      listar_grupos_deportivos: {
+        Args: Record<string, never>
+        Returns: {
+          grupo_id: string
+          grupo_nombre: string
+          deporte_id: string
+          deporte_nombre: string
+          deporte_activo: boolean
+          nivel_id: number
+          nivel_nombre: string
+          // `null` para el estudiante: no recibe el identificador del profesor.
+          profesor_id: string | null
+          profesor_nombre: string
+          profesor_apellido: string
+          cupo: number
+          ocupados: number
+          disponibles: number
+          activo: boolean
+          // `null` cuando el estudiante no está inscripto en el grupo.
+          inscripcion_propia_id: string | null
+        }[]
+      }
+      crear_grupo_deportivo: {
+        Args: {
+          p_deporte_id: string
+          p_nivel_id: number
+          p_nombre: string
+          p_cupo: number
+          p_profesor_id: string
+        }
+        Returns: Database['public']['Tables']['grupos_deportivos']['Row']
+      }
+      inscribir_en_grupo_deportivo: {
+        Args: { p_grupo_id: string }
+        Returns: Database['public']['Tables']['inscripciones_deportivas']['Row']
+      }
+      cancelar_inscripcion_deportiva: {
+        Args: { p_inscripcion_id: string }
+        Returns: Database['public']['Tables']['inscripciones_deportivas']['Row']
+      }
       renombrar_nivel: {
         Args: { p_nivel_id: number; p_nombre: string }
         Returns: {
@@ -597,3 +751,6 @@ export type Postulacion = Tables<'postulaciones'>
 export type MateriaCurso = Tables<'materias_cursos'>
 export type ServicioEscolarFila = Tables<'servicios_escolares'>
 export type InscripcionServicioFila = Tables<'inscripciones_servicios'>
+export type DeporteFila = Tables<'deportes'>
+export type GrupoDeportivoFila = Tables<'grupos_deportivos'>
+export type InscripcionDeportivaFila = Tables<'inscripciones_deportivas'>

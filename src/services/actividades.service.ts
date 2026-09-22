@@ -32,6 +32,10 @@ export async function obtenerActividadesConCupos() {
 // Traduce errores crudos de Postgres a mensajes claros para el usuario
 function traducirErrorInscripcion(error: { message?: string; code?: string }): string {
   const msg = error?.message ?? ''
+  // EPT-11: la vía legada ya no acepta escrituras sobre actividades DEPORTE.
+  if (error?.code === 'P5582') {
+    return 'Las inscripciones deportivas se hacen por grupo en la sección Deportes.'
+  }
   if (error?.code === '23505' || msg.includes('inscripciones_estudiante_id_actividad_id_key')) {
     return 'Este alumno ya está inscripto en esta actividad.'
   }
@@ -39,6 +43,14 @@ function traducirErrorInscripcion(error: { message?: string; code?: string }): s
     return 'El cupo para esta actividad está completo.'
   }
   return 'No se pudo inscribir al alumno. Intentá nuevamente.'
+}
+
+// Las bajas conservan su mensaje anterior salvo el rechazo deportivo de EPT-11.
+function mensajeDeBaja(error: { message?: string; code?: string }): string {
+  if (error?.code === 'P5582') {
+    return 'Las inscripciones deportivas anteriores son históricas y no se pueden modificar.'
+  }
+  return error?.message ?? 'No se pudo dar de baja.'
 }
 
 export async function inscribirAlumno(estudianteId: string, actividadId: number) {
@@ -78,7 +90,7 @@ export async function eliminarInscripcionDeAlumnoEnActividad(estudianteId: strin
     .delete()
     .eq('estudiante_id', estudianteId)
     .eq('actividad_id', actividadId) as any)
-  if (error) throw new Error(error.message)
+  if (error) throw new Error(mensajeDeBaja(error))
   return true
 }
 
@@ -88,7 +100,7 @@ export async function darBajaInscripcion(inscripcionId: string) {
     .from('inscripciones')
     .update({ estado: 'BAJA' })
     .eq('id', inscripcionId)
-  if (error) throw new Error(error.message)
+  if (error) throw new Error(mensajeDeBaja(error))
   return true
 }
 
