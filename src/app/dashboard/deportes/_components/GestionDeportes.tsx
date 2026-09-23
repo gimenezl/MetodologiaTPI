@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState, useTransition, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle, Plus, SoccerBall, WarningCircle } from '@phosphor-icons/react'
+import { CheckCircle, Clock, Plus, SoccerBall, UserPlus, WarningCircle } from '@phosphor-icons/react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Dialogo } from '@/components/ui/Dialogo'
@@ -10,17 +10,26 @@ import { Input, Select } from '@/components/ui/Input'
 import { cn } from '@/lib/utils'
 import { crearGrupoDeportivoRemoto, ErrorDeportes } from '@/services/deportes.client'
 import type {
+  AlumnoInscribible,
   CatalogoAltaGrupo,
   GrupoDeportivo,
+  HorariosPorGrupo,
   InscripcionDeportiva,
 } from '@/services/deportes.service'
 import { fecha, nombreNivel, plazas } from './formato'
+import { HorariosGrupo } from './HorariosGrupo'
+import { InscripcionAdministrativa } from './InscripcionAdministrativa'
+import { ListaFranjas } from './ListaFranjas'
 
 interface GestionDeportesProps {
   grupos: GrupoDeportivo[]
   inscripciones: InscripcionDeportiva[]
+  /** Franjas activas por grupo (EPT-12). */
+  horarios: HorariosPorGrupo
   /** `null` si no se pudieron cargar las opciones del alta. */
   catalogo: CatalogoAltaGrupo | null
+  /** Alumnos activos para el alta administrativa; `null` si no se pudieron cargar. */
+  alumnos: AlumnoInscribible[] | null
 }
 
 type Filtro = 'ACTIVAS' | 'CANCELADAS' | 'TODAS'
@@ -43,17 +52,27 @@ const FORMULARIO_VACIO = {
 }
 
 /**
- * Consulta deportiva de la dirección y alta mínima de grupos (EPT-11).
+ * Consulta deportiva de la dirección, alta mínima de grupos (EPT-11),
+ * configuración de franjas e inscripción administrativa (EPT-12).
  *
- * La dirección consulta todos los grupos con su ocupación y todas las
- * inscripciones, y puede crear un grupo. No inscribe ni cancela en nombre de
- * ningún alumno: esta pantalla no tiene controles para eso, y la API y la base
- * también lo rechazan. Las filas que se ven son las que devuelve PostgreSQL.
+ * La dirección consulta todos los grupos con su ocupación y sus horarios y
+ * todas las inscripciones; puede crear un grupo, asignarle o dar de baja
+ * franjas e inscribir a un alumno. La inscripción administrativa pasa por las
+ * mismas reglas de la base que el alta del alumno. No cancela inscripciones
+ * ajenas ni borra nada: eso es EPT-62 y no existe por ninguna vía.
  */
-export function GestionDeportes({ grupos, inscripciones, catalogo }: GestionDeportesProps) {
+export function GestionDeportes({
+  grupos,
+  inscripciones,
+  horarios,
+  catalogo,
+  alumnos,
+}: GestionDeportesProps) {
   const router = useRouter()
   const [refrescando, iniciarRefresco] = useTransition()
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
+  const [grupoHorarios, setGrupoHorarios] = useState<string | null>(null)
+  const [inscribiendo, setInscribiendo] = useState(false)
   const [formulario, setFormulario] = useState(FORMULARIO_VACIO)
   const [errores, setErrores] = useState<ErroresFormulario>({})
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null)
@@ -64,6 +83,7 @@ export function GestionDeportes({ grupos, inscripciones, catalogo }: GestionDepo
   const idBusqueda = useId()
 
   const sinProfesores = catalogo !== null && catalogo.profesores.length === 0
+  const grupoSeleccionado = grupos.find((grupo) => grupo.grupo_id === grupoHorarios)
 
   const visibles = useMemo(() => {
     const termino = busqueda.trim().toLocaleLowerCase('es-AR')
@@ -166,17 +186,27 @@ export function GestionDeportes({ grupos, inscripciones, catalogo }: GestionDepo
           </p>
           <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">Deportes</h1>
           <p className="text-neutral-500 text-sm mt-1 max-w-[64ch]">
-            Consultá los grupos deportivos, su ocupación y las inscripciones de los alumnos.
+            Consultá los grupos deportivos, su ocupación, sus horarios y las inscripciones de
+            los alumnos.
           </p>
         </div>
-        <Button
-          onClick={abrirDialogo}
-          disabled={catalogo === null}
-          className="self-start sm:self-auto"
-        >
-          <Plus size={18} weight="bold" aria-hidden="true" />
-          Nuevo grupo
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2 self-start sm:self-auto">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setExito(null)
+              setInscribiendo(true)
+            }}
+            disabled={alumnos === null}
+          >
+            <UserPlus size={18} weight="bold" aria-hidden="true" />
+            Inscribir alumno
+          </Button>
+          <Button onClick={abrirDialogo} disabled={catalogo === null}>
+            <Plus size={18} weight="bold" aria-hidden="true" />
+            Nuevo grupo
+          </Button>
+        </div>
       </header>
 
       <div aria-live="polite" className="space-y-3">
@@ -187,6 +217,15 @@ export function GestionDeportes({ grupos, inscripciones, catalogo }: GestionDepo
           >
             No pudimos cargar las opciones para crear grupos. Podés consultar el listado y
             reintentar más tarde.
+          </div>
+        )}
+        {alumnos === null && (
+          <div
+            role="alert"
+            className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-900"
+          >
+            No pudimos cargar el listado de alumnos para la inscripción administrativa. Podés
+            consultar el resto de la pantalla y reintentar más tarde.
           </div>
         )}
         {exito && (
@@ -245,6 +284,17 @@ export function GestionDeportes({ grupos, inscripciones, catalogo }: GestionDepo
                   <dt className="text-neutral-500">Disponibles</dt>
                   <dd className="text-neutral-900">{grupo.disponibles}</dd>
                 </dl>
+                <ListaFranjas franjas={horarios[grupo.grupo_id] ?? []} />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="self-start mt-1"
+                  onClick={() => setGrupoHorarios(grupo.grupo_id)}
+                  aria-label={`Gestionar los horarios de ${grupo.deporte_nombre}, ${grupo.grupo_nombre}`}
+                >
+                  <Clock size={16} weight="bold" aria-hidden="true" />
+                  Horarios
+                </Button>
               </li>
             ))}
           </ul>
@@ -441,6 +491,28 @@ export function GestionDeportes({ grupos, inscripciones, catalogo }: GestionDepo
             </div>
           </form>
         </Dialogo>
+      )}
+
+      {grupoHorarios && grupoSeleccionado && (
+        <HorariosGrupo
+          grupo={grupoSeleccionado}
+          franjas={horarios[grupoSeleccionado.grupo_id] ?? []}
+          onCerrar={() => setGrupoHorarios(null)}
+        />
+      )}
+
+      {inscribiendo && alumnos && (
+        <InscripcionAdministrativa
+          alumnos={alumnos}
+          grupos={grupos}
+          horarios={horarios}
+          onCerrar={() => setInscribiendo(false)}
+          onInscripto={(mensaje) => {
+            setInscribiendo(false)
+            setExito(mensaje)
+            iniciarRefresco(() => router.refresh())
+          }}
+        />
       )}
     </div>
   )
