@@ -317,6 +317,72 @@ export type Database = {
           },
         ]
       }
+      grupos_deportivos_horarios: {
+        Row: {
+          activo: boolean
+          fecha_alta: string
+          fecha_baja: string | null
+          grupo_id: string
+          horario_id: string
+          id: string
+        }
+        Insert: {
+          activo?: boolean
+          fecha_alta?: string
+          fecha_baja?: string | null
+          grupo_id: string
+          horario_id: string
+          id?: string
+        }
+        Update: {
+          activo?: boolean
+          fecha_alta?: string
+          fecha_baja?: string | null
+          grupo_id?: string
+          horario_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grupos_deportivos_horarios_grupo_id_fkey"
+            columns: ["grupo_id"]
+            isOneToOne: false
+            referencedRelation: "grupos_deportivos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grupos_deportivos_horarios_horario_id_fkey"
+            columns: ["horario_id"]
+            isOneToOne: false
+            referencedRelation: "horarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      horarios: {
+        Row: {
+          dia_semana: number
+          fecha_creacion: string
+          hora_fin: string
+          hora_inicio: string
+          id: string
+        }
+        Insert: {
+          dia_semana: number
+          fecha_creacion?: string
+          hora_fin: string
+          hora_inicio: string
+          id?: string
+        }
+        Update: {
+          dia_semana?: number
+          fecha_creacion?: string
+          hora_fin?: string
+          hora_inicio?: string
+          id?: string
+        }
+        Relationships: []
+      }
       inscripciones: {
         Row: {
           actividad_id: number | null
@@ -1157,6 +1223,28 @@ export type Database = {
       }
     }
     Functions: {
+      agregar_horario_grupo_deportivo: {
+        Args: {
+          p_dia_semana: number
+          p_grupo_id: string
+          p_hora_fin: string
+          p_hora_inicio: string
+        }
+        Returns: {
+          activo: boolean
+          fecha_alta: string
+          fecha_baja: string | null
+          grupo_id: string
+          horario_id: string
+          id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "grupos_deportivos_horarios"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       asignar_materia_curso: {
         Args: {
           p_curso_id: string
@@ -1288,6 +1376,30 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      consultar_compatibilidad_horaria: {
+        Args: never
+        Returns: {
+          conflicto_deporte: string
+          conflicto_dia_semana: number
+          conflicto_grupo: string
+          conflicto_hora_fin: string
+          conflicto_hora_inicio: string
+          grupo_id: string
+          tiene_horario: boolean
+        }[]
+      }
+      consultar_compatibilidad_horaria_alumno: {
+        Args: { p_alumno_id: string }
+        Returns: {
+          conflicto_deporte: string
+          conflicto_dia_semana: number
+          conflicto_grupo: string
+          conflicto_hora_fin: string
+          conflicto_hora_inicio: string
+          grupo_id: string
+          tiene_horario: boolean
+        }[]
+      }
       corregir_identidad_alumno: {
         Args: { p_alumno_id: string; p_dni: string; p_legajo_nro?: string }
         Returns: string
@@ -1362,8 +1474,43 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      dar_de_baja_horario_grupo_deportivo: {
+        Args: { p_franja_id: string; p_grupo_id: string }
+        Returns: {
+          activo: boolean
+          fecha_alta: string
+          fecha_baja: string | null
+          grupo_id: string
+          horario_id: string
+          id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "grupos_deportivos_horarios"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       es_director_actual: { Args: never; Returns: boolean }
       inactivar_alumno: { Args: { p_alumno_id: string }; Returns: string }
+      inscribir_alumno_en_grupo_deportivo: {
+        Args: { p_alumno_id: string; p_grupo_id: string }
+        Returns: {
+          alumno_id: string
+          deporte_id: string
+          estado: Database["public"]["Enums"]["estado_inscripcion_deportiva"]
+          fecha_cancelacion: string | null
+          fecha_inscripcion: string
+          grupo_id: string
+          id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "inscripciones_deportivas"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       inscribir_en_grupo_deportivo: {
         Args: { p_grupo_id: string }
         Returns: {
