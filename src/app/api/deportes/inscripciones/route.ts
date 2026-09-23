@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   const resultado = await inscribirEnGrupoDeportivo(parsed.data.grupo_id)
   if (!resultado.ok) {
     return NextResponse.json(
-      { error: resultado.mensaje, campo: resultado.campo },
+      { error: resultado.mensaje, campo: resultado.campo, conflicto: resultado.conflicto },
       { status: resultado.estado }
     )
   }
