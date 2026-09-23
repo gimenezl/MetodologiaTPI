@@ -78,7 +78,17 @@ const GRUPOS = {
   otroDia: { deporte: DEPORTE.atletismo, nombre: 'E2E H Atletismo martes', franjas: [[2, '10:00', '11:00']] },
   sinHorario: { deporte: DEPORTE.basquet, nombre: 'E2E H Básquet sin horario', franjas: [] },
   gestion: { deporte: DEPORTE.voley, nombre: 'E2E H Vóley gestión', franjas: [] },
-} as const satisfies Record<string, { deporte: string; nombre: string; franjas: readonly FranjaPrueba[] }>
+  // Único grupo de otro nivel: prueba el rechazo por nivel en el alta administrativa.
+  primario: {
+    deporte: DEPORTE.voley,
+    nombre: 'E2E H Vóley primario',
+    franjas: [[4, '16:00', '17:00']],
+    nivel: 'PRIMARIO',
+  },
+} as const satisfies Record<
+  string,
+  { deporte: string; nombre: string; franjas: readonly FranjaPrueba[]; nivel?: string }
+>
 
 type ClaveGrupo = keyof typeof GRUPOS
 
@@ -87,6 +97,7 @@ const CONFLICTO_FUTBOL_LUNES = {
   conflicto: { deporte: 'Fútbol', grupo: 'E2E H Fútbol', dia_semana: 1, hora_inicio: '10:00', hora_fin: '11:00' },
 }
 const SIN_HORARIO = 'Este grupo todavía no tiene horarios cargados, así que no admite inscripciones.'
+const FRANJA_YA_ASIGNADA = 'Esa franja ya está asignada a este grupo.'
 
 const contextosActivos: APIRequestContext[] = []
 
@@ -134,15 +145,16 @@ async function idGrupo(clave: ClaveGrupo): Promise<string | null> {
  */
 async function asegurarGrupos(): Promise<Record<ClaveGrupo, string>> {
   const profesor = await perfilPorDni(DOCENTE.dni)
-  const inicial = await nivelPorNombre('INICIAL')
   const ids = {} as Record<ClaveGrupo, string>
   for (const clave of Object.keys(GRUPOS) as ClaveGrupo[]) {
-    const grupo = GRUPOS[clave]
+    const grupo: { deporte: string; nombre: string; franjas: readonly FranjaPrueba[]; nivel?: string } =
+      GRUPOS[clave]
     let id = await idGrupo(clave)
     if (!id) {
+      const nivel = await nivelPorNombre(grupo.nivel ?? 'INICIAL')
       const respuesta = await pedirConSesion(SESION.directora, '/api/deportes/grupos', {
         method: 'POST',
-        data: { deporte_id: grupo.deporte, nivel_id: inicial, nombre: grupo.nombre, cupo: 10, profesor_id: profesor },
+        data: { deporte_id: grupo.deporte, nivel_id: nivel, nombre: grupo.nombre, cupo: 10, profesor_id: profesor },
       })
       expect([201, 409]).toContain(respuesta.status())
       id = await idGrupo(clave)
@@ -150,7 +162,12 @@ async function asegurarGrupos(): Promise<Record<ClaveGrupo, string>> {
     if (!id) throw new Error(`No se pudo preparar el grupo ${clave}`)
     for (const [dia, inicio, fin] of grupo.franjas) {
       const franja = await agregarFranja(SESION.directora, id, { dia_semana: dia, hora_inicio: inicio, hora_fin: fin })
-      expect([201, 409]).toContain(franja.status())
+      // 409 solo es aceptable si la franja ya estaba asignada (P5587): una
+      // superposición dejaría la matriz mal armada sin avisar.
+      if (franja.status() !== 201) {
+        expect(franja.status()).toBe(409)
+        expect((await franja.json()).error).toBe(FRANJA_YA_ASIGNADA)
+      }
     }
     ids[clave] = id
   }
@@ -241,9 +258,9 @@ async function esperarRechazo(respuesta: APIResponse, estado: number, mensaje?: 
 // Utilidades de pantalla
 // ----------------------------------------------------------------
 
-async function capturar(page: Page, nombre: string) {
+async function capturar(page: Page, nombre: string, opciones?: { paginaCompleta?: boolean }) {
   if (!CAPTURAR) return
-  await capturarSinHerramientas(page, path.join('docs/evidence/EPT-12', `real-${nombre}.png`))
+  await capturarSinHerramientas(page, path.join('docs/evidence/EPT-12', `real-${nombre}.png`), opciones)
 }
 
 function aplicacion(page: Page) {
@@ -470,7 +487,10 @@ test.describe('ESTUDIANTE AJENO autenticado — horarios', () => {
     await limpiarInscripciones(ESTUDIANTE_AJENO.dni)
   })
 
-  test('dos altas incompatibles simultáneas por HTTP: confirma exactamente una', async () => {
+  // La carrera real, con bloqueos verificados, está en horarios_concurrencia.mjs.
+  // Acá se comprueba que dos peticiones incompatibles lanzadas a la vez por
+  // HTTP nunca confirman las dos, lleguen como lleguen.
+  test('dos altas incompatibles lanzadas a la vez por HTTP nunca confirman ambas', async () => {
     const [a, b] = await Promise.all([
       inscribir(SESION.ajeno, grupos.futbol),
       inscribir(SESION.ajeno, grupos.contiene),
@@ -548,10 +568,14 @@ test.describe.serial('DIRECTOR autenticado — horarios', () => {
     await dialogo.getByLabel('Hora de fin').fill('12:00')
     await dialogo.getByRole('button', { name: 'Asignar franja' }).click()
     await expect(dialogo.getByRole('listitem')).toHaveText([/Lunes · 10:00 a 11:00/, /Lunes · 11:00 a 12:00/])
-    await capturar(page, 'escritorio-director-horarios')
+    await capturar(page, 'escritorio-director-horarios', { paginaCompleta: false })
 
     await dialogo.getByRole('button', { name: 'Dar de baja la franja del lunes de 11:00 a 12:00' }).click()
     await expect(dialogo.getByRole('status')).toContainText('Diste de baja la franja del lunes de 11:00 a 12:00.')
+    // El botón pulsado desaparece: el foco queda en el resultado, dentro del diálogo.
+    await expect(
+      dialogo.getByLabel('Resultado de la última operación sobre las franjas')
+    ).toBeFocused()
     await expect(dialogo.getByRole('listitem')).toHaveText([/Lunes · 10:00 a 11:00/])
 
     await page.keyboard.press('Escape')
@@ -653,8 +677,12 @@ test.describe.serial('DIRECTOR autenticado — horarios', () => {
     await expect(dialogo).toContainText(CONFLICTO_FUTBOL_LUNES.mensaje)
     await dialogo.getByRole('button', { name: 'Inscribir' }).click()
     await expect(dialogo.getByRole('alert')).toHaveText(CONFLICTO_FUTBOL_LUNES.mensaje)
+    // Tras el rechazo el diálogo vuelve a consultar la base; se espera a que
+    // termine para que la captura muestre el grupo elegido y su conflicto.
+    await expect(dialogo.getByText(/Consultando los grupos/)).toHaveCount(0)
+    await expect(dialogo.getByLabel('Grupo deportivo')).toHaveValue(grupos.igual)
     await exigirPantallaSinDetalleTecnico(page, 'conflicto administrativo')
-    await capturar(page, 'escritorio-director-conflicto')
+    await capturar(page, 'escritorio-director-conflicto', { paginaCompleta: false })
     await page.keyboard.press('Escape')
     await expect(dialogo).toHaveCount(0)
     expect(await activasDe(ESTUDIANTE.dni)).toEqual([grupos.futbol])
@@ -688,22 +716,15 @@ test.describe.serial('DIRECTOR autenticado — horarios', () => {
       'El alumno ya está inscripto en este grupo.'
     )
 
-    const { data: primario } = await clienteAdmin()
-      .from('grupos_deportivos')
-      .select('id')
-      .eq('nombre', 'E2E Vóley Primario')
-      .maybeSingle()
-    if (primario) {
-      await limpiarInscripciones(ESTUDIANTE_AJENO.dni)
-      await esperarRechazo(
-        await inscribirComoDireccion(SESION.directora, {
-          alumno_id: await perfilPorDni(ESTUDIANTE_AJENO.dni),
-          grupo_id: primario.id,
-        }),
-        409,
-        'Ese grupo no corresponde al nivel educativo del alumno.'
-      )
-    }
+    await limpiarInscripciones(ESTUDIANTE_AJENO.dni)
+    await esperarRechazo(
+      await inscribirComoDireccion(SESION.directora, {
+        alumno_id: await perfilPorDni(ESTUDIANTE_AJENO.dni),
+        grupo_id: grupos.primario,
+      }),
+      409,
+      'Ese grupo no corresponde al nivel educativo del alumno.'
+    )
 
     await esperarRechazo(
       await inscribirComoDireccion(SESION.directora, { alumno_id: await perfilPorDni(DOCENTE.dni), grupo_id: grupos.otroDia }),
@@ -755,7 +776,7 @@ test.describe.serial('DIRECTOR autenticado — horarios', () => {
     await tarjetaGrupo(page, 'futbol').getByRole('button', { name: /Gestionar los horarios/ }).click()
     await expect(page.getByRole('dialog', { name: 'Horarios de Fútbol · E2E H Fútbol' })).toBeVisible()
     expect(await sinScrollHorizontal(page)).toBe(true)
-    await capturar(page, 'movil-director-horarios')
+    await capturar(page, 'movil-director-horarios', { paginaCompleta: false })
   })
 })
 

@@ -135,7 +135,7 @@ export type CampoDeportes =
   | 'hora_inicio'
   | 'hora_fin'
 
-export type EstadoErrorDeportes = 400 | 401 | 403 | 404 | 409 | 422 | 500
+export type EstadoErrorDeportes = 400 | 401 | 403 | 404 | 409 | 422 | 500 | 503
 
 type RechazoDeportes = {
   estado: EstadoErrorDeportes
@@ -161,6 +161,7 @@ type Operacion =
   | 'agregarHorario'
   | 'darDeBajaHorario'
   | 'inscribirAdministrativa'
+  | 'consultarCompatibilidadAlumno'
 
 type ErrorPostgres = { code?: string | null; message?: string | null; details?: string | null }
 
@@ -271,8 +272,10 @@ const COLUMNAS_INSCRIPCION =
  * navegador detalles internos, nombres de restricciones, consultas ni SQLSTATE.
  */
 function traducirErrorDeportes(error: ErrorPostgres, operacion: Operacion): RechazoDeportes {
+  // El alta y la consulta de la dirección hablan de OTRO alumno.
   const administrativo =
-    operacion === 'inscribirAdministrativa' && error.code
+    (operacion === 'inscribirAdministrativa' || operacion === 'consultarCompatibilidadAlumno') &&
+    error.code
       ? MENSAJES_ADMINISTRATIVOS[error.code]
       : undefined
   if (administrativo) return administrativo
@@ -280,14 +283,28 @@ function traducirErrorDeportes(error: ErrorPostgres, operacion: Operacion): Rech
   switch (error.code) {
     case '23505':
       // El índice único es la autoridad ante concurrencia. En el alta de grupos
-      // protege la identidad del grupo; en la inscripción, «un grupo por deporte».
-      return operacion === 'crearGrupo'
-        ? {
-            estado: 409,
-            mensaje: 'Ya existe un grupo con ese nombre para ese deporte y nivel.',
-            campo: 'nombre',
-          }
-        : { estado: 409, mensaje: MENSAJES_DEPORTES.mismoDeporte, campo: 'grupo_id' }
+      // protege la identidad del grupo; en las franjas, «una franja activa por
+      // grupo»; en la inscripción, «un grupo por deporte».
+      if (operacion === 'crearGrupo') {
+        return {
+          estado: 409,
+          mensaje: 'Ya existe un grupo con ese nombre para ese deporte y nivel.',
+          campo: 'nombre',
+        }
+      }
+      if (operacion === 'agregarHorario') {
+        return { estado: 409, mensaje: 'Esa franja ya está asignada a este grupo.', campo: 'hora_inicio' }
+      }
+      return { estado: 409, mensaje: MENSAJES_DEPORTES.mismoDeporte, campo: 'grupo_id' }
+    case '40P01':
+    case '55P03':
+    case '57014':
+      // Interbloqueo, espera de bloqueo o tiempo agotado: la operación no se
+      // aplicó y reintentarla es seguro.
+      return {
+        estado: 503,
+        mensaje: 'Hay otra operación en curso sobre estos datos. Volvé a intentarlo en unos segundos.',
+      }
     case 'P5560':
       return { estado: 404, mensaje: 'El deporte seleccionado no existe.', campo: 'deporte_id' }
     case 'P5561':
@@ -375,7 +392,8 @@ function traducirErrorDeportes(error: ErrorPostgres, operacion: Operacion): Rech
     case 'P5586':
       return {
         estado: 422,
-        mensaje: 'La hora de inicio debe ser anterior a la hora de fin.',
+        mensaje:
+          'Revisá el rango: las horas van de 00:00 a 23:59 y la de inicio debe ser anterior a la de fin.',
         campo: 'hora_fin',
       }
     case 'P5587':
@@ -450,6 +468,8 @@ const MENSAJES_PROHIBIDO: Record<Operacion, string> = {
   agregarHorario: 'Solo la dirección puede configurar los horarios de los grupos deportivos.',
   darDeBajaHorario: 'Solo la dirección puede configurar los horarios de los grupos deportivos.',
   inscribirAdministrativa: 'Solo la dirección puede inscribir a un alumno en un deporte.',
+  consultarCompatibilidadAlumno:
+    'Solo la dirección puede consultar la compatibilidad horaria de un alumno.',
 }
 
 /** Una escritura sin fila devuelta no es un éxito confirmado. */
@@ -707,7 +727,7 @@ export async function consultarCompatibilidadAlumno(
     p_alumno_id: alumnoId,
   })
 
-  if (error) return { ok: false, ...traducirErrorDeportes(error, 'inscribirAdministrativa') }
+  if (error) return { ok: false, ...traducirErrorDeportes(error, 'consultarCompatibilidadAlumno') }
   return { ok: true, datos: indexarCompatibilidad((data ?? []) as FilaCompatibilidad[]) }
 }
 

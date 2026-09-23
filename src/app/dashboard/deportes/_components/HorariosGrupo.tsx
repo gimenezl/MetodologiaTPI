@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle, Plus, WarningCircle } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/Button'
@@ -56,6 +56,7 @@ export function HorariosGrupo({
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null)
   const [exito, setExito] = useState<string | null>(null)
   const [enviando, setEnviando] = useState<string | null>(null)
+  const regionResultado = useRef<HTMLDivElement>(null)
 
   const ordenadas = ordenarFranjas(franjas)
   const ocupado = enviando !== null
@@ -159,6 +160,7 @@ export function HorariosGrupo({
       router.refresh()
     } finally {
       setEnviando(null)
+      regionResultado.current?.focus()
     }
   }
 
@@ -173,7 +175,17 @@ export function HorariosGrupo({
       }}
     >
       <div className="space-y-5">
-        <div aria-live="polite" className="space-y-2">
+        {/*
+          Cada aviso ya es una región viva (role="status" o role="alert"); el
+          contenedor no agrega otra para no anunciarlo dos veces. Recibe el
+          foco tras una baja: el botón pulsado desaparece al refrescar.
+        */}
+        <div
+          ref={regionResultado}
+          tabIndex={-1}
+          aria-label="Resultado de la última operación sobre las franjas"
+          className="space-y-2 outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-xl"
+        >
           {errorGeneral && (
             <div
               role="alert"

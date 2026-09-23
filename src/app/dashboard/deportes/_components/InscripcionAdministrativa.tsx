@@ -182,7 +182,8 @@ export function InscripcionAdministrativa({
           required
         />
 
-        <div aria-live="polite" aria-busy={consulta.estado === 'cargando'}>
+        {/* Los avisos internos ya son regiones vivas (role="status"/"alert"). */}
+        <div aria-busy={consulta.estado === 'cargando'}>
           {consulta.estado === 'cargando' && (
             <p className="text-sm text-neutral-500" role="status">
               Consultando los grupos y la compatibilidad horaria del alumno…

@@ -211,6 +211,14 @@ CREATE TABLE public.horarios (
     fecha_creacion TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     CONSTRAINT horarios_dia_semana_valido CHECK (dia_semana BETWEEN 1 AND 7),
     CONSTRAINT horarios_rango_valido CHECK (hora_inicio < hora_fin),
+    -- TIME admite 24:00:00 y fracciones de segundo, que la aplicación no puede
+    -- representar (HH:MM[:SS] de 00:00 a 23:59:59). Se acota acá para que
+    -- ninguna fila del catálogo rompa la pantalla de nadie.
+    CONSTRAINT horarios_horas_representables CHECK (
+        hora_inicio < '24:00' AND hora_fin < '24:00'
+        AND hora_inicio = pg_catalog.date_trunc('second', hora_inicio::INTERVAL)::TIME
+        AND hora_fin = pg_catalog.date_trunc('second', hora_fin::INTERVAL)::TIME
+    ),
     CONSTRAINT horarios_franja_unica UNIQUE (dia_semana, hora_inicio, hora_fin)
 );
 
@@ -224,11 +232,12 @@ COMMENT ON COLUMN public.horarios.hora_fin IS
     'Fin excluido de la franja: una franja que empieza a esta hora es contigua, no superpuesta.';
 
 -- Una fila del catálogo puede estar referenciada por muchos grupos: cambiar su
--- día o su rango movería a todos sin validar ningún conflicto.
+-- día o su rango movería a todos sin validar ningún conflicto. No lee otras
+-- tablas, así que no necesita SECURITY DEFINER.
 CREATE OR REPLACE FUNCTION app_private.proteger_identidad_horario()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = ''
 AS $$
 BEGIN
@@ -595,7 +604,7 @@ BEGIN
     ) THEN
         RAISE EXCEPTION USING
             ERRCODE = 'P5583',
-            MESSAGE = 'El grupo todavía no tiene horarios cargados y no admite inscripciones.';
+            MESSAGE = 'Este grupo todavía no tiene horarios cargados, así que no admite inscripciones.';
     END IF;
 
     SELECT * INTO v_conflicto
@@ -689,9 +698,11 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE = 'P5568', MESSAGE = 'El grupo deportivo solicitado no existe.';
     END IF;
 
+    -- La FK ya lo impide; se valida acá para dar un mensaje propio. Usa el
+    -- código de clave foránea, no P5586 (rango inválido).
     SELECT * INTO v_horario FROM public.horarios h WHERE h.id = NEW.horario_id;
     IF NOT FOUND THEN
-        RAISE EXCEPTION USING ERRCODE = 'P5586', MESSAGE = 'El horario solicitado no existe.';
+        RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'El horario solicitado no existe.';
     END IF;
 
     IF EXISTS (
@@ -843,6 +854,15 @@ BEGIN
         RAISE EXCEPTION USING
             ERRCODE = 'P5585',
             MESSAGE = 'El día debe ser un número entre 1 (lunes) y 7 (domingo).';
+    END IF;
+
+    IF p_hora_inicio IS NOT NULL AND p_hora_fin IS NOT NULL AND (
+           p_hora_inicio >= '24:00' OR p_hora_fin >= '24:00'
+           OR p_hora_inicio <> pg_catalog.date_trunc('second', p_hora_inicio::INTERVAL)::TIME
+           OR p_hora_fin <> pg_catalog.date_trunc('second', p_hora_fin::INTERVAL)::TIME) THEN
+        RAISE EXCEPTION USING
+            ERRCODE = 'P5586',
+            MESSAGE = 'Las horas deben estar entre 00:00 y 23:59, sin fracciones de segundo.';
     END IF;
 
     IF p_hora_inicio IS NULL OR p_hora_fin IS NULL OR p_hora_inicio >= p_hora_fin THEN
@@ -1361,7 +1381,6 @@ BEGIN
         'app_private.primer_conflicto_horario(uuid,uuid)'::pg_catalog.regprocedure,
         'app_private.validar_inscripcion_deportiva()'::pg_catalog.regprocedure,
         'app_private.validar_franja_grupo_deportivo()'::pg_catalog.regprocedure,
-        'app_private.proteger_identidad_horario()'::pg_catalog.regprocedure,
         'app_private.agregar_horario_grupo_deportivo(uuid,smallint,time,time)'::pg_catalog.regprocedure,
         'app_private.dar_de_baja_horario_grupo_deportivo(uuid,uuid)'::pg_catalog.regprocedure,
         'app_private.inscribir_alumno_en_grupo_deportivo(uuid,uuid)'::pg_catalog.regprocedure,

@@ -28,10 +28,14 @@ function hayTeclado(page: Page) {
   return page.context().browser()?.browserType().name() !== 'webkit'
 }
 
-async function capturar(page: Page, nombre: string) {
+async function capturar(page: Page, nombre: string, opciones?: { paginaCompleta?: boolean }) {
   if (!CAPTURAR) return
   const perfil = esMovil(page) ? 'movil' : 'escritorio'
-  await capturarSinHerramientas(page, path.join('docs/evidence/EPT-12', `fixture-${perfil}-${nombre}.png`))
+  await capturarSinHerramientas(
+    page,
+    path.join('docs/evidence/EPT-12', `fixture-${perfil}-${nombre}.png`),
+    opciones
+  )
 }
 
 function aplicacion(page: Page) {
@@ -178,9 +182,17 @@ test.describe('horarios de la dirección (fixture)', () => {
       'La hora de inicio debe ser anterior a la hora de fin'
     )
     await expect(dialogo.getByRole('button', { name: /Eliminar|Borrar/ })).toHaveCount(0)
-    await capturar(page, 'director-horarios')
+    await capturar(page, 'director-horarios', { paginaCompleta: false })
 
     if (hayTeclado(page)) {
+      // Contención del foco: desde el último control, Tab vuelve al primero y
+      // Shift+Tab desde el primero regresa al último.
+      const ultimo = dialogo.getByRole('button', { name: 'Asignar franja' })
+      await ultimo.focus()
+      await page.keyboard.press('Tab')
+      await expect(dialogo.getByRole('button').first()).toBeFocused()
+      await page.keyboard.press('Shift+Tab')
+      await expect(ultimo).toBeFocused()
       await page.keyboard.press('Escape')
       await expect(dialogo).toHaveCount(0)
       await expect(abrir).toBeFocused()
@@ -226,7 +238,7 @@ test.describe('horarios de la dirección (fixture)', () => {
     await expect(dialogo.getByRole('status')).toHaveText(
       'Consultando los grupos y la compatibilidad horaria del alumno…'
     )
-    await capturar(page, 'director-inscripcion-carga')
+    await capturar(page, 'director-inscripcion-carga', { paginaCompleta: false })
     liberar()
 
     await dialogo.getByLabel('Grupo deportivo').selectOption('11111111-1111-4111-8111-111111111111')
@@ -234,7 +246,7 @@ test.describe('horarios de la dirección (fixture)', () => {
     await dialogo.getByLabel('Grupo deportivo').selectOption('44444444-4444-4444-8444-444444444444')
     await expect(dialogo).toContainText('Sin conflictos con las actividades deportivas activas del alumno.')
     expect(await sinScrollHorizontal(page)).toBe(true)
-    await capturar(page, 'director-inscripcion')
+    await capturar(page, 'director-inscripcion', { paginaCompleta: false })
 
     if (hayTeclado(page)) {
       await page.keyboard.press('Escape')

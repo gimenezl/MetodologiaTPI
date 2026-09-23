@@ -397,7 +397,7 @@ export function MisDeportes({
                         </Badge>
                       )}
                       {!inscripto && sinPlazas && <Badge variant="danger">Sin plazas</Badge>}
-                      {franjas.length === 0 && <Badge variant="warning">Sin horario</Badge>}
+                      {!inscripto && franjas.length === 0 && <Badge variant="warning">Sin horario</Badge>}
                       {conflicto && <Badge variant="danger">Horario superpuesto</Badge>}
                     </div>
                     <p className="text-sm text-neutral-600 mt-1 break-words">{grupo.grupo_nombre}</p>

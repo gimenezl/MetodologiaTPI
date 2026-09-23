@@ -187,12 +187,15 @@ async function asegurarGrupos(): Promise<Record<ClaveGrupo, string>> {
       id = await idGrupo(clave)
     }
     if (!id) throw new Error(`No se pudo preparar el grupo ${clave}`)
-    // Idempotente: 201 la primera vez, 409 (franja ya asignada) las siguientes.
+    // Idempotente: 201 la primera vez; 409 solo si la franja ya estaba asignada.
     const franja = await pedirConSesion(SESION.directora, `/api/deportes/grupos/${id}/horarios`, {
       method: 'POST',
       data: { dia_semana: DIA_DE_GRUPO[clave], hora_inicio: '18:00', hora_fin: '19:00' },
     })
-    expect([201, 409]).toContain(franja.status())
+    if (franja.status() !== 201) {
+      expect(franja.status()).toBe(409)
+      expect((await franja.json()).error).toBe('Esa franja ya está asignada a este grupo.')
+    }
     ids[clave] = id
   }
   return ids

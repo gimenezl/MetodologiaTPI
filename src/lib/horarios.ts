@@ -11,7 +11,7 @@
  *
  * PostgreSQL es la autoridad final (`app_private.intervalos_se_superponen`):
  * esta copia solo ANTICIPA lo que la base va a decidir, para explicarlo antes
- * de enviar. `tests/horarios-paridad.spec.ts` compara las dos implementaciones
+ * de enviar. `supabase/tests/horarios_paridad.mjs` compara las dos implementaciones
  * sobre la misma matriz de casos límite, de modo que no pueden divergir sin que
  * una prueba lo muestre.
  *

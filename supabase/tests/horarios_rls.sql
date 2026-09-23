@@ -120,6 +120,7 @@ BEGIN
                    AND pg_get_constraintdef(oid) LIKE '%dia_semana >= 1%dia_semana <= 7%')
        OR NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'horarios_rango_valido'
                       AND pg_get_constraintdef(oid) LIKE '%hora_inicio < hora_fin%')
+       OR NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'horarios_horas_representables')
        OR NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'horarios_franja_unica' AND contype = 'u') THEN
         RAISE EXCEPTION 'FALLO A1: faltan los CHECK o la unicidad del catálogo';
     END IF;
@@ -373,7 +374,21 @@ BEGIN
         RAISE EXCEPTION 'FALLO C4: se aceptó un inicio nulo';
     EXCEPTION WHEN SQLSTATE 'P5586' THEN NULL;
     END;
-    RAISE NOTICE 'OK C4: rango vacío, invertido o nulo se rechaza (P5586)';
+    -- 24:00 y las fracciones de segundo son TIME válidos, pero la aplicación no
+    -- puede representarlos: se rechazan en la RPC y en el catálogo.
+    BEGIN
+        PERFORM public.agregar_horario_grupo_deportivo(v_grupo, 4::SMALLINT, '23:00', '24:00');
+        RAISE EXCEPTION 'FALLO C4: se aceptó 24:00';
+    EXCEPTION WHEN SQLSTATE 'P5586' THEN NULL;
+    END;
+    BEGIN
+        PERFORM public.agregar_horario_grupo_deportivo(v_grupo, 4::SMALLINT, '10:00:30.5', '11:00');
+        RAISE EXCEPTION 'FALLO C4: se aceptó una fracción de segundo';
+    EXCEPTION WHEN SQLSTATE 'P5586' THEN NULL;
+    END;
+    -- 00:00–23:59:59 es el máximo representable y se acepta.
+    PERFORM public.agregar_horario_grupo_deportivo(v_grupo, 4::SMALLINT, '00:00', '09:00:59');
+    RAISE NOTICE 'OK C4: rango vacío, invertido, nulo, 24:00 o con fracciones se rechaza (P5586)';
 
     -- C5. La misma franja dos veces activa en un grupo.
     BEGIN
@@ -503,6 +518,16 @@ BEGIN
     EXCEPTION WHEN check_violation THEN NULL;
     END;
     BEGIN
+        INSERT INTO public.horarios (dia_semana, hora_inicio, hora_fin) VALUES (1, '23:00', '24:00');
+        RAISE EXCEPTION 'FALLO C10: el catálogo aceptó 24:00';
+    EXCEPTION WHEN check_violation THEN NULL;
+    END;
+    BEGIN
+        INSERT INTO public.horarios (dia_semana, hora_inicio, hora_fin) VALUES (1, '10:00:00.25', '11:00');
+        RAISE EXCEPTION 'FALLO C10: el catálogo aceptó una fracción de segundo';
+    EXCEPTION WHEN check_violation THEN NULL;
+    END;
+    BEGIN
         DELETE FROM public.grupos_deportivos WHERE id = (SELECT id FROM ept12_grupos WHERE clave = 'FUTBOL');
         RAISE EXCEPTION 'FALLO C10: se borró un grupo con franjas';
     EXCEPTION WHEN foreign_key_violation THEN NULL;
@@ -598,7 +623,7 @@ BEGIN
         PERFORM public.inscribir_en_grupo_deportivo((SELECT id FROM ept12_grupos WHERE clave = 'SIN_HORARIO'));
         RAISE EXCEPTION 'FALLO D5: se aceptó un grupo sin horario';
     EXCEPTION WHEN SQLSTATE 'P5583' THEN
-        IF SQLERRM <> 'El grupo todavía no tiene horarios cargados y no admite inscripciones.' THEN
+        IF SQLERRM <> 'Este grupo todavía no tiene horarios cargados, así que no admite inscripciones.' THEN
             RAISE EXCEPTION 'FALLO D5: mensaje inesperado: %', SQLERRM;
         END IF;
     END;

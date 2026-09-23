@@ -16,7 +16,11 @@ import type { Page } from '@playwright/test'
  * causa se vea sin repetir la corrida. Lo único que se oculta es la insignia y
  * el menú de herramientas, que no forman parte de la interfaz de la aplicación.
  */
-export async function capturarSinHerramientas(page: Page, ruta: string) {
+export async function capturarSinHerramientas(
+  page: Page,
+  ruta: string,
+  { paginaCompleta = true }: { paginaCompleta?: boolean } = {}
+) {
   const revisarYOcultarIndicadores = () => page.evaluate(() => {
     const portales = Array.from(document.querySelectorAll('nextjs-portal'))
     for (const portal of portales) {
@@ -48,7 +52,9 @@ export async function capturarSinHerramientas(page: Page, ruta: string) {
   // La lectura ocurre inmediatamente antes de componer la captura.
   await exigirSinError()
 
-  await page.screenshot({ path: ruta, fullPage: true })
+  // Con un diálogo modal abierto conviene la ventana visible: la captura de
+  // página completa recompone las capas fijas y deforma el overlay.
+  await page.screenshot({ path: ruta, fullPage: paginaCompleta })
 
   try {
     // Un overlay puede aparecer mientras Chromium compone la imagen. En ese
