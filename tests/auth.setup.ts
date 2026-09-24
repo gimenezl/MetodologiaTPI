@@ -79,6 +79,42 @@ export const PADRE = {
   archivoSesion: 'tests/.auth/padre.json',
 }
 
+export const PADRE_SEGUNDO = {
+  email: 'padre.segundo.prueba@ept.local',
+  password: 'prueba-ept-13-padre-segundo',
+  rol: 'PADRE',
+  etiqueta: 'PADRE SEGUNDO',
+  dni: '99900010',
+  nombre: 'Marcos',
+  apellido: 'Segundo',
+  legajo: null as string | null,
+  archivoSesion: 'tests/.auth/padre-segundo.json',
+}
+
+export const HIJO_APTO = {
+  email: 'hijo.apto.prueba@ept.local',
+  password: 'prueba-ept-13-hijo-apto',
+  rol: 'ESTUDIANTE',
+  etiqueta: 'HIJO APTO',
+  dni: '99900011',
+  nombre: 'Lara',
+  apellido: 'Vinculada',
+  legajo: 'LEG-PRUEBA-0011',
+  archivoSesion: 'tests/.auth/hijo-apto.json',
+}
+
+export const HIJO_CONCURRENTE = {
+  email: 'hijo.concurrente.prueba@ept.local',
+  password: 'prueba-ept-13-concurrencia',
+  rol: 'ESTUDIANTE',
+  etiqueta: 'HIJO CONCURRENTE',
+  dni: '99900012',
+  nombre: 'Nicolás',
+  apellido: 'Vinculado',
+  legajo: 'LEG-PRUEBA-0012',
+  archivoSesion: 'tests/.auth/hijo-concurrente.json',
+}
+
 export const PERSONAL = {
   email: 'personal.prueba@ept.local',
   password: 'prueba-ept-9-personal',
@@ -164,6 +200,9 @@ const IDENTIDADES = [
   ESTUDIANTE_AJENO,
   DOCENTE,
   PADRE,
+  PADRE_SEGUNDO,
+  HIJO_APTO,
+  HIJO_CONCURRENTE,
   PERSONAL,
   ESTUDIANTE_INACTIVO,
   ESTUDIANTE_CIERRE,
@@ -252,6 +291,7 @@ function vaciarModeloAcademico() {
     {
       input: `
         BEGIN;
+        DELETE FROM public.grupos_deportivos_horarios;
         DELETE FROM public.inscripciones_deportivas;
         DELETE FROM public.grupos_deportivos;
         DELETE FROM public.inscripciones_servicios;
@@ -343,6 +383,16 @@ setup('crear identidades y datos de prueba', async () => {
     }
     perfilesCreados.set(identidad.email, perfil.id as string)
   }
+
+  const padreId = perfilesCreados.get(PADRE.email)
+  const hijoId = perfilesCreados.get(HIJO_APTO.email)
+  const concurrenteId = perfilesCreados.get(HIJO_CONCURRENTE.email)
+  if (!padreId || !hijoId || !concurrenteId) throw new Error('Faltan perfiles para el vínculo familiar de prueba.')
+  const { error: errorVinculo } = await admin.from('padres_hijos').insert([
+    { padre_id: padreId, hijo_id: hijoId },
+    { padre_id: padreId, hijo_id: concurrenteId },
+  ])
+  if (errorVinculo) throw new Error(`No se pudo crear el vínculo familiar local: ${errorVinculo.message}`)
 
   // Cuenta sin perfil: existe en Auth y no tiene fila en `perfiles`.
   const { data: sinPerfil, error: errorSinPerfil } = await admin.auth.admin.createUser({

@@ -6,8 +6,13 @@
  * reconstruida desde cero con la cadena completa de migraciones. Se conserva
  * como artefacto de referencia para poder comparar.
  *
- * Reconciliación verificada entre este archivo y el esquema real (015):
+ * Reconciliación verificada entre este archivo y el esquema real (016):
  *
+ * - 016 (EPT-13) agrega lectura RLS parental sobre `alumnos` y `matriculas`
+ *   y las funciones públicas `matricular_hijo` y `consultar_detalle_hijo`.
+ *   La primera retorna el UUID de la matrícula creada; la segunda proyecta
+ *   asignaciones y deportes activos sin ampliar lectura directa de tablas.
+ *   No añade tablas ni columnas.
  * - 015 (EPT-12) agrega `horarios`, `grupos_deportivos_horarios` y las
  *   funciones públicas `agregar_horario_grupo_deportivo`,
  *   `dar_de_baja_horario_grupo_deportivo`, `inscribir_alumno_en_grupo_deportivo`,
@@ -729,6 +734,14 @@ export type Database = {
         Args: Record<string, never>
         // `null` cuando la sesión autenticada no tiene perfil.
         Returns: string | null
+      }
+      matricular_hijo: {
+        Args: { p_hijo_id: string; p_curso_id: string }
+        Returns: string
+      }
+      consultar_detalle_hijo: {
+        Args: { p_hijo_id: string }
+        Returns: Json
       }
       inscribir_en_servicio: {
         Args: { p_servicio_id: string }

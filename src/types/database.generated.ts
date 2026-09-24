@@ -1400,6 +1400,7 @@ export type Database = {
           tiene_horario: boolean
         }[]
       }
+      consultar_detalle_hijo: { Args: { p_hijo_id: string }; Returns: Json }
       corregir_identidad_alumno: {
         Args: { p_alumno_id: string; p_dni: string; p_legajo_nro?: string }
         Returns: string
@@ -1565,6 +1566,10 @@ export type Database = {
           profesor_id: string
           profesor_nombre: string
         }[]
+      }
+      matricular_hijo: {
+        Args: { p_curso_id: string; p_hijo_id: string }
+        Returns: string
       }
       reactivar_alumno: {
         Args: { p_alumno_id: string; p_curso_id: string }

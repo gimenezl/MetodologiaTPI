@@ -26,6 +26,7 @@ const navItems: NavItem[] = [
   { href: '/dashboard/legajos', label: 'Legajos', icon: Users, roles: ['DIRECTOR'] },
   { href: '/dashboard/alumnos', label: 'Alumnos', icon: Student, roles: ['DIRECTOR'] },
   { href: '/dashboard/mi-legajo', label: 'Mi legajo', icon: IdentificationCard, roles: ['ESTUDIANTE'] },
+  { href: '/dashboard/hijos', label: 'Mis hijos', icon: Student, roles: ['PADRE'] },
   { href: '/dashboard/cursos', label: 'Cursos', icon: Chalkboard, roles: ['DIRECTOR'] },
   { href: '/dashboard/niveles', label: 'Niveles', icon: GraduationCap, roles: ['DIRECTOR'] },
   { href: '/dashboard/materias', label: 'Materias', icon: BookOpen, roles: ['DIRECTOR'] },
@@ -151,7 +152,7 @@ function SidebarContent({
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { perfil, rol, isLoading, user, signOut } = useAuth()
+  const { rol, isLoading, user, signOut } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const [headerHidden, setHeaderHidden] = useState(false)

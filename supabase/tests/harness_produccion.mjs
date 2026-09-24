@@ -60,6 +60,7 @@ const RUTAS_DE_BANCO = [
   '/pruebas-ui/niveles',
   '/pruebas-ui/comedor',
   '/pruebas-ui/deportes',
+  '/pruebas-ui/hijos',
 ]
 const RUTA_LEGITIMA = '/login'
 
