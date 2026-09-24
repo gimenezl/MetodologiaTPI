@@ -433,6 +433,23 @@ RESET ROLE;
 UPDATE public.grupos_deportivos SET activo = FALSE
 WHERE id = (SELECT id FROM ept11_grupos WHERE clave = 'MARCIALES');
 
+-- Desde EPT-12 (migración 015) un grupo sin horario no admite inscripciones.
+-- Cada grupo de la matriz recibe una franja en un día DISTINTO, de modo que
+-- ninguna combinación de esta suite se superpone y cada regla de EPT-11 sigue
+-- decidiendo exactamente lo mismo que antes. Las reglas horarias se prueban
+-- en `horarios_rls.sql`.
+INSERT INTO public.horarios (dia_semana, hora_inicio, hora_fin)
+SELECT d, '18:00', '19:00' FROM generate_series(1, 7) AS d
+ON CONFLICT (dia_semana, hora_inicio, hora_fin) DO NOTHING;
+INSERT INTO public.grupos_deportivos_horarios (grupo_id, horario_id)
+SELECT g.id, h.id
+FROM ept11_grupos g
+JOIN (VALUES ('FUTBOL_A', 1), ('NATACION', 2), ('ATLETISMO', 3), ('FUTBOL_B', 4),
+             ('VOLEY_INICIAL', 5), ('BASQUET_UNO', 6), ('MARCIALES', 7)) AS dia(clave, numero)
+  ON dia.clave = g.clave
+JOIN public.horarios h
+  ON h.dia_semana = dia.numero AND h.hora_inicio = '18:00' AND h.hora_fin = '19:00';
+
 
 -- ================================================================
 -- C. MATRIZ DEL ALUMNO

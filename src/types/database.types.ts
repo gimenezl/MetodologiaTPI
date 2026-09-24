@@ -6,8 +6,16 @@
  * reconstruida desde cero con la cadena completa de migraciones. Se conserva
  * como artefacto de referencia para poder comparar.
  *
- * Reconciliación verificada entre este archivo y el esquema real (014):
+ * Reconciliación verificada entre este archivo y el esquema real (015):
  *
+ * - 015 (EPT-12) agrega `horarios`, `grupos_deportivos_horarios` y las
+ *   funciones públicas `agregar_horario_grupo_deportivo`,
+ *   `dar_de_baja_horario_grupo_deportivo`, `inscribir_alumno_en_grupo_deportivo`,
+ *   `consultar_compatibilidad_horaria` y
+ *   `consultar_compatibilidad_horaria_alumno`. En las dos consultas, las
+ *   columnas `conflicto_*` admiten `null` (no hay conflicto); el generador las
+ *   tipa como no nulas por la misma razón que en `listar_grupos_deportivos`.
+ *   Las horas (`TIME`) llegan como texto `HH:MM:SS`.
  * - 014 (EPT-11) agrega `deportes`, `grupos_deportivos`,
  *   `inscripciones_deportivas`, la vista `inscripciones_deportivas_detalle`, el
  *   tipo enumerado `estado_inscripcion_deportiva` y las funciones públicas
@@ -314,6 +322,56 @@ export type Database = {
           activo?: boolean
           fecha_creacion?: string
           fecha_actualizacion?: string
+        }
+      }
+      horarios: {
+        Row: {
+          id: string
+          // 1 = lunes … 7 = domingo.
+          dia_semana: number
+          hora_inicio: string
+          hora_fin: string
+          fecha_creacion: string
+        }
+        Insert: {
+          id?: string
+          dia_semana: number
+          hora_inicio: string
+          hora_fin: string
+          fecha_creacion?: string
+        }
+        Update: {
+          id?: string
+          dia_semana?: number
+          hora_inicio?: string
+          hora_fin?: string
+          fecha_creacion?: string
+        }
+      }
+      grupos_deportivos_horarios: {
+        Row: {
+          id: string
+          grupo_id: string
+          horario_id: string
+          activo: boolean
+          fecha_alta: string
+          fecha_baja: string | null
+        }
+        Insert: {
+          id?: string
+          grupo_id: string
+          horario_id: string
+          activo?: boolean
+          fecha_alta?: string
+          fecha_baja?: string | null
+        }
+        Update: {
+          id?: string
+          grupo_id?: string
+          horario_id?: string
+          activo?: boolean
+          fecha_alta?: string
+          fecha_baja?: string | null
         }
       }
       inscripciones_deportivas: {
@@ -720,6 +778,31 @@ export type Database = {
         Args: { p_inscripcion_id: string }
         Returns: Database['public']['Tables']['inscripciones_deportivas']['Row']
       }
+      agregar_horario_grupo_deportivo: {
+        Args: {
+          p_grupo_id: string
+          p_dia_semana: number
+          p_hora_inicio: string
+          p_hora_fin: string
+        }
+        Returns: Database['public']['Tables']['grupos_deportivos_horarios']['Row']
+      }
+      dar_de_baja_horario_grupo_deportivo: {
+        Args: { p_grupo_id: string; p_franja_id: string }
+        Returns: Database['public']['Tables']['grupos_deportivos_horarios']['Row']
+      }
+      inscribir_alumno_en_grupo_deportivo: {
+        Args: { p_alumno_id: string; p_grupo_id: string }
+        Returns: Database['public']['Tables']['inscripciones_deportivas']['Row']
+      }
+      consultar_compatibilidad_horaria: {
+        Args: Record<string, never>
+        Returns: CompatibilidadHorariaFila[]
+      }
+      consultar_compatibilidad_horaria_alumno: {
+        Args: { p_alumno_id: string }
+        Returns: CompatibilidadHorariaFila[]
+      }
       renombrar_nivel: {
         Args: { p_nivel_id: number; p_nombre: string }
         Returns: {
@@ -732,6 +815,18 @@ export type Database = {
       }
     }
   }
+}
+
+/** Fila de las consultas de compatibilidad horaria (EPT-12). */
+type CompatibilidadHorariaFila = {
+  grupo_id: string
+  tiene_horario: boolean
+  // Todas `null` cuando el grupo no choca con ninguna actividad activa.
+  conflicto_deporte: string | null
+  conflicto_grupo: string | null
+  conflicto_dia_semana: number | null
+  conflicto_hora_inicio: string | null
+  conflicto_hora_fin: string | null
 }
 
 export type Tables<T extends keyof Database['public']['Tables']> =
@@ -754,3 +849,5 @@ export type InscripcionServicioFila = Tables<'inscripciones_servicios'>
 export type DeporteFila = Tables<'deportes'>
 export type GrupoDeportivoFila = Tables<'grupos_deportivos'>
 export type InscripcionDeportivaFila = Tables<'inscripciones_deportivas'>
+export type HorarioFila = Tables<'horarios'>
+export type FranjaGrupoDeportivoFila = Tables<'grupos_deportivos_horarios'>

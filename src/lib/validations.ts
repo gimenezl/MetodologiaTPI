@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { esHoraValida, normalizarHora } from '@/lib/horarios'
 
 // ---- DNI Validation ----
 const dniSchema = z
@@ -724,3 +725,68 @@ export function primerErrorDeportes(error: z.ZodError): {
 
   return { mensaje: issue.message, campo }
 }
+
+// ---- Horarios deportivos (EPT-12) ----
+/**
+ * Hora `HH:MM` (lo que envía un `<input type="time">`) o `HH:MM:SS`. Mismo
+ * contrato que `esHoraValida` de `src/lib/horarios.ts`.
+ */
+const horaFranjaSchema = (etiqueta: string) =>
+  z
+    .string({ message: `Ingresá la hora de ${etiqueta}` })
+    .refine(esHoraValida, `Ingresá una hora de ${etiqueta} válida, por ejemplo 14:30`)
+
+/**
+ * Franja semanal de un grupo: día 1 (lunes) a 7 (domingo) y un rango con el
+ * inicio anterior al fin. La base aplica las mismas condiciones (CHECK y
+ * P5585/P5586); esta validación solo evita un viaje inútil.
+ */
+export const agregarHorarioGrupoSchema = z
+  .object({
+    dia_semana: z
+      .number({ message: 'Seleccioná un día de la semana' })
+      .int('Seleccioná un día de la semana')
+      .min(1, 'Seleccioná un día de la semana')
+      .max(7, 'Seleccioná un día de la semana'),
+    hora_inicio: horaFranjaSchema('inicio'),
+    hora_fin: horaFranjaSchema('fin'),
+  })
+  .strict()
+  // Zod 4 evalúa este refine aunque un campo ya haya fallado: con una hora
+  // inválida no se compara (el error del campo ya la describe).
+  .refine(
+    (franja) =>
+      !esHoraValida(franja.hora_inicio) ||
+      !esHoraValida(franja.hora_fin) ||
+      normalizarHora(franja.hora_inicio) < normalizarHora(franja.hora_fin),
+    {
+      message: 'La hora de inicio debe ser anterior a la hora de fin',
+      path: ['hora_fin'],
+    }
+  )
+
+export type AgregarHorarioGrupoData = z.infer<typeof agregarHorarioGrupoSchema>
+
+/** Única acción sobre una franja existente: la baja lógica. */
+export const actualizarHorarioGrupoSchema = z.discriminatedUnion('accion', [
+  z.object({ accion: z.literal('dar_de_baja') }).strict(),
+])
+
+export const grupoDeportivoIdSchema = z.string().uuid('Identificador de grupo inválido')
+export const franjaHorariaIdSchema = z.string().uuid('Identificador de franja inválido')
+
+/**
+ * Alta administrativa: la dirección elige a QUÉ alumno y a QUÉ grupo. Nunca
+ * transporta nivel, cupo ni estado: la base los deriva y los valida con las
+ * mismas reglas que el alta del propio alumno.
+ */
+export const inscripcionAdministrativaSchema = z
+  .object({
+    alumno_id: z.string({ message: 'Seleccioná un alumno' }).uuid('Seleccioná un alumno'),
+    grupo_id: z
+      .string({ message: 'Seleccioná un grupo deportivo' })
+      .uuid('Seleccioná un grupo deportivo'),
+  })
+  .strict()
+
+export type InscripcionAdministrativaData = z.infer<typeof inscripcionAdministrativaSchema>

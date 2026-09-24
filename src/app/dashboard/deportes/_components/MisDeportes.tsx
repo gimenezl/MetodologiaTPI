@@ -14,14 +14,21 @@ import {
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Dialogo } from '@/components/ui/Dialogo'
+import { MENSAJE_SIN_HORARIO, mensajeConflicto } from '@/lib/horarios'
 import { cn } from '@/lib/utils'
 import {
   cancelarInscripcionDeportivaRemota,
   ErrorDeportes,
   inscribirEnGrupoRemoto,
 } from '@/services/deportes.client'
-import type { GrupoDeportivo, InscripcionDeportiva } from '@/services/deportes.service'
+import type {
+  CompatibilidadPorGrupo,
+  GrupoDeportivo,
+  HorariosPorGrupo,
+  InscripcionDeportiva,
+} from '@/services/deportes.service'
 import { fecha, nombreNivel } from './formato'
+import { ListaFranjas } from './ListaFranjas'
 
 /** Máximo de deportes activos por alumno. La autoridad es PostgreSQL (P5577). */
 const MAXIMO_DEPORTES = 2
@@ -42,6 +49,13 @@ const MOTIVOS = {
 interface MisDeportesProps {
   grupos: GrupoDeportivo[]
   inscripciones: InscripcionDeportiva[]
+  /** Franjas activas por grupo (EPT-12). */
+  horarios: HorariosPorGrupo
+  /**
+   * Compatibilidad horaria calculada por PostgreSQL con la misma función que
+   * decide el alta. `null` si no se pudo consultar: el alta la verifica igual.
+   */
+  compatibilidad: CompatibilidadPorGrupo | null
   nivelNombre: string | null
   /** Motivo, resuelto en el servidor, por el que el alumno aún no puede inscribirse. */
   impedimento?: string
@@ -65,6 +79,8 @@ type Aviso =
 export function MisDeportes({
   grupos,
   inscripciones,
+  horarios,
+  compatibilidad,
   nivelNombre,
   impedimento,
   mensajeInicial,
@@ -166,12 +182,19 @@ export function MisDeportes({
     }
   }
 
-  /** Por qué no se puede pedir este grupo ahora, o `undefined` si se puede. */
+  /**
+   * Por qué no se puede pedir este grupo ahora, o `undefined` si se puede. El
+   * orden es el mismo en que PostgreSQL evalúa las reglas, así que el motivo
+   * anticipado es el que el alta devolvería.
+   */
   function motivoBloqueo(grupo: GrupoDeportivo): string | undefined {
     if (impedimento) return impedimento
     if (deportesActivos.has(grupo.deporte_id)) return MOTIVOS.mismoDeporte
     if (limiteAlcanzado) return MOTIVOS.limiteDos
     if (grupo.disponibles <= 0) return MOTIVOS.sinPlazas
+    if ((horarios[grupo.grupo_id] ?? []).length === 0) return MENSAJE_SIN_HORARIO
+    const conflicto = compatibilidad?.[grupo.grupo_id]?.conflicto
+    if (conflicto) return mensajeConflicto(conflicto)
     return undefined
   }
 
@@ -184,8 +207,8 @@ export function MisDeportes({
         <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">Deportes</h1>
         <p className="text-neutral-500 text-sm mt-1 max-w-[64ch]">
           Inscribite en los grupos deportivos de tu nivel. Podés tener hasta dos deportes
-          activos a la vez y cancelar cuando lo necesites; al cancelar, tu plaza queda libre
-          para otra persona.
+          activos a la vez, siempre que sus horarios no se superpongan, y cancelar cuando lo
+          necesites; al cancelar, tu plaza y tu horario quedan libres.
         </p>
       </header>
 
@@ -288,6 +311,10 @@ export function MisDeportes({
                   <p className="text-xs text-neutral-500 mt-1">
                     Desde {fecha(inscripcion.fecha_inscripcion)}
                   </p>
+                  <ListaFranjas
+                    franjas={horarios[inscripcion.grupo_id] ?? []}
+                    className="mt-2"
+                  />
                 </div>
                 <Button
                   variant="danger"
@@ -320,6 +347,16 @@ export function MisDeportes({
           </div>
         )}
 
+        {!impedimento && compatibilidad === null && grupos.length > 0 && (
+          <div
+            role="status"
+            className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-900"
+          >
+            No pudimos consultar la compatibilidad horaria de los grupos. Podés inscribirte igual:
+            al confirmar, verificamos que los horarios no se superpongan con tus otros deportes.
+          </div>
+        )}
+
         {grupos.length === 0 ? (
           <div className="bg-white rounded-2xl border border-neutral-200 py-10 px-5 text-center">
             <SoccerBall size={36} className="text-neutral-300 mx-auto mb-3" aria-hidden="true" />
@@ -338,6 +375,8 @@ export function MisDeportes({
               const idMotivo = `motivo-${grupo.grupo_id}`
               const porcentaje = grupo.cupo > 0 ? Math.min(100, (grupo.ocupados / grupo.cupo) * 100) : 100
               const sinPlazas = grupo.disponibles <= 0
+              const franjas = horarios[grupo.grupo_id] ?? []
+              const conflicto = inscripto ? null : compatibilidad?.[grupo.grupo_id]?.conflicto
 
               return (
                 <li
@@ -358,11 +397,14 @@ export function MisDeportes({
                         </Badge>
                       )}
                       {!inscripto && sinPlazas && <Badge variant="danger">Sin plazas</Badge>}
+                      {!inscripto && franjas.length === 0 && <Badge variant="warning">Sin horario</Badge>}
+                      {conflicto && <Badge variant="danger">Horario superpuesto</Badge>}
                     </div>
                     <p className="text-sm text-neutral-600 mt-1 break-words">{grupo.grupo_nombre}</p>
                     <p className="text-xs text-neutral-500 mt-1 break-words">
                       Profesor responsable: {grupo.profesor_nombre} {grupo.profesor_apellido}
                     </p>
+                    <ListaFranjas franjas={franjas} className="mt-2" />
                   </div>
 
                   <div>

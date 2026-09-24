@@ -81,6 +81,21 @@ const GRUPOS = {
 
 type ClaveGrupo = keyof typeof GRUPOS
 
+/**
+ * Desde EPT-12 un grupo sin horario no admite inscripciones. Cada grupo de la
+ * matriz recibe una franja en un día DISTINTO, así que ninguna combinación de
+ * esta suite se superpone y cada regla de EPT-11 decide lo mismo que antes. Las
+ * reglas horarias se prueban en `horarios-auth.spec.ts`.
+ */
+const DIA_DE_GRUPO: Record<ClaveGrupo, number> = {
+  futbolA: 1,
+  futbolB: 2,
+  natacion: 3,
+  atletismo: 4,
+  basquet: 5,
+  voleyPrimario: 6,
+}
+
 const MENSAJE = {
   mismoGrupo: 'Ya estás inscripto en este grupo.',
   mismoDeporte:
@@ -172,6 +187,15 @@ async function asegurarGrupos(): Promise<Record<ClaveGrupo, string>> {
       id = await idGrupo(clave)
     }
     if (!id) throw new Error(`No se pudo preparar el grupo ${clave}`)
+    // Idempotente: 201 la primera vez; 409 solo si la franja ya estaba asignada.
+    const franja = await pedirConSesion(SESION.directora, `/api/deportes/grupos/${id}/horarios`, {
+      method: 'POST',
+      data: { dia_semana: DIA_DE_GRUPO[clave], hora_inicio: '18:00', hora_fin: '19:00' },
+    })
+    if (franja.status() !== 201) {
+      expect(franja.status()).toBe(409)
+      expect((await franja.json()).error).toBe('Esa franja ya está asignada a este grupo.')
+    }
     ids[clave] = id
   }
   return ids
@@ -684,7 +708,7 @@ test.describe('DIRECTOR autenticado — deportes', () => {
     )
   })
 
-  test('consulta las inscripciones, pero no inscribe ni cancela en nombre de un alumno', async ({ page }) => {
+  test('consulta las inscripciones y no usa la vía del alumno para inscribir ni cancelar', async ({ page }) => {
     await limpiarInscripciones(ESTUDIANTE.dni)
     const alta = await inscribir(SESION.estudiante, grupos.atletismo)
     expect(alta.status()).toBe(201)
@@ -705,7 +729,11 @@ test.describe('DIRECTOR autenticado — deportes', () => {
     const fila = aplicacion(page).getByRole('listitem').filter({ hasText: 'Estudiante, Beto' })
     await expect(fila).toContainText('Atletismo')
     await expect(fila).toContainText('Legajo LEG-PRUEBA-0002')
-    await expect(page.getByRole('button', { name: /Cancelar|Inscribir/ })).toHaveCount(0)
+    // EPT-12 agrega la inscripción administrativa, que pasa por las mismas
+    // reglas de la base (horarios-auth.spec.ts). Cancelar en nombre de un
+    // alumno sigue sin existir (EPT-62).
+    await expect(page.getByRole('button', { name: /Cancelar/ })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /Inscribir/ })).toHaveText(['Inscribir alumno'])
     await capturar(page, 'escritorio-director-inscripciones')
 
     await page.setViewportSize({ width: 375, height: 812 })

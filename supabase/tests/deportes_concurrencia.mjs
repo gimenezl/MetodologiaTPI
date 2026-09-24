@@ -101,13 +101,29 @@ function afirmar(condicion, mensaje) {
   if (!condicion) throw new Error(mensaje)
 }
 
+/**
+ * Franja propia de este arnés. Desde EPT-12 (migración 015) un grupo sin
+ * horario no admite inscripciones, así que cada grupo recibe una franja en un
+ * día DISTINTO: ninguna carrera de esta suite depende de la regla horaria, que
+ * se prueba en `horarios_concurrencia.mjs`. El minuto 07 hace que las filas del
+ * catálogo sean inconfundibles al limpiar.
+ */
+const FRANJA = { inicio: '18:07', fin: '19:07' }
+let diaSiguiente = 1
+
 async function crearGrupo(sesion, clave, deporte, nivel, cupo) {
-  return sesion.escalar(
+  const id = await sesion.escalar(
     `(SELECT (public.crear_grupo_deportivo('${deporte}',
         (SELECT id FROM public.niveles WHERE nombre = '${nivel}'),
         'Concurrencia EPT-11 ${clave}', ${cupo}, '${ID.docente}')).id)`,
     `grupo_${clave}`
   )
+  await sesion.escalar(
+    `(SELECT (public.agregar_horario_grupo_deportivo('${id}', ${diaSiguiente++}::SMALLINT,
+        '${FRANJA.inicio}', '${FRANJA.fin}')).id)`,
+    `franja_${clave}`
+  )
+  return id
 }
 
 /**
@@ -132,7 +148,12 @@ async function limpiar() {
     `RESET ROLE;
      BEGIN;
      DELETE FROM public.inscripciones_deportivas WHERE alumno_id IN (${lista(ALUMNOS)});
+     DELETE FROM public.grupos_deportivos_horarios
+       WHERE grupo_id IN (SELECT id FROM public.grupos_deportivos WHERE profesor_id = '${ID.docente}');
      DELETE FROM public.grupos_deportivos WHERE profesor_id = '${ID.docente}';
+     DELETE FROM public.horarios h
+       WHERE h.hora_inicio = '${FRANJA.inicio}' AND h.hora_fin = '${FRANJA.fin}'
+         AND NOT EXISTS (SELECT 1 FROM public.grupos_deportivos_horarios f WHERE f.horario_id = h.id);
      DELETE FROM public.matriculas WHERE alumno_id IN (${lista(ALUMNOS)});
      DELETE FROM public.alumnos WHERE perfil_id IN (${lista(ALUMNOS)});
      DELETE FROM public.perfiles WHERE id IN (${lista(PERFILES)});
