@@ -12,7 +12,8 @@ CREATE POLICY "Consulta académica por actor" ON public.alumnos
         (SELECT public.es_director_actual())
         OR (perfil_id = (SELECT app_private.perfil_actual())
             AND (SELECT app_private.rol_actual()) = 'ESTUDIANTE')
-        OR perfil_id IN (SELECT app_private.mis_hijos_ids())
+        OR ((SELECT app_private.rol_actual()) = 'PADRE'
+            AND perfil_id IN (SELECT app_private.mis_hijos_ids()))
     );
 
 DROP POLICY "El director consulta todo el historial academico" ON public.matriculas;
@@ -23,8 +24,37 @@ CREATE POLICY "Consulta de matrículas por actor" ON public.matriculas
         (SELECT public.es_director_actual())
         OR (alumno_id = (SELECT app_private.perfil_actual())
             AND (SELECT app_private.rol_actual()) = 'ESTUDIANTE')
-        OR alumno_id IN (SELECT app_private.mis_hijos_ids())
+        OR ((SELECT app_private.rol_actual()) = 'PADRE'
+            AND alumno_id IN (SELECT app_private.mis_hijos_ids()))
     );
+
+-- El vínculo saliente puede sobrevivir a un cambio posterior del rol del
+-- antiguo padre. Las cuatro políticas de 011 que usan mis_hijos_ids()
+-- necesitan la misma comprobación del rol vigente. Se reemplazan únicamente
+-- esas ramas; los permisos de staff, estudiante y perfil propio permanecen.
+DROP POLICY "Padres ven perfiles de sus hijos" ON public.perfiles;
+CREATE POLICY "Padres ven perfiles de sus hijos" ON public.perfiles
+    FOR SELECT TO authenticated
+    USING ((SELECT app_private.rol_actual()) = 'PADRE'
+        AND id IN (SELECT app_private.mis_hijos_ids()));
+
+DROP POLICY "Padres ven asistencias de sus hijos" ON public.asistencias;
+CREATE POLICY "Padres ven asistencias de sus hijos" ON public.asistencias
+    FOR SELECT TO authenticated
+    USING ((SELECT app_private.rol_actual()) = 'PADRE'
+        AND estudiante_id IN (SELECT app_private.mis_hijos_ids()));
+
+DROP POLICY "Padre inscribe a sus hijos" ON public.inscripciones;
+CREATE POLICY "Padre inscribe a sus hijos" ON public.inscripciones
+    FOR INSERT TO authenticated
+    WITH CHECK ((SELECT app_private.rol_actual()) = 'PADRE'
+        AND estudiante_id IN (SELECT app_private.mis_hijos_ids()));
+
+DROP POLICY "Padre da de baja a sus hijos" ON public.inscripciones;
+CREATE POLICY "Padre da de baja a sus hijos" ON public.inscripciones
+    FOR DELETE TO authenticated
+    USING ((SELECT app_private.rol_actual()) = 'PADRE'
+        AND estudiante_id IN (SELECT app_private.mis_hijos_ids()));
 
 CREATE OR REPLACE FUNCTION app_private.matricular_hijo(p_hijo_id UUID, p_curso_id UUID)
 RETURNS UUID

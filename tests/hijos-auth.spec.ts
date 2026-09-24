@@ -1,4 +1,5 @@
 import { test, expect, request as crearContexto } from '@playwright/test'
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -54,7 +55,23 @@ test.describe('PADRE autenticado', () => {
     await expect(dialogo.getByRole('heading', { name: 'Confirmar matrícula' })).toBeVisible()
     await expect(dialogo.getByText(/Después no podrás cambiar el curso/)).toBeVisible()
     await captura(page, '04-confirmacion')
+    let registrarRetencion: () => void = () => {}
+    let liberarSolicitud: () => void = () => {}
+    const solicitudRetenida = new Promise<void>((resolve) => { registrarRetencion = resolve })
+    const continuarSolicitud = new Promise<void>((resolve) => { liberarSolicitud = resolve })
+    await page.route('**/api/hijos/*/matricula', async (route) => {
+      registrarRetencion()
+      await continuarSolicitud
+      await route.continue()
+    })
     await dialogo.getByRole('button', { name: 'Confirmar matrícula' }).click()
+    try {
+      await solicitudRetenida
+      await expect(page.getByRole('status', { name: 'Estado de la matrícula' })).toContainText('Enviando')
+      await captura(page, '04b-envio-autenticado')
+    } finally {
+      liberarSolicitud()
+    }
     await expect(page.getByRole('status', { name: 'Estado de la matrícula' })).toContainText('confirmó')
     await captura(page, '05-exito')
     await page.reload()
@@ -95,9 +112,32 @@ test.describe('PADRE autenticado', () => {
       request.post(`/api/hijos/${hijo.id}/matricula`, { data: { curso_id: cursoId } }),
     ])
     expect(resultados.map((respuesta) => respuesta.status()).sort()).toEqual([201, 409])
+    const exitosa = resultados.find((respuesta) => respuesta.status() === 201)
+    if (!exitosa) throw new Error('Ninguna solicitud confirmó la matrícula.')
+    const confirmacion = await exitosa.json()
+    expect(confirmacion.matricula_id).toMatch(/^[0-9a-f-]{36}$/i)
     const despues = await request.get(`/api/hijos/${hijo.id}`)
     expect(despues.status()).toBe(200)
-    expect((await despues.json()).hijo.estado).toBe('ACTIVO')
+    const situacion = (await despues.json()).hijo
+    expect(situacion.estado).toBe('ACTIVO')
+    expect(situacion.matricula_id).toBe(confirmacion.matricula_id)
+    const curso = datos.cursos.find((item: { id: string }) => item.id === cursoId)
+    expect(situacion.curso_denominacion).toBe(curso.denominacion)
+    expect(situacion.curso_division).toBe(curso.division)
+    expect(situacion.nivel_nombre).toBe(curso.nivel.nombre)
+
+    // Consulta de solo lectura contra el contenedor descartable: el endpoint
+    // parental proyecta la matrícula vigente, no expone el historial completo.
+    if (process.env.EPT_SUPABASE_LOCAL !== '1') throw new Error('Se requiere la base local descartable.')
+    expect(hijo.id).toMatch(/^[0-9a-f-]{36}$/i)
+    const contenedor = process.env.EPT_SUPABASE_DB_CONTAINER ?? 'supabase_db_educar-para-transformar'
+    const filas = execFileSync('docker', [
+      'exec', '-i', contenedor, 'psql', '-X', '-q', '-t', '-A', '-U', 'postgres', '-d', 'postgres',
+      '-v', 'ON_ERROR_STOP=1', '-c',
+      `SELECT COALESCE(json_agg(json_build_object('id', id, 'curso_id', curso_id, 'fecha_cierre', fecha_cierre)), '[]'::json) FROM public.matriculas WHERE alumno_id = '${hijo.id}';`,
+    ], { encoding: 'utf8' }).trim()
+    const matriculas = JSON.parse(filas) as { id: string; curso_id: string; fecha_cierre: string | null }[]
+    expect(matriculas).toEqual([{ id: confirmacion.matricula_id, curso_id: cursoId, fecha_cierre: null }])
   })
 })
 

@@ -41,6 +41,11 @@ INSERT INTO public.horarios (id, dia_semana, hora_inicio, hora_fin)
 VALUES ('eeeeeeee-1300-4000-8000-000000000021', 3, '17:00', '18:00');
 INSERT INTO public.grupos_deportivos_horarios (grupo_id, horario_id)
 VALUES ('eeeeeeee-1300-4000-8000-000000000010', 'eeeeeeee-1300-4000-8000-000000000021');
+INSERT INTO public.asistencias (estudiante_id, fecha, estado)
+VALUES ('eeeeeeee-1300-4000-8000-000000000003', '2026-09-24', 'PRESENTE');
+INSERT INTO public.inscripciones (estudiante_id, actividad_id)
+SELECT 'eeeeeeee-1300-4000-8000-000000000003', id
+FROM public.actividades WHERE tipo = 'CURRICULAR' ORDER BY id LIMIT 1;
 INSERT INTO public.cursos (id, nivel_id, denominacion, division, activo)
 SELECT 'eeeeeeee-1300-4000-8000-000000000006', id, 'Curso inactivo EPT 13', 'B', false
 FROM public.niveles WHERE nombre = 'PRIMARIO' LIMIT 1;
@@ -163,6 +168,74 @@ BEGIN
     RAISE EXCEPTION 'El detalle de un hijo ajeno quedó expuesto';
   EXCEPTION WHEN SQLSTATE 'P5520' THEN NULL;
   END;
+END $$;
+
+-- Un vínculo saliente histórico no convierte en PADRE a un perfil cuyo rol
+-- cambió. `mis_hijos_ids()` de 011 verifica identidad, pero no rol: esta
+-- prueba demuestra que la política SELECT agrega esa condición por separado.
+RESET ROLE;
+UPDATE public.perfiles
+SET rol_id = (SELECT id FROM public.roles WHERE nombre = 'PERSONAL')
+WHERE id = 'eeeeeeee-1300-4000-8000-000000000001';
+SET LOCAL ROLE authenticated;
+SELECT pg_catalog.set_config('request.jwt.claim.sub', 'eeeeeeee-1300-4000-8000-000000000011', true);
+DO $$
+DECLARE v_eliminadas INTEGER;
+BEGIN
+  IF (SELECT app_private.rol_actual()) IS DISTINCT FROM 'PERSONAL'
+     OR (SELECT count(*) FROM app_private.mis_hijos_ids()) <> 2 THEN
+    RAISE EXCEPTION 'El fixture no conserva el vínculo saliente con rol cambiado';
+  END IF;
+  IF (SELECT count(*) FROM public.alumnos) <> 0
+     OR (SELECT count(*) FROM public.matriculas) <> 0
+     OR (SELECT count(*) FROM public.alumnos_academicos) <> 0
+     OR (SELECT count(*) FROM public.matriculas_historial) <> 0
+     OR (SELECT count(*) FROM public.perfiles WHERE id = 'eeeeeeee-1300-4000-8000-000000000003') <> 0
+     OR (SELECT count(*) FROM public.asistencias WHERE estudiante_id = 'eeeeeeee-1300-4000-8000-000000000003') <> 0 THEN
+    RAISE EXCEPTION 'Un perfil no PADRE leyó datos por un vínculo saliente histórico';
+  END IF;
+  IF (SELECT count(*) FROM public.actividades WHERE tipo = 'CURRICULAR') < 2 THEN
+    RAISE EXCEPTION 'El fixture necesita dos actividades para probar INSERT real';
+  END IF;
+  BEGIN
+    INSERT INTO public.inscripciones (estudiante_id, actividad_id)
+    SELECT 'eeeeeeee-1300-4000-8000-000000000003', id
+    FROM public.actividades
+    WHERE tipo = 'CURRICULAR'
+      AND id <> (SELECT actividad_id FROM public.inscripciones
+                 WHERE estudiante_id = 'eeeeeeee-1300-4000-8000-000000000003' LIMIT 1)
+    ORDER BY id LIMIT 1;
+    RAISE EXCEPTION 'Un perfil no PADRE inscribió al hijo por vínculo histórico';
+  EXCEPTION WHEN SQLSTATE '42501' THEN NULL;
+  END;
+  WITH eliminadas AS (
+    DELETE FROM public.inscripciones
+    WHERE estudiante_id = 'eeeeeeee-1300-4000-8000-000000000003'
+    RETURNING id
+  ) SELECT count(*) INTO v_eliminadas FROM eliminadas;
+  IF v_eliminadas <> 0 THEN
+    RAISE EXCEPTION 'Un perfil no PADRE eliminó una inscripción por vínculo histórico';
+  END IF;
+  BEGIN
+    PERFORM public.consultar_detalle_hijo('eeeeeeee-1300-4000-8000-000000000003');
+    RAISE EXCEPTION 'Un perfil no PADRE consultó el detalle del hijo';
+  EXCEPTION WHEN SQLSTATE '42501' THEN NULL;
+  END;
+END $$;
+RESET ROLE;
+UPDATE public.perfiles
+SET rol_id = (SELECT id FROM public.roles WHERE nombre = 'PADRE')
+WHERE id = 'eeeeeeee-1300-4000-8000-000000000001';
+SET LOCAL ROLE authenticated;
+SELECT pg_catalog.set_config('request.jwt.claim.sub', 'eeeeeeee-1300-4000-8000-000000000011', true);
+DO $$ BEGIN
+  IF (SELECT count(*) FROM public.alumnos) <> 2
+     OR (SELECT count(*) FROM public.matriculas) <> 1
+     OR (SELECT count(*) FROM public.perfiles WHERE id = 'eeeeeeee-1300-4000-8000-000000000003') <> 1
+     OR (SELECT count(*) FROM public.asistencias WHERE estudiante_id = 'eeeeeeee-1300-4000-8000-000000000003') <> 1
+     OR (SELECT count(*) FROM public.inscripciones WHERE estudiante_id = 'eeeeeeee-1300-4000-8000-000000000003') <> 1 THEN
+    RAISE EXCEPTION 'Restaurar el rol PADRE no restauró la lectura autorizada';
+  END IF;
 END $$;
 
 SELECT pg_catalog.set_config('request.jwt.claim.sub', 'eeeeeeee-1300-4000-8000-000000000013', true);
