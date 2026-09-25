@@ -57,6 +57,34 @@ export async function obtenerTodasAsistencias(fecha?: string) {
   return data
 }
 
+/**
+ * Asistencias para la vista de gestión (dirección y docentes), sin leer
+ * `perfiles` (EPT-58).
+ *
+ * Los nombres y legajos se resuelven con `listarEstudiantesParaGestion`, que
+ * sigue funcionando cuando la migración B cierre la lectura global de perfiles
+ * para los docentes. Las filas son las mismas que antes: RLS de `asistencias`
+ * no cambia.
+ */
+export async function obtenerAsistenciasDeGestion(fecha?: string) {
+  const supabase = createClient()
+  let query: any = supabase
+    .from('asistencias')
+    .select('id, fecha, estado, estudiante_id')
+    .order('fecha', { ascending: false })
+
+  if (fecha) query = query.eq('fecha', fecha)
+
+  const { data, error } = await query
+  if (error) throw new Error(error.message)
+  return data as {
+    id: string
+    fecha: string
+    estado: 'PRESENTE' | 'AUSENTE' | 'JUSTIFICADO'
+    estudiante_id: string | null
+  }[]
+}
+
 export async function calcularPorcentajeAsistencia(estudianteId: string): Promise<number> {
   const supabase = createClient()
   const { data, error } = await (supabase as any)

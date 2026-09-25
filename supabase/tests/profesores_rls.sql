@@ -666,15 +666,9 @@ BEGIN
        <> ARRAY['apellido', 'id', 'legajo_nro', 'nombre'] THEN
         RAISE EXCEPTION 'FALLO CA-17: la consulta mínima no devuelve exactamente id, nombre, apellido y legajo.';
     END IF;
-
-    -- Mismo conjunto que hoy devuelve la lectura de perfiles ESTUDIANTE.
-    IF EXISTS (
-        (SELECT e.id FROM public.listar_estudiantes_para_gestion() e)
-        EXCEPT
-        (SELECT p.id FROM public.perfiles p JOIN public.roles r ON r.id = p.rol_id WHERE r.nombre = 'ESTUDIANTE')
-    ) THEN
-        RAISE EXCEPTION 'FALLO CA-17: la consulta mínima devuelve perfiles que no son ESTUDIANTE.';
-    END IF;
+    -- El conjunto no se compara acá contra la lectura de `perfiles` del
+    -- DOCENTE: con B esa lectura queda en su propia fila. Lo compara el bloque
+    -- siguiente como propietario, en ambos sentidos y con A o con A+B.
     RAISE NOTICE 'OK CA-17 DOCENTE: consulta mínima de cuatro columnas';
 END $$;
 RESET ROLE;
