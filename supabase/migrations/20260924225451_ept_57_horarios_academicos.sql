@@ -240,6 +240,8 @@ RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE v_horario public.horarios; v_conflicto record;
 BEGIN
     IF NOT NEW.activo THEN RETURN NEW; END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.grupos_deportivos g
+                   WHERE g.id=NEW.grupo_id AND g.activo) THEN RETURN NEW; END IF;
     SELECT * INTO v_horario FROM public.horarios WHERE id = NEW.horario_id;
     SELECT a.nombre::text AS actividad, h.dia_semana AS dia,
            h.hora_inicio AS inicio, h.hora_fin AS fin INTO v_conflicto
@@ -264,6 +266,47 @@ REVOKE ALL ON FUNCTION app_private.validar_franja_deportiva_con_academia() FROM 
 CREATE TRIGGER validar_franja_deportiva_con_academia
     AFTER INSERT OR UPDATE OF activo ON public.grupos_deportivos_horarios
     FOR EACH ROW EXECUTE FUNCTION app_private.validar_franja_deportiva_con_academia();
+
+-- Reactivar un grupo vuelve efectivos sus franjas y las inscripciones ACTIVA
+-- conservadas durante la baja. El rechazo AFTER revierte el UPDATE completo.
+CREATE FUNCTION app_private.validar_reactivacion_grupo_con_academia()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_alumno record; v_conflicto record;
+BEGIN
+    IF NOT NEW.activo OR OLD.activo THEN RETURN NEW; END IF;
+    PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext('ept57_configuracion_horaria'));
+    FOR v_alumno IN
+        SELECT a.perfil_id,m.curso_id FROM public.inscripciones_deportivas i
+        JOIN public.matriculas m ON m.alumno_id=i.alumno_id AND m.fecha_cierre IS NULL
+        JOIN public.alumnos a ON a.perfil_id=i.alumno_id
+        WHERE i.grupo_id=NEW.id AND i.estado='ACTIVA'
+        ORDER BY a.perfil_id FOR NO KEY UPDATE OF a
+    LOOP
+        SELECT actividad.nombre::text AS actividad,h.dia_semana AS dia,
+               h.hora_inicio AS inicio,h.hora_fin AS fin INTO v_conflicto
+        FROM public.materias_cursos mc
+        JOIN public.actividades actividad ON actividad.id=mc.materia_id
+        JOIN public.materias_cursos_horarios f ON f.asignacion_id=mc.id AND f.activo
+        JOIN public.horarios h ON h.id=f.horario_id
+        JOIN public.grupos_deportivos_horarios gh ON gh.grupo_id=NEW.id AND gh.activo
+        JOIN public.horarios hs ON hs.id=gh.horario_id
+        WHERE mc.curso_id=v_alumno.curso_id AND mc.activo
+          AND app_private.intervalos_se_superponen(h.dia_semana,h.hora_inicio,h.hora_fin,
+            hs.dia_semana,hs.hora_inicio,hs.hora_fin)
+        ORDER BY h.dia_semana,h.hora_inicio LIMIT 1;
+        IF FOUND THEN
+            PERFORM app_private.lanzar_conflicto_academico_deportivo(
+                v_conflicto.actividad,v_conflicto.dia,v_conflicto.inicio,v_conflicto.fin);
+        END IF;
+    END LOOP;
+    RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION app_private.validar_reactivacion_grupo_con_academia()
+    FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER validar_reactivacion_grupo_con_academia
+    AFTER UPDATE OF activo ON public.grupos_deportivos
+    FOR EACH ROW EXECUTE FUNCTION app_private.validar_reactivacion_grupo_con_academia();
 
 -- Reactivar una asignación académica con franjas guardadas vuelve a validar.
 CREATE FUNCTION app_private.validar_reactivacion_asignacion_con_horarios()

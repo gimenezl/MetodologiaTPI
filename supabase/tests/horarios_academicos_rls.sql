@@ -150,6 +150,47 @@ DO $$ BEGIN
 END $$;
 
 SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"f5700000-0000-4000-8000-000000000001"}',true);
+DO $$ DECLARE v_codigo text; BEGIN
+  BEGIN
+    PERFORM public.agregar_horario_grupo_deportivo(
+      'f5700000-0000-4000-8000-0000000000d2',2::smallint,'09:00','10:00');
+  EXCEPTION WHEN SQLSTATE 'P5595' THEN v_codigo:=SQLSTATE; END;
+  IF v_codigo<>'P5595' THEN
+    RAISE EXCEPTION 'FALLO: grupo activo aceptó franja superpuesta %',v_codigo;
+  END IF;
+  RAISE NOTICE 'OK: grupo activo sigue rechazando franja deportiva superpuesta';
+END $$;
+-- La misma configuración para un grupo inactivo no tiene efecto académico aún.
+SELECT public.agregar_horario_grupo_deportivo(
+  'f5700000-0000-4000-8000-0000000000d1',2::smallint,'09:00','10:00');
+RESET ROLE;
+DO $$ DECLARE v_codigo text; v_detalle text; BEGIN
+  BEGIN
+    UPDATE public.grupos_deportivos SET activo=true
+    WHERE id='f5700000-0000-4000-8000-0000000000d1';
+  EXCEPTION WHEN SQLSTATE 'P5595' THEN
+    v_codigo:=SQLSTATE;
+    GET STACKED DIAGNOSTICS v_detalle=PG_EXCEPTION_DETAIL;
+  END;
+  IF v_codigo<>'P5595' OR v_detalle::json->>'actividad'<>'Matemática EPT57'
+     OR v_detalle::json->>'dia_semana'<>'1'
+     OR v_detalle::json->>'hora_inicio'<>'10:00'
+     OR v_detalle::json->>'hora_fin'<>'11:00' THEN
+    RAISE EXCEPTION 'FALLO: reactivación deportiva no explicó el conflicto %, %',v_codigo,v_detalle;
+  END IF;
+  IF (SELECT activo FROM public.grupos_deportivos
+      WHERE id='f5700000-0000-4000-8000-0000000000d1')
+     OR NOT EXISTS(SELECT 1 FROM public.grupos_deportivos_horarios gh
+         JOIN public.horarios h ON h.id=gh.horario_id
+         WHERE gh.grupo_id='f5700000-0000-4000-8000-0000000000d1'
+           AND gh.activo AND h.dia_semana=2 AND h.hora_inicio='09:00') THEN
+    RAISE EXCEPTION 'FALLO: reactivación parcial o pérdida de franja histórica';
+  END IF;
+  RAISE NOTICE 'OK: franja inactiva configurable; reactivación del grupo rechazada atómicamente';
+END $$;
+
+SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claims','{"sub":"f5700000-0000-4000-8000-000000000002"}',true);
 DO $$ DECLARE v_codigo text; BEGIN
   IF EXISTS(SELECT 1 FROM public.materias_cursos_horarios) OR
