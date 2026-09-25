@@ -279,10 +279,19 @@ function clienteAdmin() {
  * `grupos_deportivos`: sus claves foráneas hacia `alumnos` y hacia el perfil
  * del profesor son ON DELETE RESTRICT. El catálogo `deportes` no se toca: lo
  * siembra la migración 014.
+ *
+ * Desde EPT-58 cada perfil DOCENTE tiene una ficha en `profesores` (FK ON
+ * DELETE RESTRICT) y el historial de estados es de solo agregado, incluso para
+ * el propietario. Antes de borrar los perfiles de prueba se retiran sus fichas
+ * y el historial que los menciona como profesor o como actor. La guarda del
+ * historial se deshabilita solo dentro de esta transacción local; la clave de
+ * servicio no tiene ningún privilegio sobre esas tablas.
  */
 function vaciarModeloAcademico() {
   const contenedor =
     process.env.EPT_SUPABASE_DB_CONTAINER ?? 'supabase_db_educar-para-transformar'
+  // Correos sintéticos de dominio reservado: se pueden incrustar sin escapar.
+  const correos = CORREOS_DE_PRUEBA.map((correo) => `'${correo}'`).join(', ')
 
   execFileSync(
     'docker',
@@ -307,6 +316,19 @@ function vaciarModeloAcademico() {
             SELECT 1 FROM public.inscripciones i WHERE i.actividad_id = a.id
           );
         UPDATE public.actividades SET activo = TRUE WHERE NOT activo;
+        CREATE TEMPORARY TABLE ept_perfiles_de_prueba ON COMMIT DROP AS
+          SELECT p.id FROM public.perfiles p
+          WHERE p.user_id IS NULL
+             OR p.user_id IN (SELECT u.id FROM auth.users u WHERE u.email IN (${correos}));
+        ALTER TABLE public.profesores_estados_historial
+          DISABLE TRIGGER impedir_modificar_historial_profesor;
+        DELETE FROM public.profesores_estados_historial
+        WHERE profesor_id IN (SELECT id FROM ept_perfiles_de_prueba)
+           OR actor_id IN (SELECT id FROM ept_perfiles_de_prueba);
+        ALTER TABLE public.profesores_estados_historial
+          ENABLE TRIGGER impedir_modificar_historial_profesor;
+        DELETE FROM public.profesores
+        WHERE perfil_id IN (SELECT id FROM ept_perfiles_de_prueba);
         COMMIT;
       `,
       stdio: ['pipe', 'pipe', 'pipe'],
