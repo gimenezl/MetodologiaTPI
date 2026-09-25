@@ -1,5 +1,13 @@
 import { z } from 'zod'
 import { esHoraValida, normalizarHora } from '@/lib/horarios'
+import {
+  cantidadDeCaracteres,
+  ESPECIALIDAD_MAXIMO,
+  ESPECIALIDAD_MINIMO,
+  MOTIVO_MAXIMO,
+  normalizarEspecialidad,
+  normalizarMotivo,
+} from '@/lib/profesores'
 
 // ---- DNI Validation ----
 const dniSchema = z
@@ -790,3 +798,75 @@ export const inscripcionAdministrativaSchema = z
   .strict()
 
 export type InscripcionAdministrativaData = z.infer<typeof inscripcionAdministrativaSchema>
+
+// ---- Profesores (EPT-58) ----
+/**
+ * Especialidad: texto libre y no único. Se normaliza con la misma clase de
+ * espacios que PostgreSQL (`src/lib/profesores.ts`) y después se exige el
+ * largo del contrato, medido en caracteres como `char_length`.
+ */
+export const especialidadSchema = z
+  .string({ message: 'La especialidad es obligatoria' })
+  .transform(normalizarEspecialidad)
+  .refine((especialidad) => especialidad.length > 0, 'La especialidad es obligatoria')
+  .refine((especialidad) => {
+    const largo = cantidadDeCaracteres(especialidad)
+    return largo === 0 || (largo >= ESPECIALIDAD_MINIMO && largo <= ESPECIALIDAD_MAXIMO)
+  }, `La especialidad debe tener entre ${ESPECIALIDAD_MINIMO} y ${ESPECIALIDAD_MAXIMO} caracteres`)
+
+/**
+ * La ficha se guarda completa o no se guarda: legajo y especialidad juntos. El
+ * legajo es `perfiles.legajo_nro` y tiene el mismo contrato que el de los
+ * alumnos (se rechaza con espacios laterales, nunca se recorta).
+ */
+export const fichaProfesorSchema = z
+  .object({ legajo_nro: legajoAlumnoSchema, especialidad: especialidadSchema })
+  .strict()
+
+export type FichaProfesorData = z.infer<typeof fichaProfesorSchema>
+
+/** Motivo opcional: se recortan los extremos, vacío equivale a no informarlo. */
+export const motivoEstadoSchema = z
+  .string({ message: 'El motivo debe ser un texto' })
+  .nullable()
+  .optional()
+  .transform((motivo) => (motivo == null ? null : normalizarMotivo(motivo)))
+  .refine(
+    (motivo) => motivo === null || cantidadDeCaracteres(motivo) <= MOTIVO_MAXIMO,
+    `El motivo no puede superar los ${MOTIVO_MAXIMO} caracteres`
+  )
+
+export const estadoProfesorSchema = z.enum(['ACTIVO', 'INACTIVO'], {
+  message: 'Elegí un estado válido: activo o inactivo',
+})
+
+const actualizarFichaProfesorSchema = z
+  .object({
+    accion: z.literal('actualizar_ficha'),
+    legajo_nro: legajoAlumnoSchema,
+    especialidad: especialidadSchema,
+  })
+  .strict()
+
+const cambiarEstadoProfesorSchema = z
+  .object({
+    accion: z.literal('cambiar_estado'),
+    estado: estadoProfesorSchema,
+    motivo: motivoEstadoSchema,
+  })
+  .strict()
+
+/** Contrato PATCH discriminado: una sola operación por petición. */
+export const actualizarProfesorSchema = z.discriminatedUnion('accion', [
+  actualizarFichaProfesorSchema,
+  cambiarEstadoProfesorSchema,
+])
+
+export type ActualizarProfesorData = z.infer<typeof actualizarProfesorSchema>
+
+export const profesorIdSchema = z.string().uuid('Identificador de profesor inválido')
+
+/** Misma traducción estructural que materias: primer problema, sin detalle de Zod. */
+export function primerErrorProfesor(error: z.ZodError): { mensaje: string; campo?: string } {
+  return primerErrorMateria(error)
+}
