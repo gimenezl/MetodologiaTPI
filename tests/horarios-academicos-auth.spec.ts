@@ -60,6 +60,57 @@ test.describe('DIRECTOR autenticado — horarios académicos', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false)
     }
   })
+
+  test('reasigna una franja histórica desde una asignación inactiva a un destino activo', async ({ page }) => {
+    const sello = Date.now()
+    const origenMateria = await page.request.post('/api/materias', { data: { nombre: `Origen EPT57 ${sello}` } })
+    const destinoMateria = await page.request.post('/api/materias', { data: { nombre: `Destino EPT57 ${sello}` } })
+    expect(origenMateria.status()).toBe(201)
+    expect(destinoMateria.status()).toBe(201)
+    await page.goto('/dashboard/materias')
+    await page.getByRole('button', { name: `Asignar la materia Origen EPT57 ${sello} a un curso` }).click()
+    const cursoId = await page.locator('#asignar-curso option').filter({ hasText: 'Sala de 5 A' }).first().getAttribute('value')
+    expect(cursoId).toBeTruthy()
+    await page.keyboard.press('Escape')
+    const origen = await page.request.post('/api/asignaciones-materias', {
+      data: { materia_id: (await origenMateria.json()).materia.id, curso_id: cursoId },
+    })
+    const destino = await page.request.post('/api/asignaciones-materias', {
+      data: { materia_id: (await destinoMateria.json()).materia.id, curso_id: cursoId },
+    })
+    expect(origen.status()).toBe(201)
+    expect(destino.status()).toBe(201)
+    const origenId = (await origen.json()).asignacion.id as string
+    const destinoId = (await destino.json()).asignacion.id as string
+    const creada = await page.request.post('/api/horarios-academicos', {
+      data: { asignacion_id: origenId, dia_semana: 7, hora_inicio: '22:00', hora_fin: '23:00' },
+    })
+    expect(creada.status(), await creada.text()).toBe(201)
+    const franjaId = (await creada.json()).franja.id as string
+    expect((await page.request.patch(`/api/horarios-academicos/${franjaId}`, {
+      data: { activo: false },
+    })).status()).toBe(200)
+    expect((await page.request.patch(`/api/asignaciones-materias/${origenId}`, {
+      data: { accion: 'cambiar_estado', activo: false },
+    })).status()).toBe(200)
+
+    await page.goto('/dashboard/horarios-academicos')
+    await page.getByLabel('Materia y curso').selectOption(origenId)
+    await expect(page.getByText('Inactiva · Conservada en el historial')).toBeVisible()
+    await page.getByRole('button', { name: 'Editar o reasignar' }).click()
+    await page.getByLabel('Asignación de destino').selectOption(destinoId)
+    await expect(page.getByRole('button', { name: 'Guardar cambios' })).toBeEnabled()
+    const respuesta = page.waitForResponse((item) => item.url().endsWith('/api/horarios-academicos') && item.request().method() === 'POST')
+    await page.getByRole('button', { name: 'Guardar cambios' }).click()
+    const guardada = await respuesta
+    expect(guardada.status()).toBe(200)
+    expect((await guardada.json()).franja.asignacion_id).toBe(destinoId)
+    await expect(page.getByRole('status')).toContainText('Franja actualizada')
+    await page.getByLabel('Materia y curso').selectOption(destinoId)
+    await expect(page.getByText('domingo de 22:00 a 23:00')).toBeVisible()
+    await expect(page.getByText('Activa', { exact: true })).toBeVisible()
+    await expect(page.getByText('Reasignada')).toBeVisible()
+  })
 })
 
 test.describe('DOCENTE autenticado — horarios académicos', () => {

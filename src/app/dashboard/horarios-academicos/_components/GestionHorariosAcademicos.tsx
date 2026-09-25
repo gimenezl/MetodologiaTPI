@@ -15,10 +15,14 @@ export function GestionHorariosAcademicos({ asignaciones, franjas, historial }: 
 }) {
   const router = useRouter()
   const [seleccion, setSeleccion] = useState(asignaciones[0]?.id ?? '')
-  const [formulario, setFormulario] = useState<Formulario>({ asignacion_id: seleccion, dia_semana: '1', hora_inicio: '', hora_fin: '' })
+  const destinoPredeterminado = (origen: string) =>
+    asignaciones.find((item) => item.id === origen && item.activo)?.id ??
+    asignaciones.find((item) => item.activo)?.id ?? ''
+  const [formulario, setFormulario] = useState<Formulario>({ asignacion_id: destinoPredeterminado(seleccion), dia_semana: '1', hora_inicio: '', hora_fin: '' })
   const [enviando, setEnviando] = useState(false)
   const [mensaje, setMensaje] = useState<{ tipo: 'error' | 'exito'; texto: string } | null>(null)
   const asignacion = asignaciones.find((item) => item.id === seleccion)
+  const destinoActivo = asignaciones.some((item) => item.id === formulario.asignacion_id && item.activo)
   const visibles = useMemo(() => franjas.filter((item) => item.asignacion_id === seleccion)
     .sort((a, b) => a.dia_semana - b.dia_semana || a.hora_inicio.localeCompare(b.hora_inicio)), [franjas, seleccion])
   const cambiosVisibles = historial.filter((c) => c.asignacion_anterior === seleccion || c.asignacion_nueva === seleccion)
@@ -26,7 +30,7 @@ export function GestionHorariosAcademicos({ asignaciones, franjas, historial }: 
 
   function elegirAsignacion(id: string) {
     setSeleccion(id)
-    setFormulario({ asignacion_id: id, dia_semana: '1', hora_inicio: '', hora_fin: '' })
+    setFormulario({ asignacion_id: destinoPredeterminado(id), dia_semana: '1', hora_inicio: '', hora_fin: '' })
     setMensaje(null)
   }
 
@@ -34,8 +38,9 @@ export function GestionHorariosAcademicos({ asignaciones, franjas, historial }: 
     evento.preventDefault()
     if (enviando) return
     setMensaje(null)
-    if (!asignacion?.activo) {
-      setMensaje({ tipo: 'error', texto: 'La asignación debe estar activa para configurar horarios.' })
+    const destino = asignaciones.find((item) => item.id === formulario.asignacion_id)
+    if (!destino?.activo) {
+      setMensaje({ tipo: 'error', texto: 'La asignación de destino debe estar activa para configurar horarios.' })
       return
     }
     const dia = Number(formulario.dia_semana)
@@ -45,7 +50,6 @@ export function GestionHorariosAcademicos({ asignaciones, franjas, historial }: 
       setMensaje({ tipo: 'error', texto: 'Revisá el día y las horas: el inicio debe ser anterior al fin.' })
       return
     }
-    const destino = asignaciones.find((item) => item.id === formulario.asignacion_id)
     const otras = franjas.filter((item) => item.activo && item.id !== formulario.franja_id &&
       asignaciones.find((asig) => asig.id === item.asignacion_id)?.curso_id === destino?.curso_id)
     const choque = primeraSuperpuesta({ dia_semana: dia, hora_inicio: formulario.hora_inicio, hora_fin: formulario.hora_fin }, otras)
@@ -65,7 +69,7 @@ export function GestionHorariosAcademicos({ asignaciones, franjas, historial }: 
       const datos = await respuesta.json().catch(() => ({}))
       if (!respuesta.ok) throw new Error(typeof datos.error === 'string' ? datos.error : 'No pudimos guardar la franja.')
       setMensaje({ tipo: 'exito', texto: formulario.franja_id ? 'Franja actualizada.' : 'Franja agregada.' })
-      setFormulario({ asignacion_id: seleccion, dia_semana: '1', hora_inicio: '', hora_fin: '' })
+      setFormulario({ asignacion_id: destinoPredeterminado(seleccion), dia_semana: '1', hora_inicio: '', hora_fin: '' })
       router.refresh()
     } catch (error) {
       setMensaje({ tipo: 'error', texto: error instanceof Error ? error.message : 'No pudimos comunicarnos con el servidor.' })
@@ -116,7 +120,7 @@ export function GestionHorariosAcademicos({ asignaciones, franjas, historial }: 
         {visibles.length === 0 ? <p className="rounded-lg border border-dashed p-5 text-sm text-neutral-600">Esta asignación todavía no tiene horarios. Podés agregar la primera franja debajo.</p> :
           <ul className="divide-y rounded-xl border border-neutral-200 bg-white">{visibles.map((franja) => <li key={franja.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div><p className="font-medium text-neutral-900">{describirFranja(franja)}</p><p className="text-xs text-neutral-500">{franja.activo ? 'Activa' : 'Inactiva · Conservada en el historial'}</p></div>
-            <div className="flex flex-wrap gap-2"><button type="button" disabled={enviando} onClick={() => { setFormulario({ asignacion_id: seleccion, dia_semana: String(franja.dia_semana), hora_inicio: franja.hora_inicio.slice(0, 5), hora_fin: franja.hora_fin.slice(0, 5), franja_id: franja.id }); document.getElementById('formulario-franja')?.scrollIntoView({ behavior: 'smooth' }) }} className="rounded-lg border px-3 py-2 text-sm hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50">Editar o reasignar</button>
+            <div className="flex flex-wrap gap-2"><button type="button" disabled={enviando} onClick={() => { setFormulario({ asignacion_id: destinoPredeterminado(seleccion), dia_semana: String(franja.dia_semana), hora_inicio: franja.hora_inicio.slice(0, 5), hora_fin: franja.hora_fin.slice(0, 5), franja_id: franja.id }); document.getElementById('formulario-franja')?.scrollIntoView({ behavior: 'smooth' }) }} className="rounded-lg border px-3 py-2 text-sm hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50">Editar o reasignar</button>
               <button type="button" disabled={enviando} onClick={() => cambiarEstado(franja)} className="rounded-lg border px-3 py-2 text-sm hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50">{franja.activo ? 'Desactivar' : 'Reactivar'}</button></div>
           </li>)}</ul>}
       </section>
@@ -128,7 +132,7 @@ export function GestionHorariosAcademicos({ asignaciones, franjas, historial }: 
           <div className="hidden sm:block" />
           <div><label htmlFor="inicio" className="mb-1 block text-sm font-medium">Hora de inicio</label><input id="inicio" type="time" required value={formulario.hora_inicio} onChange={(e) => setFormulario({ ...formulario, hora_inicio: e.target.value })} className="w-full rounded-lg border border-neutral-300 p-2.5 text-sm" /></div>
           <div><label htmlFor="fin" className="mb-1 block text-sm font-medium">Hora de fin</label><input id="fin" type="time" required value={formulario.hora_fin} onChange={(e) => setFormulario({ ...formulario, hora_fin: e.target.value })} className="w-full rounded-lg border border-neutral-300 p-2.5 text-sm" /></div>
-          <div className="flex flex-wrap gap-2 sm:col-span-2"><button type="submit" disabled={enviando || !asignacion.activo} className="rounded-lg bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700 disabled:opacity-50">{enviando ? 'Guardando…' : formulario.franja_id ? 'Guardar cambios' : 'Agregar franja'}</button>{formulario.franja_id && <button type="button" onClick={() => setFormulario({ asignacion_id: seleccion, dia_semana: '1', hora_inicio: '', hora_fin: '' })} className="rounded-lg border px-4 py-2.5 text-sm">Cancelar edición</button>}</div>
+          <div className="flex flex-wrap gap-2 sm:col-span-2"><button type="submit" disabled={enviando || !destinoActivo} className="rounded-lg bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700 disabled:opacity-50">{enviando ? 'Guardando…' : formulario.franja_id ? 'Guardar cambios' : 'Agregar franja'}</button>{formulario.franja_id && <button type="button" onClick={() => setFormulario({ asignacion_id: destinoPredeterminado(seleccion), dia_semana: '1', hora_inicio: '', hora_fin: '' })} className="rounded-lg border px-4 py-2.5 text-sm">Cancelar edición</button>}</div>
         </form>
       </section>
       <section className="border-t border-neutral-200 pt-6" aria-labelledby="historial-titulo"><h2 id="historial-titulo" className="text-lg font-semibold">Historial de cambios</h2><p className="mt-1 text-sm text-neutral-600">Las bajas, reactivaciones y reasignaciones quedan registradas sin eliminar franjas.</p>{cambiosVisibles.length === 0 ? <p className="mt-3 text-sm text-neutral-500">Todavía no hay cambios de estado registrados.</p> : <ul className="mt-3 divide-y border-t text-sm">{cambiosVisibles.map((c) => <li key={c.id} className="py-3"><time dateTime={c.cambiado_en}>{new Date(c.cambiado_en).toLocaleString('es-AR')}</time> · {c.activo_anterior ? 'Activa' : 'Inactiva'} → {c.activo_nuevo ? 'Activa' : 'Inactiva'}{c.asignacion_anterior !== c.asignacion_nueva ? ' · Reasignada' : ''}</li>)}</ul>}</section>
