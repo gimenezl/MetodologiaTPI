@@ -1129,6 +1129,9 @@ BEGIN
         RAISE NOTICE 'OK 56: el legajo duplicado sin distinguir mayúsculas se rechaza (23505)';
     END;
 
+    -- Desde EPT-58 un perfil DOCENTE nace con ficha y la FK es RESTRICT.
+    DELETE FROM public.profesores pr USING public.perfiles p
+    WHERE pr.perfil_id = p.id AND p.dni IN ('92750001', '92750002', '92750003');
     DELETE FROM public.perfiles WHERE dni IN ('92750001', '92750002', '92750003');
 END $$;
 

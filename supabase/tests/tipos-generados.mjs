@@ -49,8 +49,19 @@ function huella(texto) {
   return createHash('sha256').update(texto, 'utf8').digest('hex')
 }
 
+/**
+ * Versión del CLI con la que se generaron los tipos versionados.
+ *
+ * `npx supabase` sin versión resuelve la última publicada, y la 2.118.0 cambió
+ * el formato de `gen types` (salida sin formatear): regenerar con ella
+ * reescribía miles de líneas sin ningún cambio de esquema. Se fija la versión
+ * para que la regeneración sea reproducible; cambiarla es una decisión
+ * explícita, con `EPT_SUPABASE_CLI`.
+ */
+const VERSION_CLI = process.env.EPT_SUPABASE_CLI ?? '2.117.0'
+
 function generar() {
-  return execFileSync('npx', ['supabase', 'gen', 'types', 'typescript', '--local'], {
+  return execFileSync('npx', ['--yes', `supabase@${VERSION_CLI}`, 'gen', 'types', 'typescript', '--local'], {
     encoding: 'utf8',
     shell: process.platform === 'win32',
     maxBuffer: 32 * 1024 * 1024,

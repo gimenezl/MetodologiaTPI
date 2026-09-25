@@ -34,6 +34,8 @@ async function limpiar() {
       DELETE FROM public.materias_cursos WHERE curso_id='${ID.curso}';
       DELETE FROM public.matriculas WHERE alumno_id IN ('${ID.x}','${ID.y}');
       DELETE FROM public.alumnos WHERE perfil_id IN ('${ID.x}','${ID.y}');
+      -- Desde EPT-58 el perfil DOCENTE tiene ficha y la FK es RESTRICT.
+      DELETE FROM public.profesores WHERE perfil_id = '${ID.docente}';
       DELETE FROM public.perfiles WHERE id IN ('${ID.director}','${ID.docente}','${ID.x}','${ID.y}');
       DELETE FROM public.cursos WHERE id='${ID.curso}';
       DELETE FROM public.actividades WHERE nombre='Materia concurrencia EPT57' AND tipo='CURRICULAR';

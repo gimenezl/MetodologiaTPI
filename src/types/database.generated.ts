@@ -987,6 +987,83 @@ export type Database = {
         }
         Relationships: []
       }
+      profesores: {
+        Row: {
+          especialidad: string | null
+          estado: Database["public"]["Enums"]["estado_profesor"]
+          fecha_actualizacion: string
+          fecha_alta: string
+          perfil_id: string
+        }
+        Insert: {
+          especialidad?: string | null
+          estado?: Database["public"]["Enums"]["estado_profesor"]
+          fecha_actualizacion?: string
+          fecha_alta?: string
+          perfil_id: string
+        }
+        Update: {
+          especialidad?: string | null
+          estado?: Database["public"]["Enums"]["estado_profesor"]
+          fecha_actualizacion?: string
+          fecha_alta?: string
+          perfil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profesores_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: true
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profesores_estados_historial: {
+        Row: {
+          actor_id: string
+          estado_anterior: Database["public"]["Enums"]["estado_profesor"]
+          estado_nuevo: Database["public"]["Enums"]["estado_profesor"]
+          fecha: string
+          id: number
+          motivo: string | null
+          profesor_id: string
+        }
+        Insert: {
+          actor_id: string
+          estado_anterior: Database["public"]["Enums"]["estado_profesor"]
+          estado_nuevo: Database["public"]["Enums"]["estado_profesor"]
+          fecha?: string
+          id?: never
+          motivo?: string | null
+          profesor_id: string
+        }
+        Update: {
+          actor_id?: string
+          estado_anterior?: Database["public"]["Enums"]["estado_profesor"]
+          estado_nuevo?: Database["public"]["Enums"]["estado_profesor"]
+          fecha?: string
+          id?: never
+          motivo?: string | null
+          profesor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profesores_estados_historial_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profesores_estados_historial_profesor_id_fkey"
+            columns: ["profesor_id"]
+            isOneToOne: false
+            referencedRelation: "profesores"
+            referencedColumns: ["perfil_id"]
+          },
+        ]
+      }
       roles: {
         Row: {
           id: number
@@ -1319,6 +1396,26 @@ export type Database = {
       }
     }
     Functions: {
+      actualizar_ficha_profesor: {
+        Args: {
+          p_especialidad: string
+          p_legajo_nro: string
+          p_profesor_id: string
+        }
+        Returns: {
+          especialidad: string | null
+          estado: Database["public"]["Enums"]["estado_profesor"]
+          fecha_actualizacion: string
+          fecha_alta: string
+          perfil_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profesores"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       agregar_horario_grupo_deportivo: {
         Args: {
           p_dia_semana: number
@@ -1436,6 +1533,22 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      cambiar_estado_profesor: {
+        Args: { p_estado: string; p_motivo?: string; p_profesor_id: string }
+        Returns: {
+          especialidad: string | null
+          estado: Database["public"]["Enums"]["estado_profesor"]
+          fecha_actualizacion: string
+          fecha_alta: string
+          perfil_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profesores"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       cambiar_profesor_asignacion: {
         Args: { p_asignacion_id: string; p_profesor_id: string }
         Returns: {
@@ -1537,6 +1650,25 @@ export type Database = {
         }[]
       }
       consultar_detalle_hijo: { Args: { p_hijo_id: string }; Returns: Json }
+      consultar_ficha_profesor: {
+        Args: { p_profesor_id?: string }
+        Returns: {
+          apellido: string
+          direccion: string
+          dni: string
+          especialidad: string
+          estado: Database["public"]["Enums"]["estado_profesor"]
+          fecha_actualizacion: string
+          fecha_alta: string
+          fecha_nacimiento: string
+          ficha_completa: boolean
+          legajo_nro: string
+          nombre: string
+          perfil_id: string
+          rol_docente_vigente: boolean
+          telefono: string
+        }[]
+      }
       corregir_identidad_alumno: {
         Args: { p_alumno_id: string; p_dni: string; p_legajo_nro?: string }
         Returns: string
@@ -1683,6 +1815,33 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      listar_asignaciones_profesor: {
+        Args: { p_profesor_id?: string }
+        Returns: {
+          actividad_activa: boolean
+          actividad_nombre: string
+          curso_activo: boolean
+          curso_denominacion: string
+          curso_division: string
+          curso_id: string
+          fecha_actualizacion: string
+          grupo_nombre: string
+          nivel_id: number
+          nivel_nombre: string
+          relacion_id: string
+          tipo: string
+          vigente: boolean
+        }[]
+      }
+      listar_estudiantes_para_gestion: {
+        Args: never
+        Returns: {
+          apellido: string
+          id: string
+          legajo_nro: string
+          nombre: string
+        }[]
+      }
       listar_grupos_deportivos: {
         Args: never
         Returns: {
@@ -1701,6 +1860,47 @@ export type Database = {
           profesor_apellido: string
           profesor_id: string
           profesor_nombre: string
+        }[]
+      }
+      listar_historial_estados_profesor: {
+        Args: { p_profesor_id: string }
+        Returns: {
+          actor_apellido: string
+          actor_id: string
+          actor_nombre: string
+          estado_anterior: Database["public"]["Enums"]["estado_profesor"]
+          estado_nuevo: Database["public"]["Enums"]["estado_profesor"]
+          fecha: string
+          id: number
+          motivo: string
+        }[]
+      }
+      listar_horarios_profesor: {
+        Args: { p_profesor_id?: string }
+        Returns: {
+          dia_semana: number
+          franja_id: string
+          hora_fin: string
+          hora_inicio: string
+          relacion_id: string
+          tipo: string
+        }[]
+      }
+      listar_profesores: {
+        Args: never
+        Returns: {
+          apellido: string
+          asignaciones_activas: number
+          especialidad: string
+          estado: Database["public"]["Enums"]["estado_profesor"]
+          fecha_actualizacion: string
+          fecha_alta: string
+          ficha_completa: boolean
+          grupos_activos: number
+          legajo_nro: string
+          nombre: string
+          perfil_id: string
+          rol_docente_vigente: boolean
         }[]
       }
       matricular_hijo: {
@@ -1747,6 +1947,7 @@ export type Database = {
       estado_alumno: "ACTIVO" | "INACTIVO"
       estado_inscripcion_deportiva: "ACTIVA" | "CANCELADA"
       estado_inscripcion_servicio: "ACTIVA" | "CANCELADA"
+      estado_profesor: "ACTIVO" | "INACTIVO"
       motivo_cierre_matricula: "CAMBIO_DE_CURSO" | "INACTIVACION"
       tipo_servicio_escolar: "COMEDOR" | "TRANSPORTE"
     }
@@ -1882,6 +2083,7 @@ export const Constants = {
       estado_alumno: ["ACTIVO", "INACTIVO"],
       estado_inscripcion_deportiva: ["ACTIVA", "CANCELADA"],
       estado_inscripcion_servicio: ["ACTIVA", "CANCELADA"],
+      estado_profesor: ["ACTIVO", "INACTIVO"],
       motivo_cierre_matricula: ["CAMBIO_DE_CURSO", "INACTIVACION"],
       tipo_servicio_escolar: ["COMEDOR", "TRANSPORTE"],
     },

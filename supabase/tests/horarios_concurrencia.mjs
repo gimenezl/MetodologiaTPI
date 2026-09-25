@@ -139,6 +139,8 @@ function sqlLimpieza() {
          AND NOT EXISTS (SELECT 1 FROM public.grupos_deportivos_horarios f WHERE f.horario_id = h.id);
      DELETE FROM public.matriculas WHERE alumno_id IN (${lista(ALUMNOS)});
      DELETE FROM public.alumnos WHERE perfil_id IN (${lista(ALUMNOS)});
+     -- Desde EPT-58 el perfil DOCENTE tiene ficha y la FK es RESTRICT.
+     DELETE FROM public.profesores WHERE perfil_id IN (${lista(PERFILES)});
      DELETE FROM public.perfiles WHERE id IN (${lista(PERFILES)});
      DELETE FROM public.cursos WHERE id = '${ID.curso}';
      COMMIT;`

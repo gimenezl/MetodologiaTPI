@@ -162,6 +162,9 @@ function limpiar() {
       WHERE alumno_id IN (SELECT id FROM public.perfiles WHERE dni LIKE '${PREFIJO_DNI}%');
     DELETE FROM public.alumnos
       WHERE perfil_id IN (SELECT id FROM public.perfiles WHERE dni LIKE '${PREFIJO_DNI}%');
+    -- Desde EPT-58 el alta de un DOCENTE crea su ficha (FK RESTRICT).
+    DELETE FROM public.profesores
+      WHERE perfil_id IN (SELECT id FROM public.perfiles WHERE dni LIKE '${PREFIJO_DNI}%');
     DELETE FROM public.perfiles WHERE dni LIKE '${PREFIJO_DNI}%';
     COMMIT;
 
