@@ -297,6 +297,8 @@ function vaciarModeloAcademico() {
         DELETE FROM public.inscripciones_servicios;
         DELETE FROM public.matriculas;
         DELETE FROM public.alumnos;
+        DELETE FROM public.materias_cursos_horarios_historial;
+        DELETE FROM public.materias_cursos_horarios;
         DELETE FROM public.materias_cursos;
         DELETE FROM public.actividades a
         WHERE a.tipo = 'CURRICULAR'

@@ -6,7 +6,7 @@
  * reconstruida desde cero con la cadena completa de migraciones. Se conserva
  * como artefacto de referencia para poder comparar.
  *
- * Reconciliación verificada entre este archivo y el esquema real (016):
+ * Reconciliación verificada entre este archivo y el esquema real (EPT-57):
  *
  * - 016 (EPT-13) agrega lectura RLS parental sobre `alumnos` y `matriculas`
  *   y las funciones públicas `matricular_hijo` y `consultar_detalle_hijo`.
@@ -215,6 +215,16 @@ export type Database = {
           fecha_creacion?: string
           fecha_actualizacion?: string
         }
+      }
+      materias_cursos_horarios: {
+        Row: { id: string; asignacion_id: string; horario_id: string; activo: boolean; fecha_alta: string; fecha_baja: string | null }
+        Insert: { id?: string; asignacion_id: string; horario_id: string; activo?: boolean; fecha_alta?: string; fecha_baja?: string | null }
+        Update: { id?: string; asignacion_id?: string; horario_id?: string; activo?: boolean; fecha_alta?: string; fecha_baja?: string | null }
+      }
+      materias_cursos_horarios_historial: {
+        Row: { id: number; franja_id: string; asignacion_anterior: string; horario_anterior: string; activo_anterior: boolean; fecha_baja_anterior: string | null; asignacion_nueva: string; horario_nuevo: string; activo_nuevo: boolean; cambiado_en: string }
+        Insert: { franja_id: string; asignacion_anterior: string; horario_anterior: string; activo_anterior: boolean; fecha_baja_anterior?: string | null; asignacion_nueva: string; horario_nuevo: string; activo_nuevo: boolean; cambiado_en?: string }
+        Update: { franja_id?: string; asignacion_anterior?: string; horario_anterior?: string; activo_anterior?: boolean; fecha_baja_anterior?: string | null; asignacion_nueva?: string; horario_nuevo?: string; activo_nuevo?: boolean; cambiado_en?: string }
       }
       servicios_escolares: {
         Row: {
@@ -678,6 +688,14 @@ export type Database = {
       }
     }
     Functions: {
+      configurar_horario_materia: {
+        Args: { p_asignacion_id: string; p_dia: number; p_inicio: string; p_fin: string; p_franja_id?: string | null }
+        Returns: Database['public']['Tables']['materias_cursos_horarios']['Row']
+      }
+      cambiar_estado_horario_materia: {
+        Args: { p_franja_id: string; p_activo: boolean }
+        Returns: Database['public']['Tables']['materias_cursos_horarios']['Row']
+      }
       asignar_materia_curso: {
         Args: { p_curso_id: string; p_materia_id: number; p_profesor_id?: string | null }
         Returns: Database['public']['Tables']['materias_cursos']['Row']

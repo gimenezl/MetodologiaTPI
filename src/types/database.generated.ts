@@ -610,6 +610,102 @@ export type Database = {
           },
         ]
       }
+      materias_cursos_horarios: {
+        Row: {
+          activo: boolean
+          asignacion_id: string
+          fecha_alta: string
+          fecha_baja: string | null
+          horario_id: string
+          id: string
+        }
+        Insert: {
+          activo?: boolean
+          asignacion_id: string
+          fecha_alta?: string
+          fecha_baja?: string | null
+          horario_id: string
+          id?: string
+        }
+        Update: {
+          activo?: boolean
+          asignacion_id?: string
+          fecha_alta?: string
+          fecha_baja?: string | null
+          horario_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "materias_cursos_horarios_asignacion_id_fkey"
+            columns: ["asignacion_id"]
+            isOneToOne: false
+            referencedRelation: "materias_cursos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "materias_cursos_horarios_asignacion_id_fkey"
+            columns: ["asignacion_id"]
+            isOneToOne: false
+            referencedRelation: "materias_cursos_detalle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "materias_cursos_horarios_horario_id_fkey"
+            columns: ["horario_id"]
+            isOneToOne: false
+            referencedRelation: "horarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      materias_cursos_horarios_historial: {
+        Row: {
+          activo_anterior: boolean
+          activo_nuevo: boolean
+          asignacion_anterior: string
+          asignacion_nueva: string
+          cambiado_en: string
+          fecha_baja_anterior: string | null
+          franja_id: string
+          horario_anterior: string
+          horario_nuevo: string
+          id: number
+        }
+        Insert: {
+          activo_anterior: boolean
+          activo_nuevo: boolean
+          asignacion_anterior: string
+          asignacion_nueva: string
+          cambiado_en?: string
+          fecha_baja_anterior?: string | null
+          franja_id: string
+          horario_anterior: string
+          horario_nuevo: string
+          id?: never
+        }
+        Update: {
+          activo_anterior?: boolean
+          activo_nuevo?: boolean
+          asignacion_anterior?: string
+          asignacion_nueva?: string
+          cambiado_en?: string
+          fecha_baja_anterior?: string | null
+          franja_id?: string
+          horario_anterior?: string
+          horario_nuevo?: string
+          id?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "materias_cursos_horarios_historial_franja_id_fkey"
+            columns: ["franja_id"]
+            isOneToOne: false
+            referencedRelation: "materias_cursos_horarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       matriculas: {
         Row: {
           alumno_id: string
@@ -1293,6 +1389,23 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      cambiar_estado_horario_materia: {
+        Args: { p_activo: boolean; p_franja_id: string }
+        Returns: {
+          activo: boolean
+          asignacion_id: string
+          fecha_alta: string
+          fecha_baja: string | null
+          horario_id: string
+          id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "materias_cursos_horarios"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       cambiar_estado_materia: {
         Args: { p_activo: boolean; p_materia_id: number }
         Returns: {
@@ -1372,6 +1485,29 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "inscripciones_servicios"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      configurar_horario_materia: {
+        Args: {
+          p_asignacion_id: string
+          p_dia: number
+          p_fin: string
+          p_franja_id?: string
+          p_inicio: string
+        }
+        Returns: {
+          activo: boolean
+          asignacion_id: string
+          fecha_alta: string
+          fecha_baja: string | null
+          horario_id: string
+          id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "materias_cursos_horarios"
           isOneToOne: true
           isSetofReturn: false
         }
