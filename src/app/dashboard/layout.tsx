@@ -7,7 +7,7 @@ import {
   House, Users, CalendarCheck, Pulse, FileText,
   SignOut, List, X, Briefcase, ChatCenteredText, UserPlus, Lock,
   Newspaper, UserCircle, Chalkboard, GraduationCap, Student, IdentificationCard,
-  BookOpen, ForkKnife, SoccerBall, Clock
+  BookOpen, ForkKnife, SoccerBall, Clock, ChalkboardTeacher, ListChecks
 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
@@ -25,8 +25,10 @@ const navItems: NavItem[] = [
   { href: '/dashboard/usuarios', label: 'Usuarios', icon: UserPlus, roles: ['DIRECTOR'] },
   { href: '/dashboard/legajos', label: 'Legajos', icon: Users, roles: ['DIRECTOR'] },
   { href: '/dashboard/alumnos', label: 'Alumnos', icon: Student, roles: ['DIRECTOR'] },
+  { href: '/dashboard/profesores', label: 'Profesores', icon: ChalkboardTeacher, roles: ['DIRECTOR'] },
   { href: '/dashboard/mi-legajo', label: 'Mi legajo', icon: IdentificationCard, roles: ['ESTUDIANTE'] },
   { href: '/dashboard/hijos', label: 'Mis hijos', icon: Student, roles: ['PADRE'] },
+  { href: '/dashboard/mis-asignaciones', label: 'Mis asignaciones', icon: ListChecks, roles: ['DOCENTE'] },
   { href: '/dashboard/cursos', label: 'Cursos', icon: Chalkboard, roles: ['DIRECTOR'] },
   { href: '/dashboard/niveles', label: 'Niveles', icon: GraduationCap, roles: ['DIRECTOR'] },
   { href: '/dashboard/materias', label: 'Materias', icon: BookOpen, roles: ['DIRECTOR'] },

@@ -332,6 +332,14 @@ function traducirErrorDeportes(error: ErrorPostgres, operacion: Operacion): Rech
         mensaje: 'La persona seleccionada no tiene el rol DOCENTE.',
         campo: 'profesor_id',
       }
+    // EPT-58: la ficha del profesor está INACTIVO.
+    case 'P5605':
+      return {
+        estado: 409,
+        mensaje:
+          'El profesor está inactivo y no puede quedar a cargo de un grupo deportivo. Elegí otro profesor o reactivá su ficha en Profesores.',
+        campo: 'profesor_id',
+      }
     case 'P5566':
       return { estado: 400, mensaje: 'El cupo debe ser un número entero entre 1 y 100.', campo: 'cupo' }
     case 'P5567':

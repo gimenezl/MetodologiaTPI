@@ -85,6 +85,8 @@ const SQLSTATE_CURSO_INACTIVO = 'P5537'
 const SQLSTATE_ASIGNACION_INACTIVA = 'P5538'
 const SQLSTATE_ESTADO_INVALIDO = 'P5539'
 const SQLSTATE_IDENTIDAD_PROTEGIDA = 'P5540'
+/** EPT-58: la ficha del profesor está INACTIVO. */
+const SQLSTATE_PROFESOR_INACTIVO = 'P5605'
 
 const MENSAJE_GENERICO =
   'No pudimos completar la operación. Volvé a intentarlo en unos minutos.'
@@ -166,6 +168,13 @@ function traducirErrorMateria(
       return {
         estado: 409,
         mensaje: 'La persona seleccionada no tiene el rol DOCENTE.',
+        campo: 'profesor_id',
+      }
+    case SQLSTATE_PROFESOR_INACTIVO:
+      return {
+        estado: 409,
+        mensaje:
+          'El profesor está inactivo y no puede quedar a cargo de nuevas asignaciones. Elegí otro profesor o reactivá su ficha en Profesores.',
         campo: 'profesor_id',
       }
     case SQLSTATE_MATERIA_INACTIVA:

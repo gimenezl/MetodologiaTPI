@@ -47,6 +47,8 @@ export const IDENTIDADES_DEL_BANCO = [
   'LEG-2026-233',
   '48213907',
   '49660312',
+  'Quinteros',
+  'LEG-DOC-4471',
 ]
 
 /** Rastros que no deben aparecer en la respuesta de un 404. */
