@@ -6,6 +6,10 @@ despliegue ni `db push`. Las etapas 2 (aplicación) y 3 (migración B) no
 empezaron: dependen de que A esté integrada, aplicada y verificada en
 producción con autorización del usuario.
 
+> **Etapa 2:** la aplicación se documenta aparte, en
+> [`EPT-58/ETAPA-2.md`](EPT-58/ETAPA-2.md). Este documento queda como
+> evidencia de la etapa 1.
+
 ## 1. Resumen
 
 - **Qué agrega A:** la ficha 1:1 `profesores` de cada perfil DOCENTE
@@ -300,7 +304,7 @@ restauraron y no forman parte del candidato.
 | Aplicación \ Esquema | Actual (sin A) | A | A + B |
 |---|---|---|---|
 | Actual (`main`) | Publicada hoy. E2E línea base: 598/599 (1 omitida) | **Etapa 1.** Probada: suites SQL + E2E sobre A | **No es ruta de publicación**: Asistencias y Cupos del DOCENTE leen nombres y legajos de `perfiles` con la política amplia que B cierra; perderían los datos de los estudiantes |
-| Etapa 2 | **No publicar**: usa funciones que solo existen con A | Etapa 2 (a probar) | Etapa 3 (a probar) |
+| Etapa 2 | **No publicar**: usa funciones que solo existen con A | Probada localmente ([`ETAPA-2.md`](EPT-58/ETAPA-2.md)) | Compatibilidad probada con B simulada en la base local; B se aplica en la etapa 3 |
 
 ## 14. Despliegue y reversión no destructiva
 
