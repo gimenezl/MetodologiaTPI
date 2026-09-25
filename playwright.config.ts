@@ -32,7 +32,7 @@ const entornoServidor: Record<string, string> = {
 const conBaseLocal = process.env.EPT_SUPABASE_LOCAL === '1'
 
 const PRUEBAS_AUTENTICADAS =
-  /(?:cursos|niveles|alumnos|usuarios|materias|comedor|deportes|horarios|hijos)-auth\.spec\.ts/
+  /(?:cursos|niveles|alumnos|usuarios|materias|comedor|deportes|horarios|horarios-academicos|hijos)-auth\.spec\.ts/
 const PRUEBAS_SETUP = /auth\.setup\.ts/
 
 // `niveles-responsive` existe únicamente para los perfiles móviles.

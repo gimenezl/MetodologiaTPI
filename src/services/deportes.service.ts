@@ -251,6 +251,9 @@ const detalleConflictoSchema = detalleFranjaSchema.extend({
 const detalleAfectadosSchema = detalleConflictoSchema.extend({
   alumnos_afectados: z.number().int().positive(),
 })
+const detalleConflictoAcademicoSchema = detalleFranjaSchema.extend({
+  actividad: z.string().min(1),
+})
 
 function leerDetalle<T>(esquema: z.ZodType<T>, detalle: string | null | undefined): T | null {
   if (!detalle) return null
@@ -433,6 +436,16 @@ function traducirErrorDeportes(error: ErrorPostgres, operacion: Operacion): Rech
       return { estado: 409, mensaje: 'Esa franja ya estaba dada de baja.' }
     case 'P5592':
       return { estado: 409, mensaje: 'Esa operación no está permitida sobre una franja existente.' }
+    case 'P5595': {
+      const choque = leerDetalle(detalleConflictoAcademicoSchema, error.details)
+      return {
+        estado: 409,
+        mensaje: choque
+          ? `El horario se superpone con ${choque.actividad}: ${describirFranja(choque)}.`
+          : 'El horario se superpone con una materia del curso.',
+        campo: 'grupo_id',
+      }
+    }
     case '23503':
     case '23514':
     case '22P02':
