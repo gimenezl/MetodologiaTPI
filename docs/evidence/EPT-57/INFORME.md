@@ -26,6 +26,10 @@ La compatibilidad académico–deportiva se comprueba al configurar, reactivar o
 
 La migración es aditiva. El bloqueo consultivo transaccional común serializa cambios de franjas académicas y deportivas; el bloqueo de alumnos ordena cambios académicos frente a altas deportivas. Los rechazos ocurren dentro de la misma transacción, por lo que no dejan inscripciones o franjas parciales.
 
+Una revisión del candidato detectó un falso positivo posible al reabrir matrícula: una inscripción puede seguir `ACTIVA` aunque su grupo deportivo haya sido dado de baja por administración de datos. El control de matrícula era el único cruce que no filtraba `grupos_deportivos.activo`; ahora lo hace, igual que los demás. Se agregó una prueba SQL que conserva la inscripción, da de baja el grupo, crea una franja académica superpuesta y reabre la matrícula sin rechazo. El grupo inactivo no representa actividad deportiva vigente.
+
+Tras esta corrección se repitieron desde cero el reset local, el SQL EPT-57 y EPT-12, la paridad y ambas suites de concurrencia, la verificación de tipos, typecheck, lint enfocado, build, advisors y la suite E2E completa: todos conservaron exit 0; E2E terminó con 597 pasadas y 1 omitida. El lint global conservó los mismos 15 errores y 108 advertencias preexistentes.
+
 ## Criterios de aceptación
 
 | Criterio | Evidencia local |

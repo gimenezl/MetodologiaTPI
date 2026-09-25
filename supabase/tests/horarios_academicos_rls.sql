@@ -125,6 +125,30 @@ DO $$ DECLARE v_codigo text; BEGIN
   RAISE NOTICE 'OK: la reactivación vuelve a verificar deportes vigentes';
 END $$;
 
+-- Una inscripción ACTIVA puede persistir en un grupo dado de baja por la
+-- administración de datos. Su franja ya no debe bloquear la matrícula.
+RESET ROLE;
+UPDATE public.grupos_deportivos SET activo=false
+WHERE id='f5700000-0000-4000-8000-0000000000d1';
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"f5700000-0000-4000-8000-000000000001"}',true);
+SELECT public.configurar_horario_materia(:'asignacion_id',1::smallint,'10:00','11:00');
+RESET ROLE;
+UPDATE public.matriculas SET fecha_cierre=NOW(),motivo_cierre='CAMBIO_DE_CURSO'
+WHERE alumno_id='f5700000-0000-4000-8000-000000000003' AND fecha_cierre IS NULL;
+UPDATE public.matriculas SET fecha_cierre=NULL,motivo_cierre=NULL
+WHERE alumno_id='f5700000-0000-4000-8000-000000000003';
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM public.matriculas
+      WHERE alumno_id='f5700000-0000-4000-8000-000000000003' AND fecha_cierre IS NULL)
+     OR NOT EXISTS(SELECT 1 FROM public.inscripciones_deportivas
+      WHERE alumno_id='f5700000-0000-4000-8000-000000000003'
+        AND grupo_id='f5700000-0000-4000-8000-0000000000d1' AND estado='ACTIVA') THEN
+    RAISE EXCEPTION 'FALLO: matrícula o inscripción histórica alteradas';
+  END IF;
+  RAISE NOTICE 'OK: grupo deportivo inactivo no bloquea reapertura de matrícula';
+END $$;
+
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claims','{"sub":"f5700000-0000-4000-8000-000000000002"}',true);
 DO $$ DECLARE v_codigo text; BEGIN

@@ -448,7 +448,8 @@ BEGIN
     JOIN public.materias_cursos_horarios f ON f.asignacion_id=mc.id AND f.activo
     JOIN public.horarios h ON h.id=f.horario_id
     JOIN public.inscripciones_deportivas i ON i.alumno_id=NEW.alumno_id AND i.estado='ACTIVA'
-    JOIN public.grupos_deportivos_horarios gh ON gh.grupo_id=i.grupo_id AND gh.activo
+    JOIN public.grupos_deportivos g ON g.id=i.grupo_id AND g.activo
+    JOIN public.grupos_deportivos_horarios gh ON gh.grupo_id=g.id AND gh.activo
     JOIN public.horarios hs ON hs.id=gh.horario_id
     WHERE mc.curso_id=NEW.curso_id AND mc.activo
       AND app_private.intervalos_se_superponen(h.dia_semana,h.hora_inicio,h.hora_fin,
