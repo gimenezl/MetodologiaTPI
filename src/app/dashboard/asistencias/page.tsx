@@ -5,24 +5,37 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { toast } from 'sonner'
 import { CalendarCheck, Warning, CheckCircle, X, Minus, Plus } from '@phosphor-icons/react'
-import { obtenerTodasAsistencias, actualizarAsistencia, registrarAsistencia } from '@/services/asistencias.service'
-import { obtenerRoles } from '@/services/roles.service'
-import { obtenerPerfiles } from '@/services/perfiles.service'
+import {
+  obtenerTodasAsistencias,
+  obtenerAsistenciasDeGestion,
+  actualizarAsistencia,
+  registrarAsistencia,
+} from '@/services/asistencias.service'
+import {
+  ESTUDIANTE_NO_DISPONIBLE,
+  indexarEstudiantes,
+  listarEstudiantesParaGestion,
+} from '@/services/estudiantes.service'
 import { calcularPorcentajeLocal, getAsistenciaColor, cn } from '@/lib/utils'
 import { Badge, Skeleton } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input, Select } from '@/components/ui/Input'
 import { useAuth } from '@/context/AuthContext'
 
+type Estudiante = { id: string; nombre: string; apellido: string; legajo_nro: string | null }
+
+/**
+ * La vista de gestión trae solo `estudiante_id` y resuelve el nombre con la
+ * consulta mínima de estudiantes (EPT-58). La vista del alumno y del padre
+ * conserva la lectura de su propio perfil o el de sus hijos.
+ */
 type AsistenciaRow = {
   id: string
   fecha: string
   estado: 'PRESENTE' | 'AUSENTE' | 'JUSTIFICADO'
-  estudiante: { id: string; nombre: string; apellido: string; legajo_nro: string | null } | null
+  estudiante_id: string | null
+  estudiante?: Estudiante | null
 }
-
-type Estudiante = { id: string; nombre: string; apellido: string; legajo_nro: string | null }
-type Rol = { id: number; nombre: string }
 
 const ESTADOS = ['PRESENTE', 'AUSENTE', 'JUSTIFICADO'] as const
 
@@ -49,7 +62,7 @@ export default function AsistenciasPage() {
   const cargarAsistencias = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await obtenerTodasAsistencias(fechaFiltro)
+      const data = await obtenerAsistenciasDeGestion(fechaFiltro)
       setAsistencias((data ?? []) as AsistenciaRow[])
     } catch {
       toast.error('Error al cargar asistencias')
@@ -61,12 +74,12 @@ export default function AsistenciasPage() {
   // El historial completo (RLS filtra automáticamente: el alumno ve lo suyo, el padre el de sus hijos)
   const cargarHistorial = useCallback(async () => {
     try {
-      const data = await obtenerTodasAsistencias()
+      const data = isStaff ? await obtenerAsistenciasDeGestion() : await obtenerTodasAsistencias()
       setHistorialCompleto((data ?? []) as AsistenciaRow[])
     } catch {
       setHistorialCompleto([])
     }
-  }, [])
+  }, [isStaff])
 
   useEffect(() => {
     if (isStaff) cargarAsistencias()
@@ -80,22 +93,26 @@ export default function AsistenciasPage() {
     await cargarHistorial()
   }, [cargarAsistencias, cargarHistorial])
 
-  // Lista de alumnos para el formulario (solo staff)
+  // Lista de alumnos para el formulario y para resolver nombres (solo staff).
+  // Es el mismo conjunto de perfiles ESTUDIANTE que antes, con cuatro datos.
   useEffect(() => {
     if (!isStaff) return
     const cargarEstudiantes = async () => {
       try {
-        const rolesData = await obtenerRoles()
-        const rolEstudiante = (rolesData as Rol[]).find((r) => r.nombre === 'ESTUDIANTE')
-        if (!rolEstudiante) return
-        const data = await obtenerPerfiles(rolEstudiante.id)
-        setEstudiantes((data ?? []) as Estudiante[])
+        setEstudiantes(await listarEstudiantesParaGestion())
       } catch {
         setEstudiantes([])
       }
     }
     cargarEstudiantes()
   }, [isStaff])
+
+  const estudiantesPorId = useMemo(() => indexarEstudiantes(estudiantes), [estudiantes])
+
+  const resolverEstudiante = (row: AsistenciaRow): Estudiante | null => {
+    if (!isStaff) return row.estudiante ?? null
+    return row.estudiante_id ? estudiantesPorId.get(row.estudiante_id) ?? null : null
+  }
 
   const handleEstadoChange = async (id: string, estado: 'PRESENTE' | 'AUSENTE' | 'JUSTIFICADO') => {
     setUpdatingId(id)
@@ -135,12 +152,12 @@ export default function AsistenciasPage() {
 
   const estudiantesStats = useMemo(() => Object.values(
     historialCompleto.reduce((acc, row) => {
-      if (!row.estudiante) return acc
-      const id = row.estudiante.id
-      if (!acc[id]) acc[id] = { estudiante: row.estudiante, asistencias: [] }
+      if (!row.estudiante_id) return acc
+      const id = row.estudiante_id
+      if (!acc[id]) acc[id] = { estudianteId: id, asistencias: [] }
       acc[id].asistencias.push(row)
       return acc
-    }, {} as Record<string, { estudiante: AsistenciaRow['estudiante']; asistencias: AsistenciaRow[] }>)
+    }, {} as Record<string, { estudianteId: string; asistencias: AsistenciaRow[] }>)
   ), [historialCompleto])
 
   // ---------- VISTA ALUMNO / PADRE (solo lectura) ----------
@@ -373,23 +390,29 @@ export default function AsistenciasPage() {
                   )
                   : asistencias.map((row) => {
                       const badge = estadoBadge[row.estado]
-                      const stats = estudiantesStats.find((s) => s.estudiante?.id === row.estudiante?.id)
+                      const estudiante = resolverEstudiante(row)
+                      const stats = estudiantesStats.find((s) => s.estudianteId === row.estudiante_id)
                       const porcentaje = stats ? calcularPorcentajeLocal(stats.asistencias) : null
                       const isUpdating = updatingId === row.id
                       return (
                         <tr key={row.id} className="hover:bg-neutral-50 transition-colors">
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-2.5">
-                              <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold text-xs shrink-0">
-                                {row.estudiante?.nombre[0]}{row.estudiante?.apellido[0]}
+                              <div
+                                className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold text-xs shrink-0"
+                                aria-hidden="true"
+                              >
+                                {estudiante ? `${estudiante.nombre[0]}${estudiante.apellido[0]}` : '?'}
                               </div>
                               <span className="font-medium text-neutral-900">
-                                {row.estudiante?.apellido}, {row.estudiante?.nombre}
+                                {estudiante
+                                  ? `${estudiante.apellido}, ${estudiante.nombre}`
+                                  : ESTUDIANTE_NO_DISPONIBLE}
                               </span>
                             </div>
                           </td>
                           <td className="px-5 py-3 text-neutral-500 hidden sm:table-cell font-mono text-xs">
-                            {row.estudiante?.legajo_nro ?? '—'}
+                            {estudiante?.legajo_nro ?? '—'}
                           </td>
                           <td className="px-5 py-3"><Badge variant={badge.variant} dot>{badge.label}</Badge></td>
                           <td className="px-5 py-3 hidden md:table-cell">
@@ -424,7 +447,7 @@ export default function AsistenciasPage() {
                                         : 'bg-yellow-100 text-yellow-700 cursor-default'
                                       : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200 disabled:opacity-40'
                                   )}
-                                  aria-label={`Marcar ${row.estudiante?.nombre ?? 'alumno'} como ${estado.toLowerCase()}`}
+                                  aria-label={`Marcar ${estudiante?.nombre ?? 'alumno'} como ${estado.toLowerCase()}`}
                                 >
                                   {estado === 'PRESENTE' ? 'P' : estado === 'AUSENTE' ? 'A' : 'J'}
                                 </button>

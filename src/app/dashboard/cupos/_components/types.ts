@@ -9,9 +9,14 @@ export type ActividadConCupo = {
   nivel: { nombre: string } | null
 }
 
+/**
+ * Inscripción activa de la vista de gestión. Trae solo `estudiante_id`: el
+ * nombre y el legajo se resuelven con la consulta mínima de estudiantes
+ * (EPT-58), que un docente conserva cuando pierda la lectura global de perfiles.
+ */
 export type Inscripcion = {
   id: string
-  estudiante: { id: string; nombre: string; apellido: string; legajo_nro: string | null } | null
+  estudiante_id: string | null
 }
 
 export type Estudiante = {

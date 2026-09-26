@@ -1,16 +1,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CaretDown, CaretUp, Check, PencilSimple, Pulse, Trash, UserPlus, Warning, X } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { darBajaInscripcion, inscribirAlumno } from '@/services/actividades.service'
-import { obtenerPerfiles } from '@/services/perfiles.service'
-import { obtenerRoles } from '@/services/roles.service'
+import {
+  ESTUDIANTE_NO_DISPONIBLE,
+  indexarEstudiantes,
+  listarEstudiantesParaGestion,
+} from '@/services/estudiantes.service'
 import { createClient } from '@/services/supabase'
 import { Badge, Skeleton } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Input'
 import { cn, getCupoColor } from '@/lib/utils'
-import type { Estudiante, Inscripcion, PropiedadesVistaCupos, Rol } from './types'
+import type { Estudiante, Inscripcion, PropiedadesVistaCupos } from './types'
 import { AVISO_DEPORTE_LEGADO, esDeporteLegado, variantePorTipo } from './types'
 
 type RolNombre = 'DIRECTOR' | 'DOCENTE' | 'PADRE' | 'ESTUDIANTE' | 'PERSONAL' | null
@@ -40,16 +43,14 @@ export function VistaGestionCupos({
 
   const puedeGestionar = rol === 'DIRECTOR' || rol === 'DOCENTE'
 
+  // Mismo conjunto de perfiles ESTUDIANTE que antes, con cuatro datos (EPT-58).
+  // También resuelve los nombres de los inscriptos.
   useEffect(() => {
     if (!puedeGestionar) return
 
     const cargarEstudiantes = async () => {
       try {
-        const datosRoles = await obtenerRoles()
-        const rolEstudiante = (datosRoles as Rol[]).find((rolDisponible) => rolDisponible.nombre === 'ESTUDIANTE')
-        if (!rolEstudiante) return
-        const datos = await obtenerPerfiles(rolEstudiante.id)
-        setEstudiantes((datos ?? []) as Estudiante[])
+        setEstudiantes(await listarEstudiantesParaGestion())
       } catch {
         setEstudiantes([])
       }
@@ -57,6 +58,8 @@ export function VistaGestionCupos({
 
     cargarEstudiantes()
   }, [puedeGestionar, rol])
+
+  const estudiantesPorId = useMemo(() => indexarEstudiantes(estudiantes), [estudiantes])
 
   const alternarInscriptos = async (actividadId: number) => {
     if (actividadExpandidaId === actividadId) {
@@ -72,7 +75,7 @@ export function VistaGestionCupos({
       const supabase = createClient()
       const { data, error } = await (supabase
         .from('inscripciones')
-        .select(`id, estudiante:perfiles!inscripciones_estudiante_id_fkey(id, nombre, apellido, legajo_nro)`)
+        .select('id, estudiante_id')
         .eq('actividad_id', actividadId)
         .eq('estado', 'ACTIVO') as any)
       if (error) throw new Error(error.message)
@@ -387,18 +390,27 @@ export function VistaGestionCupos({
                           <p className="text-xs text-neutral-400 text-center py-4">No hay alumnos inscriptos</p>
                         ) : (
                           <ul className="space-y-2">
-                            {inscriptos.map((inscripcion) => (
+                            {inscriptos.map((inscripcion) => {
+                              const estudiante = inscripcion.estudiante_id
+                                ? estudiantesPorId.get(inscripcion.estudiante_id)
+                                : undefined
+                              return (
                               <li key={inscripcion.id} className="flex items-center justify-between gap-3 bg-white rounded-xl px-4 py-2.5 border border-neutral-200">
                                 <div className="flex items-center gap-2.5 min-w-0">
-                                  <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold text-xs shrink-0">
-                                    {inscripcion.estudiante?.nombre[0]}{inscripcion.estudiante?.apellido[0]}
+                                  <div
+                                    className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold text-xs shrink-0"
+                                    aria-hidden="true"
+                                  >
+                                    {estudiante ? `${estudiante.nombre[0]}${estudiante.apellido[0]}` : '?'}
                                   </div>
                                   <div className="min-w-0">
                                     <p className="text-sm font-medium text-neutral-900 truncate">
-                                      {inscripcion.estudiante?.apellido}, {inscripcion.estudiante?.nombre}
+                                      {estudiante
+                                        ? `${estudiante.apellido}, ${estudiante.nombre}`
+                                        : ESTUDIANTE_NO_DISPONIBLE}
                                     </p>
-                                    {inscripcion.estudiante?.legajo_nro && (
-                                      <p className="text-xs text-neutral-400 font-mono">Leg. {inscripcion.estudiante.legajo_nro}</p>
+                                    {estudiante?.legajo_nro && (
+                                      <p className="text-xs text-neutral-400 font-mono">Leg. {estudiante.legajo_nro}</p>
                                     )}
                                   </div>
                                 </div>
@@ -413,7 +425,8 @@ export function VistaGestionCupos({
                                   </button>
                                 )}
                               </li>
-                            ))}
+                              )
+                            })}
                           </ul>
                         )}
                       </div>
