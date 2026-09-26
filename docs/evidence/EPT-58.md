@@ -10,6 +10,10 @@ producción con autorización del usuario.
 > [`EPT-58/ETAPA-2.md`](EPT-58/ETAPA-2.md). Este documento queda como
 > evidencia de la etapa 1.
 
+> **Etapa 3:** el candidato local de privacidad de perfiles se documenta en
+> [`EPT-58/ETAPA-3.md`](EPT-58/ETAPA-3.md). El estado histórico de la etapa 1
+> registrado abajo no se reescribe.
+
 ## 1. Resumen
 
 - **Qué agrega A:** la ficha 1:1 `profesores` de cada perfil DOCENTE
