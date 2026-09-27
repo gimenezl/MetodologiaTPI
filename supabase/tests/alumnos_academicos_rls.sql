@@ -159,6 +159,9 @@ BEGIN
         WHERE schemaname = 'public'
           AND tablename IN ('alumnos', 'matriculas')
           AND cmd <> 'SELECT'
+          -- EPT-59: la política RESTRICTIVE «Bloqueo de acceso sin datos protegidos» es FOR ALL
+          -- pero solo restringe: no concede escritura. Se evalúan las permisivas.
+          AND permissive = 'PERMISSIVE'
     ) THEN
         RAISE EXCEPTION 'FALLO 8: existe una política de escritura sobre el modelo académico';
     END IF;

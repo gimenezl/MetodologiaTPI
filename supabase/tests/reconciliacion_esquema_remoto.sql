@@ -111,6 +111,9 @@ BEGIN
         WHERE schemaname = 'public'
           AND tablename IN ('actividades', 'asistencias', 'inscripciones', 'perfiles')
           AND cmd = 'ALL'
+          -- EPT-59: la política RESTRICTIVE «Bloqueo de acceso sin datos protegidos» es FOR ALL
+          -- pero solo restringe: no concede escritura. Se evalúan las permisivas.
+          AND permissive = 'PERMISSIVE'
     ) THEN
         RAISE EXCEPTION 'FALLO 9: subsiste una política ALL';
     END IF;

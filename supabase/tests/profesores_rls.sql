@@ -231,7 +231,9 @@ BEGIN
     -- Políticas: solo SELECT, con los nombres esperados.
     IF (SELECT pg_catalog.array_agg(p.policyname::TEXT || ':' || p.cmd ORDER BY p.policyname)
         FROM pg_catalog.pg_policies p
-        WHERE p.schemaname = 'public' AND p.tablename IN ('profesores', 'profesores_estados_historial'))
+        WHERE p.schemaname = 'public' AND p.tablename IN ('profesores', 'profesores_estados_historial')
+          -- EPT-59 agrega la RESTRICTIVE de bloqueo, que no concede nada.
+          AND p.permissive = 'PERMISSIVE')
        <> ARRAY[
            'Dirección ve el historial de estados de profesores:SELECT',
            'Dirección y docente propio ven fichas de profesores:SELECT'

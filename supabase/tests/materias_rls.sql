@@ -710,7 +710,9 @@ BEGIN
         RAISE EXCEPTION 'FALLO 24: una tabla de materias no tiene RLS';
     END IF;
     IF EXISTS (SELECT 1 FROM pg_policies
-               WHERE schemaname = 'public' AND tablename = 'materias_cursos' AND cmd <> 'SELECT') THEN
+               WHERE schemaname = 'public' AND tablename = 'materias_cursos' AND cmd <> 'SELECT'
+               -- EPT-59: la RESTRICTIVE de bloqueo (FOR ALL) solo restringe.
+               AND permissive = 'PERMISSIVE') THEN
         RAISE EXCEPTION 'FALLO 24: materias_cursos tiene una política de escritura';
     END IF;
     IF EXISTS (
@@ -794,6 +796,8 @@ BEGIN
         SELECT 1 FROM pg_policies
         WHERE schemaname = 'public' AND tablename = 'actividades'
           AND policyname NOT IN ('Actividades visibles para todos', 'Directores y docentes actualizan cupos')
+          -- EPT-59 agrega las RESTRICTIVE de bloqueo, que solo restringen.
+          AND permissive = 'PERMISSIVE'
     ) THEN
         RAISE EXCEPTION 'FALLO 27: se agregó una política sobre actividades';
     END IF;

@@ -642,6 +642,9 @@ BEGIN
         WHERE schemaname = 'public'
           AND tablename IN ('servicios_escolares', 'inscripciones_servicios')
           AND cmd <> 'SELECT'
+          -- EPT-59: la política RESTRICTIVE «Bloqueo de acceso sin datos protegidos» es FOR ALL
+          -- pero solo restringe: no concede escritura. Se evalúan las permisivas.
+          AND permissive = 'PERMISSIVE'
     ) THEN
         RAISE EXCEPTION 'FALLO 22: existe una política de escritura sobre el comedor';
     END IF;
@@ -780,6 +783,9 @@ BEGIN
     IF EXISTS (
         SELECT 1 FROM pg_policies
         WHERE schemaname = 'public' AND tablename = 'materias_cursos' AND cmd <> 'SELECT'
+          -- EPT-59: la política RESTRICTIVE «Bloqueo de acceso sin datos protegidos» es FOR ALL
+          -- pero solo restringe: no concede escritura. Se evalúan las permisivas.
+          AND permissive = 'PERMISSIVE'
     ) THEN
         RAISE EXCEPTION 'FALLO 24: cambiaron las políticas de materias_cursos';
     END IF;

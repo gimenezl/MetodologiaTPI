@@ -906,6 +906,7 @@ export type Database = {
           apellido: string
           direccion: string | null
           dni: string
+          estado_acceso: Database["public"]["Enums"]["estado_acceso"]
           fecha_creacion: string | null
           fecha_nacimiento: string | null
           id: string
@@ -919,6 +920,7 @@ export type Database = {
           apellido: string
           direccion?: string | null
           dni: string
+          estado_acceso?: Database["public"]["Enums"]["estado_acceso"]
           fecha_creacion?: string | null
           fecha_nacimiento?: string | null
           id?: string
@@ -932,6 +934,7 @@ export type Database = {
           apellido?: string
           direccion?: string | null
           dni?: string
+          estado_acceso?: Database["public"]["Enums"]["estado_acceso"]
           fecha_creacion?: string | null
           fecha_nacimiento?: string | null
           id?: string
@@ -947,6 +950,57 @@ export type Database = {
             columns: ["rol_id"]
             isOneToOne: false
             referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      perfiles_historial: {
+        Row: {
+          actor_perfil_id: string
+          fecha: string
+          id: number
+          motivo: string
+          operacion_id: string | null
+          perfil_id: string
+          tipo: string
+          valor_anterior: string | null
+          valor_nuevo: string
+        }
+        Insert: {
+          actor_perfil_id: string
+          fecha?: string
+          id?: never
+          motivo: string
+          operacion_id?: string | null
+          perfil_id: string
+          tipo: string
+          valor_anterior?: string | null
+          valor_nuevo: string
+        }
+        Update: {
+          actor_perfil_id?: string
+          fecha?: string
+          id?: never
+          motivo?: string
+          operacion_id?: string | null
+          perfil_id?: string
+          tipo?: string
+          valor_anterior?: string | null
+          valor_nuevo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "perfiles_historial_actor_perfil_id_fkey"
+            columns: ["actor_perfil_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "perfiles_historial_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1438,6 +1492,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      anular_desafio_vinculo: {
+        Args: { p_director_perfil_id: string; p_operacion_id: string }
+        Returns: undefined
+      }
       asignar_materia_curso: {
         Args: {
           p_curso_id: string
@@ -1463,6 +1521,20 @@ export type Database = {
       calcular_porcentaje_asistencia: {
         Args: { p_estudiante_id: string }
         Returns: number
+      }
+      cambiar_acceso_perfil: {
+        Args: {
+          p_estado_esperado: Database["public"]["Enums"]["estado_acceso"]
+          p_estado_nuevo: Database["public"]["Enums"]["estado_acceso"]
+          p_motivo: string
+          p_perfil_id: string
+        }
+        Returns: {
+          estado_acceso: Database["public"]["Enums"]["estado_acceso"]
+          historial_id: number
+          perfil_id: string
+          user_id: string
+        }[]
       }
       cambiar_curso_alumno: {
         Args: { p_alumno_id: string; p_curso_id: string }
@@ -1567,6 +1639,19 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      cambiar_rol_perfil: {
+        Args: {
+          p_motivo: string
+          p_perfil_id: string
+          p_rol_esperado: string
+          p_rol_nuevo: string
+        }
+        Returns: {
+          historial_id: number
+          perfil_id: string
+          rol: string
+        }[]
+      }
       cancelar_inscripcion_deportiva: {
         Args: { p_inscripcion_id: string }
         Returns: {
@@ -1601,6 +1686,20 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      cancelar_vinculo: {
+        Args: { p_operacion_id: string }
+        Returns: {
+          correo_enmascarado: string
+          correo_verificado: boolean
+          desafio_emitido: boolean
+          estado: string
+          intentos_restantes: number
+          operacion_id: string
+          perfil_id: string
+          vence_en: string
+          vinculado: boolean
+        }[]
       }
       configurar_horario_materia: {
         Args: {
@@ -1667,6 +1766,46 @@ export type Database = {
           perfil_id: string
           rol_docente_vigente: boolean
           telefono: string
+        }[]
+      }
+      consultar_usuario: {
+        Args: { p_perfil_id: string }
+        Returns: {
+          apellido: string
+          bloqueo_auth: boolean
+          correo_confirmado: boolean
+          correo_enmascarado: string
+          cuenta_existente: boolean
+          direccion: string
+          dni: string
+          es_director_efectivo: boolean
+          estado_acceso: Database["public"]["Enums"]["estado_acceso"]
+          fecha_creacion: string
+          fecha_nacimiento: string
+          id: string
+          legajo_nro: string
+          nombre: string
+          puede_vincular: boolean
+          rol: string
+          telefono: string
+          tiene_cuenta: boolean
+          ultimo_ingreso: string
+          vinculo_pendiente_operacion: string
+          vinculo_pendiente_vence_en: string
+        }[]
+      }
+      consultar_vinculo: {
+        Args: { p_operacion_id: string }
+        Returns: {
+          correo_enmascarado: string
+          correo_verificado: boolean
+          desafio_emitido: boolean
+          estado: string
+          intentos_restantes: number
+          operacion_id: string
+          perfil_id: string
+          vence_en: string
+          vinculado: boolean
         }[]
       }
       corregir_identidad_alumno: {
@@ -1760,7 +1899,36 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      datos_para_enlace: {
+        Args: { p_director_perfil_id: string; p_operacion_id: string }
+        Returns: {
+          correo: string
+          cuenta_id: string
+          estado: string
+          perfil_id: string
+          vinculado: boolean
+        }[]
+      }
+      emitir_desafio_vinculo: {
+        Args: {
+          p_correo: string
+          p_director_perfil_id: string
+          p_operacion_id: string
+        }
+        Returns: {
+          codigo: string
+          correo: string
+          desafio_vence_en: string
+        }[]
+      }
       es_director_actual: { Args: never; Returns: boolean }
+      estado_acceso_de: {
+        Args: { p_perfil_id: string }
+        Returns: {
+          estado_acceso: Database["public"]["Enums"]["estado_acceso"]
+          user_id: string
+        }[]
+      }
       inactivar_alumno: { Args: { p_alumno_id: string }; Returns: string }
       inscribir_alumno_en_grupo_deportivo: {
         Args: { p_alumno_id: string; p_grupo_id: string }
@@ -1875,6 +2043,21 @@ export type Database = {
           motivo: string
         }[]
       }
+      listar_historial_usuario: {
+        Args: { p_perfil_id: string }
+        Returns: {
+          actor_apellido: string
+          actor_nombre: string
+          actor_perfil_id: string
+          fecha: string
+          id: number
+          motivo: string
+          operacion_id: string
+          tipo: string
+          valor_anterior: string
+          valor_nuevo: string
+        }[]
+      }
       listar_horarios_profesor: {
         Args: { p_profesor_id?: string }
         Returns: {
@@ -1903,10 +2086,34 @@ export type Database = {
           rol_docente_vigente: boolean
         }[]
       }
+      listar_usuarios: {
+        Args: {
+          p_busqueda?: string
+          p_desplazamiento?: number
+          p_limite?: number
+        }
+        Returns: {
+          apellido: string
+          bloqueo_auth: boolean
+          correo_confirmado: boolean
+          correo_enmascarado: string
+          cuenta_existente: boolean
+          dni: string
+          es_director_efectivo: boolean
+          estado_acceso: Database["public"]["Enums"]["estado_acceso"]
+          id: string
+          legajo_nro: string
+          nombre: string
+          rol: string
+          tiene_cuenta: boolean
+          total: number
+        }[]
+      }
       matricular_hijo: {
         Args: { p_curso_id: string; p_hijo_id: string }
         Returns: string
       }
+      mi_estado_acceso: { Args: never; Returns: string }
       reactivar_alumno: {
         Args: { p_alumno_id: string; p_curso_id: string }
         Returns: string
@@ -1941,9 +2148,41 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reservar_vinculo_cuenta: {
+        Args: {
+          p_dni: string
+          p_documento_verificado: boolean
+          p_modalidad: string
+          p_operacion_id: string
+          p_perfil_id: string
+          p_representante_dni: string
+        }
+        Returns: {
+          correo_enmascarado: string
+          correo_verificado: boolean
+          desafio_emitido: boolean
+          estado: string
+          intentos_restantes: number
+          operacion_id: string
+          perfil_id: string
+          vence_en: string
+        }[]
+      }
       rol_actual: { Args: never; Returns: string }
+      verificar_desafio_vinculo: {
+        Args: {
+          p_codigo: string
+          p_director_perfil_id: string
+          p_operacion_id: string
+        }
+        Returns: {
+          intentos_restantes: number
+          resultado: string
+        }[]
+      }
     }
     Enums: {
+      estado_acceso: "HABILITADO" | "BLOQUEADO"
       estado_alumno: "ACTIVO" | "INACTIVO"
       estado_inscripcion_deportiva: "ACTIVA" | "CANCELADA"
       estado_inscripcion_servicio: "ACTIVA" | "CANCELADA"
@@ -2080,6 +2319,7 @@ export const Constants = {
   },
   public: {
     Enums: {
+      estado_acceso: ["HABILITADO", "BLOQUEADO"],
       estado_alumno: ["ACTIVO", "INACTIVO"],
       estado_inscripcion_deportiva: ["ACTIVA", "CANCELADA"],
       estado_inscripcion_servicio: ["ACTIVA", "CANCELADA"],

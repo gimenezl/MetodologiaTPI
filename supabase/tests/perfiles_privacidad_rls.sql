@@ -39,7 +39,9 @@ BEGIN
                         AND policyname = 'Padres ven perfiles de sus hijos' AND cmd = 'SELECT')
        OR NOT EXISTS (SELECT 1 FROM pg_catalog.pg_policies
                       WHERE schemaname = 'public' AND tablename = 'perfiles'
-                        AND policyname = 'Solo directores insertan perfiles' AND cmd = 'INSERT')
+                        -- EPT-59 reemplazó «Solo directores insertan perfiles» por el alta
+                        -- de legajos sin cuenta (sin user_id, con rol, nunca DIRECTOR).
+                        AND policyname = 'Dirección crea legajos sin cuenta' AND cmd = 'INSERT')
        OR NOT EXISTS (SELECT 1 FROM pg_catalog.pg_policies
                       WHERE schemaname = 'public' AND tablename = 'perfiles'
                         AND policyname = 'Directores modifican perfiles' AND cmd = 'UPDATE')
