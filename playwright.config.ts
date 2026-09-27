@@ -46,7 +46,7 @@ for (const clave of [
 const conBaseLocal = process.env.EPT_SUPABASE_LOCAL === '1'
 
 const PRUEBAS_AUTENTICADAS =
-  /(?:cursos|niveles|alumnos|usuarios|usuarios-permisos|materias|comedor|deportes|horarios|horarios-academicos|hijos|profesores|gestion-estudiantes)-auth\.spec\.ts/
+  /(?:cursos|niveles|alumnos|usuarios|usuarios-permisos|materias|comedor|deportes|transporte|horarios|horarios-academicos|hijos|profesores|gestion-estudiantes)-auth\.spec\.ts/
 const PRUEBAS_SETUP = /auth\.setup\.ts/
 
 // `niveles-responsive` existe únicamente para los perfiles móviles.
@@ -57,7 +57,7 @@ const PRUEBAS_SOLO_MOVIL = /niveles-responsive\.spec\.ts/
 // ventana, de modo que un mismo archivo demuestra la presentación de escritorio
 // y la móvil.
 const PRUEBAS_MULTIPERFIL =
-  /(?:alumnos-(?:ui|contraste)|materias-ui|comedor-ui|deportes-ui|horarios-ui|hijos-ui|profesores-ui)\.spec\.ts/
+  /(?:alumnos-(?:ui|contraste)|materias-ui|comedor-ui|deportes-ui|transporte-ui|horarios-ui|hijos-ui|profesores-ui)\.spec\.ts/
 
 const proyectoBase: Project = {
   name: 'chromium',

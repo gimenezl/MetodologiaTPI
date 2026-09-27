@@ -130,8 +130,13 @@ BEGIN
         RAISE EXCEPTION 'FALLO 1: el servicio de comedor no está sembrado y activo';
     END IF;
 
-    IF (SELECT pg_catalog.count(*) FROM public.servicios_escolares) <> 1 THEN
-        RAISE EXCEPTION 'FALLO 1: el catálogo sembró más de un servicio';
+    -- EPT-60 agrega cuatro recorridos de transporte al mismo catálogo (por
+    -- diseño: 013 ya documenta que incorporarlos es «agregar filas», no crear
+    -- tablas). Lo que EPT-10 debe seguir garantizando es que el comedor sigue
+    -- siendo el único servicio de tipo COMEDOR, no que el catálogo tenga un
+    -- único servicio en total.
+    IF (SELECT pg_catalog.count(*) FROM public.servicios_escolares WHERE tipo = 'COMEDOR') <> 1 THEN
+        RAISE EXCEPTION 'FALLO 1: el catálogo sembró más de un servicio de tipo COMEDOR';
     END IF;
 
     RAISE NOTICE 'OK 1: objetos, columnas y semilla reproducible del comedor (id %)', v_servicio.id;

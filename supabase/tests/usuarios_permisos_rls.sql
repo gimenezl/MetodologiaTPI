@@ -536,9 +536,11 @@ DECLARE
     IDEP TEXT := pg_temp.fx('insc_dep'); ISERV TEXT := pg_temp.fx('insc_serv');
     f TEXT := 'e0000000-0000-4000-8000-000000000101';
     s TEXT := 'e0000000-0000-4000-8000-000000000010';
+    t TEXT := 'e0000000-0000-4000-8000-000000000020';
     OPF TEXT := pg_temp.u('f1'); OPB TEXT := pg_temp.u('f2'); PERB TEXT := pg_temp.u('22');
 BEGIN
     PERFORM pg_temp.rpc('public.actualizar_ficha_profesor', 'x', pg_catalog.format('public.actualizar_ficha_profesor(%L, %L, %L)', DOC, 'LEG-EPT59-BAT', 'Geografía'));
+    PERFORM pg_temp.rpc('public.actualizar_recorrido', 'x', pg_catalog.format('public.actualizar_recorrido(%L, %L, true)', t, 'Recorrido Norte (batería EPT59)'));
     PERFORM pg_temp.rpc('public.agregar_horario_grupo_deportivo', 'x', pg_catalog.format('public.agregar_horario_grupo_deportivo(%L, 4::smallint, %L, %L)', GR, '10:00', '11:00'));
     PERFORM pg_temp.rpc('public.asignar_materia_curso', 'x', pg_catalog.format('public.asignar_materia_curso(%s, %L, %L)', MAT, C2, DOC));
     PERFORM pg_temp.rpc('public.calcular_porcentaje_asistencia', 'v', pg_catalog.format('public.calcular_porcentaje_asistencia(%L)', EST));
@@ -563,6 +565,7 @@ BEGIN
     PERFORM pg_temp.rpc('public.crear_nivel', 'x', $e$public.crear_nivel('NIVEL BATERIA EPT59')$e$);
     PERFORM pg_temp.rpc('public.dar_de_baja_horario_grupo_deportivo', 'x', pg_catalog.format('public.dar_de_baja_horario_grupo_deportivo(%L, %L)', GR, GFR));
     PERFORM pg_temp.rpc('public.es_director_actual', 'v', 'public.es_director_actual()');
+    PERFORM pg_temp.rpc('public.establecer_recorrido_transporte', 'x', pg_catalog.format('public.establecer_recorrido_transporte(%L)', t));
     PERFORM pg_temp.rpc('public.inactivar_alumno', 'x', pg_catalog.format('public.inactivar_alumno(%L)', EST));
     PERFORM pg_temp.rpc('public.inscribir_alumno_en_grupo_deportivo', 'x', pg_catalog.format('public.inscribir_alumno_en_grupo_deportivo(%L, %L)', EST, GR));
     PERFORM pg_temp.rpc('public.inscribir_en_grupo_deportivo', 'x', pg_catalog.format('public.inscribir_en_grupo_deportivo(%L)', GR));
