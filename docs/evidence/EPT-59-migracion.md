@@ -11,7 +11,20 @@ Antes de aplicar, una persona con autorización de lectura de `auth.users` debe 
 psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f supabase/tests/preflight_ept59.sql
 ```
 
-`DATABASE_URL` debe apuntar explícitamente al proyecto productivo correcto; no se guarda aquí. Revisar que el último historial sea `20260926154000`, que las columnas/funciones/tablas requeridas estén presentes, que `postgres_lee_auth_users` y `columnas_auth_presentes` sean `t`, que `ept59_sin_aplicar` sea `t` y que las dos políticas de `perfiles` coincidan con EPT-58 B. Revisar el conteo de Directores efectivos y perfiles huérfanos antes de aprobar la ventana. Cualquier divergencia detiene el despliegue: no editar la migración aplicada ni forzar el historial. **Este preflight no se ejecutó en producción.**
+`DATABASE_URL` debe apuntar explícitamente al proyecto productivo correcto; no se guarda aquí. Revisar que el último historial sea `20260926154000`, que las columnas/funciones/tablas requeridas estén presentes, que `postgres_lee_auth_users` y `columnas_auth_presentes` sean `t`, que `ept59_sin_aplicar` sea `t` y que las dos políticas de `perfiles` coincidan con EPT-58 B. Revisar el conteo de Directores efectivos y perfiles huérfanos antes de aprobar la ventana. Cualquier divergencia detiene el despliegue: no editar la migración aplicada ni forzar el historial.
+
+**Preflight productivo ejecutado el 27/09/2026, solo lectura.** El vínculo CLI existente se verificó contra el ref `ycvrpmrogvjnntnoosbh`. Se ejecutaron por separado los seis `SELECT` de `supabase/tests/preflight_ept59.sql` mediante `npx supabase db query --linked` (sin la directiva `psql` y sin `BEGIN`/`COMMIT`, porque la API devuelve únicamente el resultado de la última sentencia). Cada consulta devolvió código 0:
+
+| Dato | Resultado productivo |
+|---|---|
+| Base, rol y PostgreSQL | `postgres`, `postgres`, `17.6` |
+| Últimas versiones del historial | `20260926154000`, `20260925165924`, `20260924225451`, `016` |
+| Lectura de `auth.users` por `postgres` y cuatro columnas requeridas | `true`, `true` |
+| Tablas y funciones verificadas; EPT-59 ausente | Todos los indicadores `true` |
+| Políticas de `perfiles` | `Solo Dirección ve todos los perfiles` (`SELECT`, `PERMISSIVE`); `Solo directores insertan perfiles` (`INSERT`, `PERMISSIVE`) |
+| Directores efectivos; perfiles huérfanos; perfiles sin rol | `2`; `0`; `0` |
+
+La evidencia es una fotografía previa, no autorización automática para migrar: repetirla en la ventana de publicación y detenerse si cambia. No se ejecutó `db push` ni ninguna sentencia de escritura.
 
 ## Aplicación y comprobación
 
