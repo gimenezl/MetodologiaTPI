@@ -35,6 +35,11 @@ type Perfil = {
 
 type Rol = { id: number; nombre: string }
 const rolesAlternativos: Rol[] = ROLES.map((nombre, indice) => ({ id: indice + 1, nombre }))
+
+// Un legajo sin cuenta no puede nacer con rol DIRECTOR (EPT-59): un Director
+// necesita una cuenta verificada, y esa alta vive en Usuarios. El filtro vale
+// con y sin la migración de EPT-59, que además lo exige en la base.
+const esRolAsignableSinCuenta = (rol: Rol) => rol.nombre !== 'DIRECTOR'
 const elementosPorPagina = 10
 
 // `danger` siempre fue una variante válida de Badge; faltaba en este tipo, y el
@@ -233,9 +238,12 @@ export default function LegajosPage() {
                   label="Rol"
                   required
                   placeholder="Seleccionar rol"
-                  options={roles.map((rol) => ({ value: rol.id, label: rol.nombre }))}
+                  options={roles
+                    .filter(esRolAsignableSinCuenta)
+                    .map((rol) => ({ value: rol.id, label: rol.nombre }))}
                   {...registrarCampo('rol_id', { valueAsNumber: true })}
                   error={errores.rol_id?.message}
+                  helperText="Para registrar a un Director, usá el alta con cuenta en Usuarios."
                 />
               ) : (
                 <div className="flex flex-col gap-1.5">
