@@ -47,6 +47,9 @@ export async function proxy(request: NextRequest) {
   return supabaseResponse
 }
 
+// `/acceso-bloqueado` (EPT-59) se incluye solo para renovar la sesión antes de
+// que su Server Component la lea; el proxy no consulta la base ni decide nada
+// sobre esa ruta.
 export const config = {
-  matcher: ['/dashboard/:path*', '/login'],
+  matcher: ['/dashboard/:path*', '/login', '/acceso-bloqueado'],
 }

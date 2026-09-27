@@ -27,10 +27,19 @@ export function LoginForm() {
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
+      // EPT-59: una cuenta bloqueada por Dirección queda baneada en Auth. El
+      // texto de GoTrue llega en inglés, así que se muestra uno propio por código.
+      const mensajes: Record<string, string> = {
+        invalid_credentials: 'Email o contraseña incorrectos',
+        user_banned: 'Tu acceso está bloqueado. Comunicate con Dirección.',
+        email_not_confirmed: 'Tu correo todavía no está confirmado. Comunicate con Dirección.',
+        over_request_rate_limit: 'Hiciste demasiados intentos. Esperá unos minutos y volvé a probar.',
+      }
       toast.error(
-        error.message === 'Invalid login credentials'
-          ? 'Email o contraseña incorrectos'
-          : error.message
+        (error.code && mensajes[error.code]) ??
+          (error.message === 'Invalid login credentials'
+            ? mensajes.invalid_credentials
+            : 'No pudimos iniciar sesión. Intentá de nuevo en unos minutos.')
       )
       return
     }

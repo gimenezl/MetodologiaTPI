@@ -28,7 +28,16 @@ const DIRECTORIOS = [
   'src/app/pruebas-ui/alumnos',
   'src/components/ui',
 ]
-const ARCHIVOS_SUELTOS = ['src/app/dashboard/layout.tsx']
+// EPT-59: el layout del panel pasó a ser un Server Component y el armazón del
+// cliente (menú, barra inferior y «Acceso restringido») se movió a
+// `_components/PanelDashboard.tsx`. Se revisan los dos para no perder cobertura,
+// junto con la pantalla nueva de acceso bloqueado.
+const ARCHIVOS_SUELTOS = [
+  'src/app/dashboard/layout.tsx',
+  'src/app/dashboard/_components/PanelDashboard.tsx',
+  'src/app/acceso-bloqueado/page.tsx',
+  'src/app/acceso-bloqueado/_components/CerrarSesionBloqueada.tsx',
+]
 
 /** Componentes y etiquetas que son un control interactivo. */
 const CONTROLES = new Set([

@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
  * `EnlaceBoton`, que se renderiza en el servidor.
  */
 
-export type VarianteDeBoton = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'accent'
+export type VarianteDeBoton = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'accent' | 'peligro'
 export type TamanoDeBoton = 'sm' | 'md' | 'lg'
 
 const variantes: Record<VarianteDeBoton, string> = {
@@ -22,6 +22,9 @@ const variantes: Record<VarianteDeBoton, string> = {
   ghost: 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900',
   danger: 'bg-red-500 text-white hover:bg-red-600 shadow-sm shadow-red-500/25',
   accent: 'bg-accent-500 text-white hover:bg-accent-600 shadow-sm shadow-accent-500/25',
+  // Acción destructiva con contraste AA para texto normal (EPT-59). `danger`
+  // se conserva sin cambios para no alterar las pantallas que ya lo usan.
+  peligro: 'bg-red-700 text-white hover:bg-red-800 shadow-sm shadow-red-700/25',
 }
 
 const tamanos: Record<TamanoDeBoton, string> = {

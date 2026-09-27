@@ -1,9 +1,16 @@
 import { randomUUID } from 'node:crypto'
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { CATALOGO_DE_ERRORES, type CodigoDeError } from '@/lib/errores'
-import { dniAlumnoSchema, legajoAlumnoSchema } from '@/lib/validations'
+import { dniAlumnoSchema, legajoAlumnoSchema, listarUsuariosSchema } from '@/lib/validations'
 import { requerirDirector } from '@/services/autorizacion'
+import { listarUsuarios } from '@/services/gestion-usuarios.service'
+import {
+  responderDenegacion,
+  responderError as responderErrorDeUsuarios,
+  responderResultado,
+  validar,
+} from '@/services/usuarios.respuestas'
 import {
   registrarCuentaConPerfil,
   type DiagnosticoDelAlta,
@@ -93,6 +100,30 @@ const CODIGOS_CON_REFERENCIA = new Set<CodigoDeError>([
   'ESTADO_INCONSISTENTE',
   'SERVICIO_NO_DISPONIBLE',
 ])
+
+/**
+ * Listado de usuarios para la dirección (EPT-59).
+ *
+ * `?busqueda=` filtra por nombre, apellido, DNI o legajo (los comodines se
+ * buscan literalmente) y `?pagina=` pagina de a 50. La base vuelve a exigir un
+ * Director habilitado y nunca devuelve el correo completo, solo enmascarado.
+ */
+export async function GET(request: NextRequest) {
+  const autorizacion = await requerirDirector('Solo la dirección puede administrar usuarios.')
+  if (!autorizacion.autorizado) return responderDenegacion(autorizacion)
+
+  const parametros = request.nextUrl.searchParams
+  const consulta = validar(listarUsuariosSchema, {
+    busqueda: parametros.get('busqueda') ?? undefined,
+    pagina: parametros.get('pagina') ?? undefined,
+  })
+  if (!consulta.ok) {
+    const { codigo, ...opciones } = consulta
+    return responderErrorDeUsuarios(codigo, opciones)
+  }
+
+  return responderResultado(await listarUsuarios(consulta.datos.busqueda, consulta.datos.pagina))
+}
 
 export async function POST(request: Request) {
   // 1. Autorizar. La identidad sale de la sesión, nunca del cuerpo.

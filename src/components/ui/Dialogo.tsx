@@ -22,6 +22,7 @@ export function Dialogo({
   titulo,
   descripcion,
   selectorFocoInicial,
+  tituloEnfocable = false,
   onCerrar,
   children,
 }: {
@@ -29,6 +30,12 @@ export function Dialogo({
   titulo: string
   descripcion?: string
   selectorFocoInicial: string
+  /**
+   * Permite que el foco inicial sea el título (`selectorFocoInicial` =
+   * `#tituloId`). Lo usan los diálogos de EPT-59, que anuncian primero de qué
+   * se trata. Queda fuera del recorrido con Tab (`tabIndex={-1}`).
+   */
+  tituloEnfocable?: boolean
   onCerrar: () => void
   children: ReactNode
 }) {
@@ -99,7 +106,11 @@ export function Dialogo({
         className="relative w-full max-w-lg bg-white rounded-2xl border border-neutral-200 shadow-xl my-auto"
       >
         <div className="flex items-center justify-between gap-3 px-5 sm:px-6 py-4 border-b border-neutral-100">
-          <h2 id={tituloId} className="font-bold text-neutral-900 min-w-0 break-words">
+          <h2
+            id={tituloId}
+            tabIndex={tituloEnfocable ? -1 : undefined}
+            className="font-bold text-neutral-900 min-w-0 break-words focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+          >
             {titulo}
           </h2>
           <button

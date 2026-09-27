@@ -185,6 +185,59 @@ export const ESTUDIANTE_CIERRE = {
   archivoSesion: 'tests/.auth/estudiante-cierre.json',
 }
 
+/**
+ * Identidades BLOQUEADAS (EPT-59), una por rol.
+ *
+ * Cada una inicia sesión con el perfil HABILITADO —como cualquier persona antes
+ * de que Dirección la bloquee— y recién después la última etapa del setup
+ * marca su perfil BLOQUEADO en la base. Así sus sesiones guardadas son JWT
+ * emitidos antes del bloqueo: prueban que la base, el servidor y la navegación
+ * niegan todo aunque la sesión siga viva. No se banea la cuenta en Auth a
+ * propósito: con el baneo, GoTrue rechaza `getUser()` y la sesión termina en el
+ * inicio de sesión, que no es lo que estas pruebas miden.
+ */
+function identidadBloqueada(rol: 'DIRECTOR' | 'DOCENTE' | 'ESTUDIANTE' | 'PADRE' | 'PERSONAL', indice: number) {
+  const minuscula = rol.toLowerCase()
+  return {
+    email: `${minuscula}.bloqueado.prueba@ept.local`,
+    password: `prueba-ept-59-${minuscula}-bloqueado`,
+    rol,
+    etiqueta: `${rol} BLOQUEADO`,
+    dni: `9995900${indice}`,
+    nombre: 'Bruno',
+    // Apellido al final del orden alfabético: Legajos pagina de a 10 por
+    // apellido y otras suites buscan a sus identidades en la primera página.
+    apellido: `Zuloaga ${rol.charAt(0)}${minuscula.slice(1)}`,
+    legajo: null as string | null,
+    archivoSesion: `tests/.auth/${minuscula}-bloqueado.json`,
+  }
+}
+
+export const DIRECTOR_BLOQUEADO = identidadBloqueada('DIRECTOR', 1)
+export const DOCENTE_BLOQUEADO = identidadBloqueada('DOCENTE', 2)
+export const ESTUDIANTE_BLOQUEADO = identidadBloqueada('ESTUDIANTE', 3)
+export const PADRE_BLOQUEADO = identidadBloqueada('PADRE', 4)
+export const PERSONAL_BLOQUEADO = identidadBloqueada('PERSONAL', 5)
+
+export const IDENTIDADES_BLOQUEADAS = [
+  DIRECTOR_BLOQUEADO,
+  DOCENTE_BLOQUEADO,
+  ESTUDIANTE_BLOQUEADO,
+  PADRE_BLOQUEADO,
+  PERSONAL_BLOQUEADO,
+]
+
+/**
+ * Correos de las cuentas que crea `tests/usuarios-permisos-auth.spec.ts`
+ * (EPT-59): la cuenta con acceso a bloquear y la que nace del vínculo D5. Se
+ * limpian acá también por si una corrida anterior quedó a medias.
+ */
+export const CORREOS_EPT59_E2E = [
+  'acceso.e2e59.prueba@ept.local',
+  'vinculo.e2e59.prueba@ept.local',
+  'vinculo.movil.e2e59.prueba@ept.local',
+]
+
 /** Cuenta autenticada sin perfil: prueba el actor "usuario sin perfil". */
 export const SIN_PERFIL = {
   etiqueta: 'SIN PERFIL',
@@ -206,8 +259,13 @@ const IDENTIDADES = [
   PERSONAL,
   ESTUDIANTE_INACTIVO,
   ESTUDIANTE_CIERRE,
+  ...IDENTIDADES_BLOQUEADAS,
 ]
-const CORREOS_DE_PRUEBA = [...IDENTIDADES.map((i) => i.email), SIN_PERFIL.email]
+const CORREOS_DE_PRUEBA = [
+  ...IDENTIDADES.map((i) => i.email),
+  SIN_PERFIL.email,
+  ...CORREOS_EPT59_E2E,
+]
 
 /** Cursos de partida deterministas, para que las aserciones no dependan del orden. */
 export const CURSOS_SEMILLA = [
@@ -329,6 +387,24 @@ function vaciarModeloAcademico() {
           ENABLE TRIGGER impedir_modificar_historial_profesor;
         DELETE FROM public.profesores
         WHERE perfil_id IN (SELECT id FROM ept_perfiles_de_prueba);
+        -- EPT-59: el historial de perfiles y las reservas de vínculo son de
+        -- solo agregado y referencian perfiles con ON DELETE RESTRICT. Mismo
+        -- criterio que el historial de profesores: solo esta limpieza local
+        -- deshabilita sus guardas, dentro de la transacción.
+        ALTER TABLE public.perfiles_historial
+          DISABLE TRIGGER impedir_modificar_historial_perfiles;
+        DELETE FROM public.perfiles_historial
+        WHERE perfil_id IN (SELECT id FROM ept_perfiles_de_prueba)
+           OR actor_perfil_id IN (SELECT id FROM ept_perfiles_de_prueba);
+        ALTER TABLE public.perfiles_historial
+          ENABLE TRIGGER impedir_modificar_historial_perfiles;
+        ALTER TABLE app_private.vinculos_cuenta
+          DISABLE TRIGGER impedir_borrar_vinculos_cuenta;
+        DELETE FROM app_private.vinculos_cuenta
+        WHERE perfil_id IN (SELECT id FROM ept_perfiles_de_prueba)
+           OR director_perfil_id IN (SELECT id FROM ept_perfiles_de_prueba);
+        ALTER TABLE app_private.vinculos_cuenta
+          ENABLE TRIGGER impedir_borrar_vinculos_cuenta;
         COMMIT;
       `,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -532,4 +608,36 @@ setup('sembrar la situación académica de los estudiantes', async () => {
   } finally {
     await contexto.dispose()
   }
+})
+
+/**
+ * Bloquea las identidades de `IDENTIDADES_BLOQUEADAS` (EPT-59).
+ *
+ * Corre después de que cada una guardó su sesión: el bloqueo llega con la
+ * sesión ya emitida, que es el caso que la base tiene que cubrir. Se escribe
+ * directo en la base local, igual que el resto de la siembra, porque la
+ * operación de la aplicación (`cambiar_acceso_perfil`) además banearía la
+ * cuenta en Auth y estas pruebas miden la barrera de la base, no la de Auth.
+ * No se agrega fila al historial: ninguna prueba la necesita y el historial es
+ * de solo agregado.
+ */
+setup('bloquear las identidades de prueba bloqueadas', async () => {
+  const contenedor =
+    process.env.EPT_SUPABASE_DB_CONTAINER ?? 'supabase_db_educar-para-transformar'
+  const dnis = IDENTIDADES_BLOQUEADAS.map((identidad) => `'${identidad.dni}'`).join(', ')
+  const salida = execFileSync(
+    'docker',
+    ['exec', '-i', contenedor, 'psql', '-X', '-q', '-A', '-t', '-U', 'postgres', '-d', 'postgres',
+     '-v', 'ON_ERROR_STOP=1'],
+    {
+      input: `
+        UPDATE public.perfiles SET estado_acceso = 'BLOQUEADO' WHERE dni IN (${dnis});
+        SELECT pg_catalog.count(*) FROM public.perfiles
+        WHERE dni IN (${dnis}) AND estado_acceso = 'BLOQUEADO';
+      `,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }
+  )
+  expect(Number(salida.trim())).toBe(IDENTIDADES_BLOQUEADAS.length)
 })

@@ -1,0 +1,369 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import {
+  House, Users, CalendarCheck, Pulse, FileText,
+  SignOut, List, X, Briefcase, ChatCenteredText, UserPlus, Lock,
+  Newspaper, UserCircle, Chalkboard, GraduationCap, Student, IdentificationCard,
+  BookOpen, ForkKnife, SoccerBall, Clock, ChalkboardTeacher, ListChecks
+} from '@phosphor-icons/react'
+import { useAuth } from '@/context/AuthContext'
+import { cn } from '@/lib/utils'
+import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
+
+interface NavItem {
+  href: string
+  label: string
+  icon: React.ElementType
+  roles: string[]
+}
+
+const navItems: NavItem[] = [
+  // PERSONAL (EPT-59) tiene Inicio y Mi perfil, de solo lectura. Cualquier
+  // otra ruta del panel le muestra «Acceso restringido».
+  { href: '/dashboard', label: 'Inicio', icon: House, roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE', 'PERSONAL'] },
+  { href: '/dashboard/usuarios', label: 'Usuarios', icon: UserPlus, roles: ['DIRECTOR'] },
+  { href: '/dashboard/legajos', label: 'Legajos', icon: Users, roles: ['DIRECTOR'] },
+  { href: '/dashboard/alumnos', label: 'Alumnos', icon: Student, roles: ['DIRECTOR'] },
+  { href: '/dashboard/profesores', label: 'Profesores', icon: ChalkboardTeacher, roles: ['DIRECTOR'] },
+  { href: '/dashboard/mi-legajo', label: 'Mi legajo', icon: IdentificationCard, roles: ['ESTUDIANTE'] },
+  { href: '/dashboard/hijos', label: 'Mis hijos', icon: Student, roles: ['PADRE'] },
+  { href: '/dashboard/mis-asignaciones', label: 'Mis asignaciones', icon: ListChecks, roles: ['DOCENTE'] },
+  { href: '/dashboard/cursos', label: 'Cursos', icon: Chalkboard, roles: ['DIRECTOR'] },
+  { href: '/dashboard/niveles', label: 'Niveles', icon: GraduationCap, roles: ['DIRECTOR'] },
+  { href: '/dashboard/materias', label: 'Materias', icon: BookOpen, roles: ['DIRECTOR'] },
+  { href: '/dashboard/horarios-academicos', label: 'Horarios académicos', icon: Clock, roles: ['DIRECTOR'] },
+  { href: '/dashboard/comedor', label: 'Comedor', icon: ForkKnife, roles: ['DIRECTOR', 'ESTUDIANTE'] },
+  { href: '/dashboard/deportes', label: 'Deportes', icon: SoccerBall, roles: ['DIRECTOR', 'ESTUDIANTE'] },
+  { href: '/dashboard/asistencias', label: 'Asistencias', icon: CalendarCheck, roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE'] },
+  { href: '/dashboard/cupos', label: 'Actividades', icon: Pulse, roles: ['DIRECTOR', 'DOCENTE', 'ESTUDIANTE', 'PADRE'] },
+  { href: '/dashboard/solicitudes', label: 'Solicitudes', icon: FileText, roles: ['DIRECTOR'] },
+  { href: '/dashboard/postulaciones', label: 'Postulaciones', icon: Briefcase, roles: ['DIRECTOR'] },
+  { href: '/dashboard/testimonios', label: 'Testimonios', icon: ChatCenteredText, roles: ['DIRECTOR'] },
+  { href: '/dashboard/perfil', label: 'Mi perfil', icon: UserCircle, roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE', 'PERSONAL'] },
+]
+
+// Barra de navegación inferior (móvil): Asistencias, Noticias, Perfil. Un
+// atajo del panel se muestra solo si el rol puede abrirlo (EPT-59): PERSONAL
+// y una cuenta sin perfil no ven accesos que terminan en «Acceso restringido».
+const bottomNavItems = [
+  { href: '/dashboard/asistencias', label: 'Asistencias', icon: CalendarCheck },
+  { href: '/noticias', label: 'Noticias', icon: Newspaper },
+  { href: '/dashboard/perfil', label: 'Perfil', icon: UserCircle },
+]
+
+// Determina si el rol actual puede ver la ruta del dashboard.
+// Si la ruta está restringida y el rol no corresponde, la página ni se monta.
+function rutaPermitida(pathname: string, rol: string | null): boolean {
+  if (pathname === '/dashboard') return true // el índice es para todos los roles
+  const match = navItems
+    .filter((it) => it.href !== '/dashboard' && (pathname === it.href || pathname.startsWith(it.href + '/')))
+    .sort((a, b) => b.href.length - a.href.length)[0]
+  if (!match) return true // ruta sin restricción conocida
+  return rol ? match.roles.includes(rol) : false
+}
+
+function atajoVisible(href: string, rol: string | null): boolean {
+  if (!href.startsWith('/dashboard')) return true
+  return rol !== null && rutaPermitida(href, rol)
+}
+
+function SidebarContent({
+  onClose,
+  onSignOut,
+  cerrandoSesion,
+}: {
+  onClose?: () => void
+  onSignOut: () => void
+  cerrandoSesion: boolean
+}) {
+  const pathname = usePathname()
+  const { perfil, rol } = useAuth()
+
+  const visibleItems = navItems.filter((item) =>
+    rol ? item.roles.includes(rol) : false
+  )
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Logo */}
+      <div className="flex items-center gap-3 px-4 py-5 border-b border-neutral-100">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo-emblema.png" alt="Educar para Transformar" className="w-10 h-10 object-contain shrink-0" />
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-neutral-500 truncate">Educar para</p>
+          <p className="text-sm font-bold text-brand-700 truncate">Transformar</p>
+        </div>
+      </div>
+
+      {/* Nav */}
+      {/* `min-h-0` + `overflow-y-auto`: sin ellos, un menú más largo que la
+          ventana empuja el bloque de usuario y el botón de cerrar sesión fuera
+          de la pantalla, sin ninguna forma de alcanzarlos. Verificado a 1280x900
+          con el menú completo del rol DIRECTOR. */}
+      <nav
+        className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-0.5"
+        aria-label="Menú del dashboard"
+      >
+        {visibleItems.map((item) => {
+          const Icon = item.icon
+          const active = pathname === item.href
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={onClose}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150',
+                active
+                  ? 'bg-brand-50 text-brand-700 font-semibold'
+                  : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+              )}
+              aria-current={active ? 'page' : undefined}
+            >
+              <Icon size={18} weight={active ? 'fill' : 'regular'} />
+              {item.label}
+            </Link>
+          )
+        })}
+      </nav>
+
+      {/* User info */}
+      <div className="shrink-0 px-3 py-4 border-t border-neutral-100">
+        {perfil && (
+          <div className="flex items-center gap-3 px-3 py-2 mb-2">
+            <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold text-sm shrink-0">
+              {perfil.nombre[0]}{perfil.apellido[0]}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-neutral-900 truncate">
+                {perfil.nombre} {perfil.apellido}
+              </p>
+              <p className="text-xs text-neutral-400 truncate">{rol}</p>
+            </div>
+          </div>
+        )}
+        {/* Único disparador de cierre de sesión del panel junto al del encabezado
+            móvil: los dos usan el mismo manejador y quedan deshabilitados
+            mientras la operación está en curso, para no dispararla dos veces. */}
+        <button
+          onClick={onSignOut}
+          disabled={cerrandoSesion}
+          aria-busy={cerrandoSesion}
+          className="flex items-center gap-2.5 px-3 py-2 w-full rounded-xl text-sm text-neutral-600 hover:bg-red-50 hover:text-red-600 transition-colors duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <SignOut size={16} />
+          {cerrandoSesion ? 'Cerrando sesión…' : 'Cerrar sesión'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Armazón del panel, del lado del cliente.
+ *
+ * Lo renderiza `src/app/dashboard/layout.tsx` (Server Component) después de
+ * comprobar en el servidor que la sesión no está bloqueada (EPT-59). Un layout
+ * no se vuelve a ejecutar en la navegación del cliente, así que este armazón
+ * revalida el estado de acceso en cada cambio de ruta: si el perfil quedó
+ * bloqueado con el panel abierto, `AuthContext` lleva a `/acceso-bloqueado`.
+ * Ninguna de estas guardas protege datos: eso lo hacen el servidor y
+ * PostgreSQL.
+ */
+export function PanelDashboard({ children }: { children: React.ReactNode }) {
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const { rol, isLoading, user, signOut, estadoAcceso, revalidarAcceso } = useAuth()
+  const router = useRouter()
+  const pathname = usePathname()
+  const [headerHidden, setHeaderHidden] = useState(false)
+  const [cerrandoSesion, setCerrandoSesion] = useState(false)
+
+  const permitido = rutaPermitida(pathname, rol)
+  const bloqueado = estadoAcceso === 'BLOQUEADO'
+
+  // Revalidación del bloqueo en cada navegación dentro del panel.
+  useEffect(() => {
+    if (!user || cerrandoSesion) return
+    void revalidarAcceso()
+  }, [pathname, user, cerrandoSesion, revalidarAcceso])
+
+  // Durante un cierre de sesión deliberado esta guarda no debe actuar: la
+  // sesión desaparece por decisión del usuario, y redirigir al login con
+  // `redirect` al panel lo devolvería a la ruta protegida que acaba de dejar.
+  // El destino de ese caso lo decide `handleSignOut`.
+  useEffect(() => {
+    if (!isLoading && !user && !cerrandoSesion) {
+      const redirect = pathname.startsWith('/dashboard') ? pathname : '/dashboard'
+      router.replace(`/login?redirect=${encodeURIComponent(redirect)}`)
+    }
+  }, [isLoading, user, pathname, router, cerrandoSesion])
+
+  useEffect(() => {
+    let lastY = window.scrollY
+    const handler = () => {
+      const currentY = window.scrollY
+      if (currentY > 80 && currentY > lastY) setHeaderHidden(true)
+      else setHeaderHidden(false)
+      lastY = currentY
+    }
+    window.addEventListener('scroll', handler, { passive: true })
+    return () => window.removeEventListener('scroll', handler)
+  }, [])
+
+  /**
+   * Cierre de sesión real.
+   *
+   * `signOut()` del contexto invalida la sesión en Supabase y borra las cookies.
+   * La navegación usa `replace` y no `push`: con `push`, volver atrás dejaba la
+   * ruta protegida en el historial y el navegador podía mostrarla desde su
+   * caché antes de que `src/proxy.ts` redirigiera al login. `refresh()` descarta
+   * además el contenido de servidor ya renderizado para esa sesión.
+   *
+   * El indicador de progreso no es decorativo: mientras dura la operación los
+   * dos botones quedan deshabilitados, de modo que un doble clic no dispara dos
+   * cierres de sesión.
+   */
+  const handleSignOut = async () => {
+    if (cerrandoSesion) return
+    setCerrandoSesion(true)
+    try {
+      await signOut()
+      router.replace('/')
+      router.refresh()
+    } catch (error) {
+      console.warn('[dashboard] no se pudo cerrar la sesión', error)
+      setCerrandoSesion(false)
+    }
+  }
+
+  // Mientras se redirige a la pantalla de bloqueo no se monta nada del panel.
+  if (isLoading || bloqueado) {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center bg-neutral-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-3 border-brand-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-neutral-500 font-medium">Cargando...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex min-h-[100dvh] bg-neutral-50">
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex flex-col w-60 bg-white border-r border-neutral-200 fixed top-0 bottom-0 left-0">
+        <SidebarContent onSignOut={handleSignOut} cerrandoSesion={cerrandoSesion} />
+      </aside>
+
+      {/* Mobile sidebar overlay */}
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm"
+            onClick={() => setMobileOpen(false)}
+            aria-hidden="true"
+          />
+          <aside className="relative w-60 bg-white border-r border-neutral-200 flex flex-col">
+            <button
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-neutral-500 hover:bg-neutral-100"
+              onClick={() => setMobileOpen(false)}
+              aria-label="Cerrar menú"
+            >
+              <X size={18} />
+            </button>
+            <SidebarContent
+              onClose={() => setMobileOpen(false)}
+              onSignOut={handleSignOut}
+              cerrandoSesion={cerrandoSesion}
+            />
+          </aside>
+        </div>
+      )}
+
+      {/* Main */}
+      {/* `min-w-0` (EPT-59): sin él, esta columna flexible crecía hasta el ancho
+          de la tabla más ancha y el `overflow-x-auto` de las tablas no actuaba;
+          a 375 px Usuarios y Legajos se desplazaban horizontalmente. */}
+      <div className="flex-1 min-w-0 lg:ml-60 flex flex-col min-h-[100dvh]">
+        {/* Top bar */}
+        <header
+          className={cn(
+            'h-14 bg-white border-b border-neutral-200 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-40 transition-transform duration-300',
+            headerHidden ? '-translate-y-full' : 'translate-y-0'
+          )}
+        >
+          <button
+            className="lg:hidden p-2 rounded-lg text-neutral-500 hover:bg-neutral-100"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Abrir menú"
+          >
+            <List size={20} />
+          </button>
+          <div className="flex items-center gap-3 ml-auto">
+            <Link href="/" className="text-xs text-neutral-500 hover:text-neutral-700 transition-colors">
+              Ver sitio web
+            </Link>
+            {/* En móvil el botón del panel lateral queda detrás del menú. Esta
+                acción repite el mismo manejador para que cerrar sesión siempre
+                esté a un toque de distancia. */}
+            <button
+              onClick={handleSignOut}
+              disabled={cerrandoSesion}
+              aria-busy={cerrandoSesion}
+              className="lg:hidden flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-neutral-600 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <SignOut size={16} />
+              {cerrandoSesion ? 'Cerrando sesión…' : 'Cerrar sesión'}
+            </button>
+          </div>
+        </header>
+
+        <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8">
+          {permitido ? children : (
+            <div className="max-w-md mx-auto mt-12 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4">
+                <Lock size={32} weight="fill" className="text-red-500" />
+              </div>
+              <h1 className="text-xl font-extrabold text-neutral-900 tracking-tight">Acceso restringido</h1>
+              <p className="text-neutral-500 text-sm mt-2">
+                No tenés permisos para ver esta sección del panel.
+              </p>
+              {/* Un solo control: un enlace con aspecto de botón, no un botón dentro de un enlace. */}
+              <EnlaceBoton href="/dashboard" className="mt-6">
+                Volver al panel
+              </EnlaceBoton>
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* Bottom Navigation Bar (solo móvil) */}
+      <nav
+        className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-neutral-200 flex"
+        aria-label="Navegación rápida"
+      >
+        {bottomNavItems.filter((item) => atajoVisible(item.href, rol)).map((item) => {
+          const Icon = item.icon
+          const active = pathname === item.href
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-medium transition-colors',
+                active ? 'text-brand-600' : 'text-neutral-500 hover:text-neutral-800'
+              )}
+              aria-current={active ? 'page' : undefined}
+            >
+              <Icon size={22} weight={active ? 'fill' : 'regular'} />
+              {item.label}
+            </Link>
+          )
+        })}
+      </nav>
+    </div>
+  )
+}

@@ -35,10 +35,48 @@ export type CodigoDeError =
   | 'CARGA_FALLIDA'
   | 'SERVICIO_NO_DISPONIBLE'
   | 'ERROR_INESPERADO'
+  // Usuarios, roles, acceso y vínculo de cuentas (EPT-59)
+  | 'ACCESO_BLOQUEADO'
+  | 'OPERACION_PROPIA'
+  | 'PERFIL_INEXISTENTE'
+  | 'MOTIVO_INVALIDO'
+  | 'ROL_INVALIDO'
+  | 'MISMO_VALOR'
+  | 'TRANSICION_ESTUDIANTE'
+  | 'VALOR_OBSOLETO'
+  | 'PADRE_CON_VINCULOS'
+  | 'DOCENTE_CON_ASIGNACIONES'
+  | 'ULTIMO_DIRECTOR'
+  | 'DIRECTOR_SIN_CUENTA'
+  | 'AUTH_PENDIENTE'
+  | 'VINCULO_DESHABILITADO'
+  | 'RESERVA_INVALIDA'
+  | 'RESERVA_REUTILIZADA'
+  | 'RESERVA_EN_CURSO'
+  | 'RESERVA_VENCIDA'
+  | 'CUENTA_EXISTENTE'
+  | 'PERFIL_BLOQUEADO'
+  | 'ROL_SIN_VINCULO'
+  | 'DNI_NO_COINCIDE'
+  | 'CORREO_INVALIDO'
+  | 'CORREO_DISTINTO'
+  | 'RESERVA_INEXISTENTE'
+  | 'CORREO_EN_USO'
+  | 'LIMITE_DE_ENVIOS'
+  | 'RESERVA_NO_VIGENTE'
+  | 'RESERVA_DE_OTRO_DIRECTOR'
+  | 'SIN_CODIGO_VIGENTE'
+  | 'CORREO_SIN_VERIFICAR'
+  | 'CODIGO_INCORRECTO'
+  | 'CODIGO_VENCIDO'
+  | 'CODIGO_SIN_INTENTOS'
+  | 'ENVIO_FALLIDO'
+  | 'VINCULO_RECHAZADO'
+  | 'VINCULO_SIN_CONFIRMAR'
 
 type EntradaDelCatalogo = {
   /** Estado HTTP con el que la API responde este error. */
-  estado: 400 | 401 | 403 | 404 | 409 | 422 | 500 | 503
+  estado: 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500 | 502 | 503
   mensaje: string
 }
 
@@ -124,6 +162,187 @@ export const CATALOGO_DE_ERRORES: Readonly<Record<CodigoDeError, EntradaDelCatal
   ERROR_INESPERADO: {
     estado: 500,
     mensaje: 'No pudimos completar la operación. Volvé a intentarlo en unos minutos.',
+  },
+
+  // ---- Usuarios, roles, acceso y vínculo de cuentas (EPT-59) ----
+  ACCESO_BLOQUEADO: {
+    estado: 403,
+    mensaje: 'Tu acceso está bloqueado. Comunicate con Dirección.',
+  },
+  OPERACION_PROPIA: {
+    estado: 403,
+    mensaje: 'No podés cambiar el rol ni el acceso de tu propia cuenta. Pedíselo a otra persona de Dirección.',
+  },
+  PERFIL_INEXISTENTE: {
+    estado: 404,
+    mensaje: 'La persona solicitada no existe. Actualizá el listado de usuarios.',
+  },
+  MOTIVO_INVALIDO: {
+    estado: 422,
+    mensaje: 'Escribí un motivo de entre 5 y 500 caracteres.',
+  },
+  ROL_INVALIDO: {
+    estado: 422,
+    mensaje: 'El rol o el estado elegido no es válido. Actualizá la página y elegí otro.',
+  },
+  MISMO_VALOR: {
+    estado: 422,
+    mensaje: 'La persona ya tiene ese rol o ese estado de acceso. No hay nada que cambiar.',
+  },
+  TRANSICION_ESTUDIANTE: {
+    estado: 422,
+    mensaje:
+      'El rol ESTUDIANTE no se asigna ni se quita desde Usuarios: depende del legajo académico. ' +
+      'Gestionalo desde Alumnos.',
+  },
+  VALOR_OBSOLETO: {
+    estado: 409,
+    mensaje:
+      'Los datos cambiaron mientras los consultabas. Actualizá la página, revisá el estado actual y ' +
+      'volvé a intentarlo si todavía corresponde.',
+  },
+  PADRE_CON_VINCULOS: {
+    estado: 409,
+    mensaje:
+      'La persona tiene hijos vinculados. Quitá esos vínculos antes de cambiarle el rol.',
+  },
+  DOCENTE_CON_ASIGNACIONES: {
+    estado: 409,
+    mensaje:
+      'La ficha docente está activa o tiene materias o grupos a cargo. Reasigná esas relaciones e ' +
+      'inactivá la ficha antes de cambiarle el rol.',
+  },
+  ULTIMO_DIRECTOR: {
+    estado: 409,
+    mensaje:
+      'La institución se quedaría sin una persona de Dirección con acceso. Habilitá otra cuenta de ' +
+      'Dirección antes de hacer este cambio.',
+  },
+  DIRECTOR_SIN_CUENTA: {
+    estado: 409,
+    mensaje:
+      'Solo una persona con cuenta confirmada puede recibir el rol DIRECTOR. Para registrar a un ' +
+      'Director nuevo, usá el alta con cuenta.',
+  },
+  AUTH_PENDIENTE: {
+    estado: 503,
+    mensaje:
+      'No pudimos actualizar la cuenta de acceso y no se guardó ningún cambio. Volvé a intentarlo ' +
+      'en unos minutos.',
+  },
+  VINCULO_DESHABILITADO: {
+    estado: 503,
+    mensaje:
+      'La vinculación presencial de cuentas no está habilitada en este servidor: falta configurar el ' +
+      'envío de correos. Pedile al equipo técnico que la active.',
+  },
+  RESERVA_INVALIDA: {
+    estado: 422,
+    mensaje:
+      'Confirmá que verificaste presencialmente el documento y revisá la modalidad y el DNI del ' +
+      'representante.',
+  },
+  RESERVA_REUTILIZADA: {
+    estado: 409,
+    mensaje: 'Esta operación ya se usó con otros datos. Iniciá una vinculación nueva.',
+  },
+  RESERVA_EN_CURSO: {
+    estado: 409,
+    mensaje:
+      'La persona ya tiene una vinculación de cuenta en curso. Esperá a que venza o cancelala antes ' +
+      'de iniciar otra.',
+  },
+  RESERVA_VENCIDA: {
+    estado: 409,
+    mensaje: 'La vinculación venció. Iniciá una operación nueva.',
+  },
+  CUENTA_EXISTENTE: {
+    estado: 409,
+    mensaje: 'La persona ya tiene una cuenta de acceso.',
+  },
+  PERFIL_BLOQUEADO: {
+    estado: 409,
+    mensaje: 'La persona tiene el acceso bloqueado. Reactivala antes de vincular una cuenta.',
+  },
+  ROL_SIN_VINCULO: {
+    estado: 422,
+    mensaje:
+      'Solo se puede vincular una cuenta a una persona con un rol asignado distinto de DIRECTOR.',
+  },
+  DNI_NO_COINCIDE: {
+    estado: 422,
+    mensaje: 'El DNI ingresado no coincide con el del legajo. Revisá el documento presentado.',
+  },
+  CORREO_INVALIDO: {
+    estado: 422,
+    mensaje: 'El correo no tiene un formato válido.',
+  },
+  CORREO_DISTINTO: {
+    estado: 409,
+    mensaje:
+      'Esta vinculación ya tiene otro correo. Cancelala e iniciá una operación nueva para usar uno ' +
+      'distinto.',
+  },
+  RESERVA_INEXISTENTE: {
+    estado: 404,
+    mensaje: 'La vinculación solicitada no existe.',
+  },
+  CORREO_EN_USO: {
+    estado: 409,
+    mensaje: 'Ese correo ya está en uso. Pedile a la persona otro correo.',
+  },
+  LIMITE_DE_ENVIOS: {
+    estado: 429,
+    mensaje:
+      'Se alcanzó el límite de envíos de código para esta vinculación. Cancelala e iniciá una nueva.',
+  },
+  RESERVA_NO_VIGENTE: {
+    estado: 409,
+    mensaje: 'La vinculación ya no está vigente. Iniciá una operación nueva.',
+  },
+  RESERVA_DE_OTRO_DIRECTOR: {
+    estado: 409,
+    mensaje:
+      'Esta vinculación la inició otra persona de Dirección, o quien la inició ya no tiene acceso. ' +
+      'Iniciá una operación nueva.',
+  },
+  SIN_CODIGO_VIGENTE: {
+    estado: 409,
+    mensaje: 'No hay un código vigente. Enviá un código nuevo.',
+  },
+  CORREO_SIN_VERIFICAR: {
+    estado: 409,
+    mensaje: 'El correo todavía no fue verificado. Ingresá el código que recibió la persona.',
+  },
+  CODIGO_INCORRECTO: {
+    estado: 422,
+    mensaje: 'El código no es correcto.',
+  },
+  CODIGO_VENCIDO: {
+    estado: 409,
+    mensaje: 'El código venció. Enviá un código nuevo.',
+  },
+  CODIGO_SIN_INTENTOS: {
+    estado: 429,
+    mensaje: 'Se agotaron los intentos para este código. Enviá un código nuevo.',
+  },
+  ENVIO_FALLIDO: {
+    estado: 502,
+    mensaje:
+      'No pudimos enviar el código por correo. El código no enviado quedó anulado: volvé a ' +
+      'intentarlo en unos minutos.',
+  },
+  VINCULO_RECHAZADO: {
+    estado: 409,
+    mensaje:
+      'No se pudo vincular la cuenta: la vinculación ya no lo permite. No se creó ninguna cuenta. ' +
+      'Revisá el estado de la persona e iniciá una operación nueva si todavía corresponde.',
+  },
+  VINCULO_SIN_CONFIRMAR: {
+    estado: 503,
+    mensaje:
+      'No pudimos confirmar si la cuenta quedó vinculada. No se borró ningún dato. Volvé a ' +
+      'intentarlo con el mismo código: la cuenta no se duplica.',
   },
 }
 
@@ -320,6 +539,68 @@ export function traducirErrorDeLectura(error: unknown): ErrorDeDominio {
     return new ErrorDeDominio('SIN_PERMISO')
   }
   return new ErrorDeDominio('CARGA_FALLIDA')
+}
+
+/**
+ * SQLSTATE propios de EPT-59 (y los reutilizados) → código de dominio.
+ *
+ * La base es la fuente de verdad: cada código sale de un `RAISE EXCEPTION` de
+ * la migración `20260926190000_ept_59_usuarios_permisos.sql`. El mensaje de
+ * PostgreSQL nunca se reenvía; solo se usa el SQLSTATE.
+ *
+ * P5908 (historial de solo agregado) y P5939 (las reservas no se borran) no
+ * figuran: ninguna operación de la API puede provocarlos, y si aparecieran
+ * serían un error inesperado. P5940–P5947 nacen dentro de la transacción de
+ * GoTrue y llegan como un 500 genérico de Auth, no como SQLSTATE: se resuelven
+ * reconciliando con `datos_para_enlace`. P5944 sí llega por PostgREST cuando
+ * `datos_para_enlace` se consulta antes de verificar el correo.
+ */
+const CODIGOS_DE_USUARIOS: Readonly<Record<string, CodigoDeError>> = {
+  P5505: 'NO_AUTENTICADO',
+  '42501': 'SIN_PERMISO',
+  P5901: 'MOTIVO_INVALIDO',
+  P5902: 'ROL_INVALIDO',
+  P5903: 'OPERACION_PROPIA',
+  P5904: 'PERFIL_INEXISTENTE',
+  P5906: 'MISMO_VALOR',
+  P5907: 'TRANSICION_ESTUDIANTE',
+  P5909: 'VALOR_OBSOLETO',
+  P5910: 'PADRE_CON_VINCULOS',
+  P5911: 'DOCENTE_CON_ASIGNACIONES',
+  P5912: 'ULTIMO_DIRECTOR',
+  P5913: 'DIRECTOR_SIN_CUENTA',
+  P5920: 'RESERVA_INVALIDA',
+  P5921: 'RESERVA_REUTILIZADA',
+  P5922: 'RESERVA_EN_CURSO',
+  P5923: 'RESERVA_VENCIDA',
+  P5924: 'CUENTA_EXISTENTE',
+  P5925: 'PERFIL_BLOQUEADO',
+  P5926: 'ROL_SIN_VINCULO',
+  P5927: 'DNI_NO_COINCIDE',
+  P5928: 'CORREO_INVALIDO',
+  P5929: 'CORREO_DISTINTO',
+  P5930: 'RESERVA_INEXISTENTE',
+  P5931: 'CORREO_EN_USO',
+  P5932: 'LIMITE_DE_ENVIOS',
+  P5933: 'RESERVA_NO_VIGENTE',
+  P5935: 'RESERVA_DE_OTRO_DIRECTOR',
+  P5936: 'SIN_CODIGO_VIGENTE',
+  P5944: 'CORREO_SIN_VERIFICAR',
+}
+
+/**
+ * Traduce el error de una RPC de Usuarios (EPT-59) a un error de dominio.
+ *
+ * Lo que no se reconoce con certeza cae en un mensaje genérico: un error sin
+ * forma de PostgREST o sin código es un problema de servicio, y un SQLSTATE
+ * ajeno al contrato es inesperado. Nunca se devuelve el texto de la base.
+ */
+export function traducirErrorDeUsuarios(error: unknown): ErrorDeDominio {
+  if (!esErrorDeConsulta(error) || error.code === '') {
+    return new ErrorDeDominio('SERVICIO_NO_DISPONIBLE')
+  }
+  const codigo = CODIGOS_DE_USUARIOS[error.code]
+  return new ErrorDeDominio(codigo ?? 'ERROR_INESPERADO')
 }
 
 /**

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarCheck, Users, Pulse, FileText, ArrowRight, Briefcase, ChatCenteredText, UserPlus, UserCircle } from '@phosphor-icons/react'
+import { CalendarCheck, Users, Pulse, FileText, ArrowRight, Briefcase, ChatCenteredText, UserPlus, UserCircle, WarningCircle } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 
 const quickLinks = [
@@ -19,7 +19,7 @@ const quickLinks = [
     desc: 'Ver tus datos personales',
     icon: UserCircle,
     color: 'bg-green-50 text-green-600',
-    roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE'],
+    roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE', 'PERSONAL'],
   },
   {
     href: '/dashboard/usuarios',
@@ -72,8 +72,34 @@ const quickLinks = [
 ]
 
 export default function DashboardPage() {
-  const { rol } = useAuth()
+  const { rol, perfil, estadoAcceso } = useAuth()
   const visibleLinks = quickLinks.filter((link) => (rol ? link.roles.includes(rol) : false))
+
+  // Cuenta autenticada sin perfil (EPT-59): no tiene ninguna sección a la que
+  // entrar, así que el inicio explica qué falta en lugar de mostrarse vacío.
+  if (!perfil && estadoAcceso === 'SIN_PERFIL') {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">
+            Panel de gestión
+          </h1>
+        </div>
+        <div
+          role="status"
+          className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex gap-3 items-start"
+        >
+          <WarningCircle size={22} weight="fill" className="text-amber-700 shrink-0 mt-0.5" aria-hidden="true" />
+          <div>
+            <h2 className="text-sm font-bold text-amber-900">Tu cuenta no tiene un perfil</h2>
+            <p className="text-sm text-amber-900 mt-1">
+              Tu cuenta todavía no tiene un perfil asociado. Comunicate con Dirección para completarlo.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">

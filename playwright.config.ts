@@ -20,6 +20,20 @@ const entornoServidor: Record<string, string> = {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholder-anon-key-solo-para-pruebas',
 }
 
+// Vínculo presencial de cuentas (EPT-59, D5): `supabase/tests/correr-autenticadas.mjs`
+// inyecta la bandera y el SMTP local de Mailpit solo para la corrida local. Se
+// reenvían explícitamente al servidor de Next; sin ellas, D5 queda apagado.
+for (const clave of [
+  'EPT_VINCULO_CUENTAS',
+  'EPT_SMTP_HOST',
+  'EPT_SMTP_PORT',
+  'EPT_SMTP_SECURE',
+  'EPT_SMTP_REMITENTE',
+] as const) {
+  const valor = process.env[clave]
+  if (valor) entornoServidor[clave] = valor
+}
+
 /**
  * Las pruebas autenticadas necesitan el stack local descartable de Supabase y
  * usuarios sembrados, así que solo se incluyen con `EPT_SUPABASE_LOCAL=1`.
@@ -32,7 +46,7 @@ const entornoServidor: Record<string, string> = {
 const conBaseLocal = process.env.EPT_SUPABASE_LOCAL === '1'
 
 const PRUEBAS_AUTENTICADAS =
-  /(?:cursos|niveles|alumnos|usuarios|materias|comedor|deportes|horarios|horarios-academicos|hijos|profesores|gestion-estudiantes)-auth\.spec\.ts/
+  /(?:cursos|niveles|alumnos|usuarios|usuarios-permisos|materias|comedor|deportes|horarios|horarios-academicos|hijos|profesores|gestion-estudiantes)-auth\.spec\.ts/
 const PRUEBAS_SETUP = /auth\.setup\.ts/
 
 // `niveles-responsive` existe únicamente para los perfiles móviles.
@@ -145,6 +159,19 @@ const proyectosAutenticados: Project[] = [
     grep: /SIN PERFIL autenticado/,
     dependencies: ['setup'],
   },
+  // EPT-59: una sesión por rol cuyo perfil queda BLOQUEADO después de iniciar
+  // sesión (ver `tests/auth.setup.ts`). La etiqueta «<ROL> BLOQUEADO
+  // autenticado» no contiene «<ROL> autenticado», así que estos bloques nunca
+  // caen en el proyecto de la identidad habilitada del mismo rol.
+  ...(['director', 'docente', 'estudiante', 'padre', 'personal'] as const).map(
+    (rol): Project => ({
+      name: `chromium-${rol}-bloqueado`,
+      use: { ...devices['Desktop Chrome'], storageState: `tests/.auth/${rol}-bloqueado.json` },
+      testMatch: PRUEBAS_AUTENTICADAS,
+      grep: new RegExp(`${rol.toUpperCase()} BLOQUEADO autenticado`),
+      dependencies: ['setup'],
+    })
+  ),
 ]
 
 export default defineConfig({
