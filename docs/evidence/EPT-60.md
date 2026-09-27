@@ -583,6 +583,31 @@ inscripciones.
 
 ---
 
+## 20bis. Reversión no destructiva
+
+La migración es puramente aditiva (filas nuevas, una tabla nueva, funciones
+nuevas): no modifica ninguna fila ni ningún privilegio preexistente, así que
+no existe un escenario de «deshacer datos». Si hiciera falta retirar el
+transporte de la aplicación sin revertir la migración ni perder historial:
+
+```sql
+-- Deja de admitir altas nuevas sin borrar nada ni afectar inscripciones
+-- vigentes (mismo mecanismo que ya usa el catálogo para el comedor).
+UPDATE public.servicios_escolares
+SET activo = FALSE
+WHERE tipo = 'TRANSPORTE';
+```
+
+Los alumnos con un recorrido activo lo conservan (la RPC de cancelación
+sigue funcionando); solo se cierra la puerta a nuevas altas y cambios. Para
+retirar la entrada de navegación sin tocar la base alcanza con revertir el
+commit `feat(transporte): pantallas de alumno y Dirección`. No se creó
+ningún script de compensación en `docs/evidence/EPT-60/reversion/` porque no
+hay ninguna operación destructiva ni sobre datos preexistentes que
+compensar.
+
+---
+
 ## 21. Riesgos y trabajo habilitado
 
 - El límite de un solo recorrido activo descansa en el bloqueo exclusivo de
