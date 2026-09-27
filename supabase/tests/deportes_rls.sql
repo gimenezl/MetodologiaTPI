@@ -194,6 +194,9 @@ BEGIN
         WHERE schemaname = 'public'
           AND tablename IN ('deportes', 'grupos_deportivos', 'inscripciones_deportivas')
           AND cmd <> 'SELECT'
+          -- EPT-59: la política RESTRICTIVE «Bloqueo de acceso sin datos protegidos» es FOR ALL
+          -- pero solo restringe: no concede escritura. Se evalúan las permisivas.
+          AND permissive = 'PERMISSIVE'
     ) THEN
         RAISE EXCEPTION 'FALLO A5: existe una política de escritura deportiva';
     END IF;
@@ -1143,8 +1146,9 @@ BEGIN
         RAISE EXCEPTION 'FALLO G1: cambió public.actividades';
     END IF;
 
+    -- EPT-59 agrega políticas RESTRICTIVE de bloqueo; se comparan las permisivas.
     IF (SELECT array_agg(policyname::TEXT ORDER BY policyname) FROM pg_policies
-        WHERE schemaname = 'public' AND tablename = 'actividades')
+        WHERE schemaname = 'public' AND tablename = 'actividades' AND permissive = 'PERMISSIVE')
        IS DISTINCT FROM ARRAY['Actividades visibles para todos', 'Directores y docentes actualizan cupos'] THEN
         RAISE EXCEPTION 'FALLO G1: cambiaron las políticas de actividades';
     END IF;
@@ -1156,7 +1160,8 @@ BEGIN
     END IF;
     RAISE NOTICE 'OK G1: actividades conserva filas, políticas y el UPDATE de cupo de 011';
 
-    IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'inscripciones') <> 8 THEN
+    IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'inscripciones'
+        AND permissive = 'PERMISSIVE') <> 8 THEN  -- EPT-59: sin contar la RESTRICTIVE de bloqueo
         RAISE EXCEPTION 'FALLO G2: cambiaron las políticas de inscripciones';
     END IF;
     IF has_table_privilege('anon', 'public.inscripciones', 'INSERT')

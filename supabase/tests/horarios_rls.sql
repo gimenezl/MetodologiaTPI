@@ -156,7 +156,9 @@ BEGIN
         RAISE EXCEPTION 'FALLO A4: una tabla de horarios no tiene RLS';
     END IF;
     IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public'
-               AND tablename IN ('horarios', 'grupos_deportivos_horarios') AND cmd <> 'SELECT') THEN
+               AND tablename IN ('horarios', 'grupos_deportivos_horarios') AND cmd <> 'SELECT'
+               -- EPT-59: la RESTRICTIVE de bloqueo (FOR ALL) solo restringe.
+               AND permissive = 'PERMISSIVE') THEN
         RAISE EXCEPTION 'FALLO A4: existe una política de escritura';
     END IF;
     RAISE NOTICE 'OK A4: RLS activa y solo políticas SELECT';
