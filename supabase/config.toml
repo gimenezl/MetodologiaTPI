@@ -106,7 +106,9 @@ enabled = true
 # Port to use for the email testing server web interface.
 port = 54324
 # Uncomment to expose additional ports for testing user applications that send emails.
-# smtp_port = 54325
+# EPT-59: la aplicación envía el código de verificación del vínculo de cuenta (D5)
+# por SMTP; en local lo recibe Mailpit por este puerto.
+smtp_port = 54325
 # pop3_port = 54326
 # admin_email = "admin@email.com"
 # sender_name = "Admin"

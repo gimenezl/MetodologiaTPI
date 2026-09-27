@@ -49,6 +49,17 @@ if (!ANFITRIONES_LOCALES.has(anfitrion)) {
   process.exit(1)
 }
 
+// Mailpit (EPT-59, vínculo de cuentas D5) también tiene que ser de bucle local:
+// la suite envía códigos reales y los lee desde su API.
+const mailpit = local.MAILPIT_URL || local.INBUCKET_URL || 'http://127.0.0.1:54324'
+if (!ANFITRIONES_LOCALES.has(new URL(mailpit).hostname)) {
+  console.error(
+    `FALLO  Mailpit apunta a «${new URL(mailpit).hostname}», que no es de bucle local. ` +
+      'La suite envía correos de prueba: se niega a correr fuera del stack local.'
+  )
+  process.exit(1)
+}
+
 console.log(`Instancia local verificada: ${local.API_URL}`)
 
 const resultado = spawnSync('npx', ['playwright', 'test', ...process.argv.slice(2)], {
@@ -62,6 +73,15 @@ const resultado = spawnSync('npx', ['playwright', 'test', ...process.argv.slice(
     // Sólo el setup local lo usa, para sembrar identidades de prueba. Nunca
     // llega al navegador ni reemplaza a RLS en ninguna ruta de la aplicación.
     SUPABASE_SERVICE_ROLE_KEY: local.SERVICE_ROLE_KEY,
+    // Vínculo presencial de cuentas (EPT-59, D5), solo para esta corrida: el
+    // servidor de Next envía el código por el SMTP local de Mailpit y
+    // las pruebas lo leen desde su API. Nunca se usa un servidor de correo real.
+    EPT_VINCULO_CUENTAS: 'habilitado',
+    EPT_SMTP_HOST: '127.0.0.1',
+    EPT_SMTP_PORT: process.env.EPT_TEST_SMTP_PORT ?? '54325',
+    EPT_SMTP_SECURE: 'false',
+    EPT_SMTP_REMITENTE: 'no-responder@ept.local',
+    EPT_MAILPIT_URL: mailpit,
   },
 })
 

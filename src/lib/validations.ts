@@ -870,3 +870,149 @@ export const profesorIdSchema = z.string().uuid('Identificador de profesor invá
 export function primerErrorProfesor(error: z.ZodError): { mensaje: string; campo?: string } {
   return primerErrorMateria(error)
 }
+
+// ---- Usuarios, roles, acceso y vínculo de cuentas (EPT-59) ----
+/**
+ * Contrato de la API de Usuarios. PostgreSQL vuelve a validar todo: estas
+ * reglas existen para rechazar antes lo que la base rechazaría, con un mensaje
+ * propio, y sobre todo para que la reactivación no toque Auth con un pedido que
+ * la base va a rechazar por datos inválidos.
+ */
+export const perfilIdSchema = z.string().uuid('Identificador de persona inválido')
+
+/** UUID versión 4: el formato que se usa como clave de idempotencia. */
+const PATRON_UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
+
+export const operacionIdSchema = z
+  .string({ message: 'La operación no tiene un identificador válido' })
+  .regex(PATRON_UUID_V4, 'La operación no tiene un identificador válido. Recargá la página.')
+  .transform((valor) => valor.toLowerCase())
+
+export const MOTIVO_CAMBIO_MINIMO = 5
+export const MOTIVO_CAMBIO_MAXIMO = 500
+
+/**
+ * Motivo de un cambio de rol o de acceso: los espacios se colapsan y se
+ * recortan igual que en `app_private.normalizar_motivo_cambio`, y se exige el
+ * largo del historial (5 a 500 caracteres, medidos como `char_length`).
+ */
+export const motivoCambioSchema = z
+  .string({ message: 'El motivo es obligatorio' })
+  .transform(normalizarEspecialidad)
+  .refine((motivo) => {
+    const largo = cantidadDeCaracteres(motivo)
+    return largo >= MOTIVO_CAMBIO_MINIMO && largo <= MOTIVO_CAMBIO_MAXIMO
+  }, `Escribí un motivo de entre ${MOTIVO_CAMBIO_MINIMO} y ${MOTIVO_CAMBIO_MAXIMO} caracteres`)
+
+export const listarUsuariosSchema = z
+  .object({
+    busqueda: z
+      .string()
+      .max(100, 'La búsqueda no puede superar los 100 caracteres')
+      .optional(),
+    pagina: z.coerce
+      .number({ message: 'La página debe ser un número' })
+      .int('La página debe ser un número entero')
+      .min(1, 'La página debe ser 1 o mayor')
+      .max(10_000, 'La página pedida no existe')
+      .default(1),
+  })
+  .strict()
+
+/**
+ * Datos personales editables desde Usuarios: las mismas columnas y las mismas
+ * validaciones que Legajos (`perfilSchema`), sin `rol_id`. El rol cambia solo
+ * por su transición atómica, y la identidad (`user_id`, `estado_acceso`) nunca
+ * se edita. `null` en un dato opcional lo borra.
+ */
+export const actualizarDatosPersonalesSchema = perfilSchema
+  .omit({ rol_id: true })
+  .extend({
+    fecha_nacimiento: perfilSchema.shape.fecha_nacimiento.nullable(),
+    telefono: perfilSchema.shape.telefono.nullable(),
+    direccion: perfilSchema.shape.direccion.nullable(),
+    legajo_nro: perfilSchema.shape.legajo_nro.nullable(),
+  })
+  .strict()
+
+export type ActualizarDatosPersonalesData = z.infer<typeof actualizarDatosPersonalesSchema>
+
+const nombreDeRolSchema = z
+  .string({ message: 'Elegí un rol' })
+  .min(1, 'Elegí un rol')
+  .max(40, 'El rol elegido no es válido')
+
+export const cambiarRolSchema = z
+  .object({
+    rol_esperado: nombreDeRolSchema.nullable(),
+    rol_nuevo: nombreDeRolSchema,
+    motivo: motivoCambioSchema,
+  })
+  .strict()
+
+export const estadoAccesoSchema = z.enum(['HABILITADO', 'BLOQUEADO'], {
+  message: 'Elegí un estado de acceso válido',
+})
+
+export type EstadoAcceso = z.infer<typeof estadoAccesoSchema>
+
+export const cambiarAccesoSchema = z
+  .object({
+    estado_esperado: estadoAccesoSchema,
+    estado_nuevo: estadoAccesoSchema,
+    motivo: motivoCambioSchema,
+  })
+  .strict()
+  .refine((datos) => datos.estado_esperado !== datos.estado_nuevo, {
+    message: 'La persona ya tiene ese estado de acceso',
+    path: ['estado_nuevo'],
+  })
+
+export const reservarVinculoSchema = z
+  .object({
+    operacion_id: operacionIdSchema,
+    perfil_id: perfilIdSchema,
+    dni: dniAlumnoSchema,
+    modalidad: z.enum(['TITULAR', 'REPRESENTANTE'], {
+      message: 'Indicá si el trámite lo hace la persona titular o su representante',
+    }),
+    representante_dni: dniAlumnoSchema.nullable().optional(),
+    documento_verificado: z.literal(true, {
+      message: 'Confirmá que verificaste presencialmente el documento',
+    }),
+  })
+  .strict()
+  .refine(
+    (datos) => (datos.modalidad === 'REPRESENTANTE') === (datos.representante_dni != null),
+    {
+      message: 'El DNI del representante es obligatorio solo cuando el trámite lo hace un representante',
+      path: ['representante_dni'],
+    }
+  )
+
+export const emitirDesafioSchema = z
+  .object({
+    correo: z
+      .string({ message: 'El correo es obligatorio' })
+      .trim()
+      .toLowerCase()
+      .min(1, 'El correo es obligatorio')
+      .max(254, 'El correo no puede superar los 254 caracteres')
+      .email('Ingresá un correo válido'),
+  })
+  .strict()
+
+export const CONTRASENA_VINCULO_MINIMO = 8
+export const CONTRASENA_VINCULO_MAXIMO = 72
+
+export const verificarDesafioSchema = z
+  .object({
+    codigo: z
+      .string({ message: 'Ingresá el código de 6 dígitos' })
+      .regex(/^[0-9]{6}$/u, 'El código tiene exactamente 6 dígitos'),
+    contrasena: z
+      .string({ message: 'La contraseña es obligatoria' })
+      .min(CONTRASENA_VINCULO_MINIMO, `La contraseña debe tener al menos ${CONTRASENA_VINCULO_MINIMO} caracteres`)
+      .max(CONTRASENA_VINCULO_MAXIMO, `La contraseña no puede superar los ${CONTRASENA_VINCULO_MAXIMO} caracteres`),
+  })
+  .strict()
