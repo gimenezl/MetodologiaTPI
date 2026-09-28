@@ -546,6 +546,8 @@ BEGIN
     PERFORM pg_temp.rpc('public.calcular_porcentaje_asistencia', 'v', pg_catalog.format('public.calcular_porcentaje_asistencia(%L)', EST));
     PERFORM pg_temp.rpc('public.cambiar_curso_alumno', 'x', pg_catalog.format('public.cambiar_curso_alumno(%L, %L)', EST, C2));
     PERFORM pg_temp.rpc('public.cambiar_estado_asignacion', 'x', pg_catalog.format('public.cambiar_estado_asignacion(%L, false)', ASIG));
+    PERFORM pg_temp.rpc('public.cambiar_estado_deporte', 'x', pg_catalog.format('public.cambiar_estado_deporte(%L, false)', 'e0000000-0000-4000-8000-000000000103'));
+    PERFORM pg_temp.rpc('public.cambiar_estado_grupo_deportivo', 'x', pg_catalog.format('public.cambiar_estado_grupo_deportivo((SELECT id FROM public.grupos_deportivos WHERE nombre = %L), false)', 'Grupo EPT59 docente 14'));
     PERFORM pg_temp.rpc('public.cambiar_estado_horario_materia', 'x', pg_catalog.format('public.cambiar_estado_horario_materia(%L, false)', FR));
     PERFORM pg_temp.rpc('public.cambiar_estado_materia', 'x', pg_catalog.format('public.cambiar_estado_materia(%s, false)', MAT));
     PERFORM pg_temp.rpc('public.cambiar_estado_nivel', 'x', pg_catalog.format('public.cambiar_estado_nivel(%s, false)', NIV));
@@ -560,10 +562,12 @@ BEGIN
     PERFORM pg_temp.rpc('public.consultar_ficha_profesor', 'n', pg_catalog.format('public.consultar_ficha_profesor(%L)', DOC));
     PERFORM pg_temp.rpc('public.corregir_identidad_alumno', 'x', pg_catalog.format('public.corregir_identidad_alumno(%L, %L, %L)', EST, '95900044', 'LEG-EPT59-EST2'));
     PERFORM pg_temp.rpc('public.crear_alumno', 'x', pg_catalog.format('public.crear_alumno(%L, %L, %L, %L, NULL, NULL, NULL, NULL, NULL)', 'Prueba', 'Alumno batería', '95900991', 'INACTIVO'));
+    PERFORM pg_temp.rpc('public.crear_deporte', 'x', $e$public.crear_deporte('Deporte batería EPT61')$e$);
     PERFORM pg_temp.rpc('public.crear_grupo_deportivo', 'x', pg_catalog.format('public.crear_grupo_deportivo(%L, %s, %L, 5, %L)', f, (SELECT id FROM public.niveles WHERE nombre = 'PRIMARIO'), 'Grupo batería EPT59', DOC));
     PERFORM pg_temp.rpc('public.crear_materia', 'x', $e$public.crear_materia('Materia batería EPT59')$e$);
     PERFORM pg_temp.rpc('public.crear_nivel', 'x', $e$public.crear_nivel('NIVEL BATERIA EPT59')$e$);
     PERFORM pg_temp.rpc('public.dar_de_baja_horario_grupo_deportivo', 'x', pg_catalog.format('public.dar_de_baja_horario_grupo_deportivo(%L, %L)', GR, GFR));
+    PERFORM pg_temp.rpc('public.editar_grupo_deportivo', 'x', pg_catalog.format('public.editar_grupo_deportivo(%L, %L, 10, %L)', GR, 'Grupo EPT59 editado', DOC));
     PERFORM pg_temp.rpc('public.es_director_actual', 'v', 'public.es_director_actual()');
     PERFORM pg_temp.rpc('public.establecer_recorrido_transporte', 'x', pg_catalog.format('public.establecer_recorrido_transporte(%L)', t));
     PERFORM pg_temp.rpc('public.inactivar_alumno', 'x', pg_catalog.format('public.inactivar_alumno(%L)', EST));
@@ -578,6 +582,7 @@ BEGIN
     PERFORM pg_temp.rpc('public.listar_profesores', 'n', 'public.listar_profesores()');
     PERFORM pg_temp.rpc('public.matricular_hijo', 'x', pg_catalog.format('public.matricular_hijo(%L, %L)', EST2, C1));
     PERFORM pg_temp.rpc('public.reactivar_alumno', 'x', pg_catalog.format('public.reactivar_alumno(%L, %L)', EST2, C1));
+    PERFORM pg_temp.rpc('public.renombrar_deporte', 'x', pg_catalog.format('public.renombrar_deporte(%L, %L)', 'e0000000-0000-4000-8000-000000000103', 'Atletismo batería EPT61'));
     PERFORM pg_temp.rpc('public.renombrar_materia', 'x', pg_catalog.format('public.renombrar_materia(%s, %L)', MAT, 'Materia EPT59 renombrada'));
     PERFORM pg_temp.rpc('public.renombrar_nivel', 'x', pg_catalog.format('public.renombrar_nivel(%s, %L)', NIV, 'NIVEL EPT59 RENOMBRADO'));
     PERFORM pg_temp.rpc('public.rol_actual', 'v', 'public.rol_actual()');
