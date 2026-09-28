@@ -5,6 +5,49 @@ trabajar.
 
 ---
 
+## 0. Revisión del candidato `376d88e` y corrección de tres hallazgos
+
+Una segunda sesión revisó el candidato `376d88e` (commit `docs(evidencia):
+agregar reversion no destructiva a EPT-60`, mismo worktree) y encontró tres
+problemas concretos, corregidos en esta misma rama antes de pedir PR. Los
+tres se reprodujeron primero para confirmar que eran reales y después se
+corrigieron con la prueba de regresión correspondiente.
+
+| # | Hallazgo | Corrección | Prueba nueva |
+|---|---|---|---|
+| 1 | `PATCH /api/transporte/inscripciones/[id]` cancelaba cualquier inscripción propia y activa, incluida una de **comedor**, porque reutiliza la RPC genérica `cancelar_inscripcion_servicio` de 013, que no distingue tipo de servicio | `transporte.service.ts::cancelarInscripcionTransporte` verifica, ANTES de invocar la RPC, que el identificador corresponda a una inscripción propia de tipo TRANSPORTE (lectura sobre la vista `inscripciones_servicios_detalle`, ya `security_invoker`); si no, responde igual que si no existiera, sin tocar la RPC compartida. **013 no se modificó** y la baja legítima de comedor sigue intacta | `transporte-auth.spec.ts`: «la API de transporte no cancela una inscripción propia de comedor» — crea una inscripción real de comedor, intenta cancelarla por la ruta de transporte (404), y confirma que sigue activa y cancelable por su propia ruta |
+| 2 | `establecer_recorrido_transporte` comprobaba `activo` del destino ANTES de comprobar si era el recorrido ya vigente del alumno. Si Dirección inactivaba el recorrido que el alumno ya tenía, repetir la misma elección dejaba de ser idempotente y pasaba a rechazarse con P5551 | Se reordenó la función (editada en el mismo archivo de migración, nunca publicada — ver nota más abajo): la comprobación de idempotencia ahora corre antes que la de `activo`. Un destino inactivo **distinto** se sigue rechazando igual que antes | SQL (`transporte_rls.sql` #9bis) y HTTP real (`transporte-auth.spec.ts`: «repetir el recorrido vigente sigue siendo idempotente aunque Dirección lo inactive», que inactiva el recorrido vigente por la propia API de Dirección y confirma el no-op) |
+| 3 | En `/dashboard/transporte`, si `listarRecorridos()` fallaba para Dirección, la página convertía el error en `[]` y `GestionTransporte` mostraba un catálogo vacío indistinguible de «no hay recorridos» | `page.tsx` distingue la rama de Dirección: si la lectura del catálogo falla, muestra el mismo `PanelErrorLectura` (alerta en español, con reintento) que ya usa la falta de inscripciones, en vez de degradar a una lista vacía. La pantalla del alumno conserva la degradación intencional (mismo criterio que el comedor) | `transporte-auth.spec.ts`: «un fallo al leer el catálogo muestra un error real, no un catálogo vacío» — revoca de verdad el `SELECT` de `authenticated` sobre `recorridos_transporte` con `docker exec psql` (mismo patrón que `alumnos-auth.spec.ts::conPrivilegioRetirado`), no una respuesta de red simulada, porque esta pantalla lee desde un Server Component y `page.route()` no intercepta esa llamada |
+
+**Confirmación pedida por la revisión:** la migración
+`20260927220114_transporte_recorridos.sql` nunca se publicó (sin push, sin
+PR, sin merge) en ningún momento de esta tarea; solo se aplicó contra la base
+local descartable. Por eso el hallazgo 2 se corrigió editando esa misma
+migración en el lugar, en vez de agregar una migración correctiva nueva. No
+se tocó ninguna migración de 001 a 016, EPT-57, EPT-58 ni EPT-59.
+
+Los tres cambios de código están en:
+
+```
+src/services/transporte.service.ts                          → hallazgo 1
+supabase/migrations/20260927220114_transporte_recorridos.sql → hallazgo 2
+src/app/dashboard/transporte/page.tsx                        → hallazgo 3
+supabase/tests/transporte_rls.sql                            → prueba SQL del hallazgo 2
+tests/transporte-auth.spec.ts                                → pruebas HTTP/navegador de los tres
+```
+
+Después de corregir, se repitió el ciclo completo de verificación: reset
+local, `transporte_rls.sql` (22 comprobaciones, incluida la nueva 9bis),
+`transporte_concurrencia.mjs` (3 escenarios), regresión de `comedor_rls.sql`
+(24) y de la batería genérica de EPT-59 (`usuarios_permisos_rls.sql`, 01–41,
+mismo fallo preexistente 42 aislado y confirmado ajeno), `transporte-auth.
+spec.ts` (47, con las 3 pruebas nuevas), `transporte-ui.spec.ts` (47),
+`tsc`, ESLint focalizado, `npm run build`, `git diff --check` y la suite E2E
+completa del repositorio. El detalle exacto de cada comando está en las
+secciones 12 a 16 más abajo, ya actualizadas con estos resultados.
+
+---
+
 ## 1. Resumen ejecutivo
 
 El transporte escolar reutiliza exactamente el modelo que dejó EPT-10
@@ -48,9 +91,10 @@ transporte.
 
 No existe ninguna superficie de eliminación física en ninguna capa.
 
-**Estado: listo para revisión.** Sin push, sin PR, sin merge, sin `db push`
-y sin ninguna operación contra producción. La suite E2E completa del
-repositorio (778 pruebas autenticadas, todas las historias) corre sin
+**Estado: listo para revisión**, sobre el candidato que corrigió los tres
+hallazgos de una revisión anterior (§0). Sin push, sin PR, sin merge, sin
+`db push` y sin ninguna operación contra producción. La suite E2E completa
+del repositorio (781 pruebas autenticadas, todas las historias) corre sin
 ningún fallo después de este cambio (§14, §16).
 
 ---
@@ -361,11 +405,16 @@ Todas corridas contra la base local descartable, después de `supabase db
 reset`, con `docker exec … psql -v ON_ERROR_STOP=1 -f …`.
 
 ```text
-supabase/tests/transporte_rls.sql        → 21 comprobaciones OK (más 6bis, 15bis, 15ter), ROLLBACK, sin dejar datos
+supabase/tests/transporte_rls.sql        → 22 comprobaciones OK (más 6bis, 9bis, 15bis, 15ter), ROLLBACK, sin dejar datos
 supabase/tests/comedor_rls.sql           → 24 comprobaciones OK (regresión de EPT-10, ver §16 por el único ajuste)
 supabase/tests/deportes_rls.sql          → A1…G3 OK (regresión de EPT-11, sin ningún cambio de código)
 supabase/tests/usuarios_permisos_rls.sql → 01…41 OK, con las dos RPC de transporte agregadas a su batería (06, 07, 11, 13)
 ```
+
+La comprobación **9bis** (agregada al corregir el hallazgo 2 de la revisión,
+§0) verifica que repetir el recorrido vigente sigue siendo un no-op después
+de que Dirección lo inactiva, y que un destino inactivo distinto (6bis) se
+sigue rechazando.
 
 `npx supabase db advisors --local` (todas las categorías): las únicas
 observaciones son preexistentes (`calcular_porcentaje_asistencia`,
@@ -405,38 +454,36 @@ OK CONCURRENCIA: las tres carreras del transporte quedan demostradas y la base q
 npx tsc --noEmit                          → exit 0
 npx eslint .                              → 14 errores / 107 avisos, todos preexistentes (§16); 0 en archivos de transporte
 npm run build                             → build de producción correcto; /pruebas-ui/transporte NO aparece en la lista de rutas
-node supabase/tests/correr-autenticadas.mjs transporte-auth.spec.ts → 44 aprobadas (incluye el setup de 21 identidades)
+node supabase/tests/correr-autenticadas.mjs transporte-auth.spec.ts → 47 aprobadas (incluye el setup de 21 identidades)
 npx playwright test transporte-ui.spec.ts → 47 aprobadas, 1 omitida (WebKit táctil sin teclado físico)
-node supabase/tests/correr-autenticadas.mjs (SIN filtro, TODAS las historias) → 778 aprobadas, 2 omitidas, 18.1 min, exit 0
-npx playwright test (SIN filtro, sin sesión: base + bancos visuales de las 9 historias) → 452 aprobadas, 2 omitidas, 1.8 min, exit 0
+git diff --check                          → exit 0
+node supabase/tests/correr-autenticadas.mjs (SIN filtro, TODAS las historias) → 781 aprobadas, 2 omitidas, 17.7 min, exit 0
+npx playwright test (SIN filtro, sin sesión: base + bancos visuales de las 9 historias) → 452 aprobadas, 2 omitidas, exit 0 (sin cambios respecto del candidato anterior: ninguno de los tres hallazgos toca el banco visual)
 ```
 
-La corrida sin filtro de `correr-autenticadas.mjs` ejecuta las 21 identidades
-del setup y después **todas** las suites autenticadas del repositorio
-(alumnos, cursos, niveles, materias, comedor, deportes, horarios,
-horarios-académicos, hijos, profesores, usuarios, usuarios-permisos,
-gestión de estudiantes y transporte) en un único worker, incluidas las
-pruebas de concurrencia HTTP de horarios y deportes y las de bloqueo de
-cuenta de EPT-59. Terminó en **778 aprobadas, 2 omitidas (WebKit sin
-teclado), exit code 0**, sin ningún fallo.
+La corrida sin filtro subió de 778 a **781 aprobadas** (las tres pruebas
+nuevas de §0), sigue en **2 omitidas** (WebKit sin teclado) y **exit code 0**:
+ningún fallo, ni en transporte ni en el resto del repositorio. Entre las dos
+corridas sin filtro, **1233 pruebas de Playwright pasan y ninguna falla**
+sobre el candidato final.
 
-La corrida sin filtro de `npx playwright test` (sin `EPT_SUPABASE_LOCAL`)
-ejecuta el proyecto base y los bancos visuales de las nueve historias que los
-tienen, en escritorio, Pixel 5 e iPhone 13, incluidas las pruebas de
-contraste de `alumnos-contraste.spec.ts`. Terminó en **452 aprobadas, 2
-omitidas, exit code 0**.
+Al correr la suite completa se regeneraron por segunda vez, por el mismo
+efecto colateral ya documentado en §16, cuatro capturas de
+`docs/evidence/EPT-13/`; se revirtieron con `git restore` antes de comitear,
+igual que la vez anterior.
 
-Entre las dos corridas, **1230 pruebas de Playwright pasan y ninguna falla**
-después de este cambio: es la confirmación más fuerte posible de que EPT-60
-no rompió ninguna historia anterior.
-
-`transporte-auth.spec.ts` corre contra sesiones reales (`tests/auth.setup.ts`)
-y cubre: alta, idempotencia del cambio al mismo recorrido, cambio atómico
-real, fallo del destino sin pérdida, cancelación sin reemplazo, convivencia
-con el comedor, alumno ajeno, alumno inactivo, cuerpo sin campos de
-identidad, ausencia de `DELETE`, foco/Escape del diálogo, 375 px sin scroll
-horizontal, consulta y mantenimiento de Dirección, y denegación de DOCENTE,
-PADRE, PERSONAL y una cuenta sin perfil.
+`transporte-auth.spec.ts` pasó de 44 a **47** pruebas: las tres nuevas
+corresponden a los hallazgos de la revisión (§0). Corre contra sesiones
+reales (`tests/auth.setup.ts`) y cubre: alta, idempotencia del cambio al
+mismo recorrido (incluida la idempotencia después de que Dirección inactiva
+el recorrido vigente), cambio atómico real, fallo del destino sin pérdida,
+cancelación sin reemplazo, frontera de dominio con el comedor (no se cancela
+por acá una inscripción de comedor), convivencia con el comedor, alumno
+ajeno, alumno inactivo, cuerpo sin campos de identidad, ausencia de
+`DELETE`, foco/Escape del diálogo, 375 px sin scroll horizontal, consulta y
+mantenimiento de Dirección, el error real cuando falla la lectura del
+catálogo (privilegio revocado de verdad, no una respuesta de red simulada),
+y denegación de DOCENTE, PADRE, PERSONAL y una cuenta sin perfil.
 
 `transporte-ui.spec.ts` corre sobre `/pruebas-ui/transporte` (banco de datos
 sintéticos, sin base) en escritorio, Pixel 5 e iPhone 13, y cubre estados de
@@ -475,7 +522,7 @@ inyectadas por proceso (nunca escritas a `.env.local`), se recorrió a mano:
 | `usuarios_permisos_rls.sql` (original, sin editar) falla en «FALLO 42 user_metadata» | **Preexistente**, ajeno a EPT-60 | Reproducido corriendo el archivo tal cual de `origin/main` contra una base con migraciones solo hasta EPT-59 (sin la migración de EPT-60 aplicada): mismo fallo, idéntico mensaje |
 | `comedor_rls.sql`, aserción «el catálogo sembró más de un servicio» | Ajuste necesario, no una corrección de comportamiento | 013 asumía que el comedor era el único servicio del catálogo; EPT-60 agrega recorridos al mismo catálogo por diseño (así lo documenta 013). Se corrigió la aserción para verificar «un único servicio de tipo COMEDOR» en lugar de «un único servicio en total»; el resto de las 24 comprobaciones de EPT-10 pasa sin cambios |
 | ESLint: 14 errores / 107 avisos en `asistencias/page.tsx`, `solicitudes/page.tsx`, `testimonios/page.tsx`, `GestionUsuarios.tsx`, `global-error.tsx`, `layout.tsx`, `login/page.tsx` | **Preexistentes**, ninguno en archivos de transporte | `npx eslint .` antes y después del cambio; ningún resultado contiene la palabra «transporte» |
-| La corrida sin filtro de `correr-autenticadas.mjs` regeneró 7 capturas de `docs/evidence/EPT-13/` (`hijos-auth.spec.ts` corre con `EPT_CAPTURAS` heredado de una corrida anterior de esta sesión) | Efecto colateral de esta sesión, no un cambio de comportamiento | Detectado con `git status` antes de comitear (byte a byte distintas, no solo metadata); revertido con `git restore -- docs/evidence/EPT-13/` antes del commit de evidencia. Coincide con la gotcha ya documentada: correr la suite completa con capturas activas pisa la evidencia de otras historias |
+| La corrida sin filtro de `correr-autenticadas.mjs` regeneró capturas de `docs/evidence/EPT-13/` (7 la primera vez, 4 la segunda, tras corregir los hallazgos de §0) | **Preexistente**, no un efecto de EPT-60: `tests/hijos-auth.spec.ts` llama a `page.screenshot(...)` sin comprobar `EPT_CAPTURAS`, a diferencia del resto de las suites (`comedor-auth.spec.ts`, `transporte-auth.spec.ts`, etc.), que sí lo hacen. Escribe esas rutas en cualquier corrida completa, la toque o no EPT-60 | Confirmado leyendo `tests/hijos-auth.spec.ts`: la función de captura de ese archivo no tiene la guarda `if (!CAPTURAR) return` que sí tienen las demás. Detectado ambas veces con `git status` antes de comitear (byte a byte distintas, no solo metadata) y revertido con `git restore -- docs/evidence/EPT-13/` antes de cada commit de evidencia |
 
 Ningún punto queda bloqueado: los dos que estaban pendientes al cerrar la
 redacción de esta sección se completaron antes de la entrega (ver §14 y §18).
@@ -505,6 +552,14 @@ tests/transporte-auth.spec.ts
 tests/transporte-ui.spec.ts
 docs/evidence/EPT-60.md (este archivo)
 ```
+
+Cinco de estos archivos recibieron una segunda pasada de cambios al corregir
+los tres hallazgos de la revisión (§0):
+`supabase/migrations/20260927220114_transporte_recorridos.sql`,
+`src/services/transporte.service.ts`, `src/app/dashboard/transporte/page.tsx`,
+`supabase/tests/transporte_rls.sql` y `tests/transporte-auth.spec.ts`. Siguen
+listados acá como «nuevos» porque no existían antes de esta tarea; el detalle
+de qué cambió en la segunda pasada está en §0.
 
 ### Modificados
 
@@ -636,16 +691,28 @@ de EPT-59 sobre una tabla creada después de esa migración fue el segundo
 punto que costó tiempo: el aviso está en el propio SQL de EPT-59, pero es
 fácil de pasar por alto si no se lo busca expresamente.
 
+Una segunda sesión de revisión (§0) encontró tres problemas reales que la
+primera pasada no cubrió: una RPC genérica compartida que no distinguía
+dominio (comedor/transporte) en la baja, un orden de comprobaciones que
+rompía la idempotencia ante un cambio de estado posterior de Dirección, y un
+error de lectura degradado a estado vacío en la pantalla administrativa. Los
+tres comparten un patrón — reutilizar una pieza genérica o degradar un error
+sin distinguirlo de un estado legítimo — que vale la pena revisar
+expresamente la próxima vez que se reutilice una RPC o un `!ok → []`.
+
 **Comentario preparado para Jira (no publicado; a revisar antes de
 enviarlo):**
 
 > Migración, RLS, RPC atómica de alta/cambio, mantenimiento descriptivo de
 > Dirección, UI de alumno y Dirección, y pruebas de base/servidor/navegador
 > completas para los cuatro recorridos de transporte (ficticios, según lo
-> acordado). Regresión verificada sobre EPT-10, EPT-11 y EPT-59, y sobre el
-> resto del repositorio: la suite E2E autenticada completa (778 pruebas,
-> todas las historias) pasa sin ningún fallo después de este cambio.
-> Candidato en la rama `codex/ept-60-transporte`, sin push, sin PR.
+> acordado). Una revisión de código encontró tres problemas (frontera de
+> dominio en la cancelación, orden de la idempotencia, y un error de lectura
+> mostrado como catálogo vacío), corregidos con su prueba de regresión cada
+> uno. Regresión verificada sobre EPT-10, EPT-11 y EPT-59, y sobre el resto
+> del repositorio: la suite E2E autenticada completa (781 pruebas, todas las
+> historias) pasa sin ningún fallo después de este cambio. Candidato en la
+> rama `codex/ept-60-transporte`, sin push, sin PR.
 
 **Recomendación de transición:** el candidato está listo para revisión de
 código; no se movió el estado en Jira desde esta sesión. Queda a criterio de
