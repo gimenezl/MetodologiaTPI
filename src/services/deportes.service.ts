@@ -10,6 +10,13 @@ import {
   type ConflictoHorario,
   type Franja,
 } from '@/lib/horarios'
+import {
+  mensajeCupoBajoOcupacion,
+  mensajeDeporteConGruposActivos,
+  mensajeGrupoConInscripciones,
+  MENSAJE_RENOMBRAR_CON_GRUPOS,
+  MENSAJES_REACTIVACION_GRUPO,
+} from '@/lib/deportes-administracion'
 import type {
   AgregarHorarioGrupoData,
   CrearGrupoDeportivoData,
@@ -38,6 +45,12 @@ import type {
  * compatibilidad se consulta con la MISMA función de la base que decide el
  * alta, y la dirección configura franjas e inscribe a un alumno por RPC que
  * pasan por las mismas reglas que el alta propia.
+ *
+ * EPT-61 agrega la administración de la dirección: alta, renombrado y cambio de
+ * estado de deportes, y edición y cambio de estado de grupos. Todas son
+ * transacciones de PostgreSQL que revalidan `auth.uid()` y el rol DIRECTOR; ni
+ * este módulo ni la API borran nada, y el profesor es obligatorio por grupo, no
+ * por deporte.
  */
 
 /** Un grupo con su disponibilidad, tal como la calcula PostgreSQL. */
@@ -115,6 +128,33 @@ export type CatalogoAltaGrupo = {
   profesores: ProfesorDeportivo[]
 }
 
+/** Deporte del catálogo con su estado lógico (EPT-61). */
+export type DeporteCatalogo = { id: string; nombre: string; activo: boolean }
+
+/**
+ * Perfil con rol DOCENTE que la dirección puede asignar a un grupo. `activo` es
+ * el estado de su ficha (EPT-58): un profesor inactivo no puede quedar a cargo.
+ */
+export type DocenteAsignable = ProfesorDeportivo & { activo: boolean }
+
+/** Datos que la administración de la dirección necesita además de los grupos. */
+export type AdministracionDeportes = {
+  /** Todo el catálogo, activos e inactivos. */
+  deportes: DeporteCatalogo[]
+  docentes: DocenteAsignable[]
+  /** Niveles activos: un grupo cuyo nivel no figura acá tiene el nivel inactivo. */
+  nivelesActivos: number[]
+}
+
+/** Grupo tal como lo devuelven la edición y el cambio de estado. */
+export type GrupoAdministrado = {
+  id: string
+  nombre: string
+  cupo: number
+  profesor_id: string
+  activo: boolean
+}
+
 /** Situación académica propia: explica impedimentos, no autoriza nada. */
 export type SituacionAcademicaPropia = {
   estado: 'ACTIVO' | 'INACTIVO'
@@ -130,6 +170,7 @@ export type CampoDeportes =
   | 'nombre'
   | 'cupo'
   | 'profesor_id'
+  | 'activo'
   | 'alumno_id'
   | 'dia_semana'
   | 'hora_inicio'
@@ -162,6 +203,12 @@ type Operacion =
   | 'darDeBajaHorario'
   | 'inscribirAdministrativa'
   | 'consultarCompatibilidadAlumno'
+  | 'listarAdministracion'
+  | 'crearDeporte'
+  | 'renombrarDeporte'
+  | 'cambiarEstadoDeporte'
+  | 'editarGrupo'
+  | 'cambiarEstadoGrupo'
 
 type ErrorPostgres = { code?: string | null; message?: string | null; details?: string | null }
 
@@ -255,6 +302,17 @@ const detalleConflictoAcademicoSchema = detalleFranjaSchema.extend({
   actividad: z.string().min(1),
 })
 
+/** Detalle de P5974: los grupos activos que impiden inactivar un deporte. */
+const detalleGruposActivosSchema = z.object({
+  grupos: z.array(z.object({ grupo: z.string().min(1), nivel: z.string().min(1) })).min(1),
+})
+
+/** Cantidad que la base escribe en el mensaje de P5974 o P5975, si se puede leer. */
+function contarEnMensaje(mensaje: string | null | undefined, patron: RegExp): number | null {
+  const cantidad = Number(patron.exec(mensaje ?? '')?.[1])
+  return Number.isInteger(cantidad) && cantidad > 0 ? cantidad : null
+}
+
 function leerDetalle<T>(esquema: z.ZodType<T>, detalle: string | null | undefined): T | null {
   if (!detalle) return null
   try {
@@ -288,12 +346,15 @@ function traducirErrorDeportes(error: ErrorPostgres, operacion: Operacion): Rech
       // El índice único es la autoridad ante concurrencia. En el alta de grupos
       // protege la identidad del grupo; en las franjas, «una franja activa por
       // grupo»; en la inscripción, «un grupo por deporte».
-      if (operacion === 'crearGrupo') {
+      if (operacion === 'crearGrupo' || operacion === 'editarGrupo') {
         return {
           estado: 409,
           mensaje: 'Ya existe un grupo con ese nombre para ese deporte y nivel.',
           campo: 'nombre',
         }
+      }
+      if (operacion === 'crearDeporte' || operacion === 'renombrarDeporte') {
+        return { estado: 409, mensaje: 'Ya existe un deporte con ese nombre.', campo: 'nombre' }
       }
       if (operacion === 'agregarHorario') {
         return { estado: 409, mensaje: 'Esa franja ya está asignada a este grupo.', campo: 'hora_inicio' }
@@ -311,6 +372,9 @@ function traducirErrorDeportes(error: ErrorPostgres, operacion: Operacion): Rech
     case 'P5560':
       return { estado: 404, mensaje: 'El deporte seleccionado no existe.', campo: 'deporte_id' }
     case 'P5561':
+      if (operacion === 'cambiarEstadoGrupo') {
+        return { estado: 409, mensaje: MENSAJES_REACTIVACION_GRUPO.deporteInactivo, campo: 'activo' }
+      }
       return {
         estado: 409,
         mensaje: 'El deporte está inactivo y no admite grupos ni inscripciones nuevas.',
@@ -319,6 +383,9 @@ function traducirErrorDeportes(error: ErrorPostgres, operacion: Operacion): Rech
     case 'P5562':
       return { estado: 404, mensaje: 'El nivel educativo seleccionado no existe.', campo: 'nivel_id' }
     case 'P5563':
+      if (operacion === 'cambiarEstadoGrupo') {
+        return { estado: 409, mensaje: MENSAJES_REACTIVACION_GRUPO.nivelInactivo, campo: 'activo' }
+      }
       return {
         estado: 409,
         mensaje: 'El nivel educativo está inactivo y no admite grupos nuevos.',
@@ -327,6 +394,10 @@ function traducirErrorDeportes(error: ErrorPostgres, operacion: Operacion): Rech
     case 'P5564':
       return { estado: 404, mensaje: 'El profesor seleccionado no existe.', campo: 'profesor_id' }
     case 'P5565':
+      // Al reactivar, el profesor no se elige: ya es el responsable del grupo.
+      if (operacion === 'cambiarEstadoGrupo') {
+        return { estado: 409, mensaje: MENSAJES_REACTIVACION_GRUPO.profesorSinRol, campo: 'activo' }
+      }
       return {
         estado: 409,
         mensaje: 'La persona seleccionada no tiene el rol DOCENTE.',
@@ -334,6 +405,9 @@ function traducirErrorDeportes(error: ErrorPostgres, operacion: Operacion): Rech
       }
     // EPT-58: la ficha del profesor está INACTIVO.
     case 'P5605':
+      if (operacion === 'cambiarEstadoGrupo') {
+        return { estado: 409, mensaje: MENSAJES_REACTIVACION_GRUPO.profesorInactivo, campo: 'activo' }
+      }
       return {
         estado: 409,
         mensaje:
@@ -380,12 +454,77 @@ function traducirErrorDeportes(error: ErrorPostgres, operacion: Operacion): Rech
       }
     case 'P5579':
       return { estado: 409, mensaje: 'Esa inscripción ya estaba cancelada.' }
+    // EPT-61: con grupos, un deporte solo admite cambios de mayúsculas y minúsculas.
     case 'P5580':
-    case 'P5581':
+      if (operacion === 'renombrarDeporte') {
+        return { estado: 409, mensaje: MENSAJE_RENOMBRAR_CON_GRUPOS, campo: 'nombre' }
+      }
       return {
         estado: 409,
         mensaje: 'Esa operación no está permitida sobre un grupo o una inscripción existente.',
       }
+    // EPT-61: el cupo no puede quedar por debajo de la ocupación (regla de 014).
+    case 'P5581': {
+      if (operacion === 'editarGrupo') {
+        const ocupados = contarEnMensaje(error.message, /las (\d+) inscripciones/u)
+        return {
+          estado: 409,
+          mensaje: ocupados
+            ? mensajeCupoBajoOcupacion(ocupados)
+            : 'El cupo no puede ser menor que la cantidad de inscripciones activas del grupo.',
+          campo: 'cupo',
+        }
+      }
+      return {
+        estado: 409,
+        mensaje: 'Esa operación no está permitida sobre un grupo o una inscripción existente.',
+      }
+    }
+    case 'P5970':
+      return {
+        estado: 400,
+        mensaje: 'El nombre del deporte debe tener entre 1 y 100 caracteres.',
+        campo: 'nombre',
+      }
+    case 'P5971':
+      return { estado: 409, mensaje: 'Ya existe un deporte con ese nombre.', campo: 'nombre' }
+    case 'P5972':
+      return {
+        estado: 400,
+        mensaje: 'Indicá si querés dejarlo activo o inactivo.',
+        campo: 'activo',
+      }
+    case 'P5973':
+      return {
+        estado: 409,
+        mensaje: 'Ya existe un grupo con ese nombre para ese deporte y nivel.',
+        campo: 'nombre',
+      }
+    case 'P5974': {
+      // El detalle nombra los grupos que hay que inactivar primero. Si falta o
+      // viene malformado, se cuenta con lo que dice el mensaje y, sin eso, se
+      // avisa sin cifras: nunca se reenvía el texto de la base.
+      const detalle = leerDetalle(detalleGruposActivosSchema, error.details)
+      const cantidad =
+        contarEnMensaje(error.message, /tiene (\d+) grupo/u) ?? detalle?.grupos.length ?? null
+      return {
+        estado: 409,
+        mensaje: cantidad
+          ? mensajeDeporteConGruposActivos(cantidad, detalle?.grupos)
+          : 'No se puede inactivar el deporte porque todavía tiene grupos activos. Inactivá esos grupos primero.',
+        campo: 'activo',
+      }
+    }
+    case 'P5975': {
+      const cantidad = contarEnMensaje(error.message, /tiene (\d+) inscripci/u)
+      return {
+        estado: 409,
+        mensaje: cantidad
+          ? mensajeGrupoConInscripciones(cantidad)
+          : 'No se puede inactivar el grupo porque tiene alumnos con inscripción activa. Cada alumno debe cancelar la suya antes; Dirección no cancela por el alumno.',
+        campo: 'activo',
+      }
+    }
     case 'P5583':
       return { estado: 409, mensaje: MENSAJES_DEPORTES.sinHorario, campo: 'grupo_id' }
     case 'P5584': {
@@ -491,6 +630,12 @@ const MENSAJES_PROHIBIDO: Record<Operacion, string> = {
   inscribirAdministrativa: 'Solo la dirección puede inscribir a un alumno en un deporte.',
   consultarCompatibilidadAlumno:
     'Solo la dirección puede consultar la compatibilidad horaria de un alumno.',
+  listarAdministracion: 'Solo la dirección puede administrar el catálogo de deportes.',
+  crearDeporte: 'Solo la dirección puede administrar el catálogo de deportes.',
+  renombrarDeporte: 'Solo la dirección puede administrar el catálogo de deportes.',
+  cambiarEstadoDeporte: 'Solo la dirección puede administrar el catálogo de deportes.',
+  editarGrupo: 'Solo la dirección puede editar grupos deportivos.',
+  cambiarEstadoGrupo: 'Solo la dirección puede cambiar el estado de un grupo deportivo.',
 }
 
 /** Una escritura sin fila devuelta no es un éxito confirmado. */
@@ -828,5 +973,147 @@ export async function inscribirAlumnoAdministrativamente(
   return exigirFila(
     data as { id: string } | null,
     'No pudimos confirmar la inscripción. Revisá las inscripciones del alumno antes de reintentar.'
+  )
+}
+
+// ----------------------------------------------------------------
+// Administración de deportes y grupos (EPT-61)
+// ----------------------------------------------------------------
+
+/**
+ * Lo que la administración necesita además de los grupos: el catálogo completo
+ * (activos e inactivos), los docentes con el estado de su ficha y los niveles
+ * activos. Es informativo, para anticipar motivos de rechazo y ofrecer solo
+ * profesores válidos: cada operación la vuelve a validar PostgreSQL con las
+ * filas bloqueadas. Las lecturas pasan por RLS; ningún dato sale de la sesión.
+ */
+export async function listarAdministracionDeportes(): Promise<
+  ResultadoDeportes<AdministracionDeportes>
+> {
+  const supabase = await createServerSupabaseClient()
+  const [deportes, docentes, fichasInactivas, niveles] = await Promise.all([
+    supabase.from('deportes').select('id, nombre, activo').order('nombre'),
+    supabase
+      .from('perfiles')
+      .select('id, nombre, apellido, roles!inner(nombre)')
+      .eq('roles.nombre', 'DOCENTE')
+      .order('apellido', { ascending: true })
+      .order('nombre', { ascending: true }),
+    supabase.from('profesores').select('perfil_id').eq('estado', 'INACTIVO'),
+    supabase.from('niveles').select('id').eq('activo', true),
+  ])
+
+  const fallo = deportes.error ?? docentes.error ?? fichasInactivas.error ?? niveles.error
+  if (fallo) return { ok: false, ...traducirErrorDeportes(fallo, 'listarAdministracion') }
+
+  const inactivos = new Set(
+    ((fichasInactivas.data ?? []) as { perfil_id: string }[]).map((ficha) => ficha.perfil_id)
+  )
+
+  return {
+    ok: true,
+    datos: {
+      deportes: (deportes.data ?? []) as DeporteCatalogo[],
+      docentes: ((docentes.data ?? []) as unknown as ProfesorDeportivo[]).map(
+        ({ id, nombre, apellido }) => ({ id, nombre, apellido, activo: !inactivos.has(id) })
+      ),
+      nivelesActivos: ((niveles.data ?? []) as { id: number }[]).map((nivel) => nivel.id),
+    },
+  }
+}
+
+/** Alta de un deporte en el catálogo. Solo el nombre: el profesor es por grupo. */
+export async function crearDeporte(nombre: string): Promise<ResultadoDeportes<DeporteCatalogo>> {
+  const supabase = await createServerSupabaseClient()
+  const { data, error } = await supabase.rpc('crear_deporte', { p_nombre: nombre })
+
+  if (error) return { ok: false, ...traducirErrorDeportes(error, 'crearDeporte') }
+  return exigirFila(
+    data as DeporteCatalogo | null,
+    'No pudimos confirmar el alta del deporte. Revisá el catálogo antes de reintentar.'
+  )
+}
+
+/**
+ * Renombra un deporte. Con grupos (activos o inactivos) la base solo admite un
+ * cambio de mayúsculas y minúsculas: cualquier otro se rechaza con P5580.
+ */
+export async function renombrarDeporte(
+  deporteId: string,
+  nombre: string
+): Promise<ResultadoDeportes<DeporteCatalogo>> {
+  const supabase = await createServerSupabaseClient()
+  const { data, error } = await supabase.rpc('renombrar_deporte', {
+    p_deporte_id: deporteId,
+    p_nombre: nombre,
+  })
+
+  if (error) return { ok: false, ...traducirErrorDeportes(error, 'renombrarDeporte') }
+  return exigirFila(
+    data as DeporteCatalogo | null,
+    'No pudimos confirmar el cambio de nombre. Revisá el catálogo antes de reintentar.'
+  )
+}
+
+/** Baja o alta lógica de un deporte. La base rechaza inactivarlo con grupos activos. */
+export async function cambiarEstadoDeporte(
+  deporteId: string,
+  activo: boolean
+): Promise<ResultadoDeportes<DeporteCatalogo>> {
+  const supabase = await createServerSupabaseClient()
+  const { data, error } = await supabase.rpc('cambiar_estado_deporte', {
+    p_deporte_id: deporteId,
+    p_activo: activo,
+  })
+
+  if (error) return { ok: false, ...traducirErrorDeportes(error, 'cambiarEstadoDeporte') }
+  return exigirFila(
+    data as DeporteCatalogo | null,
+    'No pudimos confirmar el cambio de estado. Revisá el catálogo antes de reintentar.'
+  )
+}
+
+/**
+ * Edita nombre, cupo y profesor de un grupo. El deporte y el nivel no se envían:
+ * son la identidad del grupo. La base rechaza un cupo por debajo de la ocupación
+ * y un profesor que no sea un DOCENTE activo.
+ */
+export async function editarGrupoDeportivo(
+  grupoId: string,
+  datos: { nombre: string; cupo: number; profesor_id: string }
+): Promise<ResultadoDeportes<GrupoAdministrado>> {
+  const supabase = await createServerSupabaseClient()
+  const { data, error } = await supabase.rpc('editar_grupo_deportivo', {
+    p_grupo_id: grupoId,
+    p_nombre: datos.nombre,
+    p_cupo: datos.cupo,
+    p_profesor_id: datos.profesor_id,
+  })
+
+  if (error) return { ok: false, ...traducirErrorDeportes(error, 'editarGrupo') }
+  return exigirFila(
+    data as GrupoAdministrado | null,
+    'No pudimos confirmar los cambios del grupo. Revisá el listado antes de reintentar.'
+  )
+}
+
+/**
+ * Baja o alta lógica de un grupo. La base rechaza inactivarlo con inscripciones
+ * activas y reactivarlo si su deporte, su nivel o su profesor dejaron de valer.
+ */
+export async function cambiarEstadoGrupoDeportivo(
+  grupoId: string,
+  activo: boolean
+): Promise<ResultadoDeportes<GrupoAdministrado>> {
+  const supabase = await createServerSupabaseClient()
+  const { data, error } = await supabase.rpc('cambiar_estado_grupo_deportivo', {
+    p_grupo_id: grupoId,
+    p_activo: activo,
+  })
+
+  if (error) return { ok: false, ...traducirErrorDeportes(error, 'cambiarEstadoGrupo') }
+  return exigirFila(
+    data as GrupoAdministrado | null,
+    'No pudimos confirmar el cambio de estado. Revisá el listado antes de reintentar.'
   )
 }

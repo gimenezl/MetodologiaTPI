@@ -687,6 +687,17 @@ const nombreGrupoDeportivoSchema = z
     'El nombre del grupo no puede superar los 100 caracteres'
   )
 
+/** Cupo de un grupo: entero de 1 a 100, igual que el CHECK y P5566 de la base. */
+const cupoGrupoDeportivoSchema = z
+  .number({ message: 'Ingresá el cupo del grupo' })
+  .int('El cupo debe ser un número entero')
+  .min(1, 'El cupo debe ser de al menos 1 plaza')
+  .max(100, 'El cupo no puede superar las 100 plazas')
+
+const profesorGrupoDeportivoSchema = z
+  .string({ message: 'Seleccioná un profesor con rol DOCENTE' })
+  .uuid('Seleccioná un profesor con rol DOCENTE')
+
 /** Alta mínima de un grupo por la dirección. Mismos límites que la base. */
 export const crearGrupoDeportivoSchema = z
   .object({
@@ -699,18 +710,83 @@ export const crearGrupoDeportivoSchema = z
       .positive('Seleccioná un nivel educativo')
       .max(2147483647, 'Seleccioná un nivel educativo'),
     nombre: nombreGrupoDeportivoSchema,
-    cupo: z
-      .number({ message: 'Ingresá el cupo del grupo' })
-      .int('El cupo debe ser un número entero')
-      .min(1, 'El cupo debe ser de al menos 1 plaza')
-      .max(100, 'El cupo no puede superar las 100 plazas'),
-    profesor_id: z
-      .string({ message: 'Seleccioná un profesor con rol DOCENTE' })
-      .uuid('Seleccioná un profesor con rol DOCENTE'),
+    cupo: cupoGrupoDeportivoSchema,
+    profesor_id: profesorGrupoDeportivoSchema,
   })
   .strict()
 
 export type CrearGrupoDeportivoData = z.infer<typeof crearGrupoDeportivoSchema>
+
+// ---- Administración de deportes y grupos (EPT-61) ----
+
+/**
+ * Nombre de un deporte del catálogo: se recorta (mismo conjunto de espacios que
+ * `app_private.texto_servicio_valido`) y debe tener de 1 a 100 caracteres. La
+ * unicidad la decide la base con el nombre normalizado.
+ */
+const nombreDeporteSchema = z
+  .string({ message: 'El nombre del deporte es requerido' })
+  .transform(recortarNombreMateria)
+  .refine((nombre) => nombre.length >= 1, 'El nombre del deporte es requerido')
+  .refine(
+    (nombre) => nombre.length <= 100,
+    'El nombre del deporte no puede superar los 100 caracteres'
+  )
+
+/** El catálogo solo transporta el nombre: el deporte no lleva profesor. */
+export const crearDeporteSchema = z.object({ nombre: nombreDeporteSchema }).strict()
+
+export type CrearDeporteData = z.infer<typeof crearDeporteSchema>
+
+const renombrarDeporteSchema = z
+  .object({ accion: z.literal('renombrar'), nombre: nombreDeporteSchema })
+  .strict()
+
+const cambiarEstadoDeporteSchema = z
+  .object({
+    accion: z.literal('cambiar_estado'),
+    activo: z.boolean({ message: 'El estado del deporte debe ser verdadero o falso' }),
+  })
+  .strict()
+
+/** Contrato PATCH discriminado del deporte: una sola operación por petición. */
+export const actualizarDeporteSchema = z.discriminatedUnion('accion', [
+  renombrarDeporteSchema,
+  cambiarEstadoDeporteSchema,
+])
+
+export type ActualizarDeporteData = z.infer<typeof actualizarDeporteSchema>
+
+export const deporteIdSchema = z.string().uuid('Identificador de deporte inválido')
+
+/**
+ * Edición de un grupo: reemplazo completo de nombre, cupo y profesor. El deporte
+ * y el nivel son la identidad de la oferta y no se aceptan: `.strict()` rechaza
+ * cualquier intento de enviarlos.
+ */
+const editarGrupoDeportivoSchema = z
+  .object({
+    accion: z.literal('editar'),
+    nombre: nombreGrupoDeportivoSchema,
+    cupo: cupoGrupoDeportivoSchema,
+    profesor_id: profesorGrupoDeportivoSchema,
+  })
+  .strict()
+
+const cambiarEstadoGrupoDeportivoSchema = z
+  .object({
+    accion: z.literal('cambiar_estado'),
+    activo: z.boolean({ message: 'El estado del grupo debe ser verdadero o falso' }),
+  })
+  .strict()
+
+/** Contrato PATCH discriminado del grupo: una sola operación por petición. */
+export const actualizarGrupoDeportivoSchema = z.discriminatedUnion('accion', [
+  editarGrupoDeportivoSchema,
+  cambiarEstadoGrupoDeportivoSchema,
+])
+
+export type ActualizarGrupoDeportivoData = z.infer<typeof actualizarGrupoDeportivoSchema>
 
 /** Misma traducción estructural que `primerErrorComedor`, para deportes. */
 export function primerErrorDeportes(error: z.ZodError): {

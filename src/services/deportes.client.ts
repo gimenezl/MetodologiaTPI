@@ -75,6 +75,36 @@ export function crearGrupoDeportivoRemoto(datos: DatosNuevoGrupo) {
 }
 
 // ----------------------------------------------------------------
+// Administración de deportes y grupos (EPT-61)
+// ----------------------------------------------------------------
+// Solo la dirección. No existe ninguna ruta de eliminación física: la baja es
+// siempre lógica y viaja por PATCH.
+
+/** Alta de un deporte. El profesor es obligatorio por grupo, no por deporte. */
+export function crearDeporteRemoto(nombre: string) {
+  return enviar('/api/deportes', 'POST', { nombre })
+}
+
+export function renombrarDeporteRemoto(deporteId: string, nombre: string) {
+  return enviar(`/api/deportes/${deporteId}`, 'PATCH', { accion: 'renombrar', nombre })
+}
+
+export function cambiarEstadoDeporteRemoto(deporteId: string, activo: boolean) {
+  return enviar(`/api/deportes/${deporteId}`, 'PATCH', { accion: 'cambiar_estado', activo })
+}
+
+export type DatosEdicionGrupo = { nombre: string; cupo: number; profesor_id: string }
+
+/** Edita nombre, cupo y profesor. El deporte y el nivel no se envían nunca. */
+export function editarGrupoDeportivoRemoto(grupoId: string, datos: DatosEdicionGrupo) {
+  return enviar(`/api/deportes/grupos/${grupoId}`, 'PATCH', { accion: 'editar', ...datos })
+}
+
+export function cambiarEstadoGrupoDeportivoRemoto(grupoId: string, activo: boolean) {
+  return enviar(`/api/deportes/grupos/${grupoId}`, 'PATCH', { accion: 'cambiar_estado', activo })
+}
+
+// ----------------------------------------------------------------
 // Horarios (EPT-12)
 // ----------------------------------------------------------------
 
