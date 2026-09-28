@@ -1164,3 +1164,59 @@ export function primerErrorTransporte(error: z.ZodError): {
 
   return { mensaje: issue.message, campo }
 }
+
+// ----------------------------------------------------------------
+// Administración de inscripciones (EPT-62, RF16)
+// ----------------------------------------------------------------
+
+/**
+ * Dominios sobre los que Dirección confirma o cancela. Son los tres modelos de
+ * inscripción distintos: la matrícula académica, la inscripción deportiva y las
+ * inscripciones a servicios (comedor y transporte, distinguidos por tipo).
+ */
+export const DOMINIOS_INSCRIPCION = ['matriculas', 'deportes', 'comedor', 'transporte'] as const
+
+export type DominioInscripcion = (typeof DOMINIOS_INSCRIPCION)[number]
+
+/** Enum estricto: cualquier otro valor se rechaza, sin coerción ni recorte. */
+export const dominioInscripcionSchema = z.enum(DOMINIOS_INSCRIPCION, {
+  message: 'Dominio de inscripción inválido',
+})
+
+export const inscripcionAdministrativaIdSchema = z
+  .string({ message: 'Identificador de inscripción inválido' })
+  .uuid('Identificador de inscripción inválido')
+
+/**
+ * Parámetros de ruta de la administración de inscripciones. La operación no
+ * lee nada del cuerpo: ni alumno, ni rol, ni actor. El único dato que decide
+ * sobre qué se opera es el par dominio + identificador de la URL, y `.strict()`
+ * impide que se cuelen otros.
+ */
+export const operacionInscripcionParamsSchema = z
+  .object({
+    dominio: dominioInscripcionSchema,
+    id: inscripcionAdministrativaIdSchema,
+  })
+  .strict()
+
+export type OperacionInscripcionParams = z.infer<typeof operacionInscripcionParamsSchema>
+
+/** Misma traducción estructural que `primerErrorComedor`, para inscripciones. */
+export function primerErrorInscripciones(error: z.ZodError): {
+  mensaje: string
+  campo?: string
+} {
+  const issue = error.issues[0]
+  const campo = typeof issue?.path?.[0] === 'string' ? issue.path[0] : undefined
+
+  if (!issue) return { mensaje: 'Datos inválidos' }
+  if (issue.code === 'unrecognized_keys') {
+    return { mensaje: 'La petición contiene campos no permitidos' }
+  }
+  if (issue.code === 'invalid_type' && !campo) {
+    return { mensaje: 'Datos inválidos' }
+  }
+
+  return { mensaje: issue.message, campo }
+}

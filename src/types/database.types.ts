@@ -8,6 +8,16 @@
  *
  * Reconciliación verificada entre este archivo y el esquema real (EPT-57):
  *
+ * - EPT-62 (administración de inscripciones) agrega las tres vistas
+ *   `matriculas_administracion`, `inscripciones_deportivas_administracion` e
+ *   `inscripciones_servicios_administracion` (solo Dirección obtiene filas) y las
+ *   funciones públicas `confirmar_matricula`, `confirmar_inscripcion_deportiva`,
+ *   `confirmar_inscripcion_servicio`, `cancelar_inscripcion_deportiva_administrativa`
+ *   y `cancelar_inscripcion_servicio_administrativa`. Las confirmaciones devuelven
+ *   `jsonb` (`Json`). La tabla `confirmaciones_inscripcion` y el tipo
+ *   `dominio_inscripcion` NO se representan acá: la aplicación nunca los
+ *   consulta ni los escribe directamente, solo a través de esas funciones y de
+ *   las vistas.
  * - EPT-61 (administración de deportes y grupos) agrega las funciones públicas
  *   `crear_deporte`, `renombrar_deporte`, `cambiar_estado_deporte`,
  *   `editar_grupo_deportivo` y `cambiar_estado_grupo_deportivo`. No crea
@@ -709,6 +719,74 @@ export type Database = {
           activo: boolean | null
         }
       }
+      matriculas_administracion: {
+        Row: {
+          id: string | null
+          alumno_id: string | null
+          alumno_nombre: string | null
+          alumno_apellido: string | null
+          legajo_nro: string | null
+          alumno_estado: 'ACTIVO' | 'INACTIVO' | null
+          curso_id: string | null
+          curso_denominacion: string | null
+          curso_division: string | null
+          nivel_id: number | null
+          nivel_nombre: string | null
+          fecha_inicio: string | null
+          fecha_cierre: string | null
+          motivo_cierre: 'CAMBIO_DE_CURSO' | 'INACTIVACION' | null
+          vigente: boolean | null
+          confirmada: boolean | null
+          confirmada_en: string | null
+          confirmada_por_nombre: string | null
+          confirmada_por_apellido: string | null
+        }
+      }
+      inscripciones_deportivas_administracion: {
+        Row: {
+          id: string | null
+          alumno_id: string | null
+          alumno_nombre: string | null
+          alumno_apellido: string | null
+          legajo_nro: string | null
+          alumno_estado: 'ACTIVO' | 'INACTIVO' | null
+          grupo_id: string | null
+          grupo_nombre: string | null
+          deporte_id: string | null
+          deporte_nombre: string | null
+          nivel_id: number | null
+          nivel_nombre: string | null
+          estado: 'ACTIVA' | 'CANCELADA' | null
+          fecha_inscripcion: string | null
+          fecha_cancelacion: string | null
+          confirmada: boolean | null
+          confirmada_en: string | null
+          confirmada_por_nombre: string | null
+          confirmada_por_apellido: string | null
+        }
+      }
+      inscripciones_servicios_administracion: {
+        Row: {
+          id: string | null
+          alumno_id: string | null
+          alumno_nombre: string | null
+          alumno_apellido: string | null
+          legajo_nro: string | null
+          alumno_estado: 'ACTIVO' | 'INACTIVO' | null
+          servicio_id: string | null
+          servicio_tipo: 'COMEDOR' | 'TRANSPORTE' | null
+          servicio_codigo: string | null
+          servicio_nombre: string | null
+          servicio_activo: boolean | null
+          estado: 'ACTIVA' | 'CANCELADA' | null
+          fecha_inscripcion: string | null
+          fecha_cancelacion: string | null
+          confirmada: boolean | null
+          confirmada_en: string | null
+          confirmada_por_nombre: string | null
+          confirmada_por_apellido: string | null
+        }
+      }
       recorridos_transporte: {
         Row: {
           id: string | null
@@ -919,6 +997,26 @@ export type Database = {
       actualizar_recorrido: {
         Args: { p_servicio_id: string; p_nombre: string; p_activo: boolean }
         Returns: Database['public']['Tables']['servicios_escolares']['Row']
+      }
+      confirmar_matricula: {
+        Args: { p_matricula_id: string }
+        Returns: Json
+      }
+      confirmar_inscripcion_deportiva: {
+        Args: { p_inscripcion_id: string }
+        Returns: Json
+      }
+      confirmar_inscripcion_servicio: {
+        Args: { p_inscripcion_id: string; p_tipo: 'COMEDOR' | 'TRANSPORTE' }
+        Returns: Json
+      }
+      cancelar_inscripcion_deportiva_administrativa: {
+        Args: { p_inscripcion_id: string }
+        Returns: Database['public']['Tables']['inscripciones_deportivas']['Row']
+      }
+      cancelar_inscripcion_servicio_administrativa: {
+        Args: { p_inscripcion_id: string; p_tipo: 'COMEDOR' | 'TRANSPORTE' }
+        Returns: Database['public']['Tables']['inscripciones_servicios']['Row']
       }
       renombrar_nivel: {
         Args: { p_nivel_id: number; p_nombre: string }
