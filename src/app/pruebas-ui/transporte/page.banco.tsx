@@ -1,7 +1,9 @@
 import { notFound } from 'next/navigation'
 import TransporteLoading from '@/app/dashboard/transporte/loading'
+import { PanelErrorLectura } from '@/app/dashboard/transporte/_components/Paneles'
 import { GestionTransporte } from '@/app/dashboard/transporte/_components/GestionTransporte'
 import { MiTransporte } from '@/app/dashboard/transporte/_components/MiTransporte'
+import type { InscripcionServicioAdministracion } from '@/services/inscripciones-administracion.service'
 import type {
   InscripcionTransporte,
   Recorrido,
@@ -112,6 +114,35 @@ const INSCRIPCION_AJENA: InscripcionTransporte = {
   fecha_inscripcion: '2026-09-10T09:15:00.000Z',
 }
 
+/**
+ * Lo que lee Dirección (EPT-62): las mismas inscripciones con su confirmación.
+ * La activa está sin confirmar (sigue siendo válida), la ajena está confirmada y
+ * la cancelada no se confirmó, así que ya no se puede confirmar.
+ */
+function administrativa(
+  inscripcion: InscripcionTransporte,
+  confirmacion: Pick<
+    InscripcionServicioAdministracion,
+    'confirmada' | 'confirmada_en' | 'confirmada_por_nombre' | 'confirmada_por_apellido'
+  > = {
+    confirmada: false,
+    confirmada_en: null,
+    confirmada_por_nombre: null,
+    confirmada_por_apellido: null,
+  }
+): InscripcionServicioAdministracion {
+  return { ...inscripcion, servicio_tipo: 'TRANSPORTE', servicio_activo: true, ...confirmacion }
+}
+
+const ADMIN_ACTIVA = administrativa(INSCRIPCION_ACTIVA)
+const ADMIN_AJENA = administrativa(INSCRIPCION_AJENA, {
+  confirmada: true,
+  confirmada_en: '2026-09-11T14:05:00.000Z',
+  confirmada_por_nombre: 'Dora',
+  confirmada_por_apellido: 'Directora',
+})
+const ADMIN_CANCELADA = administrativa(INSCRIPCION_CANCELADA)
+
 const MENSAJE_ALUMNO_INACTIVO =
   'Tu legajo académico no está activo, así que no podés usar el transporte. ' +
   'Comunicate con la administración del centro educativo.'
@@ -121,7 +152,7 @@ export default async function BancoTransporte({
 }: {
   searchParams: Promise<{
     vista?: 'alumno' | 'director'
-    estado?: 'carga' | 'sin-recorrido' | 'con-recorrido' | 'inactivo' | 'error'
+    estado?: 'carga' | 'sin-recorrido' | 'con-recorrido' | 'inactivo' | 'error' | 'error-lectura'
     vacio?: string
   }>
 }) {
@@ -139,6 +170,14 @@ export default async function BancoTransporte({
     )
   }
 
+  if (estado === 'error-lectura') {
+    return (
+      <main className="min-h-[100dvh] bg-neutral-50 p-4 lg:p-8">
+        <PanelErrorLectura mensaje="No pudimos completar la operación. Volvé a intentarlo en unos minutos." />
+      </main>
+    )
+  }
+
   if (vista === 'director') {
     return (
       <main className="min-h-[100dvh] bg-neutral-50 p-4 lg:p-8">
@@ -147,7 +186,7 @@ export default async function BancoTransporte({
           inscripciones={
             vacio === '1'
               ? []
-              : [INSCRIPCION_ACTIVA, INSCRIPCION_AJENA, INSCRIPCION_CANCELADA]
+              : [ADMIN_ACTIVA, ADMIN_AJENA, ADMIN_CANCELADA]
           }
         />
       </main>

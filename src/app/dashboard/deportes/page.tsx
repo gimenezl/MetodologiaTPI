@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { requerirSesionConRol } from '@/services/autorizacion'
+import { listarInscripcionesDeportivasAdministracion } from '@/services/inscripciones-administracion.service'
 import {
   consultarCompatibilidadPropia,
   listarAdministracionDeportes,
@@ -28,7 +29,8 @@ export const dynamic = 'force-dynamic'
  * Una sola ruta atiende a los dos actores de la historia: el ESTUDIANTE, que
  * se inscribe y cancela en grupos de su nivel viendo sus horarios y su
  * compatibilidad, y el DIRECTOR, que administra el catálogo de deportes y los
- * grupos, configura sus franjas e inscribe a un alumno con las mismas reglas. El
+ * grupos, configura sus franjas, inscribe a un alumno con las mismas reglas y
+ * administra las inscripciones (confirmar y cancelar en nombre del alumno). El
  * estudiante conserva su vista sin ningún control de administración. El alcance
  * de los datos lo decide PostgreSQL (RLS y
  * `listar_grupos_deportivos`); esta función solo elige qué presentación
@@ -51,25 +53,26 @@ export default async function DeportesPage() {
     return <PanelRestringido mensaje="No tenés permisos para ver la sección de deportes." />
   }
 
-  const [grupos, inscripciones, horarios] = await Promise.all([
-    listarGruposDeportivos(),
-    listarInscripcionesDeportivas(),
-    listarHorariosGrupos(),
-  ])
-
-  // Grupos, inscripciones y horarios son la sustancia de la pantalla: sin ellos
-  // no se muestra un estado vacío que parezca real. Sin horarios, además, un
-  // grupo con franjas se vería como «sin horario» y eso sería falso.
-  if (!grupos.ok) return <PanelErrorLectura mensaje={grupos.mensaje} />
-  if (!inscripciones.ok) return <PanelErrorLectura mensaje={inscripciones.mensaje} />
-  if (!horarios.ok) return <PanelErrorLectura mensaje={horarios.mensaje} />
-
   if (sesion.rol === 'DIRECTOR') {
-    const [catalogo, alumnos, administracion] = await Promise.all([
+    // Dirección lee las inscripciones por la vista administrativa: además de las
+    // activas y las canceladas trae la confirmación (quién y cuándo), que ningún
+    // otro rol puede ver (EPT-62).
+    const [grupos, inscripciones, horarios, catalogo, alumnos, administracion] = await Promise.all([
+      listarGruposDeportivos(),
+      listarInscripcionesDeportivasAdministracion(),
+      listarHorariosGrupos(),
       listarCatalogoAltaGrupo(),
       listarAlumnosInscribibles(),
       listarAdministracionDeportes(),
     ])
+
+    // Grupos, inscripciones y horarios son la sustancia de la pantalla: sin ellos
+    // no se muestra un estado vacío que parezca real. Sin horarios, además, un
+    // grupo con franjas se vería como «sin horario» y eso sería falso.
+    if (!grupos.ok) return <PanelErrorLectura mensaje={grupos.mensaje} />
+    if (!inscripciones.ok) return <PanelErrorLectura mensaje={inscripciones.mensaje} />
+    if (!horarios.ok) return <PanelErrorLectura mensaje={horarios.mensaje} />
+
     return (
       <GestionDeportes
         grupos={grupos.datos}
@@ -81,6 +84,16 @@ export default async function DeportesPage() {
       />
     )
   }
+
+  const [grupos, inscripciones, horarios] = await Promise.all([
+    listarGruposDeportivos(),
+    listarInscripcionesDeportivas(),
+    listarHorariosGrupos(),
+  ])
+
+  if (!grupos.ok) return <PanelErrorLectura mensaje={grupos.mensaje} />
+  if (!inscripciones.ok) return <PanelErrorLectura mensaje={inscripciones.mensaje} />
+  if (!horarios.ok) return <PanelErrorLectura mensaje={horarios.mensaje} />
 
   const [situacion, compatibilidad] = await Promise.all([
     obtenerSituacionAcademicaPropia(),

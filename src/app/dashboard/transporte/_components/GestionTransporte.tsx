@@ -1,58 +1,67 @@
 'use client'
 
-import { useId, useMemo, useState, useTransition, type FormEvent } from 'react'
+import { useMemo, useState, useTransition, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { Bus, CheckCircle, MapPin, PencilSimple, WarningCircle } from '@phosphor-icons/react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Dialogo } from '@/components/ui/Dialogo'
 import { Input } from '@/components/ui/Input'
+import { ListaInscripcionesAdministrativas } from '@/components/inscripciones/ListaInscripcionesAdministrativas'
+import { nombreAlumno } from '@/components/inscripciones/formato'
+import {
+  confirmacionDe,
+  textoDeBusqueda,
+  type FilaInscripcion,
+} from '@/components/inscripciones/tipos'
 import { cn } from '@/lib/utils'
+import type { InscripcionServicioAdministracion } from '@/services/inscripciones-administracion.service'
 import { actualizarRecorridoRemoto, ErrorTransporte } from '@/services/transporte.client'
-import type {
-  InscripcionTransporte,
-  Recorrido,
-} from '@/services/transporte.service'
+import type { Recorrido } from '@/services/transporte.service'
 
 interface GestionTransporteProps {
   recorridos: Recorrido[]
-  inscripciones: InscripcionTransporte[]
+  /** Inscripciones con su confirmación, tal como las lee Dirección (EPT-62). */
+  inscripciones: InscripcionServicioAdministracion[]
 }
 
-type Filtro = 'ACTIVAS' | 'CANCELADAS' | 'TODAS'
+/** Las fechas se formatean con `components/inscripciones/formato`: zona y reloj de 24 h fijos, para que servidor y navegador coincidan. */
 
-const FILTROS: { valor: Filtro; etiqueta: string }[] = [
-  { valor: 'ACTIVAS', etiqueta: 'Activas' },
-  { valor: 'CANCELADAS', etiqueta: 'Canceladas' },
-  { valor: 'TODAS', etiqueta: 'Todas' },
-]
-
-/** Mismo formato de fecha estable que el resto de servicios escolares. */
-const FORMATO_FECHA = new Intl.DateTimeFormat('es-AR', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-  timeZone: 'America/Argentina/Buenos_Aires',
-})
-
-function fecha(valor: string | null) {
-  if (!valor) return '—'
-  const momento = new Date(valor)
-  return Number.isNaN(momento.getTime()) ? '—' : FORMATO_FECHA.format(momento)
+function aFila(inscripcion: InscripcionServicioAdministracion): FilaInscripcion {
+  const alumno = nombreAlumno(inscripcion.alumno_apellido, inscripcion.alumno_nombre)
+  return {
+    id: inscripcion.id,
+    alumno,
+    legajo: inscripcion.legajo_nro,
+    detalles: {
+      recorrido: {
+        principal: inscripcion.servicio_nombre,
+        secundario: inscripcion.servicio_codigo,
+      },
+    },
+    descripcion: `${inscripcion.servicio_nombre} (${inscripcion.servicio_codigo})`,
+    estado: inscripcion.estado,
+    fechaAlta: inscripcion.fecha_inscripcion,
+    fechaBaja: inscripcion.fecha_cancelacion,
+    confirmacion: confirmacionDe(inscripcion),
+    busqueda: textoDeBusqueda(
+      inscripcion.alumno_apellido,
+      inscripcion.alumno_nombre,
+      inscripcion.legajo_nro,
+      inscripcion.servicio_nombre
+    ),
+  }
 }
 
 /**
  * Consulta administrativa de los cuatro recorridos y sus inscriptos, con
- * mantenimiento descriptivo (EPT-60).
+ * mantenimiento descriptivo (EPT-60) y administración de inscripciones (EPT-62).
  *
- * Dirección consulta los cuatro recorridos con sus alumnos inscriptos y puede
- * editar el nombre y el estado activo/inactivo de cada uno. No inscribe ni
- * cancela en nombre de un alumno: esa facultad es exclusiva de la sesión del
- * propio estudiante, tanto en el servidor como en PostgreSQL. El código y el
- * tipo de cada recorrido no se editan desde ninguna pantalla.
+ * Dirección consulta los cuatro recorridos con sus alumnos inscriptos, puede
+ * editar el nombre y el estado activo/inactivo de cada uno, confirmar una
+ * inscripción y cancelarla en nombre del alumno. No inscribe a nadie: el alta la
+ * hace el propio estudiante. El código y el tipo de cada recorrido no se editan
+ * desde ninguna pantalla.
  */
 export function GestionTransporte({ recorridos, inscripciones }: GestionTransporteProps) {
   const router = useRouter()
@@ -64,9 +73,6 @@ export function GestionTransporte({ recorridos, inscripciones }: GestionTranspor
   const [guardando, setGuardando] = useState(false)
   const [exito, setExito] = useState<string | null>(null)
   const [filtroRecorrido, setFiltroRecorrido] = useState<string>('TODOS')
-  const [filtroEstado, setFiltroEstado] = useState<Filtro>('ACTIVAS')
-  const [busqueda, setBusqueda] = useState('')
-  const idBusqueda = useId()
 
   const conteoActivas = useMemo(() => {
     const conteo = new Map<string, number>()
@@ -77,32 +83,15 @@ export function GestionTransporte({ recorridos, inscripciones }: GestionTranspor
     return conteo
   }, [inscripciones])
 
-  const visibles = useMemo(() => {
-    const termino = busqueda.trim().toLocaleLowerCase('es-AR')
-    return inscripciones
-      .filter((inscripcion) =>
-        filtroRecorrido === 'TODOS' ? true : inscripcion.servicio_id === filtroRecorrido
-      )
-      .filter((inscripcion) =>
-        filtroEstado === 'TODAS'
-          ? true
-          : filtroEstado === 'ACTIVAS'
-            ? inscripcion.estado === 'ACTIVA'
-            : inscripcion.estado === 'CANCELADA'
-      )
-      .filter((inscripcion) => {
-        if (!termino) return true
-        return [
-          inscripcion.alumno_apellido,
-          inscripcion.alumno_nombre,
-          inscripcion.legajo_nro ?? '',
-          inscripcion.servicio_nombre,
-        ]
-          .join(' ')
-          .toLocaleLowerCase('es-AR')
-          .includes(termino)
-      })
-  }, [inscripciones, filtroRecorrido, filtroEstado, busqueda])
+  const filas = useMemo(
+    () =>
+      inscripciones
+        .filter((inscripcion) =>
+          filtroRecorrido === 'TODOS' ? true : inscripcion.servicio_id === filtroRecorrido
+        )
+        .map(aFila),
+    [inscripciones, filtroRecorrido]
+  )
 
   function abrirEdicion(recorrido: Recorrido) {
     setEditando(recorrido)
@@ -261,88 +250,25 @@ export function GestionTransporte({ recorridos, inscripciones }: GestionTranspor
             ))}
           </div>
         </div>
-        <div className="flex flex-col md:flex-row md:items-end gap-3">
-          <div role="group" aria-label="Filtrar por estado" className="flex flex-wrap gap-2">
-            {FILTROS.map(({ valor, etiqueta }) => (
-              <button
-                key={valor}
-                type="button"
-                onClick={() => setFiltroEstado(valor)}
-                aria-pressed={filtroEstado === valor}
-                className={cn(
-                  'px-4 py-2 rounded-full text-sm font-semibold border transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2',
-                  filtroEstado === valor
-                    ? 'bg-brand-500 text-white border-brand-500'
-                    : 'bg-white text-neutral-700 border-neutral-300 hover:border-brand-400'
-                )}
-              >
-                {etiqueta}
-              </button>
-            ))}
-          </div>
-          <div className="md:ml-auto md:w-80">
-            <Input
-              id={idBusqueda}
-              label="Buscar"
-              placeholder="Alumno, legajo o recorrido"
-              value={busqueda}
-              onChange={(evento) => setBusqueda(evento.target.value)}
-            />
-          </div>
-        </div>
 
-        <p className="text-sm text-neutral-500" role="status">
-          {visibles.length === 1 ? '1 inscripción' : `${visibles.length} inscripciones`}
-        </p>
-
-        {visibles.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-neutral-200 py-8 px-5 text-center">
-            <p className="text-sm text-neutral-600 font-semibold">
-              No hay inscripciones para mostrar
-            </p>
-            <p className="text-neutral-500 text-sm mt-1">
-              Probá con otro filtro o con otra búsqueda.
-            </p>
-          </div>
-        ) : (
-          <ul className="space-y-2">
-            {visibles.map((inscripcion) => (
-              <li
-                key={inscripcion.id}
-                className="bg-white rounded-2xl border border-neutral-200 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-neutral-900 break-words">
-                    {inscripcion.alumno_apellido}, {inscripcion.alumno_nombre}
-                    <span className="font-normal text-neutral-500">
-                      {' '}
-                      · Legajo {inscripcion.legajo_nro ?? '—'}
-                    </span>
-                  </p>
-                  <p className="text-sm text-neutral-600 break-words">
-                    {inscripcion.servicio_nombre} ({inscripcion.servicio_codigo})
-                  </p>
-                  <p className="text-xs text-neutral-500">
-                    Alta: {fecha(inscripcion.fecha_inscripcion)}
-                    {inscripcion.fecha_cancelacion
-                      ? ` · Baja: ${fecha(inscripcion.fecha_cancelacion)}`
-                      : ''}
-                  </p>
-                </div>
-                {inscripcion.estado === 'ACTIVA' ? (
-                  <Badge variant="success" dot className="self-start md:self-auto">
-                    Activa
-                  </Badge>
-                ) : (
-                  <Badge variant="default" className="self-start md:self-auto">
-                    Cancelada
-                  </Badge>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+        <ListaInscripcionesAdministrativas
+          dominio="transporte"
+          filas={filas}
+          columnas={[{ clave: 'recorrido', titulo: 'Recorrido' }]}
+          caption="Alumnos inscriptos al transporte con legajo, recorrido, estado, confirmación, fechas y acciones"
+          filtroEstado={{
+            etiquetaGrupo: 'Filtrar por estado',
+            etiquetas: { ACTIVAS: 'Activas', CANCELADAS: 'Canceladas', TODAS: 'Todas' },
+          }}
+          busqueda={{ etiqueta: 'Buscar', placeholder: 'Alumno, legajo o recorrido' }}
+          resumen={({ visibles }) =>
+            visibles === 1 ? '1 inscripción' : `${visibles} inscripciones`
+          }
+          vacio={{
+            titulo: 'No hay inscripciones para mostrar',
+            ayuda: 'Probá con otro filtro o con otra búsqueda.',
+          }}
+        />
       </section>
 
       {editando && (

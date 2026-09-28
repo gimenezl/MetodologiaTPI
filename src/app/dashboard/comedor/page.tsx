@@ -1,12 +1,12 @@
 import type { Metadata } from 'next'
-import { Lock, WarningCircle } from '@phosphor-icons/react/dist/ssr'
-import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 import { requerirSesionConRol } from '@/services/autorizacion'
+import { listarInscripcionesServiciosAdministracion } from '@/services/inscripciones-administracion.service'
 import {
   listarInscripcionesComedor,
   obtenerEstadoAcademicoPropio,
   obtenerServicioComedor,
 } from '@/services/comedor.service'
+import { PanelErrorLectura, PanelRestringido } from './_components/Paneles'
 import { InscriptosComedor } from './_components/InscriptosComedor'
 import { MiComedor } from './_components/MiComedor'
 
@@ -23,6 +23,7 @@ export const dynamic = 'force-dynamic'
  * mismos datos con distinto alcance, y ese alcance ya lo decide RLS: el
  * estudiante recibe solo sus filas y el director todas. La rama de esta función
  * elige qué presentación renderizar; nunca decide qué datos se pueden leer.
+ * Solo el director lee, además, la confirmación de cada inscripción (EPT-62).
  *
  * El resto de los roles no tiene nada que hacer acá y recibe el panel de acceso
  * restringido. Eso es presentación, no seguridad: aunque alguien llegara igual,
@@ -48,6 +49,24 @@ export default async function ComedorPage() {
     )
   }
 
+  if (sesion.rol === 'DIRECTOR') {
+    // Dirección lee la vista administrativa: además de las inscripciones trae la
+    // confirmación (quién y cuándo), que ningún otro rol puede ver.
+    const [servicio, administracion] = await Promise.all([
+      obtenerServicioComedor(),
+      listarInscripcionesServiciosAdministracion('COMEDOR'),
+    ])
+    if (!administracion.ok) {
+      return <PanelErrorLectura mensaje={administracion.mensaje} />
+    }
+    return (
+      <InscriptosComedor
+        servicio={servicio.ok ? servicio.datos : null}
+        inscripciones={administracion.datos}
+      />
+    )
+  }
+
   const [servicio, inscripciones] = await Promise.all([
     obtenerServicioComedor(),
     listarInscripcionesComedor(),
@@ -57,15 +76,6 @@ export default async function ComedorPage() {
   // un estado vacío que parezca real.
   if (!inscripciones.ok) {
     return <PanelErrorLectura mensaje={inscripciones.mensaje} />
-  }
-
-  if (sesion.rol === 'DIRECTOR') {
-    return (
-      <InscriptosComedor
-        servicio={servicio.ok ? servicio.datos : null}
-        inscripciones={inscripciones.datos}
-      />
-    )
   }
 
   // El catálogo sí puede degradarse: la pantalla sigue siendo útil para
@@ -113,55 +123,4 @@ function impedimentoDeAlta(
     return 'El comedor no está recibiendo inscripciones en este momento.'
   }
   return undefined
-}
-
-function PanelRestringido({
-  mensaje,
-  accion,
-}: {
-  mensaje: string
-  accion?: { href: string; texto: string }
-}) {
-  return (
-    <div className="max-w-md mx-auto mt-12 text-center">
-      <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4">
-        <Lock size={32} weight="fill" className="text-red-500" />
-      </div>
-      <h1 className="text-xl font-extrabold text-neutral-900 tracking-tight">
-        Acceso restringido
-      </h1>
-      <p className="text-neutral-500 text-sm mt-2">{mensaje}</p>
-      <EnlaceBoton href={accion?.href ?? '/dashboard'} className="mt-6">
-        {accion?.texto ?? 'Volver al panel'}
-      </EnlaceBoton>
-    </div>
-  )
-}
-
-function PanelErrorLectura({ mensaje }: { mensaje: string }) {
-  return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">
-          Comedor
-        </h1>
-        <p className="text-neutral-500 text-sm mt-1">Inscripción al comedor escolar</p>
-      </div>
-      <div
-        role="alert"
-        className="bg-red-50 border border-red-200 rounded-2xl p-6 flex gap-3 items-start"
-      >
-        <WarningCircle size={22} weight="fill" className="text-red-500 shrink-0 mt-0.5" />
-        <div>
-          <p className="text-sm font-semibold text-red-800">
-            No pudimos cargar el comedor
-          </p>
-          <p className="text-sm text-red-700 mt-1">{mensaje}</p>
-          <EnlaceBoton href="/dashboard/comedor" variant="outline" className="mt-4">
-            Reintentar
-          </EnlaceBoton>
-        </div>
-      </div>
-    </div>
-  )
 }
