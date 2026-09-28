@@ -523,7 +523,6 @@ async function probarConfirmarVsCierreDeMatricula() {
 //    Una sola fila de auditoría; el índice único es la autoridad de respaldo.
 // ---------------------------------------------------------------------------
 const nombreDe = { [ID.dir1]: 'Prueba Directora Uno', [ID.dir2]: 'Prueba Directora Dos' }
-const filasConfirmables = {}
 
 async function probarDobleConfirmacion(dominio, expresion, id, actorA, actorB, esMatricula = false) {
   const r = await carrera({

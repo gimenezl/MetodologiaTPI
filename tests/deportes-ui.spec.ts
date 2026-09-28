@@ -156,13 +156,13 @@ test.describe('pantalla de la dirección (fixture)', () => {
     await expect(page.getByRole('heading', { name: 'Grupos deportivos' })).toBeVisible()
     await expect(aplicacion(page).getByText('Completo')).toBeVisible()
     await expect(page.getByText('2 inscripciones')).toBeVisible()
+    // La dirección sí administra las inscripciones (EPT-62): confirmar y cancelar en nombre del alumno.
+    await expect(page.getByRole('button', { name: /^Confirmar inscripción de/ }).first()).toBeVisible()
     await page.getByRole('button', { name: 'Todas' }).click()
     await expect(page.getByText('3 inscripciones')).toBeVisible()
     await page.getByLabel('Buscar').fill('atletismo')
     await expect(page.getByText('1 inscripción', { exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: /Inscribirme|Cancelar mi/ })).toHaveCount(0)
-    // La dirección sí administra las inscripciones (EPT-62): confirmar y cancelar en nombre del alumno.
-    await expect(page.getByRole('button', { name: /^Confirmar inscripción de/ }).first()).toBeVisible()
     expect(await sinScrollHorizontal(page)).toBe(true)
     await capturar(page, 'director-listado')
   })
