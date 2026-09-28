@@ -1016,3 +1016,75 @@ export const verificarDesafioSchema = z
       .max(CONTRASENA_VINCULO_MAXIMO, `La contraseña no puede superar los ${CONTRASENA_VINCULO_MAXIMO} caracteres`),
   })
   .strict()
+
+// ---- Transporte (EPT-60) ----
+
+/**
+ * Alta o cambio del recorrido del alumno de la sesión. El cuerpo solo
+ * transporta QUÉ recorrido se solicita. Nunca el alumno, el perfil ni el
+ * rol: esa identidad la deriva PostgreSQL desde `auth.uid()`. `.strict()`
+ * rechaza cualquier intento de agregarla.
+ */
+export const establecerRecorridoTransporteSchema = z
+  .object({
+    servicio_id: z
+      .string({ message: 'Seleccioná un recorrido de transporte' })
+      .uuid('Seleccioná un recorrido de transporte'),
+  })
+  .strict()
+
+export type EstablecerRecorridoTransporteData = z.infer<
+  typeof establecerRecorridoTransporteSchema
+>
+
+export const recorridoServicioIdSchema = z
+  .string()
+  .uuid('Identificador de recorrido inválido')
+
+/**
+ * Nombre del recorrido. Mismo contrato de texto que
+ * `app_private.texto_servicio_valido`, que es el que aplica la base: se
+ * reutiliza el mismo recorte que materias y grupos deportivos.
+ */
+const nombreRecorridoSchema = z
+  .string({ message: 'El nombre del recorrido es requerido' })
+  .transform(recortarNombreMateria)
+  .refine((nombre) => nombre.length >= 1, 'El nombre del recorrido es requerido')
+  .refine(
+    (nombre) => nombre.length <= 100,
+    'El nombre del recorrido no puede superar los 100 caracteres'
+  )
+
+/**
+ * Mantenimiento descriptivo de un recorrido por Dirección: nombre y estado
+ * activo/inactivo. El código y el tipo no se exponen: son inmutables en la
+ * base en cuanto el recorrido tiene alguna inscripción, y esta pantalla no
+ * los edita nunca.
+ */
+export const actualizarRecorridoSchema = z
+  .object({
+    nombre: nombreRecorridoSchema,
+    activo: z.boolean({ message: 'Indicá si el recorrido queda activo' }),
+  })
+  .strict()
+
+export type ActualizarRecorridoData = z.infer<typeof actualizarRecorridoSchema>
+
+/** Misma traducción estructural que `primerErrorComedor`, para transporte. */
+export function primerErrorTransporte(error: z.ZodError): {
+  mensaje: string
+  campo?: string
+} {
+  const issue = error.issues[0]
+  const campo = typeof issue?.path?.[0] === 'string' ? issue.path[0] : undefined
+
+  if (!issue) return { mensaje: 'Datos inválidos' }
+  if (issue.code === 'unrecognized_keys') {
+    return { mensaje: 'La petición contiene campos no permitidos' }
+  }
+  if (issue.code === 'invalid_type' && !campo) {
+    return { mensaje: 'Datos inválidos' }
+  }
+
+  return { mensaje: issue.message, campo }
+}

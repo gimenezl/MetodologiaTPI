@@ -8,6 +8,16 @@
  *
  * Reconciliación verificada entre este archivo y el esquema real (EPT-57):
  *
+ * - EPT-60 (transporte) agrega `paradas_recorrido`, la vista
+ *   `recorridos_transporte` (con `paradas` como `Json | null`: el generador
+ *   proyecta el `jsonb_agg` de la vista sin tipar su forma interna) y las
+ *   funciones públicas `establecer_recorrido_transporte` y
+ *   `actualizar_recorrido`. No crea tipos enumerados nuevos: reutiliza
+ *   `tipo_servicio_escolar` y `estado_inscripcion_servicio` de 013, que ya
+ *   estaban representados en este archivo antes de EPT-60. Este archivo no
+ *   reconcilia EPT-58 ni EPT-59 (brecha preexistente a EPT-60, fuera de su
+ *   alcance): sus tablas y funciones (`perfiles_historial`,
+ *   `vinculos_cuenta`, `estado_acceso`, etc.) no están representadas acá.
  * - 016 (EPT-13) agrega lectura RLS parental sobre `alumnos` y `matriculas`
  *   y las funciones públicas `matricular_hijo` y `consultar_detalle_hijo`.
  *   La primera retorna el UUID de la matrícula creada; la segunda proyecta
@@ -605,6 +615,29 @@ export type Database = {
           fecha_postulacion?: string
         }
       }
+      paradas_recorrido: {
+        Row: {
+          id: string
+          servicio_id: string
+          orden: number
+          nombre: string
+          fecha_creacion: string
+        }
+        Insert: {
+          id?: string
+          servicio_id: string
+          orden: number
+          nombre: string
+          fecha_creacion?: string
+        }
+        Update: {
+          id?: string
+          servicio_id?: string
+          orden?: number
+          nombre?: string
+          fecha_creacion?: string
+        }
+      }
       padres_hijos: {
         Row: {
           padre_id: string
@@ -665,6 +698,17 @@ export type Database = {
           id: number | null
           nombre: string | null
           activo: boolean | null
+        }
+      }
+      recorridos_transporte: {
+        Row: {
+          id: string | null
+          codigo: string | null
+          nombre: string | null
+          activo: boolean | null
+          // Agregado de paradas ordenadas ({orden, nombre}[]); el generador no
+          // tipa la forma interna de un jsonb_agg.
+          paradas: Json | null
         }
       }
       materias_cursos_detalle: {
@@ -834,6 +878,14 @@ export type Database = {
         Args: { p_alumno_id: string }
         Returns: CompatibilidadHorariaFila[]
       }
+      establecer_recorrido_transporte: {
+        Args: { p_servicio_id: string }
+        Returns: Database['public']['Tables']['inscripciones_servicios']['Row']
+      }
+      actualizar_recorrido: {
+        Args: { p_servicio_id: string; p_nombre: string; p_activo: boolean }
+        Returns: Database['public']['Tables']['servicios_escolares']['Row']
+      }
       renombrar_nivel: {
         Args: { p_nivel_id: number; p_nombre: string }
         Returns: {
@@ -882,3 +934,4 @@ export type GrupoDeportivoFila = Tables<'grupos_deportivos'>
 export type InscripcionDeportivaFila = Tables<'inscripciones_deportivas'>
 export type HorarioFila = Tables<'horarios'>
 export type FranjaGrupoDeportivoFila = Tables<'grupos_deportivos_horarios'>
+export type ParadaRecorridoFila = Tables<'paradas_recorrido'>

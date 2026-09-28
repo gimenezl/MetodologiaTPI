@@ -7,7 +7,7 @@ import {
   House, Users, CalendarCheck, Pulse, FileText,
   SignOut, List, X, Briefcase, ChatCenteredText, UserPlus, Lock,
   Newspaper, UserCircle, Chalkboard, GraduationCap, Student, IdentificationCard,
-  BookOpen, ForkKnife, SoccerBall, Clock, ChalkboardTeacher, ListChecks
+  BookOpen, ForkKnife, SoccerBall, Clock, ChalkboardTeacher, ListChecks, Bus
 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
@@ -37,6 +37,7 @@ const navItems: NavItem[] = [
   { href: '/dashboard/horarios-academicos', label: 'Horarios académicos', icon: Clock, roles: ['DIRECTOR'] },
   { href: '/dashboard/comedor', label: 'Comedor', icon: ForkKnife, roles: ['DIRECTOR', 'ESTUDIANTE'] },
   { href: '/dashboard/deportes', label: 'Deportes', icon: SoccerBall, roles: ['DIRECTOR', 'ESTUDIANTE'] },
+  { href: '/dashboard/transporte', label: 'Transporte', icon: Bus, roles: ['DIRECTOR', 'ESTUDIANTE'] },
   { href: '/dashboard/asistencias', label: 'Asistencias', icon: CalendarCheck, roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE'] },
   { href: '/dashboard/cupos', label: 'Actividades', icon: Pulse, roles: ['DIRECTOR', 'DOCENTE', 'ESTUDIANTE', 'PADRE'] },
   { href: '/dashboard/solicitudes', label: 'Solicitudes', icon: FileText, roles: ['DIRECTOR'] },
