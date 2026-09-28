@@ -338,7 +338,51 @@ bloqueado; y un contexto sin cookies con 401.
 | `node supabase/tests/correr-autenticadas.mjs horarios-auth.spec.ts horarios-academicos-auth.spec.ts profesores-auth.spec.ts` | 0 | 62 pasaron |
 
 La suite completa sin filtro con `EPT_CAPTURAS=1` no se corrió, a propósito. La
-corrida completa de toda la E2E queda para quien integra el candidato.
+corrida completa de toda la E2E sin esa variable se hizo sobre el candidato
+final y se documenta en la sección 13bis.
+
+---
+
+## 13bis. Corrida final completa sobre el candidato
+
+Hecha por quien coordinó las fases, de forma independiente de los informes de
+cada escritor, sobre `1c7b69b` (base `origin/main` = `1d33d30`), con la base
+local descartable reconstruida desde cero con `npx supabase db reset` (toda la
+cadena de migraciones, sin errores). Ninguna prueba tocó producción.
+
+| Paso | Resultado |
+|---|---|
+| `npx supabase db reset` | exit 0 |
+| SQL: `deportes_administracion_rls`, `deportes_rls`, `profesores_rls`, `horarios_rls`, `horarios_academicos_rls`, `comedor_rls`, `transporte_rls`, `niveles_rls`, `materias_rls` | exit 0 en todas; `deportes_administracion_rls` con 50 comprobaciones OK y ningún FALLO |
+| SQL: `usuarios_permisos_rls` (como `supabase_admin`) | exit 0 |
+| Concurrencia: `deportes_administracion`, `deportes`, `profesores`, `horarios`, `horarios_academicos`, `transporte`, `comedor` | exit 0 en todas; la de administración con 14 escenarios OK |
+| `npx tsc --noEmit` | exit 0 |
+| `npm run build` con credenciales locales inyectadas | exit 0; ninguna ruta `/pruebas-ui/*` en la lista; `/dashboard/deportes` y las tres rutas nuevas de `/api/deportes` presentes |
+| `node supabase/tests/correr-autenticadas.mjs` (toda la E2E con sesión real, sin filtro) | exit 0; 891 aprobadas, 2 omitidas, 15,1 min |
+| `npx playwright test` (toda la E2E sin sesión, con los bancos visuales de todas las historias) | exit 0; 531 aprobadas, 2 omitidas, 1 inestable (ver abajo), 2,2 min |
+
+Observaciones de esa corrida:
+
+- **El build sin variables de entorno falla, y es esperado.** El worktree no
+  tiene `.env.local` a propósito (la de este proyecto apunta a la base remota).
+  Sin `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `next build`
+  aborta al prerenderizar `/_not-found` con «Missing Supabase env vars». No es un
+  defecto de EPT-61: se reprodujo con las credenciales locales de
+  `npx supabase status -o env` (verificando que la API sea de loopback) y el
+  build terminó bien.
+- **Una prueba inestable, de otra historia.** `tests/alumnos-contraste.spec.ts:364`
+  (auditoría de contraste, EPT-9, proyecto `pixel-5-chromium`) falló una vez en la
+  corrida paralela completa y pasó en el reintento automático. Aislada y
+  repetida tres veces (`--repeat-each=3`, 69 pruebas) pasó siempre. No toca
+  deportes ni código de este candidato; se deja registrada sin acomodarla.
+- **La corrida completa regenera capturas de EPT-13** (cinco PNG de
+  `docs/evidence/EPT-13/`) aun sin `EPT_CAPTURAS=1`. Se restauraron con
+  `git checkout` para no ensuciar el candidato: el árbol de trabajo quedó
+  limpio y el diff contra `origin/main` solo contiene archivos de EPT-61.
+- Las suites que necesitan una base en versión anterior o producción
+  (`usuarios_vinculo_cuenta`, `usuarios_reconciliacion`, `profesores_migracion_a`,
+  `profesores_reversion_a`, `migracion_009_colisiones`, `harness_produccion`) no
+  se ejecutaron y quedan fuera de esta evidencia.
 
 ---
 
