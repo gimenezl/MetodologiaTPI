@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useMemo, useState, useTransition, type FormEvent } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, useTransition, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle, Clock, Plus, SoccerBall, UserPlus, WarningCircle } from '@phosphor-icons/react'
 import { Badge } from '@/components/ui/Badge'
@@ -10,12 +10,15 @@ import { Input, Select } from '@/components/ui/Input'
 import { cn } from '@/lib/utils'
 import { crearGrupoDeportivoRemoto, ErrorDeportes } from '@/services/deportes.client'
 import type {
+  AdministracionDeportes,
   AlumnoInscribible,
   CatalogoAltaGrupo,
   GrupoDeportivo,
   HorariosPorGrupo,
   InscripcionDeportiva,
 } from '@/services/deportes.service'
+import { AccionesGrupo } from './AccionesGrupo'
+import { CatalogoDeportes } from './CatalogoDeportes'
 import { fecha, nombreNivel, plazas } from './formato'
 import { HorariosGrupo } from './HorariosGrupo'
 import { InscripcionAdministrativa } from './InscripcionAdministrativa'
@@ -30,6 +33,11 @@ interface GestionDeportesProps {
   catalogo: CatalogoAltaGrupo | null
   /** Alumnos activos para el alta administrativa; `null` si no se pudieron cargar. */
   alumnos: AlumnoInscribible[] | null
+  /**
+   * Catálogo completo y docentes con su estado (EPT-61); `null` si no se
+   * pudieron cargar: la pantalla conserva la consulta y oculta la administración.
+   */
+  administracion: AdministracionDeportes | null
 }
 
 type Filtro = 'ACTIVAS' | 'CANCELADAS' | 'TODAS'
@@ -52,13 +60,16 @@ const FORMULARIO_VACIO = {
 }
 
 /**
- * Consulta deportiva de la dirección, alta mínima de grupos (EPT-11),
- * configuración de franjas e inscripción administrativa (EPT-12).
+ * Administración deportiva de la dirección: consulta y alta mínima de grupos
+ * (EPT-11), franjas e inscripción administrativa (EPT-12) y administración del
+ * catálogo y de los grupos (EPT-61).
  *
  * La dirección consulta todos los grupos con su ocupación y sus horarios y
- * todas las inscripciones; puede crear un grupo, asignarle o dar de baja
- * franjas e inscribir a un alumno. La inscripción administrativa pasa por las
- * mismas reglas de la base que el alta del alumno. No cancela inscripciones
+ * todas las inscripciones; administra el catálogo de deportes (alta, renombrado,
+ * inactivar y reactivar), crea y edita grupos (nombre, cupo y profesor; el
+ * deporte y el nivel no cambian), los inactiva y reactiva, asigna o da de baja
+ * franjas e inscribe a un alumno. Las reglas las aplica PostgreSQL con las filas
+ * bloqueadas: lo que la pantalla anticipa es una ayuda. No cancela inscripciones
  * ajenas ni borra nada: eso es EPT-62 y no existe por ninguna vía.
  */
 export function GestionDeportes({
@@ -67,6 +78,7 @@ export function GestionDeportes({
   horarios,
   catalogo,
   alumnos,
+  administracion,
 }: GestionDeportesProps) {
   const router = useRouter()
   const [refrescando, iniciarRefresco] = useTransition()
@@ -81,6 +93,7 @@ export function GestionDeportes({
   const [filtro, setFiltro] = useState<Filtro>('ACTIVAS')
   const [busqueda, setBusqueda] = useState('')
   const idBusqueda = useId()
+  const regionExito = useRef<HTMLDivElement>(null)
 
   const sinProfesores = catalogo !== null && catalogo.profesores.length === 0
   const grupoSeleccionado = grupos.find((grupo) => grupo.grupo_id === grupoHorarios)
@@ -109,6 +122,23 @@ export function GestionDeportes({
           .includes(termino)
       })
   }, [inscripciones, filtro, busqueda])
+
+  // La confirmación aparece arriba de la página: si la operación se hizo sobre
+  // una tarjeta lejana, se la acerca a la vista sin mover el foco.
+  useEffect(() => {
+    if (exito) regionExito.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [exito])
+
+  /** Operación de administración confirmada: informa y vuelve a leer el estado real. */
+  function alCambiar(mensaje: string) {
+    setExito(mensaje)
+    iniciarRefresco(() => router.refresh())
+  }
+
+  /** Rechazo o resultado incierto: solo se vuelve a leer, para no mostrar datos viejos. */
+  function alReleer() {
+    iniciarRefresco(() => router.refresh())
+  }
 
   function abrirDialogo() {
     setFormulario(FORMULARIO_VACIO)
@@ -186,8 +216,8 @@ export function GestionDeportes({
           </p>
           <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">Deportes</h1>
           <p className="text-neutral-500 text-sm mt-1 max-w-[64ch]">
-            Consultá los grupos deportivos, su ocupación, sus horarios y las inscripciones de
-            los alumnos.
+            Administrá el catálogo de deportes y sus grupos, y consultá la ocupación, los horarios
+            y las inscripciones de los alumnos.
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 self-start sm:self-auto">
@@ -228,8 +258,18 @@ export function GestionDeportes({
             consultar el resto de la pantalla y reintentar más tarde.
           </div>
         )}
+        {administracion === null && (
+          <div
+            role="alert"
+            className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-900"
+          >
+            No pudimos cargar los datos para administrar el catálogo y los grupos. Podés consultar
+            el listado y reintentar más tarde.
+          </div>
+        )}
         {exito && (
           <div
+            ref={regionExito}
             role="status"
             className="bg-green-50 border border-green-200 rounded-2xl p-4 flex gap-3 items-start"
           >
@@ -238,6 +278,16 @@ export function GestionDeportes({
           </div>
         )}
       </div>
+
+      {administracion && (
+        <CatalogoDeportes
+          deportes={administracion.deportes}
+          grupos={grupos}
+          onCambio={alCambiar}
+          onReleer={alReleer}
+          actualizando={refrescando}
+        />
+      )}
 
       <section aria-labelledby="grupos-titulo" aria-busy={refrescando} className="space-y-3">
         <h2 id="grupos-titulo" className="text-lg font-bold text-neutral-900">
@@ -268,6 +318,7 @@ export function GestionDeportes({
                     <Badge variant="default">Inactivo</Badge>
                   )}
                   {grupo.activo && grupo.disponibles <= 0 && <Badge variant="danger">Completo</Badge>}
+                  {!grupo.deporte_activo && <Badge variant="warning">Deporte inactivo</Badge>}
                 </div>
                 <p className="text-sm text-neutral-700 break-words">{grupo.grupo_nombre}</p>
                 <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
@@ -285,16 +336,24 @@ export function GestionDeportes({
                   <dd className="text-neutral-900">{grupo.disponibles}</dd>
                 </dl>
                 <ListaFranjas franjas={horarios[grupo.grupo_id] ?? []} />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="self-start mt-1"
-                  onClick={() => setGrupoHorarios(grupo.grupo_id)}
-                  aria-label={`Gestionar los horarios de ${grupo.deporte_nombre}, ${grupo.grupo_nombre}`}
-                >
-                  <Clock size={16} weight="bold" aria-hidden="true" />
-                  Horarios
-                </Button>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="min-h-11 sm:min-h-8"
+                    onClick={() => setGrupoHorarios(grupo.grupo_id)}
+                    aria-label={`Gestionar los horarios de ${grupo.deporte_nombre}, ${grupo.grupo_nombre}`}
+                  >
+                    <Clock size={16} weight="bold" aria-hidden="true" />
+                    Horarios
+                  </Button>
+                  <AccionesGrupo
+                    grupo={grupo}
+                    administracion={administracion}
+                    onCambio={alCambiar}
+                    onReleer={alReleer}
+                  />
+                </div>
               </li>
             ))}
           </ul>

@@ -8,6 +8,15 @@
  *
  * Reconciliación verificada entre este archivo y el esquema real (EPT-57):
  *
+ * - EPT-61 (administración de deportes y grupos) agrega las funciones públicas
+ *   `crear_deporte`, `renombrar_deporte`, `cambiar_estado_deporte`,
+ *   `editar_grupo_deportivo` y `cambiar_estado_grupo_deportivo`. No crea
+ *   tablas, columnas ni tipos enumerados: devuelven la fila de `deportes` o de
+ *   `grupos_deportivos`. Las operaciones del catálogo no reciben profesor y la
+ *   edición de grupos no recibe deporte ni nivel (son inmutables). Todos
+ *   los argumentos son obligatorios (el generador no declara nulabilidad en
+ *   argumentos): repetir el estado o los datos actuales devuelve la fila sin
+ *   cambios.
  * - EPT-60 (transporte) agrega `paradas_recorrido`, la vista
  *   `recorridos_transporte` (con `paradas` como `Json | null`: el generador
  *   proyecta el `jsonb_agg` de la vista sin tipar su forma interna) y las
@@ -843,6 +852,31 @@ export type Database = {
           p_cupo: number
           p_profesor_id: string
         }
+        Returns: Database['public']['Tables']['grupos_deportivos']['Row']
+      }
+      crear_deporte: {
+        Args: { p_nombre: string }
+        Returns: Database['public']['Tables']['deportes']['Row']
+      }
+      renombrar_deporte: {
+        Args: { p_deporte_id: string; p_nombre: string }
+        Returns: Database['public']['Tables']['deportes']['Row']
+      }
+      cambiar_estado_deporte: {
+        Args: { p_deporte_id: string; p_activo: boolean }
+        Returns: Database['public']['Tables']['deportes']['Row']
+      }
+      editar_grupo_deportivo: {
+        Args: {
+          p_grupo_id: string
+          p_nombre: string
+          p_cupo: number
+          p_profesor_id: string
+        }
+        Returns: Database['public']['Tables']['grupos_deportivos']['Row']
+      }
+      cambiar_estado_grupo_deportivo: {
+        Args: { p_grupo_id: string; p_activo: boolean }
         Returns: Database['public']['Tables']['grupos_deportivos']['Row']
       }
       inscribir_en_grupo_deportivo: {

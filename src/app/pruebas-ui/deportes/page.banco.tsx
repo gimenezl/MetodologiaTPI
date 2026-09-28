@@ -4,6 +4,7 @@ import { GestionDeportes } from '@/app/dashboard/deportes/_components/GestionDep
 import { MisDeportes } from '@/app/dashboard/deportes/_components/MisDeportes'
 import { PanelErrorLectura } from '@/app/dashboard/deportes/_components/Paneles'
 import type {
+  AdministracionDeportes,
   AlumnoInscribible,
   CompatibilidadPorGrupo,
   GrupoDeportivo,
@@ -188,6 +189,94 @@ const ALUMNOS: AlumnoInscribible[] = [
   },
 ]
 
+/**
+ * Administración (EPT-61). El banco de siempre conserva sus cuatro grupos activos
+ * y le suma el catálogo: dos deportes sin grupos, uno de ellos inactivo.
+ */
+const PROFESOR_ACTIVO = 'cccccccc-1111-4111-8111-111111111111'
+const PROFESOR_INACTIVO = 'cccccccc-2222-4222-8222-222222222222'
+
+const DEPORTE = {
+  futbol: GRUPOS[0].deporte_id,
+  natacion: GRUPOS[2].deporte_id,
+  atletismo: GRUPOS[3].deporte_id,
+  voley: 'e0000000-0000-4000-8000-000000000105',
+  basquet: 'e0000000-0000-4000-8000-000000000106',
+  hockey: 'e0000000-0000-4000-8000-000000000107',
+}
+
+const ADMINISTRACION_BASE: AdministracionDeportes = {
+  deportes: [
+    { id: DEPORTE.atletismo, nombre: 'Atletismo', activo: true },
+    { id: DEPORTE.futbol, nombre: 'Fútbol', activo: true },
+    { id: DEPORTE.hockey, nombre: 'Hockey', activo: false },
+    { id: DEPORTE.natacion, nombre: 'Natación', activo: true },
+    { id: DEPORTE.voley, nombre: 'Vóley', activo: true },
+  ],
+  docentes: [
+    { id: PROFESOR_ACTIVO, nombre: 'Darío', apellido: 'Docente', activo: true },
+    { id: PROFESOR_INACTIVO, nombre: 'Pablo', apellido: 'Inactivo', activo: false },
+    { id: 'cccccccc-3333-4333-8333-333333333333', nombre: 'Ana', apellido: 'Profesora', activo: true },
+  ],
+  nivelesActivos: [1, 2],
+}
+
+/**
+ * Situaciones de administración difíciles de inducir en la base: un grupo
+ * inactivo que se puede reactivar, otro que no porque su deporte está inactivo y
+ * otro que no porque su profesor está inactivo, y un deporte inactivo con grupos.
+ */
+const GRUPOS_ADMINISTRACION: GrupoDeportivo[] = [
+  ...GRUPOS.map((grupo) => ({ ...grupo, profesor_id: PROFESOR_ACTIVO })),
+  {
+    ...GRUPO_BASE,
+    grupo_id: '66666666-6666-4666-8666-666666666666',
+    grupo_nombre: 'Primario turno mañana',
+    deporte_id: DEPORTE.voley,
+    deporte_nombre: 'Vóley',
+    profesor_id: PROFESOR_ACTIVO,
+    cupo: 12,
+    ocupados: 0,
+    disponibles: 12,
+    activo: false,
+  },
+  {
+    ...GRUPO_BASE,
+    grupo_id: '77777777-7777-4777-8777-777777777777',
+    grupo_nombre: 'Primario noche',
+    deporte_id: DEPORTE.natacion,
+    deporte_nombre: 'Natación',
+    profesor_id: PROFESOR_INACTIVO,
+    profesor_nombre: 'Pablo',
+    profesor_apellido: 'Inactivo',
+    cupo: 8,
+    ocupados: 0,
+    disponibles: 8,
+    activo: false,
+  },
+  {
+    ...GRUPO_BASE,
+    grupo_id: '88888888-8888-4888-8888-888888888888',
+    grupo_nombre: 'Primario invierno',
+    deporte_id: DEPORTE.basquet,
+    deporte_nombre: 'Básquet',
+    deporte_activo: false,
+    profesor_id: PROFESOR_ACTIVO,
+    cupo: 10,
+    ocupados: 0,
+    disponibles: 10,
+    activo: false,
+  },
+]
+
+const ADMINISTRACION_AMPLIA: AdministracionDeportes = {
+  ...ADMINISTRACION_BASE,
+  deportes: [
+    ...ADMINISTRACION_BASE.deportes,
+    { id: DEPORTE.basquet, nombre: 'Básquet', activo: false },
+  ].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es-AR')),
+}
+
 const MENSAJE_INACTIVO =
   'Tu legajo académico no está activo, así que no podés inscribirte a deportes. Comunicate con la administración del centro educativo.'
 
@@ -206,6 +295,8 @@ export default async function BancoDeportes({
       | 'error-lectura'
       | 'horarios'
       | 'sin-compatibilidad'
+      | 'administracion'
+      | 'sin-administracion'
   }>
 }) {
   if (process.env.NODE_ENV === 'production' || process.env.EPT_UI_HARNESS !== '1') {
@@ -223,11 +314,27 @@ export default async function BancoDeportes({
     }
 
     if (vista === 'director') {
+      const ampliada = estado === 'administracion'
       return (
         <GestionDeportes
-          grupos={estado === 'vacio' ? [] : GRUPOS.map((grupo) => ({ ...grupo, profesor_id: 'cccccccc-1111-4111-8111-111111111111' }))}
+          grupos={
+            estado === 'vacio'
+              ? []
+              : ampliada
+                ? GRUPOS_ADMINISTRACION
+                : GRUPOS.map((grupo) => ({ ...grupo, profesor_id: PROFESOR_ACTIVO }))
+          }
           inscripciones={estado === 'vacio' ? [] : [INSCRIPCION, INSCRIPCION_ATLETISMO, INSCRIPCION_CANCELADA]}
           horarios={estado === 'vacio' ? {} : HORARIOS}
+          administracion={
+            estado === 'sin-administracion'
+              ? null
+              : estado === 'vacio'
+                ? { ...ADMINISTRACION_BASE, deportes: [] }
+                : ampliada
+                  ? ADMINISTRACION_AMPLIA
+                  : ADMINISTRACION_BASE
+          }
           alumnos={ALUMNOS}
           catalogo={{
             deportes: [
@@ -238,7 +345,7 @@ export default async function BancoDeportes({
               { id: 1, nombre: 'INICIAL' },
               { id: 2, nombre: 'PRIMARIO' },
             ],
-            profesores: [{ id: 'cccccccc-1111-4111-8111-111111111111', nombre: 'Darío', apellido: 'Docente' }],
+            profesores: [{ id: PROFESOR_ACTIVO, nombre: 'Darío', apellido: 'Docente' }],
           }}
         />
       )

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { requerirSesionConRol } from '@/services/autorizacion'
 import {
   consultarCompatibilidadPropia,
+  listarAdministracionDeportes,
   listarAlumnosInscribibles,
   listarCatalogoAltaGrupo,
   listarGruposDeportivos,
@@ -22,12 +23,14 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic'
 
 /**
- * Deportes (EPT-11, EPT-12).
+ * Deportes (EPT-11, EPT-12, EPT-61).
  *
  * Una sola ruta atiende a los dos actores de la historia: el ESTUDIANTE, que
  * se inscribe y cancela en grupos de su nivel viendo sus horarios y su
- * compatibilidad, y el DIRECTOR, que consulta y crea grupos, configura sus
- * franjas e inscribe a un alumno con las mismas reglas. El alcance de los datos lo decide PostgreSQL (RLS y
+ * compatibilidad, y el DIRECTOR, que administra el catálogo de deportes y los
+ * grupos, configura sus franjas e inscribe a un alumno con las mismas reglas. El
+ * estudiante conserva su vista sin ningún control de administración. El alcance
+ * de los datos lo decide PostgreSQL (RLS y
  * `listar_grupos_deportivos`); esta función solo elige qué presentación
  * renderizar. El resto de los roles recibe el panel de acceso restringido,
  * que es presentación, no seguridad: la API y la base también los rechazan.
@@ -62,9 +65,10 @@ export default async function DeportesPage() {
   if (!horarios.ok) return <PanelErrorLectura mensaje={horarios.mensaje} />
 
   if (sesion.rol === 'DIRECTOR') {
-    const [catalogo, alumnos] = await Promise.all([
+    const [catalogo, alumnos, administracion] = await Promise.all([
       listarCatalogoAltaGrupo(),
       listarAlumnosInscribibles(),
+      listarAdministracionDeportes(),
     ])
     return (
       <GestionDeportes
@@ -73,6 +77,7 @@ export default async function DeportesPage() {
         horarios={horarios.datos}
         catalogo={catalogo.ok ? catalogo.datos : null}
         alumnos={alumnos.ok ? alumnos.datos : null}
+        administracion={administracion.ok ? administracion.datos : null}
       />
     )
   }
