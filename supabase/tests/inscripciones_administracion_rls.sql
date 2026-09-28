@@ -1695,6 +1695,7 @@ BEGIN
         pg_temp.conf_id('MATRICULA', pg_temp.fxu('mA')))), 'P6204', 'I3 DELETE');
     PERFORM pg_temp.esperar(pg_temp.propietario('DELETE FROM public.confirmaciones_inscripcion'), 'P6204', 'I3 DELETE masivo');
     PERFORM pg_temp.esperar(pg_temp.propietario('UPDATE public.confirmaciones_inscripcion SET confirmada_en = now()'), 'P6204', 'I3 UPDATE masivo');
+    PERFORM pg_temp.esperar(pg_temp.propietario('TRUNCATE public.confirmaciones_inscripcion'), 'P6204', 'I3 TRUNCATE');
     IF pg_temp.conf_fila('MATRICULA', pg_temp.fxu('mA')) <> v_fila OR pg_temp.total_conf() <> v_n THEN
         RAISE EXCEPTION 'FALLO I3: una confirmación cambió o desapareció';
     END IF;

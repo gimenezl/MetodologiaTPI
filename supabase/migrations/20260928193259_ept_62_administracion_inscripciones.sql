@@ -323,6 +323,30 @@ CREATE TRIGGER proteger_confirmacion_inscripcion_antes_de_escribir
     FOR EACH ROW
     EXECUTE FUNCTION app_private.proteger_confirmacion_inscripcion();
 
+-- `TRUNCATE` no dispara triggers de fila: ni siquiera el propietario vacía el
+-- registro por accidente. Quien deba limpiar un entorno descartable desactiva
+-- explícitamente estos triggers en su propia transacción.
+CREATE OR REPLACE FUNCTION app_private.impedir_vaciar_confirmaciones()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+    RAISE EXCEPTION USING
+        ERRCODE = 'P6204',
+        MESSAGE = 'El registro de confirmaciones es histórico y no puede vaciarse.';
+END;
+$$;
+
+REVOKE ALL ON FUNCTION app_private.impedir_vaciar_confirmaciones()
+    FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE TRIGGER impedir_vaciar_confirmaciones_antes_de_truncar
+    BEFORE TRUNCATE ON public.confirmaciones_inscripcion
+    FOR EACH STATEMENT
+    EXECUTE FUNCTION app_private.impedir_vaciar_confirmaciones();
+
 
 -- ================================================================
 -- 4. OPERACIONES PRIVILEGIADAS
