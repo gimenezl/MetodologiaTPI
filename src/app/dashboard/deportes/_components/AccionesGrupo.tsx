@@ -390,7 +390,7 @@ function DialogoEstadoGrupo({
     >
       <div className="space-y-4">
         <AlertaError aviso={aviso} />
-        {motivo && (
+        {motivo && aviso?.texto !== motivo && (
           <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl p-3">
             {motivo}
           </p>
