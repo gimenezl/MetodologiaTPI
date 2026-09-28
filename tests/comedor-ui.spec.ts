@@ -297,13 +297,32 @@ test.describe('consulta administrativa de inscriptos', () => {
     await capturar(page, 'consulta-administrativa')
   })
 
-  test('no ofrece ningún control de escritura ni de eliminación', async ({ page }) => {
+  test('ofrece confirmar y cancelar en nombre del alumno, pero nunca eliminar ni inscribir', async ({
+    page,
+  }) => {
     await page.goto('/pruebas-ui/comedor?vista=director')
 
+    // Antes de EPT-62 la consulta era de solo lectura; ya no lo es, y el texto no debe decirlo.
+    await expect(page.getByText('solo lectura')).toHaveCount(0)
     await expect(
-      page.getByRole('button', { name: /inscribir|cancelar|eliminar|borrar/i })
+      page.getByText('cancelarla en nombre del alumno', { exact: false })
+    ).toBeVisible()
+
+    // Una inscripción activa sin confirmar ofrece las dos acciones; la confirmada, solo cancelar.
+    await expect(
+      page.getByRole('button', { name: 'Confirmar inscripción de Estudiante, Beto' })
+    ).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: 'Cancelar inscripción de Estudiante, Beto' })
+    ).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: 'Confirmar inscripción de Ajena, Celeste' })
     ).toHaveCount(0)
-    await expect(page.getByText('Esta consulta es de solo lectura')).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: 'Cancelar inscripción de Ajena, Celeste' })
+    ).toBeVisible()
+
+    await expect(page.getByRole('button', { name: /inscribir|eliminar|borrar/i })).toHaveCount(0)
   })
 
   test('filtra por estado y busca por apellido o legajo', async ({ page }) => {
