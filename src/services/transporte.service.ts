@@ -79,6 +79,13 @@ const SQLSTATE_YA_TIENE_RECORRIDO_ACTIVO = 'P5961'
 const MENSAJE_GENERICO =
   'No pudimos completar la operación. Volvé a intentarlo en unos minutos.'
 
+/**
+ * Una inscripción ajena, inexistente o de otro tipo de servicio (comedor)
+ * responden todas lo mismo: no se delata cuál de las tres es.
+ */
+const MENSAJE_INSCRIPCION_TRANSPORTE_INEXISTENTE =
+  'No encontramos una inscripción de transporte activa tuya para cancelar.'
+
 const COLUMNAS_RECORRIDO = 'id, codigo, nombre, activo, paradas'
 
 const COLUMNAS_INSCRIPCION =
@@ -146,10 +153,7 @@ function traducirErrorTransporte(
     case SQLSTATE_INSCRIPCION_INEXISTENTE:
       // Una inscripción ajena y una inexistente devuelven exactamente lo mismo:
       // no se delata que la de otra persona exista.
-      return {
-        estado: 404,
-        mensaje: 'No encontramos una inscripción de transporte activa tuya para cancelar.',
-      }
+      return { estado: 404, mensaje: MENSAJE_INSCRIPCION_TRANSPORTE_INEXISTENTE }
     case SQLSTATE_INSCRIPCION_YA_CANCELADA:
       return { estado: 409, mensaje: 'Esa inscripción ya estaba cancelada.' }
     case SQLSTATE_IDENTIDAD_PROTEGIDA:
@@ -298,13 +302,39 @@ export async function establecerRecorridoTransporte(
 /**
  * Baja lógica de la inscripción de transporte propia, sin reemplazo. No
  * elimina ninguna fila: registra la cancelación y conserva el ciclo en el
- * historial. Reutiliza la misma RPC genérica que el comedor: no distingue
- * tipo de servicio, solo exige que la inscripción sea propia y esté activa.
+ * historial.
+ *
+ * Reutiliza la RPC genérica `cancelar_inscripcion_servicio` de 013, que no
+ * distingue tipo de servicio: solo exige que la inscripción sea propia y
+ * esté activa. Por eso, ANTES de invocarla, esta función verifica que el
+ * identificador corresponda a una inscripción de tipo TRANSPORTE — si no,
+ * responde igual que si no existiera, sin llegar a tocar la RPC genérica.
+ * Sin este paso, esta ruta podría cancelar por acá una inscripción de
+ * comedor propia, porque la RPC compartida no sabe distinguir dominios. La
+ * lectura usa la vista `inscripciones_servicios_detalle`, que ya es
+ * `security_invoker`: RLS la limita a las filas propias del alumno, así que
+ * la comprobación de tipo no amplía ni reduce a quién pertenece la fila.
  */
 export async function cancelarInscripcionTransporte(
   inscripcionId: string
 ): Promise<ResultadoTransporte<{ id: string }>> {
   const supabase = await createServerSupabaseClient()
+
+  const { data: propia, error: errorLectura } = await supabase
+    .from('inscripciones_servicios_detalle')
+    .select('id')
+    .eq('id', inscripcionId)
+    .eq('servicio_tipo', 'TRANSPORTE')
+    .eq('estado', 'ACTIVA')
+    .maybeSingle()
+
+  if (errorLectura) {
+    return { ok: false, ...traducirErrorTransporte(errorLectura, 'cancelarInscripcion') }
+  }
+  if (!propia) {
+    return { ok: false, estado: 404, mensaje: MENSAJE_INSCRIPCION_TRANSPORTE_INEXISTENTE }
+  }
+
   const { data, error } = await supabase.rpc('cancelar_inscripcion_servicio', {
     p_inscripcion_id: inscripcionId,
   })

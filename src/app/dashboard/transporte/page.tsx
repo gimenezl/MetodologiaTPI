@@ -60,13 +60,23 @@ export default async function TransportePage() {
     return <PanelErrorLectura mensaje={inscripciones.mensaje} />
   }
 
-  const listaRecorridos = recorridos.ok ? recorridos.datos : []
-
   if (sesion.rol === 'DIRECTOR') {
+    // El catálogo es la sustancia de esta vista: si no se pudo leer, un
+    // catálogo vacío se vería igual que «no hay recorridos», que no es lo que
+    // pasó. Se distingue con el mismo panel de error que ya usa la falta de
+    // inscripciones, en vez de degradar a una lista vacía silenciosa.
+    if (!recorridos.ok) {
+      return <PanelErrorLectura mensaje={recorridos.mensaje} />
+    }
     return (
-      <GestionTransporte recorridos={listaRecorridos} inscripciones={inscripciones.datos} />
+      <GestionTransporte recorridos={recorridos.datos} inscripciones={inscripciones.datos} />
     )
   }
+
+  // Para el alumno el catálogo sí puede degradarse: la pantalla sigue siendo
+  // útil para consultar el estado propio y el botón de alta queda explicado
+  // y deshabilitado (mismo criterio que el comedor).
+  const listaRecorridos = recorridos.ok ? recorridos.datos : []
 
   const academico = await obtenerEstadoAcademicoPropio()
   const situacion = academico.ok ? academico.datos : null

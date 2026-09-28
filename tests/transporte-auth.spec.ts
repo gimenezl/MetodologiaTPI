@@ -7,6 +7,7 @@ import {
   type Browser,
   type Page,
 } from '@playwright/test'
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -144,6 +145,49 @@ function cancelar(sesion: string, inscripcionId: string) {
   })
 }
 
+function actualizarRecorridoComoDirector(
+  servicioId: string,
+  nombre: string,
+  activo: boolean
+) {
+  return pedirConSesion(SESION_DIRECTORA, `/api/transporte/recorridos/${servicioId}`, {
+    method: 'PATCH',
+    data: { nombre, activo },
+  })
+}
+
+/**
+ * Retira un privilegio de `authenticated` mientras dura `cuerpo` y lo
+ * devuelve, incluso si `cuerpo` lanza.
+ *
+ * Mismo patrón que `alumnos-auth.spec.ts`: sirve para llegar de verdad al
+ * estado que el servidor muestra cuando no puede leer, provocado con un
+ * privilegio real retirado y no simulado con una respuesta de red falsa
+ * (esta pantalla lee desde un Server Component, así que `page.route()` no
+ * intercepta nada: la petición nunca pasa por el navegador).
+ */
+function conPrivilegioRetirado(
+  retirar: string,
+  restituir: string,
+  cuerpo: () => Promise<void>
+) {
+  const contenedor =
+    process.env.EPT_SUPABASE_DB_CONTAINER ?? 'supabase_db_educar-para-transformar'
+  const psql = (sentencia: string) =>
+    execFileSync(
+      'docker',
+      [
+        'exec', '-i', contenedor, 'psql', '-X', '-q', '-U', 'postgres', '-d', 'postgres',
+        '-v', 'ON_ERROR_STOP=1',
+      ],
+      { input: sentencia, stdio: ['pipe', 'pipe', 'pipe'] }
+    )
+  psql(retirar)
+  return cuerpo().finally(() => {
+    psql(restituir)
+  })
+}
+
 /**
  * Deja a un estudiante sin recorrido de transporte activo, usando
  * exclusivamente la aplicación real.
@@ -174,6 +218,37 @@ async function dejarSinRecorridoActivo(browser: Browser, archivoSesion: string) 
     await expect(
       page.getByText('Todavía no tenés un recorrido de transporte activo.')
     ).toBeVisible({ timeout: 20_000 })
+  } finally {
+    await contexto.close()
+  }
+}
+
+/**
+ * Deja a un estudiante sin inscripción de comedor activa, usando
+ * exclusivamente la aplicación real. Sirve solo para preparar el fixture de
+ * la prueba de frontera de dominio; el resto de las pruebas de este archivo
+ * no toca el comedor.
+ */
+async function dejarSinInscripcionComedorActiva(browser: Browser, archivoSesion: string) {
+  const contexto = await browser.newContext({
+    baseURL: BASE_URL,
+    storageState: archivoSesion,
+  })
+  try {
+    const page = await contexto.newPage()
+    await page.goto('/dashboard/comedor')
+
+    await expect(
+      page.getByRole('button', { name: /Inscribirme al comedor|Cancelar mi inscripción/ })
+    ).toBeVisible({ timeout: 20_000 })
+
+    const cancelarBoton = page.getByRole('button', { name: 'Cancelar mi inscripción' })
+    if ((await cancelarBoton.count()) === 0) return
+
+    await cancelarBoton.click()
+    const dialogo = page.getByRole('dialog')
+    await dialogo.getByRole('button', { name: 'Sí, cancelar mi inscripción' }).click()
+    await expect(page.getByText('Sin inscripción activa')).toBeVisible({ timeout: 20_000 })
   } finally {
     await contexto.close()
   }
@@ -231,6 +306,38 @@ test.describe('ESTUDIANTE autenticado — transporte', () => {
     const { inscripcion } = await repetido.json()
     // Misma fila, no una nueva: el «cambio» al recorrido vigente no crea nada.
     expect(inscripcion.id).toBe(id)
+  })
+
+  test('repetir el recorrido vigente sigue siendo idempotente aunque Dirección lo inactive', async ({
+    browser,
+  }) => {
+    await dejarSinRecorridoActivo(browser, SESION_ESTUDIANTE)
+    const id = await establecerYObtenerId(SESION_ESTUDIANTE, TR_NORTE)
+
+    try {
+      const inactivacion = await actualizarRecorridoComoDirector(
+        TR_NORTE,
+        'Recorrido Norte (ficticio)',
+        false
+      )
+      expect(inactivacion.status()).toBe(200)
+
+      // El alumno "vuelve a elegir" el mismo recorrido que ya tenía: como no
+      // pide una plaza nueva, tiene que seguir siendo un no-op, no un P5551.
+      // (Un destino inactivo DISTINTO sí se rechaza: ver transporte_rls.sql
+      // #6bis, que cubre exactamente ese caso contrario.)
+      const repetido = await establecer(SESION_ESTUDIANTE, TR_NORTE)
+      expect(repetido.status()).toBe(201)
+      const { inscripcion } = await repetido.json()
+      expect(inscripcion.id).toBe(id)
+    } finally {
+      const restitucion = await actualizarRecorridoComoDirector(
+        TR_NORTE,
+        'Recorrido Norte (ficticio)',
+        true
+      )
+      expect(restitucion.status()).toBe(200)
+    }
   })
 
   test('cambia de recorrido de forma atómica: cancela el anterior y activa el nuevo', async ({
@@ -322,6 +429,50 @@ test.describe('ESTUDIANTE autenticado — transporte', () => {
     expect(JSON.parse(cuerpo).error).toBe(
       'No encontramos una inscripción de transporte activa tuya para cancelar.'
     )
+  })
+
+  test('la API de transporte no cancela una inscripción propia de comedor', async ({
+    browser,
+  }) => {
+    await dejarSinRecorridoActivo(browser, SESION_ESTUDIANTE)
+    await dejarSinInscripcionComedorActiva(browser, SESION_ESTUDIANTE)
+
+    // Inscripción propia de COMEDOR, no de transporte.
+    const comedor = await pedirConSesion(SESION_ESTUDIANTE, '/api/comedor/inscripciones', {
+      method: 'POST',
+      data: { servicio_id: SERVICIO_COMEDOR },
+    })
+    expect(comedor.status()).toBe(201)
+    const comedorId = (await comedor.json()).inscripcion.id as string
+
+    // El identificador es real y propio, pero de otro dominio: la ruta de
+    // transporte tiene que tratarlo como si no existiera, nunca cancelarlo.
+    const intento = await cancelar(SESION_ESTUDIANTE, comedorId)
+    expect(intento.status()).toBe(404)
+    const cuerpo = await intento.text()
+    esperarSinFiltraciones(cuerpo)
+    expect(JSON.parse(cuerpo).error).toBe(
+      'No encontramos una inscripción de transporte activa tuya para cancelar.'
+    )
+
+    // Y la inscripción de comedor sigue activa: no se tocó nada. Un segundo
+    // alta la rechaza por duplicado, que es la prueba de que sigue viva.
+    const reintentoAlta = await pedirConSesion(SESION_ESTUDIANTE, '/api/comedor/inscripciones', {
+      method: 'POST',
+      data: { servicio_id: SERVICIO_COMEDOR },
+    })
+    expect(reintentoAlta.status()).toBe(409)
+    const cuerpoReintento = await reintentoAlta.text()
+    expect(JSON.parse(cuerpoReintento).error).toBe('Ya tenés una inscripción activa al comedor.')
+
+    // Limpieza: se cancela por la vía correcta para no dejar estado a la
+    // siguiente corrida.
+    const bajaLegitima = await pedirConSesion(
+      SESION_ESTUDIANTE,
+      `/api/comedor/inscripciones/${comedorId}`,
+      { method: 'PATCH', data: { accion: 'cancelar' } }
+    )
+    expect(bajaLegitima.status()).toBe(200)
   })
 
   test('el cuerpo no admite un alumno, un perfil ni un legajo elegidos por el navegador', async () => {
@@ -467,6 +618,35 @@ test.describe('DIRECTOR autenticado — transporte', () => {
     await dialogo.getByLabel('Nombre del recorrido').fill('Recorrido Norte (ficticio)')
     await dialogo.getByRole('button', { name: 'Guardar cambios' }).click()
     await expect(page.getByText('Actualizaste TR-NORTE.')).toBeVisible({ timeout: 20_000 })
+  })
+
+  test('un fallo al leer el catálogo muestra un error real, no un catálogo vacío', async ({
+    page,
+  }) => {
+    await conPrivilegioRetirado(
+      'REVOKE SELECT ON public.recorridos_transporte FROM authenticated;',
+      'GRANT SELECT ON public.recorridos_transporte TO authenticated;',
+      async () => {
+        await page.goto('/dashboard/transporte')
+
+        // No es "no hay recorridos": es que no se pudieron leer. La pantalla
+        // no puede confundir las dos cosas.
+        await expect(
+          page.getByRole('alert').filter({ hasText: 'No pudimos cargar el transporte' })
+        ).toBeVisible({ timeout: 20_000 })
+        // Prueba de que GestionTransporte no llegó a renderizar en absoluto:
+        // no hay un catálogo vacío disfrazando el error.
+        await expect(page.getByRole('heading', { name: 'Recorridos' })).toHaveCount(0)
+        await capturar(page, 'escritorio-director-error-catalogo')
+      }
+    )
+
+    // Restituido el privilegio, la misma ruta vuelve a mostrar el catálogo real.
+    await page.goto('/dashboard/transporte')
+    await expect(page.getByRole('heading', { name: 'Recorridos' })).toBeVisible()
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'No pudimos cargar el transporte' })
+    ).toHaveCount(0)
   })
 
   test('no obtiene ninguna facultad de establecer un recorrido en nombre del alumno', async () => {

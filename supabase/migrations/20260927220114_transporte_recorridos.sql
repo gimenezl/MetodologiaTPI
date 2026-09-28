@@ -525,8 +525,12 @@ BEGIN
     WHERE a.perfil_id = v_perfil_id
     FOR NO KEY UPDATE;
 
-    -- El destino se valida ANTES de tocar la inscripción vigente: si el
-    -- destino no es válido, la función termina acá y no se cancela nada.
+    -- El destino se identifica y se tipa ANTES de tocar la inscripción
+    -- vigente: si el servicio no existe o no es de transporte, la función
+    -- termina acá y no se cancela nada. La comprobación de "activo" se
+    -- pospone a propósito (ver más abajo): repetir el recorrido que ya está
+    -- activo tiene que seguir siendo idempotente aunque Dirección lo haya
+    -- inactivado mientras tanto, y esa rama no crea ni cancela nada.
     SELECT s.tipo, s.activo
     INTO v_tipo_servicio, v_servicio_activo
     FROM public.servicios_escolares s
@@ -543,12 +547,6 @@ BEGIN
             MESSAGE = 'Esta operación es exclusiva de recorridos de transporte.';
     END IF;
 
-    IF NOT v_servicio_activo THEN
-        RAISE EXCEPTION USING
-            ERRCODE = 'P5551',
-            MESSAGE = 'El recorrido está inactivo y no admite nuevas inscripciones.';
-    END IF;
-
     -- Recorrido de transporte activo del alumno, si tiene uno.
     SELECT i.* INTO v_activa_actual
     FROM public.inscripciones_servicios i
@@ -558,14 +556,25 @@ BEGIN
       AND s.tipo = 'TRANSPORTE'
     FOR UPDATE OF i;
 
-    IF FOUND THEN
+    IF FOUND AND v_activa_actual.servicio_id = p_servicio_id THEN
         -- Semántica idempotente y explícita: «cambiar» al recorrido que ya
         -- está activo no crea una fila nueva ni cancela nada, y devuelve la
-        -- inscripción existente sin cambios.
-        IF v_activa_actual.servicio_id = p_servicio_id THEN
-            RETURN v_activa_actual;
-        END IF;
+        -- inscripción existente sin cambios. Se resuelve ANTES de mirar si el
+        -- destino sigue activo: el alumno ya tiene esa plaza, no está
+        -- pidiendo una nueva, así que una inactivación posterior de
+        -- Dirección no puede convertir un no-op en un rechazo.
+        RETURN v_activa_actual;
+    END IF;
 
+    -- A partir de acá es un alta o un cambio real hacia OTRO recorrido (o el
+    -- primero del alumno), así que el destino tiene que admitir altas nuevas.
+    IF NOT v_servicio_activo THEN
+        RAISE EXCEPTION USING
+            ERRCODE = 'P5551',
+            MESSAGE = 'El recorrido está inactivo y no admite nuevas inscripciones.';
+    END IF;
+
+    IF FOUND THEN
         -- Cancelación del recorrido anterior. Si el INSERT de abajo falla
         -- por cualquier motivo, PostgreSQL revierte esta función entera (no
         -- hay COMMIT parcial dentro de una función), así que esta fila nunca

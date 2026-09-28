@@ -235,6 +235,51 @@ END $$;
 
 
 -- ================================================================
+-- 9bis. IDEMPOTENCIA SE MANTIENE AUNQUE DIRECCIÓN INACTIVE EL RECORRIDO VIGENTE
+-- ================================================================
+-- Reproduce el hallazgo de la revisión: si Dirección inactiva el recorrido
+-- que el alumno ya tiene activo, repetir la misma elección tiene que seguir
+-- siendo un no-op (el alumno no está pidiendo una plaza nueva), no un
+-- rechazo P5551. Un destino inactivo DISTINTO (6bis) se sigue rechazando.
+RESET ROLE;
+UPDATE public.servicios_escolares SET activo = FALSE WHERE codigo = 'TR-SUR';
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims', '{"sub":"b2222222-2222-4222-8222-222222222222"}', true);
+
+DO $$
+DECLARE
+    v_sur       UUID := 'e0000000-0000-4000-8000-000000000021';
+    v_vigente   public.inscripciones_servicios;
+    v_repetido  public.inscripciones_servicios;
+BEGIN
+    SELECT i.* INTO v_vigente
+    FROM public.inscripciones_servicios i
+    WHERE i.alumno_id = 'b2222222-2222-4222-8222-222222222222'
+      AND i.servicio_id = v_sur
+      AND i.estado = 'ACTIVA';
+
+    IF v_vigente.id IS NULL THEN
+        RAISE EXCEPTION 'FALLO 9bis: el fixture no tiene a TR-SUR como recorrido vigente';
+    END IF;
+
+    v_repetido := public.establecer_recorrido_transporte(v_sur);
+    IF v_repetido.id <> v_vigente.id THEN
+        RAISE EXCEPTION 'FALLO 9bis: repetir el recorrido ya inactivado creó o cambió la fila: %', v_repetido;
+    END IF;
+
+    IF (SELECT pg_catalog.count(*) FROM public.inscripciones_servicios
+        WHERE alumno_id = 'b2222222-2222-4222-8222-222222222222' AND servicio_id = v_sur) <> 1 THEN
+        RAISE EXCEPTION 'FALLO 9bis: quedó más de una fila para el mismo recorrido';
+    END IF;
+
+    RAISE NOTICE 'OK 9bis: repetir el recorrido vigente sigue siendo idempotente aunque Dirección lo haya inactivado mientras tanto';
+END $$;
+
+RESET ROLE;
+UPDATE public.servicios_escolares SET activo = TRUE WHERE codigo = 'TR-SUR';
+
+
+-- ================================================================
 -- 10. EL TRIGGER RECHAZA UN SEGUNDO RECORRIDO ACTIVO AUNQUE SE SALTEE LA RPC
 -- ================================================================
 RESET ROLE;
