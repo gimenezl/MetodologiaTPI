@@ -14,6 +14,8 @@
  */
 
 import { execFileSync, spawnSync } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
 
 const ANFITRIONES_LOCALES = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
 
@@ -28,10 +30,21 @@ const DIRECTORIO_SUPABASE = process.env.EPT_SUPABASE_WORKDIR
 function leerEntornoLocal() {
   const argumentos = ['supabase', 'status', '-o', 'env']
   if (DIRECTORIO_SUPABASE) argumentos.push('--workdir', DIRECTORIO_SUPABASE)
-  const salida = execFileSync('npx', argumentos, {
-    encoding: 'utf8',
-    shell: process.platform === 'win32',
-  })
+  let salida
+  try {
+    salida = execFileSync('npx', argumentos, {
+      encoding: 'utf8',
+      shell: process.platform === 'win32',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  } catch {
+    console.error(
+      'FALLO  no se pudo leer la instancia local de Supabase' +
+        (DIRECTORIO_SUPABASE ? ' de EPT_SUPABASE_WORKDIR=' + DIRECTORIO_SUPABASE : '') +
+        '. ¿El directorio es correcto y el stack está levantado?'
+    )
+    process.exit(1)
+  }
 
   const valores = {}
   for (const linea of salida.split(/\r?\n/u)) {
@@ -70,7 +83,58 @@ if (!ANFITRIONES_LOCALES.has(new URL(mailpit).hostname)) {
   process.exit(1)
 }
 
-console.log(`Instancia local verificada: ${local.API_URL}`)
+/**
+ * La aplicación habla con la API, pero muchas suites preparan y limpian datos con
+ * `docker exec … psql` sobre un CONTENEDOR. Si la API es la del stack aislado y el
+ * contenedor es el del compartido (o al revés), la siembra y los `DELETE` caen en
+ * la base de otra persona. Por eso el contenedor se deriva del `project_id` del
+ * directorio de trabajo y, sea el que sea, se exige que publique el MISMO puerto de
+ * base de datos que informa `supabase status`. Si no coincide, no se corre nada.
+ */
+function proyectoDe(directorio) {
+  const ruta = path.join(directorio, 'supabase', 'config.toml')
+  let contenido
+  try {
+    contenido = fs.readFileSync(ruta, 'utf8')
+  } catch {
+    console.error(`FALLO  no se pudo leer ${ruta}. EPT_SUPABASE_WORKDIR debe ser un directorio con supabase/config.toml.`)
+    process.exit(1)
+  }
+  const coincidencia = /^project_id\s*=\s*"([^"]+)"/mu.exec(contenido)
+  if (!coincidencia) {
+    console.error(`FALLO  ${ruta} no declara project_id.`)
+    process.exit(1)
+  }
+  return coincidencia[1]
+}
+
+const contenedorDeBase =
+  process.env.EPT_SUPABASE_DB_CONTAINER ?? `supabase_db_${proyectoDe(DIRECTORIO_SUPABASE ?? process.cwd())}`
+
+const puertoDeBase = local.DB_URL ? new URL(local.DB_URL).port : ''
+let puertosDelContenedor = ''
+try {
+  puertosDelContenedor = execFileSync('docker', ['port', contenedorDeBase, '5432/tcp'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+} catch {
+  console.error(
+    `FALLO  el contenedor de base de datos «${contenedorDeBase}» no existe o no está en marcha. ` +
+      'Con EPT_SUPABASE_WORKDIR se deduce del project_id; con EPT_SUPABASE_DB_CONTAINER se indica a mano.'
+  )
+  process.exit(1)
+}
+if (!puertoDeBase || !puertosDelContenedor.split(/\r?\n/u).some((linea) => linea.trim().endsWith(`:${puertoDeBase}`))) {
+  console.error(
+    `FALLO  el contenedor «${contenedorDeBase}» no publica el puerto de base de datos ${puertoDeBase || '(desconocido)'} ` +
+      'que informa supabase status: la API y los psql de las pruebas apuntarían a bases distintas. ' +
+      'Se niega a correr para no sembrar ni borrar datos en una base ajena.'
+  )
+  process.exit(1)
+}
+
+console.log(`Instancia local verificada: ${local.API_URL} (base: ${contenedorDeBase})`)
 
 const resultado = spawnSync('npx', ['playwright', 'test', ...process.argv.slice(2)], {
   stdio: 'inherit',
@@ -78,6 +142,8 @@ const resultado = spawnSync('npx', ['playwright', 'test', ...process.argv.slice(
   env: {
     ...process.env,
     EPT_SUPABASE_LOCAL: '1',
+    // La misma base que la API: las suites que usan `docker exec psql` la leen de acá.
+    EPT_SUPABASE_DB_CONTAINER: contenedorDeBase,
     NEXT_PUBLIC_SUPABASE_URL: local.API_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: local.ANON_KEY,
     // Sólo el setup local lo usa, para sembrar identidades de prueba. Nunca

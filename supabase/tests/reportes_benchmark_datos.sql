@@ -10,8 +10,9 @@
 --      reales no son sintéticos; todas las pruebas del repositorio usan 9xxxxxxx).
 --   2. Exige el rol supabase_admin: necesita `session_replication_role = replica`
 --      para insertar sin recorrer los triggers de validación fila por fila. La
---      corrida lo comprueba y `reportes_benchmark.mjs` rechaza toda URL que no
---      sea loopback antes de ejecutar nada.
+--      corrida lo comprueba. Las suites que la usan se lanzan con
+--      `correr-autenticadas.mjs`, que rechaza toda API que no sea de bucle local y
+--      exige que el contenedor de `psql` sea la MISMA base que la API.
 --
 -- Ejecución (el contenedor es el del stack local que se esté usando):
 --     docker cp supabase/tests/reportes_benchmark_datos.sql <contenedor>:/tmp/
