@@ -1,28 +1,32 @@
 # EPT-63 — RF17: Generar los reportes oficiales de la Dirección
 
 El paquete original se integró a `origin/main` mediante el PR #22 (merge
-`6673d747`). El despliegue de Vercel observado corresponde a ese mismo SHA.
+`6673d747`). La corrección del rótulo de búsqueda de docentes se integró
+mediante el [PR #23](https://github.com/gimenezl/MetodologiaTPI/pull/23)
+(merge `ca013c3e`); el árbol de `origin/main` coincide con
+el de la rama aprobada (`37f681fc`). El despliegue Production de GitHub para
+`ca013c3e` terminó correctamente. La aplicación pública muestra el rótulo
+corregido, aunque no se pudo verificar la asociación exacta entre el alias
+público y ese despliegue porque la página individual exige SSO de Vercel.
 La migración `20260929012923_ept_63_reportes_oficiales.sql` ya se aplicó una
 vez al proyecto productivo de Supabase `ycvrpmrogvjnntnoosbh`, después de
 verificar un respaldo privado del esquema. **Esto no completa la definición de
-terminado**: faltan pruebas funcionales con sesiones existentes de Dirección y de un
-rol no DIRECTOR, medición productiva del CSV, impresión/PDF y la integración y
-el despliegue de la corrección del rótulo de búsqueda de docentes. Esa corrección
-permanece en `codex/ept-63-legajo-label`, sin merge ni despliegue. Jira EPT-63 sigue
-«En curso». Las pruebas y mediciones históricas de este documento corresponden
-al candidato original en un entorno local aislado.
+terminado**: los recorridos productivos por rol y las mediciones aún tienen
+límites detallados en la sección 9.4. Jira EPT-63 sigue «En curso». Las pruebas
+y mediciones históricas de este documento corresponden al candidato original
+en un entorno local aislado, salvo indicación expresa en contrario.
 
 ### Estado productivo comprobado tras la migración
 
 | Control | Resultado |
 |---|---|
-| Código servido | PR #22 integrado; `origin/main` y despliegue Production de Vercel en `6673d747` para el paquete original. La corrección posterior no está desplegada. |
+| Código y despliegue | PR #22 integrado en `6673d747`; PR #23 integrado en `ca013c3eaf59461b3b7cc90610448d45f34be594`. [Despliegue Production `6740862968`](https://github.com/gimenezl/MetodologiaTPI/deployments/6740862968) con estado `success` para este último SHA (29/09/2026 17:11:40 UTC). El alias público muestra el rótulo nuevo; no se confirmó su correspondencia byte a byte con el despliegue individual protegido por SSO. |
 | Respaldo previo | Respaldo privado, legible y con SHA-256 verificado de los esquemas `public` y `app_private`; fuera del repositorio. No contiene filas de datos. |
-| Aplicación y ledger | `npx --yes supabase@2.118.0 db push --linked --project-ref ycvrpmrogvjnntnoosbh --skip-vault` terminó con código 0. Había 23 migraciones previas alineadas y solo EPT-63 pendiente; después, el ledger quedó en 24/24. No se repitió el `push`. |
-| Funciones y permisos | Existen las 10 funciones nuevas (7 públicas y 3 privadas), de solo lectura, `SECURITY INVOKER`, con `search_path` vacío. Se verificaron los `GRANT`/`REVOKE` previstos y la guardia de Dirección habilitada. Los intentos anónimos y autenticados sin JWT fueron rechazados; esto no sustituye la prueba con un usuario no DIRECTOR real. |
+| Aplicación y ledger | `npx --yes supabase@2.118.0 db push --linked --project-ref ycvrpmrogvjnntnoosbh --skip-vault` terminó con código 0 en la aplicación original. Había 23 migraciones previas alineadas y solo EPT-63 pendiente; el ledger posterior quedó en 24/24. Una nueva lectura de `migration list --linked` confirmó 24/24; no se repitió el `push`. |
+| Funciones y permisos | Existen las 10 funciones nuevas (7 públicas y 3 privadas), de solo lectura, `SECURITY INVOKER`, con `search_path` vacío. Se verificaron los `GRANT`/`REVOKE` previstos y la guardia de Dirección habilitada. Los seis GET anónimos respondieron 401 `SIN_SESION` y `Cache-Control: no-store`; un usuario no DIRECTOR autenticado vio «Acceso restringido» en las siete páginas, pero no se probaron API 403 ni RPC con su sesión productiva. |
 | Datos de control | Matrículas 1; materias por curso 0; inscripciones deportivas 1; inscripciones de servicios 2; grupos deportivos 4: sin cambios entre el preflight y la comprobación posterior. Esta evidencia no incluye filas personales. |
-| Advisors | Las mismas nueve advertencias anteriores; ningún hallazgo nuevo atribuible a EPT-63 en esa comparación. |
-| Rendimiento y acceso | Sin medición productiva del CSV ni recorridos funcionales autenticados. La configuración observada de Vercel permite una duración máxima de función de hasta 300 s, pero no demuestra que los reportes cumplan el objetivo de menos de 60 s. |
+| Advisors | Lectura actual: 9 `WARN`, 24 `INFO`, 0 `ERROR`; ninguno corresponde a objetos de reportes. No es idéntica a la captura histórica de la sección 8 (10 advertencias): desaparecieron dos `rls_policy_always_true` y apareció `auth_leaked_password_protection`. No se modificó configuración productiva. |
+| Rendimiento y acceso | Se recorrieron los seis reportes con Dirección y se verificó que un rol no DIRECTOR ve «Acceso restringido» en el índice y las seis páginas. Faltan los bytes descargados del CSV, el PDF y los tiempos HTTP productivos; la navegación visual no demuestra el objetivo de menos de 60 s. Los logs de Vercel no estuvieron disponibles por SSO. |
 
 La base histórica del candidato original fue `origin/main` =
 `50bef50cc0afb79274849ef179261efce3397f28`; su rama fue
@@ -61,13 +65,17 @@ No hay una medición equivalente en producción frente al objetivo de 60 s
 | PDF aprobado (`PlanTrabajo_Grupo12_SistemaGestion (1).pdf`) RF17 y módulo de Reportes | «listados definidos por la Dirección por alumno, docente, curso, materia, deporte, nivel, horario, responsable y recorrido»; «listados cruzados de alumnos por curso, materia, deporte, nivel, horario y recorrido de transporte, y de docentes por nivel» | sí |
 | Jira EPT-63 (lectura histórica durante la implementación: entonces «Por hacer», hija de EPT-7, Lucas Gimenez, sin subtareas; hoy «En curso») | mismos listados + «responsable», «menos de un minuto» y «las mismas relaciones que usan las operaciones diarias» | sí |
 | Contrato aprobado por Lucas | cruces, «responsable» = profesor, origen académico/deportivo sin mezclar, materia derivada del curso, filtros en servidor, historial solo si el esquema lo registra, exclusividad de Dirección, `confirmada_por` fuera, CSV + impresión, 60 s con más de 1000 filas | sí |
-| Git | `50bef50` fue la línea base del candidato; el PR #22 se integró en `6673d747` | sí |
+| Git | `50bef50` fue la línea base del candidato; el PR #22 se integró en `6673d747` y la corrección del rótulo del PR #23 en `ca013c3e` | sí |
 
 No hubo contradicción material: no se detuvo el trabajo ni se redujo ningún requisito.
 
 ---
 
 ## 3. Matriz criterio → consulta o pantalla → prueba → evidencia
+
+Las pruebas de la matriz corresponden al entorno local aislado, salvo las
+observaciones productivas delimitadas en la sección 9.4. Una pantalla vacía en
+producción no demuestra que sus filas y cruces sean correctos con datos reales.
 
 | # | Criterio (PDF / Jira / contrato) | Consulta o pantalla | Prueba | Evidencia |
 |---|---|---|---|---|
@@ -363,29 +371,73 @@ CRLF; `db lint` sin errores y 0 hallazgos de los advisors sobre objetos de EPT-6
 Una revisión fresca del delta posterior a la corrección no halló defectos altos ni
 medios.
 
-### 9.3 Corrección posterior al merge #22 (pendiente de integrar)
+### 9.3 Corrección del rótulo integrada mediante el PR #23
 
 `reporte_docentes_nivel` compara `p.apellido` y `p.nombre`, incluida la combinación
-de ambos, pero no `legajo_nro`. El formulario ahora muestra «Buscar por nombre o
+de ambos, pero no `legajo_nro`. El formulario muestra «Buscar por nombre o
 apellido» solo en docentes; los cinco reportes de alumnos conservan «Buscar por
-nombre, apellido o legajo». La migración y el comportamiento de búsqueda no cambian.
+nombre, apellido o legajo». La migración y el comportamiento de búsqueda no
+cambiaron. El PR #23 se integró en `origin/main` (`ca013c3e`), cuyo árbol coincide
+con el de la rama aprobada (`37f681fc`).
 
-| Comprobación local de esta corrección | Resultado |
+| Comprobación local previa al PR #23 | Resultado |
 |---|---|
 | `npm run test:e2e -- tests/reportes-lib.spec.ts --project=chromium --reporter=line` | 61 pasan, exit 0; incluye el contrato de etiquetas para los seis reportes |
 | `npx tsc --noEmit --incremental false` | exit 0 |
 | `npx eslint src/lib/reportes.ts src/app/dashboard/reportes/_components/FormularioFiltros.tsx tests/reportes-lib.spec.ts tests/reportes-auth.spec.ts --no-cache` | exit 0 |
 | `npm run build` con las variables públicas de Supabase de relleno del arnés | exit 0; sin variables, el prerender falla por configuración faltante, no por esta corrección |
 
-La aserción de accesibilidad en `reportes-auth.spec.ts` también verifica el rótulo
-renderizado de docentes, pero no se ejecutó en esta corrección porque requiere el
-stack local aislado y sesiones autenticadas. No se ejecutaron pruebas funcionales
-con sesiones reales contra producción. En el primer preflight, el respaldo falló
-porque Docker no estaba disponible y **en ese momento** no se aplicó la migración.
-Luego se obtuvo y verificó el respaldo privado del esquema, se volvió a comprobar
-que únicamente `20260929012923` estaba pendiente y se aplicó una sola vez. El
-ledger posterior muestra 24/24. Quedan pendientes el merge y despliegue de esta
-corrección y la verificación funcional productiva descrita al comienzo.
+**Regresión posterior al merge sobre el SHA exacto `ca013c3eaf59461b3b7cc90610448d45f34be594`:**
+se creó un stack local descartable separado (`project_id`
+`ept63ca013cverify`, 24 migraciones); se detuvo al terminar. No se usó la base
+productiva para estas pruebas.
+
+| Comprobación sobre `ca013c3e` | Resultado |
+|---|---|
+| E2E autenticada y accesible del rótulo (comando debajo) | 22/22 pasan, exit 0; verifica la etiqueta renderizada con sesión DIRECTOR |
+| `npm run test:e2e -- tests/reportes-lib.spec.ts tests/reportes.spec.ts --project=chromium --reporter=line` | 65/65 pasan, exit 0 |
+| `EPT_SUPABASE_WORKDIR=<stack aislado> EPT_TEST_SMTP_PORT=57325 node supabase/tests/correr-autenticadas.mjs tests/reportes-auth.spec.ts --reporter=line` | 67 pasan, 1 omitida por menú de perfil bloqueado no aplicable, exit 0; cubre reportes, cruces, CSV, impresión y permisos locales |
+| `npx tsc --noEmit` | exit 0 |
+| `npx eslint src/lib/reportes.ts src/app/dashboard/reportes tests/reportes-lib.spec.ts tests/reportes-auth.spec.ts` | exit 0 |
+| `npm run build` con las variables públicas de prueba indicadas debajo | 18/18 páginas, exit 0 |
+
+La prueba focalizada del rótulo y el build se ejecutaron en PowerShell con
+estos comandos. La ruta personal de `EPT_SUPABASE_WORKDIR` se sustituye aquí
+por `<stack aislado>`; la ejecución registrada utilizó la ruta local concreta.
+
+```powershell
+$env:EPT_SUPABASE_WORKDIR='<stack aislado>'; $env:EPT_TEST_SMTP_PORT='57325'; node supabase/tests/correr-autenticadas.mjs tests/reportes-auth.spec.ts --project=chromium-directora --grep 'accesibilidad: cada filtro' --reporter=line
+$env:NEXT_PUBLIC_SUPABASE_URL='https://placeholder-pruebas.supabase.co'; $env:NEXT_PUBLIC_SUPABASE_ANON_KEY='placeholder-anon-key-solo-para-pruebas'; npm run build
+```
+
+La primera prueba intentada con `node --test` no resolvió importaciones TypeScript
+por no usar el ejecutor del proyecto; se repitió mediante Playwright y pasó.
+Estos resultados **no sustituyen** las pruebas funcionales en producción. La
+migración se aplicó una sola vez tras verificar el respaldo privado; la lectura
+posterior del ledger confirma 24/24, sin otro `db push`.
+
+### 9.4 Recorridos productivos posteriores al PR #23 y límites de evidencia
+
+Se usaron sesiones **existentes** iniciadas por su titular, primero de Dirección
+y luego de un rol no DIRECTOR. No se crearon usuarios ni datos en producción.
+Se comprobaron las páginas de la aplicación pública, pero no los bytes del
+alias frente al despliegue individual protegido por SSO.
+
+| Criterio | Observación productiva | Límite / pendiente |
+|---|---|---|
+| Seis reportes de Dirección | Alumnos por curso con nivel + curso: 1 fila. Docentes por nivel con origen Deportivo: 4 filas; con origen Académico: 0. Alumnos por materia, deporte, horario y recorrido: estados vacíos sin error visible. | Las cuatro vistas vacías y el origen académico sin filas no prueban contenido, cruces ni exportación con datos reales. No se sembraron datos. |
+| Filtros y búsqueda | Filtros combinados sobre los datos disponibles; docentes permite buscar por nombre/apellido, sin prometer legajo. Los alumnos conservan el rótulo de nombre/apellido/legajo. Etiquetas asociadas en los formularios inspeccionados; idioma visible español. | No hay datos suficientes para comprobar todas las combinaciones y el historial real de cada dominio. |
+| Impresión/PDF | La vista imprimible reflejó filtros y total de filas (4/4 en docentes y 0 en un reporte vacío). | No se abrió el diálogo de impresión ni se verificó un PDF productivo. |
+| CSV | En docentes, la interfaz anunció exportación lista para 4 filas. | El navegador no entregó archivo ni ruta verificable: bytes, cabeceras, BOM, separador `;`, CRLF, neutralización de fórmulas y completitud quedan **sin verificar en producción**. No se verificó CSV de alumnos. |
+| Acceso de rol no DIRECTOR | Índice de reportes y las seis páginas mostraron «Acceso restringido». Los seis GET anónimos a la API respondieron 401 `SIN_SESION`, sin caché. | El navegador no permitió un GET autenticado documentable hacia API/RPC: 403 de API y rechazo de RPC no están probados con esta sesión productiva. |
+| Tiempo y operación | Navegación visual ≈1,1–2,4 s; cambios de filtros ≈1–3,4 s. | No son mediciones HTTP puras ni cubren CSV/PDF o más de 1000 filas reales. No demuestran el requisito de <60 s. Logs de Vercel inaccesibles por SSO. |
+
+**Siguiente paso para cerrar EPT-63:** obtener evidencia productiva sin alterar datos
+de una descarga CSV verificable, PDF/impresión y tiempos HTTP, además del 403 de
+API y rechazo de RPC con una sesión no DIRECTOR. Donde la base real no tiene
+filas, dejar el criterio como no observado; las pruebas sintéticas locales de la
+sección 8 no deben presentarse como sustituto. Mantener Jira «En curso» hasta
+completar la definición de terminado aprobada.
 
 ---
 
@@ -433,10 +485,10 @@ No se regeneraron las capturas de otras historias.
    función observado en Vercel es de hasta 300 s; no garantiza el objetivo de
    exportación inferior a 60 s. Falta medirlo con datos reales sin sembrar producción.
 6. **Búsqueda de docentes**: la consulta solo compara nombre y apellido, no legajo.
-   La rama `codex/ept-63-legajo-label` corrige el rótulo a «Buscar por nombre o
-   apellido» y mantiene «Buscar por nombre, apellido o legajo» en alumnos. La
-   corrección está pendiente de integración y despliegue; no está verificada en
-   producción.
+   El PR #23 integró el rótulo «Buscar por nombre o apellido» y conserva
+   «Buscar por nombre, apellido o legajo» en alumnos. Se observó el rótulo nuevo
+   en producción; sigue sin poder verificarse la correspondencia byte a byte
+   entre el alias público y el despliegue individual protegido por SSO.
 7. **Un stack compartido** entre checkouts sigue siendo frágil (`db reset` ajeno).
 8. La descarga con `fetch` requiere JavaScript (el panel ya lo requiere).
 9. Preexistente: 14 errores de ESLint en archivos ajenos (no se tocaron).
