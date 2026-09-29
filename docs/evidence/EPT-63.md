@@ -1,13 +1,16 @@
 # EPT-63 — RF17: Generar los reportes oficiales de la Dirección
 
-Candidato con revisión independiente (sección 9.2). **No** integrado y **no** en
-producción: la migración **NO fue aplicada en producción**, sin `db push` productivo,
-sin pruebas de carga ni siembra en producción. Jira: solo EPT-63 está «En curso» (no
-«Listo»). «Implementado» no equivale a «integrado»; el merge lo hace Lucas.
+El paquete original se integró a `origin/main` mediante el PR #22 (merge
+`6673d747`). La corrección del rótulo de búsqueda de docentes está en la rama
+`codex/ept-63-legajo-label`, basada en ese merge: **pendiente de integrar y
+desplegar**. No se verificó el estado de producción ni se ejecutaron pruebas
+productivas para esta corrección; las pruebas y mediciones históricas de este
+documento corresponden al candidato original en un entorno local aislado. El
+estado actual de Jira también requiere una consulta nueva antes de actualizarlo.
 
-Base: `origin/main` = `50bef50cc0afb79274849ef179261efce3397f28` (verificado con
-`git fetch origin --prune`; EPT-62 integrado). Rama `codex/ept-63-reportes-oficiales`
-en el worktree `E:\Escritorio\codigo\MetodologiaTPI-ept63`.
+La base histórica del candidato original fue `origin/main` =
+`50bef50cc0afb79274849ef179261efce3397f28`; su rama fue
+`codex/ept-63-reportes-oficiales`.
 
 ---
 
@@ -341,6 +344,25 @@ CRLF; `db lint` sin errores y 0 hallazgos de los advisors sobre objetos de EPT-6
 Una revisión fresca del delta posterior a la corrección no halló defectos altos ni
 medios.
 
+### 9.3 Corrección posterior al merge #22 (pendiente de integrar)
+
+`reporte_docentes_nivel` compara `p.apellido` y `p.nombre`, incluida la combinación
+de ambos, pero no `legajo_nro`. El formulario ahora muestra «Buscar por nombre o
+apellido» solo en docentes; los cinco reportes de alumnos conservan «Buscar por
+nombre, apellido o legajo». La migración y el comportamiento de búsqueda no cambian.
+
+| Comprobación local de esta corrección | Resultado |
+|---|---|
+| `npm run test:e2e -- tests/reportes-lib.spec.ts --project=chromium --reporter=line` | 61 pasan, exit 0; incluye el contrato de etiquetas para los seis reportes |
+| `npx tsc --noEmit --incremental false` | exit 0 |
+| `npx eslint src/lib/reportes.ts src/app/dashboard/reportes/_components/FormularioFiltros.tsx tests/reportes-lib.spec.ts tests/reportes-auth.spec.ts --no-cache` | exit 0 |
+| `npm run build` con las variables públicas de Supabase de relleno del arnés | exit 0; sin variables, el prerender falla por configuración faltante, no por esta corrección |
+
+La aserción de accesibilidad en `reportes-auth.spec.ts` también verifica el rótulo
+renderizado de docentes, pero no se ejecutó en esta corrección porque requiere el
+stack local aislado y sesiones autenticadas. No se ejecutaron pruebas ni consultas
+contra producción. Quedan pendientes merge, despliegue y verificación productiva.
+
 ---
 
 ## 10. Interfaz y accesibilidad
@@ -383,9 +405,12 @@ No se regeneraron las capturas de otras historias.
 8. **Memoria y duración**: el CSV y la impresión se arman en memoria (un objeto por fila)
    y el tope es de 500 000 filas; con el volumen medido (78 800) el archivo pesa 9,1 MiB
    y tarda ~11 s. No se fijó `maxDuration` de la ruta: conviene comprobar el límite del
-   plan de despliegue con datos reales tras el merge (no se siembra producción).
-9. **Búsqueda de docentes**: el rótulo «Buscar por nombre, apellido o legajo» es común a
-   los seis reportes, pero en docentes la búsqueda no incluye el legajo.
+   plan de despliegue con datos reales tras desplegar (no se siembra producción).
+4. **Búsqueda de docentes**: la consulta solo compara nombre y apellido, no legajo.
+   La rama `codex/ept-63-legajo-label` corrige el rótulo a «Buscar por nombre o
+   apellido» y mantiene «Buscar por nombre, apellido o legajo» en alumnos. La
+   corrección está pendiente de integración y despliegue; no está verificada en
+   producción.
 5. **Un stack compartido** entre checkouts sigue siendo frágil (`db reset` ajeno).
 6. La descarga con `fetch` requiere JavaScript (el panel ya lo requiere).
 7. Preexistente: 14 errores de ESLint en archivos ajenos (no se tocaron).
@@ -439,7 +464,10 @@ EPT_BENCH_MODO="producción (next build + next start)" EPT_BENCH=1 EPT_SUPABASE_
 
 ---
 
-## 14. Textos de entrega
+## 14. Textos de entrega originales (históricos)
+
+Los textos siguientes describen la entrega original antes del PR #22; no deben
+usarse como declaración del estado actual de producción, Jira o esta corrección.
 
 ### Comentario de Jira (EPT-63)
 

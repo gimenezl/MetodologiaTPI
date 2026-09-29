@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import {
   ETIQUETAS_FILTRO,
   TAMANOS_PAGINA,
+  etiquetaBusqueda,
   etiquetaHorario,
   type Catalogos,
   type DefinicionReporte,
@@ -74,7 +75,7 @@ export function FormularioFiltros({
           {admite('q') && (
             <div className="flex flex-col gap-1.5 sm:col-span-2">
               <label htmlFor="filtro-q" className="text-sm font-semibold text-neutral-700">
-                {ETIQUETAS_FILTRO.q}
+                {etiquetaBusqueda(reporte.id)}
               </label>
               <input
                 id="filtro-q"

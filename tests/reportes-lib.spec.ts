@@ -13,6 +13,7 @@ import {
   columnasDe,
   construirCsv,
   describirFiltros,
+  etiquetaBusqueda,
   fecha,
   filaCsv,
   hora,
@@ -54,6 +55,13 @@ const ALUMNO: FilaAlumnosCurso = {
   motivo_cierre: null,
   vigente: true,
 }
+
+test('la búsqueda de docentes no promete legajo y los reportes de alumnos lo conservan', () => {
+  expect(etiquetaBusqueda('docentes-por-nivel')).toBe('Buscar por nombre o apellido')
+  for (const id of IDS_REPORTE.filter((reporte) => reporte !== 'docentes-por-nivel')) {
+    expect(etiquetaBusqueda(id)).toBe('Buscar por nombre, apellido o legajo')
+  }
+})
 
 test.describe('celdaCsv: escape', () => {
   test('un texto común queda igual', () => {

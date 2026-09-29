@@ -652,6 +652,9 @@ test.describe('DIRECTOR autenticado — reportes oficiales con volumen', () => {
     const tablaConNombre = await page.getByRole('table').evaluate((t) => t.querySelector('caption')?.textContent ?? '')
     expect(tablaConNombre).toBe('Alumnos por horario')
     await exigirPantallaSinDetalleTecnico(page, 'reporte de horarios')
+    await page.goto('/dashboard/reportes/docentes-por-nivel?tamano=25')
+    await expect(page.getByLabel('Buscar por nombre o apellido', { exact: true })).toBeVisible()
+    await expect(page.getByLabel('Buscar por nombre, apellido o legajo', { exact: true })).toHaveCount(0)
   })
 })
 
