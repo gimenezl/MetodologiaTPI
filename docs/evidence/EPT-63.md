@@ -8,7 +8,7 @@ verificar un respaldo privado del esquema. **Esto no completa la definición de
 terminado**: faltan pruebas funcionales con sesiones existentes de Dirección y de un
 rol no DIRECTOR, medición productiva del CSV, impresión/PDF y la integración y
 el despliegue de la corrección del rótulo de búsqueda de docentes. Esa corrección
-permanece en `codex/ept-63-legajo-label`, sin push ni merge. Jira EPT-63 sigue
+permanece en `codex/ept-63-legajo-label`, sin merge ni despliegue. Jira EPT-63 sigue
 «En curso». Las pruebas y mediciones históricas de este documento corresponden
 al candidato original en un entorno local aislado.
 
