@@ -1,4 +1,10 @@
-import { ERROR_LIMITE_DE_PAGINAS, MAXIMO_PAGINAS, TAMANO_PAGINA, leerTodasLasFilas } from '@/lib/paginacion'
+import {
+  ERROR_LECTURA_INCONSISTENTE,
+  ERROR_LIMITE_DE_PAGINAS,
+  MAXIMO_PAGINAS,
+  TAMANO_PAGINA,
+  leerTodasLasFilasEnParalelo,
+} from '@/lib/paginacion'
 import {
   MAXIMO_FILAS_IMPRESION,
   REPORTES,
@@ -23,16 +29,17 @@ import { createServerSupabaseClient } from '@/services/supabase.server'
  *
  * Toda lectura es COMPLETA o falla: ninguna consulta se recorta en silencio al
  * tope de 1000 filas de la Data API. La pantalla pide una página exacta; la
- * exportación y la impresión recorren todas con `leerTodasLasFilas`.
+ * exportación y la impresión recorren todas con `leerTodasLasFilasEnParalelo`.
  */
 
-export type EstadoErrorReportes = 400 | 401 | 403 | 413 | 500
+export type EstadoErrorReportes = 400 | 401 | 403 | 409 | 413 | 500
 
 export type CodigoErrorReportes =
   | 'DATOS_INVALIDOS'
   | 'SIN_SESION'
   | 'ACCESO_DENEGADO'
   | 'DEMASIADAS_FILAS'
+  | 'DATOS_CAMBIARON'
   | 'ERROR_INTERNO'
 
 export type FalloReportes = {
@@ -90,6 +97,13 @@ function traducirError(error: ErrorPostgres, operacion: string, reporte: IdRepor
         estado: 400,
         codigo: 'DATOS_INVALIDOS',
         mensaje: 'Los filtros enviados no son válidos.',
+      }
+    case ERROR_LECTURA_INCONSISTENTE:
+      return {
+        ok: false,
+        estado: 409,
+        codigo: 'DATOS_CAMBIARON',
+        mensaje: 'Los datos cambiaron mientras se preparaba el reporte y el resultado podría estar incompleto. Volvé a intentarlo.',
       }
     case ERROR_LIMITE_DE_PAGINAS:
       return {
@@ -188,10 +202,13 @@ type OpcionesLecturaCompleta = {
 }
 
 /**
- * TODAS las filas del conjunto filtrado, página a página. Se apoya en
- * `leerTodasLasFilas`: el orden es total, las filas repetidas por una alta
- * concurrente se descartan por identificador y un error en cualquier página
- * devuelve ese error, nunca un listado parcial.
+ * TODAS las filas del conjunto filtrado. Se apoya en
+ * `leerTodasLasFilasEnParalelo`: el orden es total, las páginas se piden de a
+ * cuatro (cada una vuelve a resolver el conjunto, así que en serie 79 páginas
+ * costaban 79 veces), cada una tiene que traer exactamente las filas que le
+ * tocan según el total y un error en cualquier página devuelve ese error, nunca
+ * un listado parcial. Si los datos cambian a mitad de la lectura se reintenta
+ * una vez y luego se informa con 409.
  *
  * Con `maximoFilas` (la impresión) se lee antes el total —una sola fila— y se
  * rechaza el pedido si lo supera, informando cuántas filas tiene el conjunto.
@@ -218,9 +235,15 @@ export async function leerReporteCompleto(
   }
 
   const supabase = await createServerSupabaseClient()
-  const resultado = await leerTodasLasFilas<FilaReporte>((desde, hasta) =>
-    supabase.rpc(reporte.rpc, argumentosRpc(reporte, filtros, hasta - desde + 1, desde))
-  )
+  const leer = () =>
+    leerTodasLasFilasEnParalelo<FilaReporte>((desde, hasta) =>
+      supabase.rpc(reporte.rpc, argumentosRpc(reporte, filtros, hasta - desde + 1, desde))
+    )
+
+  let resultado = await leer()
+  // Un alta o una baja a mitad de la lectura cambia el total: se reintenta UNA vez
+  // y, si vuelve a cambiar, se informa. Nunca se entrega un listado dudoso.
+  if (!resultado.ok && resultado.error?.code === ERROR_LECTURA_INCONSISTENTE) resultado = await leer()
 
   if (!resultado.ok) return traducirError(resultado.error ?? {}, 'completo', id)
   return { ok: true, datos: { filas: resultado.datos, total: resultado.datos.length } }

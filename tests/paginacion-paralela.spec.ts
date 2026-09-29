@@ -1,0 +1,205 @@
+import { expect, test } from '@playwright/test'
+import {
+  CONCURRENCIA_POR_DEFECTO,
+  ERROR_LECTURA_INCONSISTENTE,
+  ERROR_LIMITE_DE_PAGINAS,
+  leerTodasLasFilasEnParalelo,
+} from '../src/lib/paginacion'
+
+/**
+ * Lectura completa con páginas en paralelo (EPT-63): completitud, orden,
+ * concurrencia acotada y detección de datos que cambian a mitad de la lectura.
+ * Sin navegador ni base de datos.
+ *
+ * `fuente(total, opciones)` simula PostgREST sobre `total` filas con
+ * identificadores consecutivos y `total_filas` en cada una. Registra los pedidos
+ * y cuántos hubo en vuelo a la vez.
+ */
+
+type Fila = { id: string; total_filas: number }
+type Pedido = { desde: number; hasta: number }
+
+type OpcionesFuente = {
+  /** Tope de filas por respuesta (un `max_rows` menor que la página). */
+  tope?: number
+  /** Demora de cada página, para forzar que terminen desordenadas. */
+  demora?: (desde: number) => number
+  /** Reemplaza la respuesta de una página (error, faltantes, sobrantes). */
+  intervenir?: (desde: number, filas: Fila[]) => { data: Fila[] | null; error: { code?: string } | null } | null
+}
+
+function fuente(total: number, { tope = Number.POSITIVE_INFINITY, demora, intervenir }: OpcionesFuente = {}) {
+  const pedidos: Pedido[] = []
+  let enVuelo = 0
+  let maximoEnVuelo = 0
+
+  const pagina = async (desde: number, hasta: number) => {
+    pedidos.push({ desde, hasta })
+    enVuelo += 1
+    maximoEnVuelo = Math.max(maximoEnVuelo, enVuelo)
+    try {
+      await new Promise((resolver) => setTimeout(resolver, demora ? demora(desde) : 0))
+      const fin = Math.min(hasta + 1, total, desde + tope)
+      const filas: Fila[] = []
+      for (let i = desde; i < fin; i += 1) filas.push({ id: `fila-${i}`, total_filas: total })
+      return intervenir?.(desde, filas) ?? { data: filas, error: null }
+    } finally {
+      enVuelo -= 1
+    }
+  }
+  return { pagina, pedidos, maximoEnVuelo: () => maximoEnVuelo }
+}
+
+const OPCIONES = { tamano: 3, maximoPaginas: 100 }
+
+test.describe('leerTodasLasFilasEnParalelo', () => {
+  test('la concurrencia por defecto es 4', () => {
+    expect(CONCURRENCIA_POR_DEFECTO).toBe(4)
+  })
+
+  test('trae todas las filas, en orden y sin repetir', async () => {
+    const { pagina } = fuente(20)
+    const r = await leerTodasLasFilasEnParalelo<Fila>(pagina, OPCIONES)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.datos.map((f) => f.id)).toEqual(Array.from({ length: 20 }, (_, i) => `fila-${i}`))
+  })
+
+  test('mantiene el orden aunque las páginas terminen desordenadas', async () => {
+    // Las primeras páginas tardan más que las últimas.
+    const { pagina } = fuente(30, { demora: (desde) => Math.max(0, 40 - desde) })
+    const r = await leerTodasLasFilasEnParalelo<Fila>(pagina, { ...OPCIONES, concurrencia: 5 })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.datos.map((f) => f.id)).toEqual(Array.from({ length: 30 }, (_, i) => `fila-${i}`))
+  })
+
+  test('nunca hay más pedidos en vuelo que la concurrencia', async () => {
+    for (const concurrencia of [1, 2, 4, 7]) {
+      const { pagina, maximoEnVuelo } = fuente(60, { demora: () => 5 })
+      const r = await leerTodasLasFilasEnParalelo<Fila>(pagina, { ...OPCIONES, concurrencia })
+      expect(r.ok).toBe(true)
+      expect(maximoEnVuelo()).toBeLessThanOrEqual(concurrencia)
+      expect(maximoEnVuelo()).toBeGreaterThanOrEqual(Math.min(concurrencia, 2) === 1 ? 1 : 2)
+    }
+  })
+
+  test('la primera página va sola y fija el total antes de pedir el resto', async () => {
+    const { pagina, pedidos } = fuente(10)
+    await leerTodasLasFilasEnParalelo<Fila>(pagina, { ...OPCIONES, concurrencia: 4 })
+    expect(pedidos[0]).toEqual({ desde: 0, hasta: 2 })
+    expect(pedidos.map((p) => p.desde).sort((a, b) => a - b)).toEqual([0, 3, 6, 9])
+    // Cada rango es contiguo y no se pide ninguna página de más.
+    expect(pedidos).toHaveLength(4)
+  })
+
+  test('un conjunto de una sola página, o vacío, no pide nada más', async () => {
+    const una = fuente(2)
+    const r1 = await leerTodasLasFilasEnParalelo<Fila>(una.pagina, OPCIONES)
+    expect(r1.ok && r1.datos).toHaveLength(2)
+    expect(una.pedidos).toHaveLength(1)
+
+    const vacia = fuente(0)
+    const r2 = await leerTodasLasFilasEnParalelo<Fila>(vacia.pagina, OPCIONES)
+    expect(r2).toEqual({ ok: true, datos: [] })
+    expect(vacia.pedidos).toHaveLength(1)
+  })
+
+  test('un total múltiplo exacto del tamaño no pide una página vacía de más', async () => {
+    const { pagina, pedidos } = fuente(9)
+    const r = await leerTodasLasFilasEnParalelo<Fila>(pagina, OPCIONES)
+    expect(r.ok && r.datos).toHaveLength(9)
+    expect(pedidos).toHaveLength(3)
+  })
+
+  test('el resultado es idéntico al de una lectura de una sola pasada', async () => {
+    for (const total of [1, 3, 4, 17, 18, 100]) {
+      const { pagina } = fuente(total, { demora: (desde) => (desde * 7) % 11 })
+      const r = await leerTodasLasFilasEnParalelo<Fila>(pagina, OPCIONES)
+      expect(r.ok, `total ${total}`).toBe(true)
+      if (r.ok) expect(r.datos.map((f) => f.id)).toEqual(Array.from({ length: total }, (_, i) => `fila-${i}`))
+    }
+  })
+
+  test('respeta la cota: con más páginas que el máximo falla sin leer el resto', async () => {
+    const { pagina, pedidos } = fuente(50)
+    const r = await leerTodasLasFilasEnParalelo<Fila>(pagina, { tamano: 3, maximoPaginas: 4 })
+    expect(r).toEqual({ ok: false, error: { code: ERROR_LIMITE_DE_PAGINAS } })
+    expect(pedidos).toHaveLength(1)
+  })
+
+  test('la cota es exacta: justo el máximo de páginas es válido', async () => {
+    const { pagina } = fuente(12)
+    const r = await leerTodasLasFilasEnParalelo<Fila>(pagina, { tamano: 3, maximoPaginas: 4 })
+    expect(r.ok && r.datos).toHaveLength(12)
+    const uno_mas = await leerTodasLasFilasEnParalelo<Fila>(fuente(13).pagina, { tamano: 3, maximoPaginas: 4 })
+    expect(uno_mas).toEqual({ ok: false, error: { code: ERROR_LIMITE_DE_PAGINAS } })
+  })
+
+  test('un error en cualquier página se devuelve tal cual, nunca un listado parcial', async () => {
+    const { pagina } = fuente(20, {
+      intervenir: (desde) => (desde === 9 ? { data: null, error: { code: '57014' } } : null),
+    })
+    const r = await leerTodasLasFilasEnParalelo<Fila>(pagina, OPCIONES)
+    expect(r).toEqual({ ok: false, error: { code: '57014' } })
+  })
+
+  test('un error en la primera página también se devuelve', async () => {
+    const { pagina, pedidos } = fuente(20, { intervenir: () => ({ data: null, error: { code: '42501' } }) })
+    const r = await leerTodasLasFilasEnParalelo<Fila>(pagina, OPCIONES)
+    expect(r).toEqual({ ok: false, error: { code: '42501' } })
+    expect(pedidos).toHaveLength(1)
+  })
+
+  test('una página con filas de menos (datos que cambiaron) se detecta', async () => {
+    const { pagina } = fuente(20, {
+      intervenir: (desde, filas) => (desde === 6 ? { data: filas.slice(0, 2), error: null } : null),
+    })
+    const r = await leerTodasLasFilasEnParalelo<Fila>(pagina, OPCIONES)
+    expect(r).toEqual({ ok: false, error: { code: ERROR_LECTURA_INCONSISTENTE } })
+  })
+
+  test('una página con filas de más se detecta', async () => {
+    const { pagina } = fuente(20, {
+      intervenir: (desde, filas) => (desde === 6 ? { data: [...filas, { id: 'sobrante', total_filas: 20 }], error: null } : null),
+    })
+    const r = await leerTodasLasFilasEnParalelo<Fila>(pagina, OPCIONES)
+    expect(r).toEqual({ ok: false, error: { code: ERROR_LECTURA_INCONSISTENTE } })
+  })
+
+  test('filas repetidas entre páginas con el largo correcto se detectan por el recuento único', async () => {
+    const { pagina } = fuente(20, {
+      intervenir: (desde, filas) =>
+        desde === 6 ? { data: filas.map((f) => ({ ...f, id: 'fila-0' })), error: null } : null,
+    })
+    const r = await leerTodasLasFilasEnParalelo<Fila>(pagina, OPCIONES)
+    expect(r).toEqual({ ok: false, error: { code: ERROR_LECTURA_INCONSISTENTE } })
+  })
+
+  test('si el servidor devuelve menos que lo pedido (tope menor), lee sin suponer y trae todo', async () => {
+    const { pagina } = fuente(10, { tope: 2 })
+    const r = await leerTodasLasFilasEnParalelo<Fila>(pagina, { tamano: 4, maximoPaginas: 100 })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.datos.map((f) => f.id)).toEqual(Array.from({ length: 10 }, (_, i) => `fila-${i}`))
+  })
+
+  test('sin total utilizable cae a la lectura secuencial y trae todo', async () => {
+    const pedidos: Pedido[] = []
+    const pagina = async (desde: number, hasta: number) => {
+      pedidos.push({ desde, hasta })
+      const filas: { id: string }[] = []
+      for (let i = desde; i < Math.min(hasta + 1, 7); i += 1) filas.push({ id: `fila-${i}` })
+      return { data: filas, error: null }
+    }
+    const r = await leerTodasLasFilasEnParalelo<Fila>(pagina, OPCIONES)
+    expect(r.ok && r.datos.map((f) => f.id)).toEqual(Array.from({ length: 7 }, (_, i) => `fila-${i}`))
+  })
+
+  test('un fallo detiene los pedidos pendientes: no se sigue leyendo a ciegas', async () => {
+    const { pagina, pedidos } = fuente(300, {
+      demora: () => 3,
+      intervenir: (desde) => (desde === 3 ? { data: null, error: { code: '57014' } } : null),
+    })
+    const r = await leerTodasLasFilasEnParalelo<Fila>(pagina, { tamano: 3, maximoPaginas: 500, concurrencia: 2 })
+    expect(r.ok).toBe(false)
+    expect(pedidos.length).toBeLessThan(20)
+  })
+})
