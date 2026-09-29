@@ -142,7 +142,7 @@ Limit  (cost=362.69..362.70 rows=1 width=427) (actual time=55.055..55.160 rows=1
                                                               Hash Cond: (a.perfil_id = p.id)
                                                               Buffers: shared hit=105
                                                               ->  Seq Scan on alumnos a  (cost=7.77..104.91 rows=854 width=16) (actual time=0.753..1.097 rows=3407 loops=1)
-                                                                    Filter: ((NOT (InitPlan 5).col1) AND ((InitPlan 6).col1 OR ((perfil_id = (InitPlan 7).col1) AND ((InitPlan 
+                                                                    Filter: ((NOT (InitPlan 5).col1) AND ((InitPlan 6).col1 OR ((perfil_id = (InitPlan 7).col1) AND ((InitPlan
                                                                     Buffers: shared hit=44
                                                               ->  Hash  (cost=209.40..209.40 rows=14 width=43) (actual time=3.012..3.013 rows=3568 loops=1)
                                                                     Buckets: 4096 (originally 1024)  Batches: 1 (originally 1)  Memory Usage: 295kB
@@ -178,7 +178,7 @@ Limit  (cost=362.69..362.70 rows=1 width=427) (actual time=55.055..55.160 rows=1
                     ->  Seq Scan on cursos c  (cost=0.00..2.03 rows=52 width=32) (actual time=0.001..0.003 rows=50 loops=3400)
                           Filter: (NOT (InitPlan 37).col1)
                           Buffers: shared hit=3403
- count 
+ count
 -------
   1000
 (1 row)
@@ -276,12 +276,12 @@ Limit  (cost=396.93..396.93 rows=1 width=428) (actual time=543.093..544.197 rows
                                                                                   Buffers: shared hit=15
                                                                                     ->  Index Scan using idx_inscripciones_deportivas_alumno on inscripciones_deportivas i_2  (
                                                                                           Index Cond: (alumno_id = (InitPlan 42).col1)
-                                                                                          Filter: ((NOT (InitPlan 43).col1) AND ((InitPlan 44).col1 OR ((alumno_id = (InitPlan 
+                                                                                          Filter: ((NOT (InitPlan 43).col1) AND ((InitPlan 44).col1 OR ((alumno_id = (InitPlan
                                                                     ->  Hash  (cost=17.81..17.81 rows=60 width=51) (actual time=0.922..0.924 rows=240 loops=1)
                                                                           Buckets: 1024  Batches: 1  Memory Usage: 28kB
                                                                           Buffers: shared hit=15
                                                                           ->  Seq Scan on grupos_deportivos g  (cost=9.61..17.81 rows=60 width=51) (actual time=0.833..0.876 ro
-                                                                                Filter: ((NOT (InitPlan 26).col1) AND activo AND ((InitPlan 27).col1 OR (((InitPlan 28).col1 = 
+                                                                                Filter: ((NOT (InitPlan 26).col1) AND activo AND ((InitPlan 27).col1 OR (((InitPlan 28).col1 =
                                                                                 Buffers: shared hit=15
                                                                                   ->  Index Scan using idx_inscripciones_deportivas_alumno on inscripciones_deportivas i_1  (co
                                                                                         Index Cond: (alumno_id = (InitPlan 30).col1)
@@ -441,7 +441,7 @@ Limit  (cost=81.99..82.00 rows=1 width=359) (actual time=10.548..10.656 rows=100
                                                   Hash Cond: (g.deporte_id = d.id)
                                                   Buffers: shared hit=19
                                                   ->  Seq Scan on grupos_deportivos g  (cost=9.61..17.81 rows=60 width=67) (actual time=0.381..0.423 rows=240 loops=1)
-                                                        Filter: ((NOT (InitPlan 13).col1) AND activo AND ((InitPlan 14).col1 OR (((InitPlan 15).col1 = 'ESTUDIANTE'::text) AND 
+                                                        Filter: ((NOT (InitPlan 13).col1) AND activo AND ((InitPlan 14).col1 OR (((InitPlan 15).col1 = 'ESTUDIANTE'::text) AND
                                                         Buffers: shared hit=15
                                                           ->  Index Scan using idx_inscripciones_deportivas_alumno on inscripciones_deportivas i  (cost=1.58..9.61 rows=1 width
                                                                 Index Cond: (alumno_id = (InitPlan 17).col1)
@@ -512,7 +512,7 @@ Limit  (cost=416.58..416.59 rows=1 width=275) (actual time=10.638..10.649 rows=2
                     ->  Seq Scan on niveles n  (cost=0.00..1.03 rows=2 width=13) (actual time=0.006..0.006 rows=2 loops=29)
                           Filter: (NOT (InitPlan 19).col1)
                           Buffers: shared hit=32
- count 
+ count
 -------
     29
 (1 row)
@@ -616,12 +616,12 @@ Limit  (cost=479.61..479.61 rows=1 width=428) (actual time=41.276..41.345 rows=0
                                                                                   Buffers: shared hit=15
                                                                                     ->  Index Scan using idx_inscripciones_deportivas_alumno on inscripciones_deportivas i_2  (
                                                                                           Index Cond: (alumno_id = (InitPlan 43).col1)
-                                                                                          Filter: ((NOT (InitPlan 44).col1) AND ((InitPlan 45).col1 OR ((alumno_id = (InitPlan 
+                                                                                          Filter: ((NOT (InitPlan 44).col1) AND ((InitPlan 45).col1 OR ((alumno_id = (InitPlan
                                                                     ->  Hash  (cost=17.81..17.81 rows=60 width=51) (actual time=0.737..0.741 rows=240 loops=1)
                                                                           Buckets: 1024  Batches: 1  Memory Usage: 28kB
                                                                           Buffers: shared hit=15
                                                                           ->  Seq Scan on grupos_deportivos g  (cost=9.61..17.81 rows=60 width=51) (actual time=0.654..0.692 ro
-                                                                                Filter: ((NOT (InitPlan 27).col1) AND activo AND ((InitPlan 28).col1 OR (((InitPlan 29).col1 = 
+                                                                                Filter: ((NOT (InitPlan 27).col1) AND activo AND ((InitPlan 28).col1 OR (((InitPlan 29).col1 =
                                                                                 Buffers: shared hit=15
                                                                                   ->  Index Scan using idx_inscripciones_deportivas_alumno on inscripciones_deportivas i_1  (co
                                                                                         Index Cond: (alumno_id = (InitPlan 31).col1)
