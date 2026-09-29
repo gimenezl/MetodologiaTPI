@@ -368,6 +368,16 @@ function vaciarModeloAcademico() {
         DELETE FROM public.confirmaciones_inscripcion;
         ALTER TABLE public.confirmaciones_inscripcion
           ENABLE TRIGGER proteger_confirmacion_inscripcion_antes_de_escribir;
+        -- EPT-64: las credenciales QR son de solo agregado y referencian
+        -- alumnos y perfiles con ON DELETE RESTRICT. Mismo criterio: solo esta
+        -- limpieza local deshabilita la guarda, dentro de la transacción, y va
+        -- antes de vaciar 'alumnos'. La clave de servicio no tiene ningún
+        -- privilegio sobre la tabla.
+        ALTER TABLE public.credenciales_qr
+          DISABLE TRIGGER proteger_credencial_qr_antes_de_escribir;
+        DELETE FROM public.credenciales_qr;
+        ALTER TABLE public.credenciales_qr
+          ENABLE TRIGGER proteger_credencial_qr_antes_de_escribir;
         DELETE FROM public.grupos_deportivos_horarios;
         DELETE FROM public.inscripciones_deportivas;
         DELETE FROM public.grupos_deportivos;
