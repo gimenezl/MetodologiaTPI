@@ -60,4 +60,3 @@ export type EntradaHistorial = {
   motivo_revocacion: string | null
   reemplaza_a: string | null
 }
-
