@@ -10,9 +10,10 @@ corregido, aunque no se pudo verificar la asociación exacta entre el alias
 público y ese despliegue porque la página individual exige SSO de Vercel.
 La migración `20260929012923_ept_63_reportes_oficiales.sql` ya se aplicó una
 vez al proyecto productivo de Supabase `ycvrpmrogvjnntnoosbh`, después de
-verificar un respaldo privado del esquema. **Esto no completa la definición de
-terminado**: los recorridos productivos por rol y las mediciones aún tienen
-límites detallados en la sección 9.4. Jira EPT-63 sigue «En curso». Las pruebas
+verificar un respaldo privado del esquema. La sección 9.5 registra el cierre
+técnico en producción (API y RPC denegadas a roles no DIRECTOR, CSV real,
+impresión y tiempo HTTP), con sus límites; la sección 9.4 conserva el estado
+previo. Las pruebas
 y mediciones históricas de este documento corresponden al candidato original
 en un entorno local aislado, salvo indicación expresa en contrario.
 
@@ -23,10 +24,10 @@ en un entorno local aislado, salvo indicación expresa en contrario.
 | Código y despliegue | PR #22 integrado en `6673d747`; PR #23 integrado en `ca013c3eaf59461b3b7cc90610448d45f34be594`. [Despliegue Production `6740862968`](https://github.com/gimenezl/MetodologiaTPI/deployments/6740862968) con estado `success` para este último SHA (29/09/2026 17:11:40 UTC). El alias público muestra el rótulo nuevo; no se confirmó su correspondencia byte a byte con el despliegue individual protegido por SSO. |
 | Respaldo previo | Respaldo privado, legible y con SHA-256 verificado de los esquemas `public` y `app_private`; fuera del repositorio. No contiene filas de datos. |
 | Aplicación y ledger | `npx --yes supabase@2.118.0 db push --linked --project-ref ycvrpmrogvjnntnoosbh --skip-vault` terminó con código 0 en la aplicación original. Había 23 migraciones previas alineadas y solo EPT-63 pendiente; el ledger posterior quedó en 24/24. Una nueva lectura de `migration list --linked` confirmó 24/24; no se repitió el `push`. |
-| Funciones y permisos | Existen las 10 funciones nuevas (7 públicas y 3 privadas), de solo lectura, `SECURITY INVOKER`, con `search_path` vacío. Se verificaron los `GRANT`/`REVOKE` previstos y la guardia de Dirección habilitada. Los seis GET anónimos respondieron 401 `SIN_SESION` y `Cache-Control: no-store`; un usuario no DIRECTOR autenticado vio «Acceso restringido» en las siete páginas, pero no se probaron API 403 ni RPC con su sesión productiva. |
+| Funciones y permisos | Existen las 10 funciones nuevas (7 públicas y 3 privadas), de solo lectura, `SECURITY INVOKER`, con `search_path` vacío. Se verificaron los `GRANT`/`REVOKE` previstos y la guardia de Dirección habilitada. Los seis GET anónimos respondieron 401 `SIN_SESION` y `Cache-Control: no-store`; un usuario no DIRECTOR autenticado vio «Acceso restringido» en las siete páginas, y el cierre posterior (sección 9.5) comprobó 403 en las 12 rutas de API y `42501` en las RPC para roles no DIRECTOR. |
 | Datos de control | Matrículas 1; materias por curso 0; inscripciones deportivas 1; inscripciones de servicios 2; grupos deportivos 4: sin cambios entre el preflight y la comprobación posterior. Esta evidencia no incluye filas personales. |
 | Advisors | Lectura actual: 9 `WARN`, 24 `INFO`, 0 `ERROR`; ninguno corresponde a objetos de reportes. No es idéntica a la captura histórica de la sección 8 (10 advertencias): desaparecieron dos `rls_policy_always_true` y apareció `auth_leaked_password_protection`. No se modificó configuración productiva. |
-| Rendimiento y acceso | Se recorrieron los seis reportes con Dirección y se verificó que un rol no DIRECTOR ve «Acceso restringido» en el índice y las seis páginas. Faltan los bytes descargados del CSV, el PDF y los tiempos HTTP productivos; la navegación visual no demuestra el objetivo de menos de 60 s. Los logs de Vercel no estuvieron disponibles por SSO. |
+| Rendimiento y acceso | Se recorrieron los seis reportes con Dirección y se verificó que un rol no DIRECTOR ve «Acceso restringido» en el índice y las seis páginas. Los bytes del CSV, la impresión y el tiempo HTTP productivo se registran en la sección 9.5; el PDF no se probó en producción. Los logs de Vercel no estuvieron disponibles por SSO. |
 
 La base histórica del candidato original fue `origin/main` =
 `50bef50cc0afb79274849ef179261efce3397f28`; su rama fue
@@ -432,12 +433,42 @@ alias frente al despliegue individual protegido por SSO.
 | Acceso de rol no DIRECTOR | Índice de reportes y las seis páginas mostraron «Acceso restringido». Los seis GET anónimos a la API respondieron 401 `SIN_SESION`, sin caché. | El navegador no permitió un GET autenticado documentable hacia API/RPC: 403 de API y rechazo de RPC no están probados con esta sesión productiva. |
 | Tiempo y operación | Navegación visual ≈1,1–2,4 s; cambios de filtros ≈1–3,4 s. | No son mediciones HTTP puras ni cubren CSV/PDF o más de 1000 filas reales. No demuestran el requisito de <60 s. Logs de Vercel inaccesibles por SSO. |
 
-**Siguiente paso para cerrar EPT-63:** obtener evidencia productiva sin alterar datos
-de una descarga CSV verificable, PDF/impresión y tiempos HTTP, además del 403 de
-API y rechazo de RPC con una sesión no DIRECTOR. Donde la base real no tiene
-filas, dejar el criterio como no observado; las pruebas sintéticas locales de la
-sección 8 no deben presentarse como sustituto. Mantener Jira «En curso» hasta
-completar la definición de terminado aprobada.
+Los pendientes de esta tabla (CSV, impresión, tiempos, 403 de API y rechazo de
+RPC) se resuelven en la sección 9.5. Donde la base real no tiene filas, el
+criterio queda como no observado con datos reales; las pruebas sintéticas
+locales de la sección 8 no lo sustituyen.
+
+### 9.5 Cierre técnico en producción (29/09/2026)
+
+Verificación sobre `origin/main` = `7870f103d403155955eeca2e60c99231f91c4f62`
+(merge del PR #24; despliegue Production de GitHub `success`). No se aplicó
+ninguna migración, no se crearon datos ni usuarios y no se guardó ningún archivo
+exportado: el CSV se analizó en memoria de la página y solo se registran
+métricas de estructura, sin datos personales.
+
+| Control | Resultado | Alcance |
+|---|---|---|
+| Ledger | `migration list --linked`: 24/24; `20260929012923_ept_63_reportes_oficiales` aplicada; sin pendientes | Producción, solo lectura |
+| Funciones | 10 presentes; las 10 `SECURITY INVOKER` con `search_path` vacío; `EXECUTE` para `authenticated` y ninguno para `anon` ni `service_role` | Producción, solo lectura |
+| API con sesión no DIRECTOR | 12/12 rutas (6 de consulta y 6 de `/exportar`, petición del propio navegador y del mismo origen, sin extraer credenciales): **403** `ACCESO_DENEGADO`, `Cache-Control: no-store` | Producción |
+| RPC | Transacción `READ ONLY` con `ROLLBACK`, rol `authenticated` y una identidad representativa por rol: DOCENTE, PADRE y ESTUDIANTE reciben `42501` en las 7 funciones; `anon` también. Control positivo con DIRECTOR: 1, 0, 0, 0, 0 y 4 filas (curso, materia, deporte, horario, recorrido, docentes) | Producción. No es la cuenta concreta del navegador; no existe perfil PERSONAL en producción |
+| CSV de docentes (Dirección) | HTTP 200; 390 bytes; BOM UTF-8 presente; separador `;`; 8 columnas por fila; CRLF sin saltos sueltos; 4 filas de datos = 4 filas mostradas = `X-Total-Filas: 4`; sin la cadena «confirm» ni columna `confirmada_por`; `Cache-Control: no-store`. Encabezado: Nivel, Apellido, Nombre, Especialidad, Estado del docente, Origen, Materia o deporte, Curso o grupo | Producción, con los 4 registros existentes |
+| CSV filtrado | `origen=DEPORTIVO`: 4 filas (pantalla: «Mostrando 1 a 4 de 4»); `origen=ACADEMICO`: 0 filas; `origen=XX`: 400 | Producción |
+| Impresión | La vista imprimible con `origen=DEPORTIVO` muestra «Origen: Deportivo · Historial: No disponible», fecha y «4 filas», con 4 filas en la tabla | Producción |
+| Tiempo HTTP del CSV | Desde el inicio del `fetch` hasta recibir el cuerpo completo: 5 repeticiones 704 a 1155 ms (mediana 912 ms); primera petición 1518 ms; todas con código 200 | Producción, 4 filas (390 bytes), medido desde el navegador |
+| Fórmulas | `tests/reportes-lib.spec.ts` sobre `7870f10`: 61/61, incluidos los casos de fórmulas con prefijos invisibles. No se introdujeron datos de ataque en producción | Local |
+
+**Límites.** (1) Los encabezados `Content-Type` y `Content-Disposition` no pudieron
+leerse desde la página (la herramienta los bloquea); el contenido sí se validó
+byte a byte. (2) **No se probó un PDF**: solo se comprobó la vista imprimible;
+la generación de PDF sigue cubierta únicamente por la prueba local
+(`page.pdf()`, sección 10). (3) El tiempo de 4 filas no es comparable con el
+benchmark local de 78.800 filas (11,4 s, sección 8): son cargas distintas; el
+objetivo de menos de 60 s queda demostrado por separado para cada alcance.
+(4) Los cuatro reportes con estado vacío en producción se aceptan como
+comportamiento con los datos actuales; su lógica con filas se respalda con las
+pruebas locales. (5) La conformidad manual de Lucas sobre la interfaz es
+aceptación humana, no prueba automática de API, RPC, bytes ni rendimiento.
 
 ---
 
