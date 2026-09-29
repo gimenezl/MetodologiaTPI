@@ -70,7 +70,7 @@ export function FormularioFiltros({
           los mismos.
         </p>
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {admite('q') && (
             <div className="flex flex-col gap-1.5 sm:col-span-2">
               <label htmlFor="filtro-q" className="text-sm font-semibold text-neutral-700">
