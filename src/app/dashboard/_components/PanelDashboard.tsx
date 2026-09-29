@@ -7,7 +7,7 @@ import {
   House, Users, CalendarCheck, Pulse, FileText,
   SignOut, List, X, Briefcase, ChatCenteredText, UserPlus, Lock,
   Newspaper, UserCircle, Chalkboard, GraduationCap, Student, IdentificationCard,
-  BookOpen, ForkKnife, SoccerBall, Clock, ChalkboardTeacher, ListChecks, Bus
+  BookOpen, ForkKnife, SoccerBall, Clock, ChalkboardTeacher, ListChecks, Bus, ChartBar
 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
@@ -38,6 +38,7 @@ const navItems: NavItem[] = [
   { href: '/dashboard/comedor', label: 'Comedor', icon: ForkKnife, roles: ['DIRECTOR', 'ESTUDIANTE'] },
   { href: '/dashboard/deportes', label: 'Deportes', icon: SoccerBall, roles: ['DIRECTOR', 'ESTUDIANTE'] },
   { href: '/dashboard/transporte', label: 'Transporte', icon: Bus, roles: ['DIRECTOR', 'ESTUDIANTE'] },
+  { href: '/dashboard/reportes', label: 'Reportes', icon: ChartBar, roles: ['DIRECTOR'] },
   { href: '/dashboard/asistencias', label: 'Asistencias', icon: CalendarCheck, roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE'] },
   { href: '/dashboard/cupos', label: 'Actividades', icon: Pulse, roles: ['DIRECTOR', 'DOCENTE', 'ESTUDIANTE', 'PADRE'] },
   { href: '/dashboard/solicitudes', label: 'Solicitudes', icon: FileText, roles: ['DIRECTOR'] },
@@ -255,7 +256,7 @@ export function PanelDashboard({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-[100dvh] bg-neutral-50">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex flex-col w-60 bg-white border-r border-neutral-200 fixed top-0 bottom-0 left-0">
+      <aside className="hidden lg:flex print:hidden! flex-col w-60 bg-white border-r border-neutral-200 fixed top-0 bottom-0 left-0">
         <SidebarContent onSignOut={handleSignOut} cerrandoSesion={cerrandoSesion} />
       </aside>
 
@@ -288,11 +289,11 @@ export function PanelDashboard({ children }: { children: React.ReactNode }) {
       {/* `min-w-0` (EPT-59): sin él, esta columna flexible crecía hasta el ancho
           de la tabla más ancha y el `overflow-x-auto` de las tablas no actuaba;
           a 375 px Usuarios y Legajos se desplazaban horizontalmente. */}
-      <div className="flex-1 min-w-0 lg:ml-60 flex flex-col min-h-[100dvh]">
+      <div className="flex-1 min-w-0 lg:ml-60 print:ml-0 flex flex-col min-h-[100dvh]">
         {/* Top bar */}
         <header
           className={cn(
-            'h-14 bg-white border-b border-neutral-200 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-40 transition-transform duration-300',
+            'print:hidden h-14 bg-white border-b border-neutral-200 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-40 transition-transform duration-300',
             headerHidden ? '-translate-y-full' : 'translate-y-0'
           )}
         >
@@ -322,7 +323,7 @@ export function PanelDashboard({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8">
+        <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8 print:p-0">
           {permitido ? children : (
             <div className="max-w-md mx-auto mt-12 text-center">
               <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4">
@@ -343,7 +344,7 @@ export function PanelDashboard({ children }: { children: React.ReactNode }) {
 
       {/* Bottom Navigation Bar (solo móvil) */}
       <nav
-        className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-neutral-200 flex"
+        className="lg:hidden print:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-neutral-200 flex"
         aria-label="Navegación rápida"
       >
         {bottomNavItems.filter((item) => atajoVisible(item.href, rol)).map((item) => {

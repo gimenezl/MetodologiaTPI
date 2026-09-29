@@ -53,13 +53,27 @@ const SQLSTATE_PARAMETRO_INVALIDO = 'P6301'
 const MENSAJE_GENERICO =
   'No pudimos obtener el reporte. Volvé a intentarlo en unos minutos; si continúa, avisale al equipo técnico.'
 
-type ErrorPostgres = { code?: string | null }
+type ErrorPostgres = { code?: string | null; message?: string | null }
+
+/**
+ * El rechazo de Dirección de las funciones de reportes (`42501` con este
+ * mensaje) se distingue de cualquier OTRO `42501`, como un privilegio de tabla
+ * retirado: quien llega acá ya pasó la guarda de Dirección del servidor, así que
+ * un privilegio faltante es un fallo de la instalación y no una falta de permiso
+ * de la persona. Decirle «solo Dirección puede…» a una directora sería falso.
+ */
+const MENSAJE_RECHAZO_DE_DIRECCION = /^Solo la dirección puede consultar los reportes oficiales/u
 
 /**
  * Traduce un error de PostgreSQL. Nunca devuelve al navegador el mensaje de la
  * base, un SQLSTATE, el nombre de una función ni una consulta.
  */
 function traducirError(error: ErrorPostgres, operacion: string, reporte: IdReporte | null): FalloReportes {
+  if (error.code === SQLSTATE_PRIVILEGIO_INSUFICIENTE && !MENSAJE_RECHAZO_DE_DIRECCION.test(error.message ?? '')) {
+    console.error('[reportes] privilegio insuficiente en la base', { operacion, reporte, code: error.code })
+    return { ok: false, estado: 500, codigo: 'ERROR_INTERNO', mensaje: MENSAJE_GENERICO }
+  }
+
   switch (error.code) {
     case SQLSTATE_IDENTIDAD_AUSENTE:
       return { ok: false, estado: 401, codigo: 'SIN_SESION', mensaje: 'Necesitás iniciar sesión para continuar.' }
