@@ -136,14 +136,24 @@ FROM generate_series(1, 100) AS c, generate_series(0, 11) AS k;
 -- Catálogo de horarios: lunes a viernes, diez franjas de una hora (08 a 17).
 INSERT INTO public.horarios (id, dia_semana, hora_inicio, hora_fin)
 SELECT pg_temp.uid('b4', d * 100 + s), d, make_time(7 + s, 0, 0), make_time(8 + s, 0, 0)
-FROM generate_series(1, 5) AS d, generate_series(1, 10) AS s;
+FROM generate_series(1, 5) AS d, generate_series(1, 10) AS s
+ON CONFLICT (dia_semana, hora_inicio, hora_fin) DO NOTHING;
+
+-- Otras suites ya crean franjas del catálogo (la franja es única): se reutilizan
+-- las existentes y la limpieza solo retira las que sembró este script.
+CREATE TEMPORARY TABLE hor (clave INTEGER PRIMARY KEY, id UUID NOT NULL) ON COMMIT DROP;
+INSERT INTO hor (clave, id)
+SELECT g.d * 100 + g.s, h.id
+FROM (SELECT d, s FROM generate_series(1, 5) AS d, generate_series(1, 10) AS s) AS g
+JOIN public.horarios h ON h.dia_semana = g.d AND h.hora_inicio = make_time(7 + g.s, 0, 0)
+                      AND h.hora_fin = make_time(8 + g.s, 0, 0);
 
 -- 24 franjas distintas por curso: la asignación k usa los lugares 2k y 2k+1 de
 -- una ronda de 50, de modo que un curso nunca se superpone consigo mismo.
 INSERT INTO public.materias_cursos_horarios (id, asignacion_id, horario_id)
 SELECT pg_temp.uid('b5', (c * 100 + k) * 10 + j),
        pg_temp.uid('b3', c * 100 + k),
-       pg_temp.uid('b4', ((pos - 1) / 10 + 1) * 100 + ((pos - 1) % 10 + 1))
+       (SELECT h.id FROM hor h WHERE h.clave = ((pos - 1) / 10 + 1) * 100 + ((pos - 1) % 10 + 1))
 FROM generate_series(1, 100) AS c,
      generate_series(0, 11) AS k,
      generate_series(0, 1) AS j,
@@ -172,7 +182,7 @@ FROM generate_series(0, 239) AS g;
 INSERT INTO public.grupos_deportivos_horarios (id, grupo_id, horario_id)
 SELECT pg_temp.uid('b8', g * 10 + j),
        pg_temp.uid('b7', g),
-       pg_temp.uid('b4', ((pos - 1) / 10 + 1) * 100 + ((pos - 1) % 10 + 1))
+       (SELECT h.id FROM hor h WHERE h.clave = ((pos - 1) / 10 + 1) * 100 + ((pos - 1) % 10 + 1))
 FROM generate_series(0, 239) AS g,
      generate_series(0, 1) AS j,
      LATERAL (SELECT 30 + ((g * 3 + j) % 20) + 1 AS pos) AS p;
