@@ -1,8 +1,9 @@
 # EPT-63 — RF17: Generar los reportes oficiales de la Dirección
 
-Candidato local completo. **No** integrado, **no** en producción: sin push, sin PR,
-sin `db push` productivo, sin pruebas de carga ni siembra en producción. Jira: solo
-EPT-63 pasó a «En curso» (no a «Listo»). «Implementado» no equivale a «integrado».
+Candidato con revisión independiente (sección 9.2). **No** integrado y **no** en
+producción: la migración **NO fue aplicada en producción**, sin `db push` productivo,
+sin pruebas de carga ni siembra en producción. Jira: solo EPT-63 está «En curso» (no
+«Listo»). «Implementado» no equivale a «integrado»; el merge lo hace Lucas.
 
 Base: `origin/main` = `50bef50cc0afb79274849ef179261efce3397f28` (verificado con
 `git fetch origin --prune`; EPT-62 integrado). Rama `codex/ept-63-reportes-oficiales`
@@ -28,7 +29,7 @@ que un alumno con varias materias, deportes y franjas **nunca se multiplica**.
 | Docentes por nivel | un docente × una asignación vigente, con su **origen** | no |
 
 Cada reporte tarda **menos de 1 s en pantalla** y el peor CSV completo (78 800 filas)
-**12,3 s** (mediana; máximo 12,9 s) frente al límite de 60 s (sección 8).
+**10,5 s** (mediana; máximo 11,4 s) frente al límite de 60 s (sección 8).
 
 ---
 
@@ -66,7 +67,7 @@ No hubo contradicción material: no se detuvo el trabajo ni se redujo ningún re
 | 15 | Pantalla responsive | tabla ≥1280 px, tarjetas debajo | E2E 375 px y 1280 px sin scroll horizontal | capturas |
 | 16 | CSV completo, legible, escapado, sin fórmulas | `/api/reportes/[reporte]/exportar` | unitarias `celdaCsv`; E2E CSV 78 800 y 36 000 filas, nombres hostiles | sección 9 |
 | 17 | Impresión/PDF del navegador con título, fecha y filtros | `/imprimir` + `print:` | E2E impresión + `page.pdf()` | captura de impresión |
-| 18 | Ninguna lectura se trunca al límite de 1000 filas | `leerTodasLasFilasEnParalelo` | unitarias (30 con la secuencial); E2E totales exactos | sección 9 |
+| 18 | Ninguna lectura se trunca al límite de 1000 filas ni omite o repite filas si los datos cambian a mitad de la lectura | `leerTodasLasFilasEnParalelo` (páginas solapadas en una fila, frontera verificada) | unitarias (32 con la secuencial, incluidas 500 escenarios aleatorios de altas y bajas); E2E totales exactos | secciones 8 y 9 |
 | 19 | Menos de 60 s por reporte con más de 1000 filas por dominio | funciones + lectura paralela | `reportes-rendimiento-auth.spec.ts` | sección 8 |
 | 20 | Interfaz en español, accesible | textos, etiquetas, foco, `role=status/alert` | E2E accesibilidad, sin detalle técnico | sección 10 |
 | 21 | Errores reales (401/403/400/404/405/500) | API y pantallas | `reportes.spec.ts`; E2E privilegio retirado | sección 9 |
@@ -205,23 +206,33 @@ sesión real de Dirección; 5 repeticiones. Archivo: `docs/evidence/EPT-63/medic
 
 | Reporte | Pantalla (100 filas) | Cruce | CSV completo | Impresión |
 |---|---|---|---|---|
-| alumnos por curso | 367 / 571 | 327 / 367 | 199 / 205 (3 003 filas) | 1 970 / 2 041 (3 003 filas) |
-| alumnos por materia | 766 / 800 | 323 / 364 | 2 668 / 2 951 (36 000 filas) | rechazada por el máximo (672) |
-| alumnos por deporte | 337 / 514 | 295 / 329 | 211 / 267 (3 400 filas) | 2 877 / 2 923 (3 400 filas) |
-| alumnos por horario | 691 / 839 | 339 / 377 | **12 339 / 12 944** (78 800 filas, 9,1 MiB) | rechazada por el máximo (544) |
-| alumnos por recorrido | 335 / 529 | 312 / 334 | 187 / 237 (2 500 filas) | 1 917 / 2 155 (2 500 filas) |
-| docentes por nivel | 323 / 482 | 305 / 313 | 124 / 156 (1 379 filas) | 849 / 980 (1 379 filas) |
+| alumnos por curso | 310 / 469 | 278 / 289 | 168 / 204 (3 003 filas) | 1 745 / 1 872 (3 003 filas) |
+| alumnos por materia | 686 / 722 | 278 / 303 | 2 377 / 2 407 (36 000 filas) | rechazada por el máximo (647) |
+| alumnos por deporte | 266 / 480 | 293 / 322 | 211 / 247 (3 400 filas) | 2 507 / 2 615 (3 400 filas) |
+| alumnos por horario | 536 / 845 | 264 / 291 | **10 499 / 11 410** (78 800 filas, 9,1 MiB) | rechazada por el máximo (524) |
+| alumnos por recorrido | 312 / 477 | 272 / 293 | 169 / 195 (2 500 filas) | 1 710 / 1 845 (2 500 filas) |
+| docentes por nivel | 304 / 763 | 268 / 293 | 107 / 123 (1 379 filas) | 741 / 753 (1 379 filas) |
 
 «Pantalla» incluye consulta, servidor de Next, HTML y representación hasta que la
 tabla y el total son visibles. El CSV se verifica contra el archivo recibido (filas =
-`X-Total-Filas` + encabezado). Peor caso: **12,9 s < 60 s**.
+`X-Total-Filas` + encabezado). Peor caso: **11,4 s < 60 s**. Mediciones repetidas tras la
+corrección de la sección 9.2 (5 repeticiones, `next build` + `next start`, declarado en
+`mediciones.json`); los números anteriores (12,3 s / 12,9 s) eran del lector previo.
+La siembra de 78 800 filas y todas las mediciones son locales; nunca se hicieron en
+producción.
+
+Distinción de tiempos: «pantalla» = extremo a extremo hasta ver la tabla; «cruce» =
+pantalla con cuatro filtros; «CSV» = descarga completa con el archivo verificado;
+«impresión» = vista imprimible completa. El tiempo de SQL puro está aparte
+(`tiempos-sql.txt`).
 
 **Hallazgo y corrección.** La primera medición dio 37 s (mediana; 50 s en frío) para el
 CSV de horarios: cada página con orden total resuelve y ordena el conjunto (≈0,5 s) y
 había 79 páginas en serie. Se implementó `leerTodasLasFilasEnParalelo`
-(4 páginas a la vez; la primera fija el total; cada página debe traer exactamente lo
-que le toca; las únicas deben sumar el total; si no, reintento único y 409). Bajó a
-12 s. El primer intento con `work_mem` mayor no cambió nada y se descartó.
+(4 páginas a la vez). Bajó a 12 s. La revisión independiente demostró que esa primera
+versión comprobaba solo cantidades y podía entregar filas omitidas con el mismo total
+(sección 9.2); la versión final solapa las páginas en una fila y verifica cada frontera
+(10,5 s). El primer intento con `work_mem` mayor no cambió nada y se descartó.
 
 **SQL** (`tiempos-sql.txt`, RLS activo): páginas de 1000 filas entre 8 ms (docentes) y
 261 ms (horarios); página profunda de horarios (offset 77 000) 481 ms.
@@ -256,15 +267,15 @@ datos. Se añadió `EPT_SUPABASE_WORKDIR` a `correr-autenticadas.mjs` y
 | Tipos generados (CLI 2.117.0 fijada) | dos generaciones idénticas, coincide byte a byte; diff solo agrega 194 líneas |
 | `supabase db lint` | «No schema errors found» |
 | Advisors seguridad y rendimiento | 0 hallazgos de EPT-63 |
-| `reportes_oficiales_rls.sql` | 30 comprobaciones OK, exit 0, también con la base «sucia» de Playwright |
+| `reportes_oficiales_rls.sql` | 31 comprobaciones OK (agrega R1, la reversión), exit 0 |
 | Mutación: guardia de Dirección anulada | la prueba falla (estudiante obtiene datos) |
 | Resto de pruebas SQL del repo (cursos, niveles, alumnos, materias, comedor, deportes, horarios, horarios académicos, hijos, perfiles, profesores, transporte, deportes-admin, inscripciones-admin, alta atómica, reconciliación, preflight) | exit 0 |
 | Batería EPT-59 (`usuarios_permisos_rls.sql`, como `supabase_admin`) | exit 0; cubre 73 envoltorios; sin `42P17` |
-| `tests/reportes-lib.spec.ts` | 52 pasan |
-| `tests/paginacion.spec.ts` + `paginacion-paralela.spec.ts` | 30 pasan |
+| `tests/reportes-lib.spec.ts` | 60 pasan (8 casos nuevos de fórmulas con prefijos invisibles) |
+| `tests/paginacion.spec.ts` + `paginacion-paralela.spec.ts` | 32 pasan (incluye la baja+alta con el mismo total y 500 escenarios aleatorios) |
 | `reportes-auth.spec.ts` DIRECTOR (con más de 1000 filas por dominio) | 44 pasan (incluye el setup) |
 | `reportes-auth.spec.ts` (todos los actores) + `reportes.spec.ts` + `reportes-lib.spec.ts` | 123 pasan, 1 omitida (el menú no aplica a un bloqueado), sobre la base «sucia» de la suite completa |
-| `reportes-rendimiento-auth.spec.ts` (`EPT_BENCH=1`, producción) | 27 pasan; todo < 60 s |
+| `reportes-rendimiento-auth.spec.ts` (`EPT_BENCH=1`, producción) | 27 pasan; todo < 60 s (peor CSV 11,4 s) |
 | `git diff --check` | sin salida |
 | `npx tsc --noEmit --incremental false` | exit 0 |
 | ESLint focalizado en los archivos nuevos | 0 errores, 0 advertencias |
@@ -275,22 +286,60 @@ datos. Se añadió `EPT_SUPABASE_WORKDIR` a `correr-autenticadas.mjs` y
 ### 9.1 Suite E2E completa
 
 `node supabase/tests/correr-autenticadas.mjs` (todos los proyectos: escritorio,
-Pixel 5, iPhone 13 y una sesión por rol), contra el stack aislado, base reseteada
-antes de empezar: **1275 pasaron, 11 omitidas, 0 fallaron, exit 0** (21,8 min).
+Pixel 5, iPhone 13 y una sesión por rol), contra un stack aislado **creado desde
+cero** para la revisión (`project_id` `ept63rev`, 24 migraciones aplicadas sin error),
+sobre el HEAD final: **1285 pasaron, 11 omitidas, 0 fallaron, exit 0** (19,7 min).
 
-Historia honesta de la corrida: la primera suite completa dio 7 fallos, **todos míos**:
-mi siembra de volumen chocaba con la franja lunes 08:00–09:00 que otras suites ya
-crean (`horarios_franja_unica`) y pasó inadvertida en corridas aisladas. Se corrigió
-(`ON CONFLICT DO NOTHING` y resolución por día y horas). La segunda dio 1 fallo: la
-comprobación de desplazamiento horizontal a 375 px se evaluaba antes de que el diseño
-se asentara; ahora reintenta y, si falla, nombra los elementos que desbordan. La
-tercera pasó completa. No hubo fallos preexistentes en la suite E2E. Las capturas de
-EPT-13 que la suite regenera se restauraron (`git checkout`) para no mezclar
-evidencia ajena.
+Historia honesta: en la revisión, la corrida completa anterior a la última corrección
+falló una vez en «375 px» (desborde de 4 px en los filtros de «alumnos por curso»); se
+corrigió (`grid-cols-1` explícito y `min-w-0`) y la corrida completa posterior pasó
+sin fallos. Las capturas de EPT-13 que la suite regenera se restauraron con
+`git checkout` para no mezclar evidencia ajena.
 
-Omitidas (11): una es de EPT-63 (el menú no aplica a un perfil bloqueado); las demás
-son omisiones condicionadas de la suite existente que no se auditaron una por una.
-La medición de rendimiento (`EPT_BENCH=1`) corre aparte, sección 8.
+**Las 11 omitidas, una por una** (ninguna debía haber corrido en esta suite):
+
+| # | Prueba | Motivo |
+|---|---|---|
+| 1 | `inscripciones-administracion-ui` «objetivos táctiles… en móvil» (chromium) | `test.skip(!esMovil)`: solo aplica a los perfiles móviles |
+| 2 | `comedor-ui` «se opera con el teclado» (iPhone 13) | el perfil táctil de WebKit no expone teclado físico |
+| 3 | `inscripciones-administracion-ui` «se opera con el teclado» (iPhone 13) | ídem |
+| 4 | `transporte-ui` «se opera con el teclado» (iPhone 13) | ídem |
+| 5–10 | `reportes-rendimiento-auth` (6 reportes) | `EPT_BENCH` no está definida: son mediciones y se corren aparte (27 pasan, sección 8) |
+| 11 | `reportes-auth` «el menú no ofrece Reportes» (director bloqueado) | un perfil bloqueado no llega al panel; la ausencia de acceso se prueba en las otras tres pruebas del mismo actor |
+
+---
+
+### 9.2 Revisión independiente y correcciones
+
+Revisión de todos los cambios de la rama contra el contrato aprobado, sin apoyarse en el
+informe previo. Defectos candidato-causados encontrados y corregidos en la misma rama:
+
+| # | Severidad | Hallazgo | Corrección | Prueba |
+|---|---|---|---|---|
+| 1 | **Alta** (completitud) | `leerTodasLasFilasEnParalelo` comprobaba solo cantidades. Una baja en una página ya leída y un alta al final dejan el total igual y corren un lugar las filas siguientes: el CSV/impresión podía omitir una fila y repetir otra con el mismo total. Reproducido: 317 de 500 escenarios daban un listado incompleto con `ok: true` | páginas solapadas en una fila y frontera verificada; sin tope propio se usa el observado; sin total utilizable falla (`src/lib/paginacion.ts`) | `paginacion-paralela.spec.ts`: caso determinista y 500 escenarios aleatorios (fallaban antes, pasan después) |
+| 2 | Media (seguridad) | El CSV no neutralizaba fórmulas con prefijos de control o invisibles (`\x01=…`, `U+200B=…`) | patrón Unicode `[\s\p{Cc}\p{Cf}\p{Z}]` (`src/lib/reportes.ts`) | 8 casos en `reportes-lib.spec.ts` |
+| 3 | Media (requisito) | Impresión de más de 10 000 filas: solo un texto genérico «No pudimos cargar el reporte»; sin filtros aplicados ni forma de bajar el CSV | `PanelImpresionExcedida`: total, filtros y botón «Exportar CSV» | E2E «impresión… más filas que el máximo imprimible» |
+| 4 | Media (aislamiento) | Con `EPT_SUPABASE_WORKDIR` la API apuntaba al stack aislado pero los `psql` de siembra y limpieza usaban por defecto el contenedor del stack **compartido** | el arnés deduce el contenedor del `project_id` y exige que publique el mismo puerto de base que la API; si no, no corre (`correr-autenticadas.mjs`) | negativa (contenedor equivocado) y positiva verificadas a mano |
+| 5 | Baja (evidencia) | Dos capturas mostraban «Cargando…»; el benchmark declaraba «desarrollo» por omitir `EPT_BENCH_MODO` | la prueba espera el contenido; capturas y mediciones regeneradas | capturas revisadas |
+| 6 | Baja (UI) | Los filtros desbordaban 4 px a 375 px en la corrida completa | `grid-cols-1` y `min-w-0` | E2E 375 px |
+| 7 | Baja (prueba) | La reversión no tenía prueba propia | sección R1 de `reportes_oficiales_rls.sql`; con un `DROP` de menos falla | SQL |
+
+**Aclaración del conteo.** La migración crea **10 funciones**: 7 públicas (6 reportes y
+el catálogo) y 3 privadas. Los 10 `DROP` documentados las sueltan exactamente, sin tocar
+objetos previos ni dejar nuevos (verificado ejecutándolos en una transacción con
+`ROLLBACK` y con la prueba R1). No existe ninguna afirmación de «9 funciones» en el
+repositorio.
+
+**Verificado sin hallazgos:** funciones `SECURITY INVOKER` (no hay `SECURITY DEFINER`
+nuevo) con `search_path` vacío, `EXECUTE` solo para `authenticated`, Dirección exigida
+por `es_director_actual()` (rol DIRECTOR y acceso HABILITADO); 7 actores rechazados con
+`42501` (anónimo, estudiante, docente, padre, personal, dirección bloqueada, sin perfil),
+en SQL y por PostgREST con sesión real; sin escrituras; `confirmada_por` y variantes
+ausentes de columnas, tipos, API, CSV, impresión y capturas; «responsable» es el
+profesor; sin SQL dinámico con valores del llamador; separador `;` documentado, BOM y
+CRLF; `db lint` sin errores y 0 hallazgos de los advisors sobre objetos de EPT-63.
+Una revisión fresca del delta posterior a la corrección no halló defectos altos ni
+medios.
 
 ---
 
@@ -325,8 +374,18 @@ No se regeneraron las capturas de otras historias.
 3. **Volumen mucho mayor**: las estimaciones de filas con RLS son pobres (sección 8);
    si el colegio creciera órdenes de magnitud convendría revisar estadísticas o
    materializar. Con el volumen medido hay 4× de margen sobre el límite.
-4. **Concurrencia con altas**: si los datos cambian durante una exportación, se
-   reintenta una vez y luego se informa (409); no hay instantánea entre páginas.
+4. **Concurrencia con altas**: no hay instantánea entre páginas (cada página es una
+   consulta propia). La lectura garantiza que toda fila que existió durante TODA la
+   lectura, con su clave de orden sin cambios, aparece exactamente una vez; ante
+   cualquier corrimiento se reintenta una vez y luego se informa (409). Las filas que
+   se dan de alta o de baja mientras se lee pueden o no figurar, como en cualquier
+   lectura confirmada.
+8. **Memoria y duración**: el CSV y la impresión se arman en memoria (un objeto por fila)
+   y el tope es de 500 000 filas; con el volumen medido (78 800) el archivo pesa 9,1 MiB
+   y tarda ~11 s. No se fijó `maxDuration` de la ruta: conviene comprobar el límite del
+   plan de despliegue con datos reales tras el merge (no se siembra producción).
+9. **Búsqueda de docentes**: el rótulo «Buscar por nombre, apellido o legajo» es común a
+   los seis reportes, pero en docentes la búsqueda no incluye el legajo.
 5. **Un stack compartido** entre checkouts sigue siendo frágil (`db reset` ajeno).
 6. La descarga con `fetch` requiere JavaScript (el panel ya lo requiere).
 7. Preexistente: 14 errores de ESLint en archivos ajenos (no se tocaron).
@@ -335,7 +394,11 @@ No se regeneraron las capturas de otras historias.
 
 ## 12. Reversión
 
-La migración es aditiva y no toca filas ni tablas. Revertir el comportamiento sin
+La migración es aditiva y no toca filas ni tablas. Crea **10 funciones** (7 públicas y
+3 privadas) y los 10 `DROP` de abajo las sueltan exactamente: la sección R de
+`reportes_oficiales_rls.sql` los ejecuta literalmente y comprueba que no cambia ninguna
+fila, que no queda ninguna función de reportes y que no se pierde ninguna función previa
+(con una mutación, un `DROP` de menos, la prueba falla). Revertir el comportamiento sin
 perder datos:
 
 ```sql
@@ -360,16 +423,18 @@ migrar. Si se revierte solo la aplicación, las funciones quedan inertes.
 ## 13. Comandos reproducibles
 
 ```bash
-# Stack aislado y reset (desde un directorio con su propio supabase/config.toml)
+# Stack aislado y reset (desde un directorio con su propio supabase/config.toml).
+# correr-autenticadas.mjs deduce el contenedor de psql del project_id y se niega a
+# correr si no publica el mismo puerto de base que la API.
 npx supabase start -x studio,realtime,storage-api,imgproxy,edge-runtime,logflare,vector,postgres-meta
 npx supabase db reset --local
 # Pruebas SQL (cada una imprime OK/FALLO)
 docker exec -i <db> psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/reportes_oficiales_rls.sql
 # E2E completas contra el stack aislado
-EPT_SUPABASE_WORKDIR=<dir> EPT_SUPABASE_DB_CONTAINER=<db> node supabase/tests/correr-autenticadas.mjs
+EPT_SUPABASE_WORKDIR=<dir> EPT_TEST_SMTP_PORT=<puerto smtp del stack> node supabase/tests/correr-autenticadas.mjs
 # Medición (modo producción)
 npm run build && npx next start -p 3000
-EPT_BENCH=1 EPT_SUPABASE_WORKDIR=<dir> EPT_SUPABASE_DB_CONTAINER=<db> node supabase/tests/correr-autenticadas.mjs tests/reportes-rendimiento-auth.spec.ts --project=setup --project=chromium-directora
+EPT_BENCH_MODO="producción (next build + next start)" EPT_BENCH=1 EPT_SUPABASE_WORKDIR=<dir> node supabase/tests/correr-autenticadas.mjs tests/reportes-rendimiento-auth.spec.ts --project=setup --project=chromium-directora
 ```
 
 ---
@@ -378,12 +443,12 @@ EPT_BENCH=1 EPT_SUPABASE_WORKDIR=<dir> EPT_SUPABASE_DB_CONTAINER=<db> node supab
 
 ### Comentario de Jira (EPT-63)
 
-Implementé RF17 en la rama `codex/ept-63-reportes-oficiales` (sin push ni PR). Seis
+Implementé RF17 en la rama `codex/ept-63-reportes-oficiales`; revisión independiente hecha (docs/evidence/EPT-63.md, sección 9.2). Seis
 reportes con grano declarado y filtros cruzados aplicados por el servidor; CSV
 completo e impresión/PDF del navegador; solo Dirección, con exigencia repetida en
 PostgreSQL. `confirmada_por` no aparece en ninguna superficie. Con más de 1000 filas
-por dominio, el peor CSV completo (78 800 filas) tarda 12,9 s y ninguna medición
-supera 60 s. Evidencia: `docs/evidence/EPT-63.md`.
+por dominio, el peor CSV completo (78 800 filas) tarda 11,4 s y ninguna medición
+supera 60 s. La migración NO fue aplicada en producción. Evidencia: `docs/evidence/EPT-63.md`.
 
 ### Descripción del PR
 

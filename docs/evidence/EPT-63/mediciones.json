@@ -1,6 +1,6 @@
 {
   "entorno": {
-    "fecha": "2026-09-29T02:32:35.330Z",
+    "fecha": "2026-09-29T04:58:14.689Z",
     "sistema": "Windows_NT 10.0.19045 (x64)",
     "cpu": "Intel(R) Core(TM) i5-14400F × 16",
     "memoriaGiB": 32,
@@ -28,55 +28,55 @@
     "alumnos-por-curso": {
       "pantalla": {
         "ms": [
-          571,
-          400,
-          355,
-          367,
-          358
+          469,
+          310,
+          310,
+          306,
+          340
         ],
-        "mediana": 367,
-        "minimo": 355,
-        "maximo": 571,
+        "mediana": 310,
+        "minimo": 306,
+        "maximo": 469,
         "filas": 3003
       },
       "cruce": {
         "ms": [
-          367,
-          340,
-          322,
-          327,
-          306
+          289,
+          287,
+          278,
+          263,
+          258
         ],
-        "mediana": 327,
-        "minimo": 306,
-        "maximo": 367
+        "mediana": 278,
+        "minimo": 258,
+        "maximo": 289
       },
       "csv": {
         "ms": [
-          205,
-          205,
-          199,
-          179,
-          155
+          204,
+          168,
+          137,
+          164,
+          176
         ],
-        "mediana": 199,
-        "minimo": 155,
-        "maximo": 205,
+        "mediana": 168,
+        "minimo": 137,
+        "maximo": 204,
         "csvFilas": 3003,
         "csvBytes": 246458,
         "csvPaginasDe1000": 4
       },
       "impresion": {
         "ms": [
-          2041,
-          1949,
-          1970,
-          1944,
-          2014
+          1872,
+          1726,
+          1674,
+          1745,
+          1767
         ],
-        "mediana": 1970,
-        "minimo": 1944,
-        "maximo": 2041,
+        "mediana": 1745,
+        "minimo": 1674,
+        "maximo": 1872,
         "impresionFilas": 3003,
         "impresionRechazadaPorMaximo": false
       }
@@ -84,55 +84,55 @@
     "alumnos-por-materia": {
       "pantalla": {
         "ms": [
-          488,
-          800,
-          701,
-          781,
-          766
+          497,
+          722,
+          703,
+          686,
+          674
         ],
-        "mediana": 766,
-        "minimo": 488,
-        "maximo": 800,
+        "mediana": 686,
+        "minimo": 497,
+        "maximo": 722,
         "filas": 36000
       },
       "cruce": {
         "ms": [
-          288,
-          364,
-          323,
-          309,
-          350
+          257,
+          263,
+          303,
+          278,
+          281
         ],
-        "mediana": 323,
-        "minimo": 288,
-        "maximo": 364
+        "mediana": 278,
+        "minimo": 257,
+        "maximo": 303
       },
       "csv": {
         "ms": [
-          2951,
-          2664,
-          2613,
-          2668,
-          2790
+          2407,
+          2396,
+          2359,
+          2377,
+          2343
         ],
-        "mediana": 2668,
-        "minimo": 2613,
-        "maximo": 2951,
+        "mediana": 2377,
+        "minimo": 2343,
+        "maximo": 2407,
         "csvFilas": 36000,
         "csvBytes": 3169220,
         "csvPaginasDe1000": 36
       },
       "impresion": {
         "ms": [
-          672,
-          715,
-          680,
-          650,
-          655
+          659,
+          646,
+          633,
+          690,
+          647
         ],
-        "mediana": 672,
-        "minimo": 650,
-        "maximo": 715,
+        "mediana": 647,
+        "minimo": 633,
+        "maximo": 690,
         "impresionFilas": 0,
         "impresionRechazadaPorMaximo": true
       }
@@ -140,55 +140,55 @@
     "alumnos-por-deporte": {
       "pantalla": {
         "ms": [
-          514,
-          337,
-          337,
+          480,
+          266,
           269,
-          340
+          235,
+          252
         ],
-        "mediana": 337,
-        "minimo": 269,
-        "maximo": 514,
+        "mediana": 266,
+        "minimo": 235,
+        "maximo": 480,
         "filas": 3400
       },
       "cruce": {
         "ms": [
-          329,
-          295,
-          290,
-          273,
-          309
+          291,
+          293,
+          294,
+          279,
+          322
         ],
-        "mediana": 295,
-        "minimo": 273,
-        "maximo": 329
+        "mediana": 293,
+        "minimo": 279,
+        "maximo": 322
       },
       "csv": {
         "ms": [
-          267,
-          205,
-          211,
-          216,
-          201
+          247,
+          206,
+          222,
+          193,
+          211
         ],
         "mediana": 211,
-        "minimo": 201,
-        "maximo": 267,
+        "minimo": 193,
+        "maximo": 247,
         "csvFilas": 3400,
         "csvBytes": 414332,
         "csvPaginasDe1000": 4
       },
       "impresion": {
         "ms": [
-          2779,
-          2920,
-          2923,
-          2877,
-          2786
+          2615,
+          2564,
+          2494,
+          2466,
+          2507
         ],
-        "mediana": 2877,
-        "minimo": 2779,
-        "maximo": 2923,
+        "mediana": 2507,
+        "minimo": 2466,
+        "maximo": 2615,
         "impresionFilas": 3400,
         "impresionRechazadaPorMaximo": false
       }
@@ -196,55 +196,55 @@
     "alumnos-por-horario": {
       "pantalla": {
         "ms": [
-          839,
-          578,
-          739,
-          691,
-          633
+          845,
+          508,
+          598,
+          506,
+          536
         ],
-        "mediana": 691,
-        "minimo": 578,
-        "maximo": 839,
+        "mediana": 536,
+        "minimo": 506,
+        "maximo": 845,
         "filas": 78800
       },
       "cruce": {
         "ms": [
-          283,
-          338,
-          360,
-          377,
-          339
+          254,
+          291,
+          264,
+          262,
+          275
         ],
-        "mediana": 339,
-        "minimo": 283,
-        "maximo": 377
+        "mediana": 264,
+        "minimo": 254,
+        "maximo": 291
       },
       "csv": {
         "ms": [
-          12944,
-          11322,
-          11981,
-          12339,
-          12384
+          11129,
+          11410,
+          10499,
+          10408,
+          10432
         ],
-        "mediana": 12339,
-        "minimo": 11322,
-        "maximo": 12944,
+        "mediana": 10499,
+        "minimo": 10408,
+        "maximo": 11410,
         "csvFilas": 78800,
         "csvBytes": 9321664,
         "csvPaginasDe1000": 79
       },
       "impresion": {
         "ms": [
-          515,
-          534,
-          547,
-          544,
-          557
+          511,
+          524,
+          520,
+          570,
+          526
         ],
-        "mediana": 544,
-        "minimo": 515,
-        "maximo": 557,
+        "mediana": 524,
+        "minimo": 511,
+        "maximo": 570,
         "impresionFilas": 0,
         "impresionRechazadaPorMaximo": true
       }
@@ -252,55 +252,55 @@
     "alumnos-por-recorrido": {
       "pantalla": {
         "ms": [
-          529,
-          310,
-          335,
-          323,
-          335
+          477,
+          294,
+          338,
+          312,
+          310
         ],
-        "mediana": 335,
-        "minimo": 310,
-        "maximo": 529,
+        "mediana": 312,
+        "minimo": 294,
+        "maximo": 477,
         "filas": 2500
       },
       "cruce": {
         "ms": [
-          302,
-          334,
-          266,
-          312,
-          331
+          272,
+          293,
+          293,
+          259,
+          265
         ],
-        "mediana": 312,
-        "minimo": 266,
-        "maximo": 334
+        "mediana": 272,
+        "minimo": 259,
+        "maximo": 293
       },
       "csv": {
         "ms": [
-          225,
-          237,
-          171,
-          187,
-          178
+          189,
+          195,
+          169,
+          167,
+          162
         ],
-        "mediana": 187,
-        "minimo": 171,
-        "maximo": 237,
+        "mediana": 169,
+        "minimo": 162,
+        "maximo": 195,
         "csvFilas": 2500,
         "csvBytes": 412798,
         "csvPaginasDe1000": 3
       },
       "impresion": {
         "ms": [
-          2155,
-          1917,
-          1898,
-          1936,
-          1848
+          1845,
+          1810,
+          1706,
+          1710,
+          1689
         ],
-        "mediana": 1917,
-        "minimo": 1848,
-        "maximo": 2155,
+        "mediana": 1710,
+        "minimo": 1689,
+        "maximo": 1845,
         "impresionFilas": 2500,
         "impresionRechazadaPorMaximo": false
       }
@@ -308,55 +308,55 @@
     "docentes-por-nivel": {
       "pantalla": {
         "ms": [
-          482,
-          299,
-          323,
-          299,
-          348
+          763,
+          304,
+          282,
+          269,
+          309
         ],
-        "mediana": 323,
-        "minimo": 299,
-        "maximo": 482,
+        "mediana": 304,
+        "minimo": 269,
+        "maximo": 763,
         "filas": 1379
       },
       "cruce": {
         "ms": [
-          313,
-          305,
-          278,
-          313,
-          290
+          286,
+          262,
+          268,
+          293,
+          260
         ],
-        "mediana": 305,
-        "minimo": 278,
-        "maximo": 313
+        "mediana": 268,
+        "minimo": 260,
+        "maximo": 293
       },
       "csv": {
         "ms": [
-          116,
-          124,
-          156,
-          128,
-          119
+          113,
+          104,
+          102,
+          107,
+          123
         ],
-        "mediana": 124,
-        "minimo": 116,
-        "maximo": 156,
+        "mediana": 107,
+        "minimo": 102,
+        "maximo": 123,
         "csvFilas": 1379,
         "csvBytes": 119567,
         "csvPaginasDe1000": 2
       },
       "impresion": {
         "ms": [
-          828,
-          980,
-          837,
-          852,
-          849
+          750,
+          741,
+          753,
+          685,
+          729
         ],
-        "mediana": 849,
-        "minimo": 828,
-        "maximo": 980,
+        "mediana": 741,
+        "minimo": 685,
+        "maximo": 753,
         "impresionFilas": 1379,
         "impresionRechazadaPorMaximo": false
       }
