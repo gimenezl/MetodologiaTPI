@@ -1,5 +1,6 @@
 import { Lock, WarningCircle } from '@phosphor-icons/react/dist/ssr'
 import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
+import { AccionesReporte } from './AccionesReporte'
 
 /** Paneles de servidor de la sección de reportes: acceso restringido y error de lectura. */
 
@@ -20,6 +21,57 @@ export function PanelRestringido({
       <EnlaceBoton href={accion?.href ?? '/dashboard'} className="mt-6">
         {accion?.texto ?? 'Volver al panel'}
       </EnlaceBoton>
+    </div>
+  )
+}
+
+/**
+ * La vista imprimible se niega a imprimir un conjunto demasiado grande. No es un
+ * fallo de lectura: se explica con el total exacto y los filtros aplicados, y se
+ * ofrece lo que sí corresponde (acotar con filtros o exportar el CSV completo).
+ */
+export function PanelImpresionExcedida({
+  titulo,
+  mensaje,
+  total,
+  filtros,
+  urlExportar,
+  volver,
+}: {
+  titulo: string
+  mensaje: string
+  total: number
+  filtros: { etiqueta: string; valor: string }[]
+  urlExportar: string
+  /** El reporte en pantalla, con los mismos filtros, para acotarlos. */
+  volver: string
+}) {
+  return (
+    <div className="max-w-2xl mx-auto space-y-6">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-widest text-brand-600 mb-2">Reportes oficiales</p>
+        <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">{titulo}</h1>
+      </div>
+      <div role="alert" className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex gap-3 items-start">
+        <WarningCircle size={22} weight="fill" className="text-amber-600 shrink-0 mt-0.5" aria-hidden="true" />
+        <div className="space-y-3">
+          <p className="text-sm font-semibold text-amber-900">Este reporte es demasiado grande para imprimirlo</p>
+          <p className="text-sm text-amber-900">{mensaje}</p>
+          <p className="text-xs text-amber-900">
+            <span className="font-semibold">Filtros aplicados:</span>{' '}
+            {filtros.map((f) => `${f.etiqueta}: ${f.valor}`).join(' · ')}
+          </p>
+          <AccionesReporte urlExportar={urlExportar} urlImprimir={volver} total={total} conImpresion={false} />
+          <div className="flex flex-wrap gap-2">
+            <EnlaceBoton href={volver} variant="outline">
+              Acotar con filtros
+            </EnlaceBoton>
+            <EnlaceBoton href="/dashboard/reportes" variant="ghost">
+              Volver a los reportes
+            </EnlaceBoton>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

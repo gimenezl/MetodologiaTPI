@@ -62,7 +62,8 @@ export function FormularioFiltros({
 
   return (
     <form method="get" action={base} className="bg-white rounded-2xl border border-neutral-200 p-4 sm:p-5 space-y-4">
-      <fieldset className="space-y-4">
+      {/* min-w-0: un fieldset no se achica por debajo de su contenido y a 375 px desbordaba. */}
+      <fieldset className="space-y-4 min-w-0">
         <legend className="text-sm font-bold text-neutral-900">Filtros</legend>
         <p className="text-xs text-neutral-500 -mt-2 max-w-[80ch]">
           Los filtros se combinan y los aplica el servidor: la pantalla, el CSV y la impresión usan siempre

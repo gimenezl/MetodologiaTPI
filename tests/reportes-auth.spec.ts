@@ -569,13 +569,18 @@ test.describe('DIRECTOR autenticado — reportes oficiales con volumen', () => {
     await capturar(page, 'escritorio-impresion')
   })
 
-  test('impresión: un reporte con más filas que el máximo imprimible lo dice con el total exacto y ofrece acotar', async ({ page }) => {
+  test('impresión: un reporte con más filas que el máximo imprimible lo dice con el total y los filtros, y ofrece el CSV completo', async ({ page }) => {
     const total = ESPERADO.franjas()
     expect(total).toBeGreaterThan(10_000)
-    await page.goto('/dashboard/reportes/alumnos-por-horario/imprimir')
-    const alerta = page.getByRole('alert').filter({ hasText: 'No pudimos cargar el reporte' })
-    await expect(alerta).toContainText(`${total.toLocaleString('es-AR')} filas`)
-    await expect(alerta).toContainText('exportalo en CSV')
+    await page.goto('/dashboard/reportes/alumnos-por-horario/imprimir?origen=ACADEMICO')
+    const alerta = page.getByRole('alert').filter({ hasText: 'demasiado grande para imprimirlo' })
+    await expect(alerta).toContainText('filas, más que las 10.000')
+    await expect(alerta).toContainText('Origen: Académico')
+    await expect(alerta).toContainText('Historial: No disponible')
+    // No recorta en silencio ni finge un error de lectura: ofrece el CSV y acotar.
+    await expect(alerta.getByRole('button', { name: 'Exportar CSV' })).toBeEnabled()
+    await expect(alerta.getByRole('link', { name: 'Acotar con filtros' })).toHaveAttribute('href', /origen=ACADEMICO/)
+    await expect(page.getByRole('alert').filter({ hasText: 'No pudimos cargar el reporte' })).toHaveCount(0)
     await expect(page.getByRole('table')).toHaveCount(0)
   })
 
@@ -616,9 +621,14 @@ test.describe('DIRECTOR autenticado — reportes oficiales con volumen', () => {
       const cabeceras = page.getByRole('table').getByRole('columnheader')
       expect(await cabeceras.count()).toBeGreaterThan(5)
     }
+    // Se espera el contenido antes de capturar: sin esto la captura mostraba «Cargando…».
     await page.goto('/dashboard/reportes/alumnos-por-horario?origen=DEPORTIVO&tamano=25')
+    await expect(page.getByRole('status').filter({ hasText: /Mostrando/ })).toBeVisible()
+    await expect(page.getByRole('table')).toBeVisible()
     await capturar(page, 'escritorio-alumnos-por-horario')
     await page.goto('/dashboard/reportes/docentes-por-nivel?tamano=25')
+    await expect(page.getByRole('status').filter({ hasText: /Mostrando/ })).toBeVisible()
+    await expect(page.getByRole('table')).toBeVisible()
     await capturar(page, 'escritorio-docentes-por-nivel')
   })
 

@@ -175,7 +175,7 @@ test.describe('DIRECTOR autenticado — rendimiento de los reportes', () => {
       await repetir(id, 'impresion', async () => {
         const t0 = performance.now()
         await page.goto(`/dashboard/reportes/${id}/imprimir`, { waitUntil: 'domcontentloaded' })
-        const rechazo = page.getByRole('alert').filter({ hasText: 'No pudimos cargar el reporte' })
+        const rechazo = page.getByRole('alert').filter({ hasText: 'demasiado grande para imprimirlo' })
         await expect(page.getByRole('article').or(rechazo)).toBeVisible({ timeout: LIMITE_MS })
         const ms = performance.now() - t0
         const rechazada = (await rechazo.count()) > 0

@@ -38,10 +38,13 @@ export function AccionesReporte({
   urlExportar,
   urlImprimir,
   total,
+  conImpresion = true,
 }: {
   urlExportar: string
   urlImprimir: string
   total: number
+  /** Falso en la vista que rechaza imprimir por tamaño: ahí solo se ofrece el CSV completo. */
+  conImpresion?: boolean
 }) {
   const [estado, setEstado] = useState<Estado>({ fase: 'reposo' })
   const sinFilas = total === 0
@@ -99,10 +102,12 @@ export function AccionesReporte({
           <DownloadSimple size={18} weight="bold" aria-hidden="true" />
           Exportar CSV
         </Button>
-        <EnlaceBoton href={urlImprimir} variant="outline" aria-describedby={sinFilas ? 'acciones-sin-filas' : undefined}>
-          <Printer size={18} weight="bold" aria-hidden="true" />
-          Imprimir o guardar como PDF
-        </EnlaceBoton>
+        {conImpresion && (
+          <EnlaceBoton href={urlImprimir} variant="outline" aria-describedby={sinFilas ? 'acciones-sin-filas' : undefined}>
+            <Printer size={18} weight="bold" aria-hidden="true" />
+            Imprimir o guardar como PDF
+          </EnlaceBoton>
+        )}
       </div>
 
       {sinFilas && (

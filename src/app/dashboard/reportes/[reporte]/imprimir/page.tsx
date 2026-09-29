@@ -13,7 +13,7 @@ import {
 import { requerirDirector } from '@/services/autorizacion'
 import { MAXIMO_FILAS_PARA_IMPRIMIR, leerCatalogos, leerReporteCompleto } from '@/services/reportes.service'
 import { BotonImprimir } from '../../_components/BotonImprimir'
-import { PanelErrorLectura, PanelRestringido } from '../../_components/Paneles'
+import { PanelErrorLectura, PanelImpresionExcedida, PanelRestringido } from '../../_components/Paneles'
 import { TablaReporte } from '../../_components/TablaReporte'
 
 export const metadata: Metadata = {
@@ -82,12 +82,27 @@ export default async function ImprimirReportePage({
     leerReporteCompleto(reporte.id, filtros, { maximoFilas: MAXIMO_FILAS_PARA_IMPRIMIR }),
   ])
 
+  const aplicados = describirFiltros(reporte, filtros, catalogos.ok ? catalogos.datos : null)
+
   if (!lectura.ok) {
+    // Más filas que el máximo imprimible: no es un fallo, se ofrece acotar o exportar todo.
+    if (lectura.codigo === 'DEMASIADAS_FILAS' && lectura.total !== undefined) {
+      const parametrosExportacion = parametrosDeUrl(filtros).toString()
+      return (
+        <PanelImpresionExcedida
+          titulo={reporte.titulo}
+          mensaje={lectura.mensaje}
+          total={lectura.total}
+          filtros={aplicados}
+          urlExportar={`/api/reportes/${reporte.id}/exportar${parametrosExportacion ? `?${parametrosExportacion}` : ''}`}
+          volver={volver}
+        />
+      )
+    }
     return <PanelErrorLectura titulo={reporte.titulo} mensaje={lectura.mensaje} reintentar={volver} />
   }
 
   const { filas, total } = lectura.datos
-  const aplicados = describirFiltros(reporte, filtros, catalogos.ok ? catalogos.datos : null)
   const emitido = fechaHora(new Date().toISOString())
 
   return (
