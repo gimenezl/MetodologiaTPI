@@ -95,6 +95,12 @@ type FilaConIdYTotal = FilaConId & { total_filas: number }
 /** Páginas que se piden a la vez. Cada una vuelve a resolver el conjunto, así que más no ayuda. */
 export const CONCURRENCIA_POR_DEFECTO = 4
 
+/**
+ * La respuesta no cumple el contrato (sin `total_filas` utilizable, o una página que
+ * no puede solaparse). No es un cambio de datos: reintentar no la arregla.
+ */
+export const ERROR_RESPUESTA_INVALIDA = 'ERROR_RESPUESTA_INVALIDA'
+
 type OpcionesEnParalelo = Opciones & { concurrencia?: number }
 
 /**
@@ -105,15 +111,29 @@ type OpcionesEnParalelo = Opciones & { concurrencia?: number }
  * que resolver y ordenar el conjunto entero en CADA página. Leer 79 páginas una
  * tras otra multiplica ese costo por 79; pedirlas de a `concurrencia` lo divide.
  *
- * Reglas, las mismas de la lectura secuencial y dos más:
+ * Garantía. Cada página es una consulta con su propia foto de la base: entre dos
+ * páginas puede haber altas y bajas. Comparar solo CANTIDADES no alcanza: una baja
+ * en una página ya leída y un alta al final dejan el total igual y corren un lugar
+ * todas las filas siguientes, de modo que una fila se omite y otra queda de más con
+ * el mismo total. Por eso las páginas SE SOLAPAN EN UNA FILA: la página `k` arranca
+ * en la última fila de la `k-1`, y las dos tienen que coincidir. Si entre las dos
+ * lecturas cambió algo que corre el orden antes de esa frontera, la fila de la
+ * frontera no coincide y la lectura falla. Con el orden total (clave única como
+ * último criterio) esto asegura que toda fila que existió durante TODA la lectura,
+ * con su clave de orden sin cambios, aparece exactamente una vez. Las filas que se
+ * dieron de alta o de baja mientras se leía pueden o no figurar (como en cualquier
+ * lectura confirmada): lo que nunca ocurre es que falte una fila estable.
  *
- *  1. La primera página va sola: fija el total y comprueba la cota ANTES de leer
- *     el resto (más de `maximoPaginas` páginas falla con `ERROR_LIMITE_DE_PAGINAS`).
- *  2. Si el servidor devolvió menos filas que las pedidas habiendo más
- *     (su tope es menor que `tamano`), no se puede saber qué página cae dónde:
- *     se cae a la lectura secuencial, que no lo supone.
- *  3. Cada página tiene que traer EXACTAMENTE las filas que le corresponden según
- *     el total. Otro largo significa que los datos cambiaron a mitad de la lectura.
+ * Reglas:
+ *
+ *  1. La primera página va sola: fija el total y la capacidad de página, y comprueba
+ *     la cota ANTES de leer el resto (más de `tamano × maximoPaginas` filas falla con
+ *     `ERROR_LIMITE_DE_PAGINAS`).
+ *  2. Si el servidor devolvió menos filas que las pedidas habiendo más (su tope es
+ *     menor que `tamano`), esa cantidad pasa a ser la capacidad de cada página.
+ *  3. Cada página tiene que traer EXACTAMENTE las filas que le corresponden según el
+ *     total, el mismo `total_filas` que la primera y una primera fila igual a la
+ *     última de la página anterior.
  *  4. Al final, las filas únicas (por identificador) tienen que ser el total.
  *
  * Con 3 o 4 incumplidas se devuelve `ERROR_LECTURA_INCONSISTENTE`: un listado que
@@ -139,20 +159,24 @@ export async function leerTodasLasFilasEnParalelo<T extends FilaConIdYTotal>(
 
   const total = inicial[0].total_filas
   if (!Number.isSafeInteger(total) || total < inicial.length) {
-    // La fila no informa un total utilizable: se lee sin suponerlo.
-    return leerTodasLasFilas<T>(pagina, { tamano, maximoPaginas })
+    return { ok: false, error: { code: ERROR_RESPUESTA_INVALIDA } }
   }
 
-  if (Math.ceil(total / tamano) > maximoPaginas) {
+  if (total > tamano * maximoPaginas) {
     return { ok: false, error: { code: ERROR_LIMITE_DE_PAGINAS } }
   }
 
-  if (inicial.length < Math.min(tamano, total)) {
-    return leerTodasLasFilas<T>(pagina, { tamano, maximoPaginas })
-  }
+  // Filas que el servidor entrega por página. Sin tope propio es `tamano`.
+  const capacidad = inicial.length < Math.min(tamano, total) ? inicial.length : tamano
+
+  if (inicial.length === total) return unicas(inicial, total)
+
+  // Cada página nueva aporta `capacidad - 1` filas: la primera es el solape.
+  const paso = capacidad - 1
+  if (paso < 1) return { ok: false, error: { code: ERROR_RESPUESTA_INVALIDA } }
 
   const desplazamientos: number[] = []
-  for (let desde = tamano; desde < total; desde += tamano) desplazamientos.push(desde)
+  for (let desde = paso; desde < total - 1; desde += paso) desplazamientos.push(desde)
 
   const lotes: T[][] = new Array(desplazamientos.length)
   let siguiente = 0
@@ -165,14 +189,14 @@ export async function leerTodasLasFilasEnParalelo<T extends FilaConIdYTotal>(
       if (indice >= desplazamientos.length) return
 
       const desde = desplazamientos[indice]
-      const { data, error } = await pagina(desde, desde + tamano - 1)
+      const { data, error } = await pagina(desde, desde + capacidad - 1)
       if (error) {
         fallo ??= { error }
         return
       }
 
       const lote = (data ?? []) as T[]
-      if (lote.length !== Math.min(tamano, total - desde)) {
+      if (lote.length !== Math.min(capacidad, total - desde) || lote[0].total_filas !== total) {
         fallo ??= { error: { code: ERROR_LECTURA_INCONSISTENTE } }
         return
       }
@@ -185,17 +209,26 @@ export async function leerTodasLasFilasEnParalelo<T extends FilaConIdYTotal>(
   )
   if (fallo !== null) return { ok: false, error: (fallo as { error: ErrorDePagina | null }).error }
 
-  const vistas = new Set<string>()
-  const filas: T[] = []
-  for (const lote of [inicial, ...lotes]) {
-    for (const fila of lote) {
-      if (!vistas.has(fila.id)) {
-        vistas.add(fila.id)
-        filas.push(fila)
-      }
+  // La frontera de cada par de páginas contiguas tiene que ser la MISMA fila.
+  const paginas = [inicial, ...lotes]
+  for (let i = 1; i < paginas.length; i += 1) {
+    const anterior = paginas[i - 1]
+    if (paginas[i][0].id !== anterior[anterior.length - 1].id) {
+      return { ok: false, error: { code: ERROR_LECTURA_INCONSISTENTE } }
     }
   }
 
-  if (filas.length !== total) return { ok: false, error: { code: ERROR_LECTURA_INCONSISTENTE } }
+  const filas: T[] = [...inicial]
+  for (const lote of lotes) filas.push(...lote.slice(1))
+  return unicas(filas, total)
+}
+
+/** Las filas tienen que ser exactamente `total` y no repetirse: si no, los datos cambiaron. */
+function unicas<T extends FilaConId>(filas: T[], total: number): ResultadoLectura<T> {
+  const vistas = new Set<string>()
+  for (const fila of filas) vistas.add(fila.id)
+  if (filas.length !== total || vistas.size !== total) {
+    return { ok: false, error: { code: ERROR_LECTURA_INCONSISTENTE } }
+  }
   return { ok: true, datos: filas }
 }
