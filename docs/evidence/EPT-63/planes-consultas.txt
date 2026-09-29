@@ -652,4 +652,3 @@ Limit  (cost=479.61..479.61 rows=1 width=428) (actual time=41.276..41.345 rows=0
                     ->  Index Scan using perfiles_pkey on perfiles pr  (cost=8.04..10.72 rows=1 width=30) (never executed)
                           Index Cond: (id = "*SELECT* 1".responsable_id)
                           Filter: ((NOT (InitPlan 7).col1) AND (((InitPlan 8).col1 = 'DIRECTOR'::text) OR ((COALESCE(NULLIF(current_setting('request.jwt.claim.sub'::text, true
-

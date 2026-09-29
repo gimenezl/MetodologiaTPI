@@ -763,4 +763,3 @@ for (const actor of ACTORES_DENEGADOS) {
     })
   })
 }
-
