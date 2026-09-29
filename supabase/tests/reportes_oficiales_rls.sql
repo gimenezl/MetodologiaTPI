@@ -149,6 +149,20 @@ RETURNS TEXT LANGUAGE sql AS $$
     SELECT pg_temp.ejecutar('authenticated', pg_temp.u(p_sufijo), p_sql);
 $$;
 
+-- ALCANCE: la base puede traer datos de otras suites (identidades y matrículas
+-- de Playwright, por ejemplo). Todo lo que crea ESTA prueba lleva la marca
+-- «EPT63» —en el legajo de los alumnos y en el nombre de los docentes—, y toda
+-- lectura de un reporte que no traiga su propia búsqueda se acota a esa marca.
+-- Así los recuentos exactos no dependen de la base en la que se corre.
+CREATE FUNCTION pg_temp.acotar(p_llamada TEXT)
+RETURNS TEXT LANGUAGE sql IMMUTABLE AS $$
+    SELECT CASE
+        WHEN p_llamada NOT LIKE 'public.reporte\_%' OR p_llamada LIKE '%p_busqueda%' THEN p_llamada
+        WHEN p_llamada LIKE '%()' THEN pg_catalog.regexp_replace(p_llamada, '\(\)$', '(p_busqueda => ''EPT63'')')
+        ELSE pg_catalog.regexp_replace(p_llamada, '\(', '(p_busqueda => ''EPT63'', ')
+    END;
+$$;
+
 -- Filas de un reporte como arreglo JSON, vistas por la directora 01.
 -- `p_llamada` es la llamada completa, por ejemplo
 -- 'public.reporte_alumnos_curso(p_materia_id => 5)'.
@@ -158,7 +172,7 @@ DECLARE
     v TEXT;
 BEGIN
     v := pg_temp.dir(pg_catalog.format(
-        'SELECT COALESCE(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(f)), ''[]''::jsonb)::TEXT FROM %s AS f', p_llamada));
+        'SELECT COALESCE(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(f)), ''[]''::jsonb)::TEXT FROM %s AS f', pg_temp.acotar(p_llamada)));
     IF v NOT LIKE 'OK:%' THEN
         RAISE EXCEPTION 'FALLO la lectura % devolvió %', p_llamada, v;
     END IF;
@@ -220,8 +234,8 @@ WITH base_libre AS (
     VALUES
         ('01', 'DIRECTOR',   'Directora', 'Confirmadora Uno', NULL,             1, 'HABILITADO'),
         ('02', 'DIRECTOR',   'Directora', 'Bloqueada',        NULL,             2, 'BLOQUEADO'),
-        ('03', 'DOCENTE',    'Ana',       'Zorrilla',         NULL,             3, 'HABILITADO'),
-        ('04', 'DOCENTE',    'Beto',      'Yáñez',            NULL,             4, 'HABILITADO'),
+        ('03', 'DOCENTE',    'Ana EPT63', 'Zorrilla',         NULL,             3, 'HABILITADO'),
+        ('04', 'DOCENTE',    'Beto EPT63','Yáñez',            NULL,             4, 'HABILITADO'),
         ('05', 'PADRE',      'Pablo',     'Padre',            NULL,             5, 'HABILITADO'),
         ('06', 'PERSONAL',   'Paula',     'Personal',         NULL,             6, 'HABILITADO'),
         ('07', 'ESTUDIANTE', 'Uno',       'Alumna A',         'LEG-EPT63-0007', 7, 'HABILITADO'),
@@ -850,7 +864,8 @@ BEGIN
     PERFORM pg_temp.esperar(pg_temp.dir(pg_catalog.format('SELECT count(*)::TEXT FROM public.reporte_alumnos_curso(p_busqueda => %L)', repeat('a', 100))),
         'OK', 'G3 búsqueda de 100 caracteres');
     PERFORM pg_temp.esperar(pg_temp.dir('SELECT count(*)::TEXT FROM public.reporte_alumnos_curso(p_busqueda => ''   '')'), 'OK', 'G3 búsqueda en blanco = sin búsqueda');
-    PERFORM pg_temp.contar('public.reporte_alumnos_curso(p_busqueda => ''   '')', 5, 'G3 búsqueda en blanco no filtra');
+    PERFORM pg_temp.exigir(pg_temp.total('public.reporte_alumnos_curso(p_busqueda => ''   '')') = pg_temp.total('public.reporte_alumnos_curso(p_busqueda => NULL)')
+                           AND pg_temp.total('public.reporte_alumnos_curso(p_busqueda => NULL)') >= 5, 'G3 búsqueda en blanco no filtra');
     -- Las validaciones vienen DESPUÉS de la autorización: un estudiante con un parámetro inválido sigue recibiendo 42501.
     PERFORM pg_temp.esperar(pg_temp.como('07', 'SELECT count(*)::TEXT FROM public.reporte_alumnos_curso(p_limite => 0)'), '42501', 'G3 estudiante con parámetro inválido');
     PERFORM pg_temp.ok('G3: límite fuera de 1–1000, desplazamiento negativo, origen y búsqueda inválidos → P6301; la autorización se decide antes');
