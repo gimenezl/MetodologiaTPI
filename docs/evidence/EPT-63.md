@@ -1,13 +1,28 @@
 # EPT-63 — RF17: Generar los reportes oficiales de la Dirección
 
 El paquete original se integró a `origin/main` mediante el PR #22 (merge
-`6673d747`). La corrección del rótulo de búsqueda de docentes está en la rama
-`codex/ept-63-legajo-label`, basada en ese merge: **pendiente de integrar y
-desplegar**. La inspección productiva de solo lectura confirmó que la migración
-todavía está pendiente; no se ejecutaron pruebas funcionales productivas para
-esta corrección. Las pruebas y mediciones históricas de este documento
-corresponden al candidato original en un entorno local aislado. Jira EPT-63
-continúa «En curso» al momento de esta inspección.
+`6673d747`). El despliegue de Vercel observado corresponde a ese mismo SHA.
+La migración `20260929012923_ept_63_reportes_oficiales.sql` ya se aplicó una
+vez al proyecto productivo de Supabase `ycvrpmrogvjnntnoosbh`, después de
+verificar un respaldo privado del esquema. **Esto no completa la definición de
+terminado**: faltan pruebas funcionales con sesiones existentes de Dirección y de un
+rol no DIRECTOR, medición productiva del CSV, impresión/PDF y la integración y
+el despliegue de la corrección del rótulo de búsqueda de docentes. Esa corrección
+permanece en `codex/ept-63-legajo-label`, sin push ni merge. Jira EPT-63 sigue
+«En curso». Las pruebas y mediciones históricas de este documento corresponden
+al candidato original en un entorno local aislado.
+
+### Estado productivo comprobado tras la migración
+
+| Control | Resultado |
+|---|---|
+| Código servido | PR #22 integrado; `origin/main` y despliegue Production de Vercel en `6673d747` para el paquete original. La corrección posterior no está desplegada. |
+| Respaldo previo | Respaldo privado, legible y con SHA-256 verificado de los esquemas `public` y `app_private`; fuera del repositorio. No contiene filas de datos. |
+| Aplicación y ledger | `npx --yes supabase@2.118.0 db push --linked --project-ref ycvrpmrogvjnntnoosbh --skip-vault` terminó con código 0. Había 23 migraciones previas alineadas y solo EPT-63 pendiente; después, el ledger quedó en 24/24. No se repitió el `push`. |
+| Funciones y permisos | Existen las 10 funciones nuevas (7 públicas y 3 privadas), de solo lectura, `SECURITY INVOKER`, con `search_path` vacío. Se verificaron los `GRANT`/`REVOKE` previstos y la guardia de Dirección habilitada. Los intentos anónimos y autenticados sin JWT fueron rechazados; esto no sustituye la prueba con un usuario no DIRECTOR real. |
+| Datos de control | Matrículas 1; materias por curso 0; inscripciones deportivas 1; inscripciones de servicios 2; grupos deportivos 4: sin cambios entre el preflight y la comprobación posterior. Esta evidencia no incluye filas personales. |
+| Advisors | Las mismas nueve advertencias anteriores; ningún hallazgo nuevo atribuible a EPT-63 en esa comparación. |
+| Rendimiento y acceso | Sin medición productiva del CSV ni recorridos funcionales autenticados. La configuración observada de Vercel permite una duración máxima de función de hasta 300 s, pero no demuestra que los reportes cumplan el objetivo de menos de 60 s. |
 
 La base histórica del candidato original fue `origin/main` =
 `50bef50cc0afb79274849ef179261efce3397f28`; su rama fue
@@ -32,8 +47,10 @@ que un alumno con varias materias, deportes y franjas **nunca se multiplica**.
 | Alumnos por recorrido | una inscripción a un recorrido de transporte | sí: canceladas con fecha |
 | Docentes por nivel | un docente × una asignación vigente, con su **origen** | no |
 
-Cada reporte tarda **menos de 1 s en pantalla** y el peor CSV completo (78 800 filas)
-**10,5 s** (mediana; máximo 11,4 s) frente al límite de 60 s (sección 8).
+En el entorno **local aislado**, cada reporte tardó menos de 1 s en pantalla y
+el peor CSV completo (78 800 filas) tardó 10,5 s (mediana; máximo 11,4 s).
+No hay una medición equivalente en producción frente al objetivo de 60 s
+(sección 8).
 
 ---
 
@@ -42,9 +59,9 @@ Cada reporte tarda **menos de 1 s en pantalla** y el peor CSV completo (78 800 f
 | Fuente | Qué dice | Coincide |
 |---|---|---|
 | PDF aprobado (`PlanTrabajo_Grupo12_SistemaGestion (1).pdf`) RF17 y módulo de Reportes | «listados definidos por la Dirección por alumno, docente, curso, materia, deporte, nivel, horario, responsable y recorrido»; «listados cruzados de alumnos por curso, materia, deporte, nivel, horario y recorrido de transporte, y de docentes por nivel» | sí |
-| Jira EPT-63 (leída de nuevo: «Por hacer», hija de EPT-7, Lucas Gimenez, sin subtareas) | mismos listados + «responsable», «menos de un minuto» y «las mismas relaciones que usan las operaciones diarias» | sí |
+| Jira EPT-63 (lectura histórica durante la implementación: entonces «Por hacer», hija de EPT-7, Lucas Gimenez, sin subtareas; hoy «En curso») | mismos listados + «responsable», «menos de un minuto» y «las mismas relaciones que usan las operaciones diarias» | sí |
 | Contrato aprobado por Lucas | cruces, «responsable» = profesor, origen académico/deportivo sin mezclar, materia derivada del curso, filtros en servidor, historial solo si el esquema lo registra, exclusividad de Dirección, `confirmada_por` fuera, CSV + impresión, 60 s con más de 1000 filas | sí |
-| Git | `origin/main` = 50bef50 = línea base informada | sí |
+| Git | `50bef50` fue la línea base del candidato; el PR #22 se integró en `6673d747` | sí |
 
 No hubo contradicción material: no se detuvo el trabajo ni se redujo ningún requisito.
 
@@ -334,8 +351,9 @@ objetos previos ni dejar nuevos (verificado ejecutándolos en una transacción c
 `ROLLBACK` y con la prueba R1). No existe ninguna afirmación de «9 funciones» en el
 repositorio.
 
-**Verificado sin hallazgos:** funciones `SECURITY INVOKER` (no hay `SECURITY DEFINER`
-nuevo) con `search_path` vacío, `EXECUTE` solo para `authenticated`, Dirección exigida
+**Verificado localmente sin hallazgos antes del merge:** funciones
+`SECURITY INVOKER` (no hay `SECURITY DEFINER` nuevo) con `search_path` vacío,
+`EXECUTE` solo para `authenticated`, Dirección exigida
 por `es_director_actual()` (rol DIRECTOR y acceso HABILITADO); 7 actores rechazados con
 `42501` (anónimo, estudiante, docente, padre, personal, dirección bloqueada, sin perfil),
 en SQL y por PostgREST con sesión real; sin escrituras; `confirmada_por` y variantes
@@ -361,13 +379,13 @@ nombre, apellido o legajo». La migración y el comportamiento de búsqueda no c
 
 La aserción de accesibilidad en `reportes-auth.spec.ts` también verifica el rótulo
 renderizado de docentes, pero no se ejecutó en esta corrección porque requiere el
-stack local aislado y sesiones autenticadas. No se ejecutaron pruebas ni consultas
-funcionales contra producción. La inspección de solo lectura de Supabase confirmó
-23 migraciones previas alineadas y únicamente `20260929012923` pendiente; el
-`db push --dry-run --skip-vault` enumeró solo esa migración. El respaldo previo
-del esquema falló porque Docker no estaba disponible, por lo que **no se aplicó
-la migración**. Quedan pendientes el respaldo verificable, la aplicación controlada,
-el merge de esta corrección, el despliegue y la verificación funcional productiva.
+stack local aislado y sesiones autenticadas. No se ejecutaron pruebas funcionales
+con sesiones reales contra producción. En el primer preflight, el respaldo falló
+porque Docker no estaba disponible y **en ese momento** no se aplicó la migración.
+Luego se obtuvo y verificó el respaldo privado del esquema, se volvió a comprobar
+que únicamente `20260929012923` estaba pendiente y se aplicó una sola vez. El
+ledger posterior muestra 24/24. Quedan pendientes el merge y despliegue de esta
+corrección y la verificación funcional productiva descrita al comienzo.
 
 ---
 
@@ -401,7 +419,8 @@ No se regeneraron las capturas de otras historias.
 2. **Separador «;» del CSV**: decisión de usabilidad para planillas en español.
 3. **Volumen mucho mayor**: las estimaciones de filas con RLS son pobres (sección 8);
    si el colegio creciera órdenes de magnitud convendría revisar estadísticas o
-   materializar. Con el volumen medido hay 4× de margen sobre el límite.
+   materializar. El margen calculado con la carga local no está demostrado en
+   producción.
 4. **Concurrencia con altas**: no hay instantánea entre páginas (cada página es una
    consulta propia). La lectura garantiza que toda fila que existió durante TODA la
    lectura, con su clave de orden sin cambios, aparece exactamente una vez; ante
@@ -410,8 +429,9 @@ No se regeneraron las capturas de otras historias.
    lectura confirmada.
 5. **Memoria y duración**: el CSV y la impresión se arman en memoria (un objeto por fila)
    y el tope es de 500 000 filas; con el volumen medido (78 800) el archivo pesa 9,1 MiB
-   y tarda ~11 s. No se fijó `maxDuration` de la ruta: conviene comprobar el límite del
-   plan de despliegue con datos reales tras desplegar (no se siembra producción).
+   y tardó ~11 s localmente. No se fijó `maxDuration` de la ruta. El máximo de
+   función observado en Vercel es de hasta 300 s; no garantiza el objetivo de
+   exportación inferior a 60 s. Falta medirlo con datos reales sin sembrar producción.
 6. **Búsqueda de docentes**: la consulta solo compara nombre y apellido, no legajo.
    La rama `codex/ept-63-legajo-label` corrige el rótulo a «Buscar por nombre o
    apellido» y mantiene «Buscar por nombre, apellido o legajo» en alumnos. La
@@ -482,7 +502,9 @@ reportes con grano declarado y filtros cruzados aplicados por el servidor; CSV
 completo e impresión/PDF del navegador; solo Dirección, con exigencia repetida en
 PostgreSQL. `confirmada_por` no aparece en ninguna superficie. Con más de 1000 filas
 por dominio, el peor CSV completo (78 800 filas) tarda 11,4 s y ninguna medición
-supera 60 s. La migración NO fue aplicada en producción. Evidencia: `docs/evidence/EPT-63.md`.
+supera 60 s. En el momento de redactar este texto, la migración no se había
+aplicado en producción; el estado actual se indica al comienzo de este
+documento. Evidencia: `docs/evidence/EPT-63.md`.
 
 ### Descripción del PR
 
