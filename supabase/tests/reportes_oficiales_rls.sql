@@ -34,6 +34,7 @@
 --     F. privacidad: sin confirmador, sin datos personales sensibles
 --     G. paginación y validación de parámetros
 --     H. catálogos de los filtros
+--     R. reversión no destructiva: los DROP documentados sueltan solo las 10 funciones nuevas
 --
 -- Todos los datos son sintéticos: DNI en un rango libre elegido en tiempo de
 -- ejecución, sin correspondencia con ninguna persona real.
@@ -903,5 +904,55 @@ BEGIN
     PERFORM pg_temp.exigir(pg_temp.huella() = pg_temp.fx('h_datos'), 'Z1 los reportes modificaron matrículas, asignaciones, grupos, inscripciones o confirmaciones');
     PERFORM pg_temp.ok('Z1: matrículas, asignaciones, grupos, inscripciones y confirmaciones quedan idénticos tras todas las lecturas');
 END $$;
+
+
+-- ================================================================
+-- R. REVERSIÓN NO DESTRUCTIVA
+-- ================================================================
+-- Ejecuta LITERALMENTE los DROP documentados en la cabecera de la migración y
+-- comprueba que sueltan exactamente las 10 funciones nuevas (7 públicas y 3
+-- privadas): ninguna fila cambia, no queda ninguna función de reportes y no se
+-- pierde ninguna función previa.
+SAVEPOINT reversion;
+
+CREATE TEMP TABLE reversion_antes AS
+SELECT (SELECT count(*) FROM pg_catalog.pg_proc) AS funciones,
+       (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname IN ('public', 'app_private')
+          AND (p.proname LIKE 'reporte\_%' OR p.proname IN ('catalogos_reportes', 'exigir_director_reporte', 'preparar_reporte'))) AS nuevas,
+       pg_temp.huella() AS huella;
+
+DROP FUNCTION public.catalogos_reportes();
+DROP FUNCTION public.reporte_docentes_nivel(text, integer, uuid, integer, uuid, uuid, uuid, text, integer, integer);
+DROP FUNCTION public.reporte_alumnos_recorrido(text, integer, uuid, integer, uuid, uuid, uuid, uuid, boolean, integer, integer);
+DROP FUNCTION public.reporte_alumnos_horario(text, integer, uuid, integer, uuid, uuid, uuid, uuid, text, integer, integer);
+DROP FUNCTION public.reporte_alumnos_deporte(text, integer, uuid, integer, uuid, uuid, uuid, uuid, boolean, integer, integer);
+DROP FUNCTION public.reporte_alumnos_materia(text, integer, uuid, integer, uuid, uuid, uuid, uuid, integer, integer);
+DROP FUNCTION public.reporte_alumnos_curso(text, integer, uuid, integer, uuid, uuid, uuid, uuid, boolean, integer, integer);
+DROP FUNCTION app_private.reporte_alumnos_filtrados(text, integer, uuid, integer, uuid, uuid, uuid, uuid);
+DROP FUNCTION app_private.preparar_reporte(text, integer, integer, text);
+DROP FUNCTION app_private.exigir_director_reporte();
+
+DO $$
+DECLARE
+    v_antes reversion_antes%ROWTYPE;
+BEGIN
+    SELECT * INTO v_antes FROM reversion_antes;
+    PERFORM pg_temp.exigir(v_antes.nuevas = 10, 'R1 se esperaban 10 funciones nuevas antes de revertir y hay ' || v_antes.nuevas);
+    PERFORM pg_temp.exigir((SELECT count(*) FROM pg_catalog.pg_proc) = v_antes.funciones - 10,
+        'R1 la reversión no suelta exactamente 10 funciones');
+    PERFORM pg_temp.exigir(NOT EXISTS (
+        SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname IN ('public', 'app_private')
+          AND (p.proname LIKE 'reporte\_%' OR p.proname IN ('catalogos_reportes', 'exigir_director_reporte', 'preparar_reporte'))),
+        'R1 quedaron funciones de reportes después de la reversión');
+    PERFORM pg_temp.exigir(pg_temp.huella() = v_antes.huella, 'R1 la reversión cambió filas');
+    PERFORM pg_temp.exigir(pg_catalog.to_regprocedure('public.es_director_actual()') IS NOT NULL
+                           AND pg_catalog.to_regprocedure('public.confirmar_matricula(uuid)') IS NOT NULL,
+        'R1 la reversión tocó funciones de EPT-59 o EPT-62');
+    PERFORM pg_temp.ok('R1: los 10 DROP documentados sueltan exactamente las 10 funciones nuevas, sin cambiar filas ni tocar objetos previos');
+END $$;
+
+ROLLBACK TO SAVEPOINT reversion;
 
 ROLLBACK;
