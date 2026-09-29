@@ -60,8 +60,17 @@ function huella(texto) {
  */
 const VERSION_CLI = process.env.EPT_SUPABASE_CLI ?? '2.117.0'
 
+/**
+ * `EPT_SUPABASE_WORKDIR` apunta a un directorio con su propio `supabase/config.toml`
+ * (otro `project_id`): genera los tipos desde un stack local aislado. Sin la
+ * variable, el comportamiento es el de siempre.
+ */
+const DIRECTORIO_SUPABASE = process.env.EPT_SUPABASE_WORKDIR
+
 function generar() {
-  return execFileSync('npx', ['--yes', `supabase@${VERSION_CLI}`, 'gen', 'types', 'typescript', '--local'], {
+  const argumentos = ['--yes', `supabase@${VERSION_CLI}`, 'gen', 'types', 'typescript', '--local']
+  if (DIRECTORIO_SUPABASE) argumentos.push('--workdir', DIRECTORIO_SUPABASE)
+  return execFileSync('npx', argumentos, {
     encoding: 'utf8',
     shell: process.platform === 'win32',
     maxBuffer: 32 * 1024 * 1024,

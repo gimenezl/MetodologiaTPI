@@ -17,8 +17,18 @@ import { execFileSync, spawnSync } from 'node:child_process'
 
 const ANFITRIONES_LOCALES = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
 
+/**
+ * `EPT_SUPABASE_WORKDIR` apunta a un directorio con su propio `supabase/config.toml`
+ * (otro `project_id` y otros puertos): permite correr la suite contra un stack
+ * local AISLADO sin tocar el compartido que usen otros checkouts. Sin la
+ * variable, el comportamiento es el de siempre.
+ */
+const DIRECTORIO_SUPABASE = process.env.EPT_SUPABASE_WORKDIR
+
 function leerEntornoLocal() {
-  const salida = execFileSync('npx', ['supabase', 'status', '-o', 'env'], {
+  const argumentos = ['supabase', 'status', '-o', 'env']
+  if (DIRECTORIO_SUPABASE) argumentos.push('--workdir', DIRECTORIO_SUPABASE)
+  const salida = execFileSync('npx', argumentos, {
     encoding: 'utf8',
     shell: process.platform === 'win32',
   })
