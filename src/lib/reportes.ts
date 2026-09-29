@@ -739,12 +739,13 @@ export const BOM_UTF8 = '﻿'
  *     se encierra entre comillas y las comillas internas se duplican.
  *  2. Neutralización de fórmulas de planilla (inyección CSV): una celda que
  *     empieza con `=`, `+`, `-`, `@`, tabulación o retorno de carro —incluso
- *     precedida por espacios— se ejecutaría como fórmula al abrirla. Se antepone
- *     un apóstrofo, que las planillas muestran como texto.
+ *     precedida por espacios, caracteres de control o caracteres invisibles de
+ *     formato, como el espacio de ancho cero— se ejecutaría como fórmula al
+ *     abrirla. Se antepone un apóstrofo, que las planillas muestran como texto.
  */
 export function celdaCsv(valor: string): string {
   let texto = valor
-  if (/^[\s]*[=+\-@]/.test(texto) || /^[\t\r]/.test(texto)) texto = `'${texto}`
+  if (/^[\s\p{Cc}\p{Cf}\p{Z}]*[=+\-@]/u.test(texto) || /^[\t\r]/.test(texto)) texto = `'${texto}`
   if (texto.includes(SEPARADOR_CSV) || /["\r\n]/.test(texto)) texto = `"${texto.replace(/"/g, '""')}"`
   return texto
 }

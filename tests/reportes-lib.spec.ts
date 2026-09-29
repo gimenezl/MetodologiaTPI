@@ -94,6 +94,14 @@ test.describe('celdaCsv: neutralización de fórmulas de planilla', () => {
     })
   }
 
+  for (const prefijo of ['\u0000', '\u0001', '\u001f', '\u000b', ' ', '​', '﻿', ' ']) {
+    test(`también con el prefijo invisible ${JSON.stringify(prefijo)} antes del signo`, () => {
+      const celda = celdaCsv(`${prefijo}=1+1`)
+      const sinComillas = celda.startsWith('"') ? celda.slice(1, -1).replace(/""/g, '"') : celda
+      expect(sinComillas.startsWith("'")).toBe(true)
+    })
+  }
+
   test('también con espacios antes del signo', () => {
     expect(celdaCsv('  =1+1')).toBe("'  =1+1")
   })
