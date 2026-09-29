@@ -1,0 +1,365 @@
+{
+  "entorno": {
+    "fecha": "2026-09-29T02:32:35.330Z",
+    "sistema": "Windows_NT 10.0.19045 (x64)",
+    "cpu": "Intel(R) Core(TM) i5-14400F × 16",
+    "memoriaGiB": 32,
+    "node": "v24.19.0",
+    "postgres": "PostgreSQL 17.6 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit",
+    "next": "Next.js v16.3.3",
+    "modoDeLaAplicacion": "producción (next build + next start)",
+    "baseUrl": "http://localhost:3000",
+    "repeticiones": 5,
+    "maxRows": 1000
+  },
+  "volumen": {
+    "matriculas vigentes": 3003,
+    "matriculas (con historial)": 4203,
+    "alumno × materia": 36000,
+    "inscripciones deportivas activas": 3400,
+    "inscripciones deportivas (con historial)": 4200,
+    "alumno × franja (académicas + deportivas)": 78800,
+    "inscripciones de transporte activas": 2500,
+    "inscripciones de transporte (con historial)": 3000,
+    "docente × asignación": 1379
+  },
+  "limiteMs": 60000,
+  "reportes": {
+    "alumnos-por-curso": {
+      "pantalla": {
+        "ms": [
+          571,
+          400,
+          355,
+          367,
+          358
+        ],
+        "mediana": 367,
+        "minimo": 355,
+        "maximo": 571,
+        "filas": 3003
+      },
+      "cruce": {
+        "ms": [
+          367,
+          340,
+          322,
+          327,
+          306
+        ],
+        "mediana": 327,
+        "minimo": 306,
+        "maximo": 367
+      },
+      "csv": {
+        "ms": [
+          205,
+          205,
+          199,
+          179,
+          155
+        ],
+        "mediana": 199,
+        "minimo": 155,
+        "maximo": 205,
+        "csvFilas": 3003,
+        "csvBytes": 246458,
+        "csvPaginasDe1000": 4
+      },
+      "impresion": {
+        "ms": [
+          2041,
+          1949,
+          1970,
+          1944,
+          2014
+        ],
+        "mediana": 1970,
+        "minimo": 1944,
+        "maximo": 2041,
+        "impresionFilas": 3003,
+        "impresionRechazadaPorMaximo": false
+      }
+    },
+    "alumnos-por-materia": {
+      "pantalla": {
+        "ms": [
+          488,
+          800,
+          701,
+          781,
+          766
+        ],
+        "mediana": 766,
+        "minimo": 488,
+        "maximo": 800,
+        "filas": 36000
+      },
+      "cruce": {
+        "ms": [
+          288,
+          364,
+          323,
+          309,
+          350
+        ],
+        "mediana": 323,
+        "minimo": 288,
+        "maximo": 364
+      },
+      "csv": {
+        "ms": [
+          2951,
+          2664,
+          2613,
+          2668,
+          2790
+        ],
+        "mediana": 2668,
+        "minimo": 2613,
+        "maximo": 2951,
+        "csvFilas": 36000,
+        "csvBytes": 3169220,
+        "csvPaginasDe1000": 36
+      },
+      "impresion": {
+        "ms": [
+          672,
+          715,
+          680,
+          650,
+          655
+        ],
+        "mediana": 672,
+        "minimo": 650,
+        "maximo": 715,
+        "impresionFilas": 0,
+        "impresionRechazadaPorMaximo": true
+      }
+    },
+    "alumnos-por-deporte": {
+      "pantalla": {
+        "ms": [
+          514,
+          337,
+          337,
+          269,
+          340
+        ],
+        "mediana": 337,
+        "minimo": 269,
+        "maximo": 514,
+        "filas": 3400
+      },
+      "cruce": {
+        "ms": [
+          329,
+          295,
+          290,
+          273,
+          309
+        ],
+        "mediana": 295,
+        "minimo": 273,
+        "maximo": 329
+      },
+      "csv": {
+        "ms": [
+          267,
+          205,
+          211,
+          216,
+          201
+        ],
+        "mediana": 211,
+        "minimo": 201,
+        "maximo": 267,
+        "csvFilas": 3400,
+        "csvBytes": 414332,
+        "csvPaginasDe1000": 4
+      },
+      "impresion": {
+        "ms": [
+          2779,
+          2920,
+          2923,
+          2877,
+          2786
+        ],
+        "mediana": 2877,
+        "minimo": 2779,
+        "maximo": 2923,
+        "impresionFilas": 3400,
+        "impresionRechazadaPorMaximo": false
+      }
+    },
+    "alumnos-por-horario": {
+      "pantalla": {
+        "ms": [
+          839,
+          578,
+          739,
+          691,
+          633
+        ],
+        "mediana": 691,
+        "minimo": 578,
+        "maximo": 839,
+        "filas": 78800
+      },
+      "cruce": {
+        "ms": [
+          283,
+          338,
+          360,
+          377,
+          339
+        ],
+        "mediana": 339,
+        "minimo": 283,
+        "maximo": 377
+      },
+      "csv": {
+        "ms": [
+          12944,
+          11322,
+          11981,
+          12339,
+          12384
+        ],
+        "mediana": 12339,
+        "minimo": 11322,
+        "maximo": 12944,
+        "csvFilas": 78800,
+        "csvBytes": 9321664,
+        "csvPaginasDe1000": 79
+      },
+      "impresion": {
+        "ms": [
+          515,
+          534,
+          547,
+          544,
+          557
+        ],
+        "mediana": 544,
+        "minimo": 515,
+        "maximo": 557,
+        "impresionFilas": 0,
+        "impresionRechazadaPorMaximo": true
+      }
+    },
+    "alumnos-por-recorrido": {
+      "pantalla": {
+        "ms": [
+          529,
+          310,
+          335,
+          323,
+          335
+        ],
+        "mediana": 335,
+        "minimo": 310,
+        "maximo": 529,
+        "filas": 2500
+      },
+      "cruce": {
+        "ms": [
+          302,
+          334,
+          266,
+          312,
+          331
+        ],
+        "mediana": 312,
+        "minimo": 266,
+        "maximo": 334
+      },
+      "csv": {
+        "ms": [
+          225,
+          237,
+          171,
+          187,
+          178
+        ],
+        "mediana": 187,
+        "minimo": 171,
+        "maximo": 237,
+        "csvFilas": 2500,
+        "csvBytes": 412798,
+        "csvPaginasDe1000": 3
+      },
+      "impresion": {
+        "ms": [
+          2155,
+          1917,
+          1898,
+          1936,
+          1848
+        ],
+        "mediana": 1917,
+        "minimo": 1848,
+        "maximo": 2155,
+        "impresionFilas": 2500,
+        "impresionRechazadaPorMaximo": false
+      }
+    },
+    "docentes-por-nivel": {
+      "pantalla": {
+        "ms": [
+          482,
+          299,
+          323,
+          299,
+          348
+        ],
+        "mediana": 323,
+        "minimo": 299,
+        "maximo": 482,
+        "filas": 1379
+      },
+      "cruce": {
+        "ms": [
+          313,
+          305,
+          278,
+          313,
+          290
+        ],
+        "mediana": 305,
+        "minimo": 278,
+        "maximo": 313
+      },
+      "csv": {
+        "ms": [
+          116,
+          124,
+          156,
+          128,
+          119
+        ],
+        "mediana": 124,
+        "minimo": 116,
+        "maximo": 156,
+        "csvFilas": 1379,
+        "csvBytes": 119567,
+        "csvPaginasDe1000": 2
+      },
+      "impresion": {
+        "ms": [
+          828,
+          980,
+          837,
+          852,
+          849
+        ],
+        "mediana": 849,
+        "minimo": 828,
+        "maximo": 980,
+        "impresionFilas": 1379,
+        "impresionRechazadaPorMaximo": false
+      }
+    }
+  }
+}
