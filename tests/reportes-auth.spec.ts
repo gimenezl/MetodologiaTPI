@@ -578,8 +578,10 @@ test.describe('DIRECTOR autenticado — reportes oficiales con volumen', () => {
       await expect(page.getByRole('list').filter({ has: page.getByRole('listitem') }).last().getByRole('listitem').first()).toBeVisible()
     }
     await page.goto('/dashboard/reportes/alumnos-por-horario?tamano=25')
+    await expect(page.getByRole('status').filter({ hasText: /Mostrando/ })).toBeVisible()
     await capturar(page, 'movil-alumnos-por-horario')
     await page.goto('/dashboard/reportes')
+    await expect(page.getByRole('heading', { name: 'Reportes oficiales', level: 1 })).toBeVisible()
     expect(await hayScrollHorizontal(page)).toBe(false)
     await capturar(page, 'movil-indice')
     await page.goto('/dashboard/reportes/alumnos-por-curso/imprimir?q=Garc%C3%ADa&nivel=1')

@@ -1,0 +1,655 @@
+PLANES DE EJECUCIÓN REALES (EXPLAIN ANALYZE vía auto_explain) — EPT-63
+Entorno: PostgreSQL 17.6 local, rol authenticated con sesión de Dirección (RLS activo), datos de volumen sintéticos
+(3000 matrículas vigentes, 36 000 alumno × materia, 3400 inscripciones deportivas, 78 800 alumno × franja, 2500 de transporte, 1379 docente × asignación).
+Cada plan es el de la consulta interna de la función del reporte; se omiten los InitPlan de comprobación de rol y los ProjectSet de RLS.
+
+=== 1-alumnos-por-curso (primera página de 1000)
+Duración total de la consulta: 32.554 ms
+Limit  (cost=349.63..349.63 rows=1 width=275) (actual time=32.059..32.186 rows=1000 loops=1)
+  Buffers: shared hit=15954
+  ->  Sort  (cost=345.73..345.73 rows=1 width=275) (actual time=32.058..32.114 rows=1000 loops=1)
+        Sort Key: ((p.apellido)::text), ((p.nombre)::text), m.fecha_inicio DESC, m.id
+        Sort Method: top-N heapsort  Memory: 482kB
+        Buffers: shared hit=15954
+        ->  WindowAgg  (cost=225.39..345.72 rows=1 width=275) (actual time=28.775..29.197 rows=3003 loops=1)
+              Buffers: shared hit=15945
+              ->  Nested Loop  (cost=225.39..345.71 rows=1 width=112) (actual time=3.205..27.397 rows=3003 loops=1)
+                    Join Filter: (c.nivel_id = n.id)
+                    Rows Removed by Join Filter: 2970
+                    Buffers: shared hit=15945
+                    ->  Nested Loop  (cost=225.39..344.65 rows=1 width=103) (actual time=3.094..24.592 rows=3003 loops=1)
+                          Join Filter: (c.id = m.curso_id)
+                          Rows Removed by Join Filter: 148806
+                          Buffers: shared hit=12939
+                          ->  Nested Loop  (cost=225.39..341.97 rows=1 width=83) (actual time=2.933..8.016 rows=3003 loops=1)
+                                Buffers: shared hit=9933
+                                ->  Hash Join  (cost=217.34..316.73 rows=3 width=63) (actual time=2.395..3.667 rows=3407 loops=1)
+                                      Hash Cond: (a.perfil_id = p.id)
+                                      Buffers: shared hit=105
+                                      ->  Seq Scan on alumnos a  (cost=7.77..104.91 rows=854 width=20) (actual time=0.851..1.183 rows=3407 loops=1)
+                                            Filter: ((NOT (InitPlan 7).col1) AND ((InitPlan 8).col1 OR ((perfil_id = (InitPlan 9).col1) AND ((InitPlan 10).col1 = 'ESTUDIANTE':
+                                            Buffers: shared hit=44
+                                      ->  Hash  (cost=209.40..209.40 rows=14 width=43) (actual time=1.538..1.539 rows=3568 loops=1)
+                                            Buckets: 4096 (originally 1024)  Batches: 1 (originally 1)  Memory Usage: 295kB
+                                            Buffers: shared hit=61
+                                            ->  Seq Scan on perfiles p  (cost=7.77..209.40 rows=14 width=43) (actual time=0.369..0.876 rows=3568 loops=1)
+                                                  Filter: ((NOT (InitPlan 13).col1) AND (((InitPlan 14).col1 = 'DIRECTOR'::text) OR ((COALESCE(NULLIF(current_setting('request.
+                                                  Buffers: shared hit=61
+                                ->  Index Scan using idx_matriculas_una_activa_por_alumno on matriculas m  (cost=8.04..8.41 rows=1 width=68) (actual time=0.001..0.001 rows=1 l
+                                      Index Cond: (alumno_id = a.perfil_id)
+                                      Filter: ((NOT (InitPlan 1).col1) AND ((InitPlan 2).col1 OR ((alumno_id = (InitPlan 3).col1) AND ((InitPlan 4).col1 = 'ESTUDIANTE'::text))
+                                      Buffers: shared hit=9828
+                          ->  Seq Scan on cursos c  (cost=0.00..2.03 rows=52 width=36) (actual time=0.001..0.003 rows=51 loops=3003)
+                                Filter: (NOT (InitPlan 17).col1)
+                                Buffers: shared hit=3006
+                    ->  Seq Scan on niveles n  (cost=0.00..1.03 rows=2 width=13) (actual time=0.000..0.000 rows=2 loops=3003)
+                          Filter: (NOT (InitPlan 18).col1)
+                          Buffers: shared hit=3006
+
+=== 2-alumnos-por-materia (página 21 de 1000)
+Duración total de la consulta: 215.659 ms
+Limit  (cost=370.67..370.67 rows=1 width=413) (actual time=214.910..215.267 rows=1000 loops=1)
+  Buffers: shared hit=232489, temp read=2059 written=1887
+  ->  Sort  (cost=365.46..365.47 rows=2 width=413) (actual time=205.728..214.568 rows=21000 loops=1)
+        Sort Key: ((p.apellido)::text), ((p.nombre)::text), ((ma.nombre)::text), m.id, mc.id
+        Sort Method: external merge  Disk: 9616kB
+        Buffers: shared hit=232489, temp read=2059 written=1887
+        ->  WindowAgg  (cost=299.64..365.45 rows=2 width=413) (actual time=131.371..143.335 rows=36000 loops=1)
+              Buffers: shared hit=232483, temp read=1071 written=681
+              ->  Nested Loop Left Join  (cost=233.85..365.40 rows=2 width=137) (actual time=4.265..112.400 rows=36000 loops=1)
+                    Buffers: shared hit=232483
+                    ->  Nested Loop  (cost=225.81..346.98 rows=2 width=139) (actual time=3.878..76.518 rows=36000 loops=1)
+                          Buffers: shared hit=129962
+                          ->  Nested Loop  (cost=225.67..346.38 rows=3 width=124) (actual time=3.870..47.956 rows=36000 loops=1)
+                                Join Filter: (c.id = mc.curso_id)
+                                Buffers: shared hit=57962
+                                ->  Nested Loop  (cost=225.39..345.71 rows=1 width=104) (actual time=3.342..29.437 rows=3003 loops=1)
+                                      Join Filter: (c.nivel_id = n.id)
+                                      Rows Removed by Join Filter: 2970
+                                      Buffers: shared hit=15945
+                                      ->  Nested Loop  (cost=225.39..344.65 rows=1 width=95) (actual time=3.174..26.144 rows=3003 loops=1)
+                                            Join Filter: (c.id = m.curso_id)
+                                            Rows Removed by Join Filter: 148806
+                                            Buffers: shared hit=12939
+                                            ->  Nested Loop  (cost=225.39..341.97 rows=1 width=59) (actual time=2.963..8.682 rows=3003 loops=1)
+                                                  Buffers: shared hit=9933
+                                                  ->  Hash Join  (cost=217.34..316.73 rows=3 width=59) (actual time=2.198..3.799 rows=3407 loops=1)
+                                                        Hash Cond: (a.perfil_id = p.id)
+                                                        Buffers: shared hit=105
+                                                        ->  Seq Scan on alumnos a  (cost=7.77..104.91 rows=854 width=16) (actual time=0.625..1.069 rows=3407 loops=1)
+                                                              Filter: ((NOT (InitPlan 7).col1) AND ((InitPlan 8).col1 OR ((perfil_id = (InitPlan 9).col1) AND ((InitPlan 10).co
+                                                              Buffers: shared hit=44
+                                                        ->  Hash  (cost=209.40..209.40 rows=14 width=43) (actual time=1.565..1.567 rows=3568 loops=1)
+                                                              Buckets: 4096 (originally 1024)  Batches: 1 (originally 1)  Memory Usage: 295kB
+                                                              Buffers: shared hit=61
+                                                              ->  Seq Scan on perfiles p  (cost=7.77..209.40 rows=14 width=43) (actual time=0.318..0.837 rows=3568 loops=1)
+                                                                    Filter: ((NOT (InitPlan 13).col1) AND (((InitPlan 14).col1 = 'DIRECTOR'::text) OR ((COALESCE(NULLIF(current
+                                                                    Buffers: shared hit=61
+                                                  ->  Index Scan using idx_matriculas_una_activa_por_alumno on matriculas m  (cost=8.04..8.41 rows=1 width=48) (actual time=0.0
+                                                        Index Cond: (alumno_id = a.perfil_id)
+                                                        Filter: ((NOT (InitPlan 1).col1) AND ((InitPlan 2).col1 OR ((alumno_id = (InitPlan 3).col1) AND ((InitPlan 4).col1 = 'E
+                                                        Buffers: shared hit=9828
+                                            ->  Seq Scan on cursos c  (cost=0.00..2.03 rows=52 width=36) (actual time=0.001..0.003 rows=51 loops=3003)
+                                                  Filter: (NOT (InitPlan 17).col1)
+                                                  Buffers: shared hit=3006
+                                      ->  Seq Scan on niveles n  (cost=0.00..1.03 rows=2 width=13) (actual time=0.000..0.001 rows=2 loops=3003)
+                                            Filter: (NOT (InitPlan 18).col1)
+                                            Buffers: shared hit=3006
+                                ->  Index Scan using idx_materias_cursos_curso on materias_cursos mc  (cost=0.28..0.64 rows=3 width=52) (actual time=0.001..0.005 rows=12 loops
+                                      Index Cond: (curso_id = m.curso_id)
+                                      Filter: ((NOT (InitPlan 19).col1) AND (InitPlan 20).col1 AND activo)
+                                      Buffers: shared hit=42017
+                          ->  Index Scan using actividades_pkey on actividades ma  (cost=0.14..0.20 rows=1 width=19) (actual time=0.001..0.001 rows=1 loops=36000)
+                                Index Cond: (id = mc.materia_id)
+                                Filter: (activo AND ((tipo)::text = 'CURRICULAR'::text))
+                                Buffers: shared hit=72000
+                    ->  Index Scan using perfiles_pkey on perfiles pr  (cost=8.04..9.13 rows=1 width=30) (actual time=0.001..0.001 rows=1 loops=36000)
+                          Index Cond: (id = mc.profesor_id)
+                          Filter: ((NOT (InitPlan 21).col1) AND (((InitPlan 22).col1 = 'DIRECTOR'::text) OR ((COALESCE(NULLIF(current_setting('request.jwt.claim.sub'::text, tr
+                          Buffers: shared hit=102521
+
+=== 3-alumnos-por-deporte (primera página de 1000)
+Duración total de la consulta: 55.567 ms
+Limit  (cost=362.69..362.70 rows=1 width=427) (actual time=55.055..55.160 rows=1000 loops=1)
+  Buffers: shared hit=47781
+  ->  Sort  (cost=355.67..355.68 rows=1 width=427) (actual time=55.053..55.101 rows=1000 loops=1)
+        Sort Key: ((p.apellido)::text), ((p.nombre)::text), ((d.nombre)::text), i.fecha_inscripcion DESC, i.id
+        Sort Method: top-N heapsort  Memory: 476kB
+        Buffers: shared hit=47781
+        ->  WindowAgg  (cost=243.47..355.66 rows=1 width=427) (actual time=51.033..51.549 rows=3400 loops=1)
+              Buffers: shared hit=47772
+              ->  Nested Loop Left Join  (cost=243.47..355.65 rows=1 width=166) (actual time=6.174..48.902 rows=3400 loops=1)
+                    Join Filter: (c.id = m.curso_id)
+                    Rows Removed by Join Filter: 168300
+                    Buffers: shared hit=47772
+                    ->  Nested Loop Left Join  (cost=243.47..352.97 rows=1 width=166) (actual time=6.049..30.499 rows=3400 loops=1)
+                          Buffers: shared hit=44369
+                          ->  Nested Loop Left Join  (cost=235.42..344.35 rows=1 width=166) (actual time=5.627..26.129 rows=3400 loops=1)
+                                Buffers: shared hit=34158
+                                ->  Nested Loop  (cost=227.38..331.26 rows=1 width=168) (actual time=5.239..21.960 rows=3400 loops=1)
+                                      Join Filter: (g.nivel_id = n.id)
+                                      Rows Removed by Join Filter: 3366
+                                      Buffers: shared hit=23947
+                                      ->  Nested Loop  (cost=227.38..330.20 rows=1 width=159) (actual time=5.101..18.940 rows=3400 loops=1)
+                                            Join Filter: (d.id = i.deporte_id)
+                                            Rows Removed by Join Filter: 18866
+                                            Buffers: shared hit=20544
+                                            ->  Nested Loop  (cost=227.38..329.01 rows=1 width=146) (actual time=4.879..13.614 rows=3400 loops=1)
+                                                  Buffers: shared hit=17141
+                                                  ->  Nested Loop  (cost=217.62..319.18 rows=1 width=111) (actual time=4.416..10.069 rows=3400 loops=1)
+                                                        Buffers: shared hit=10330
+                                                        ->  Hash Join  (cost=217.34..316.73 rows=3 width=59) (actual time=3.773..4.969 rows=3407 loops=1)
+                                                              Hash Cond: (a.perfil_id = p.id)
+                                                              Buffers: shared hit=105
+                                                              ->  Seq Scan on alumnos a  (cost=7.77..104.91 rows=854 width=16) (actual time=0.753..1.097 rows=3407 loops=1)
+                                                                    Filter: ((NOT (InitPlan 5).col1) AND ((InitPlan 6).col1 OR ((perfil_id = (InitPlan 7).col1) AND ((InitPlan 
+                                                                    Buffers: shared hit=44
+                                                              ->  Hash  (cost=209.40..209.40 rows=14 width=43) (actual time=3.012..3.013 rows=3568 loops=1)
+                                                                    Buckets: 4096 (originally 1024)  Batches: 1 (originally 1)  Memory Usage: 295kB
+                                                                    Buffers: shared hit=61
+                                                                    ->  Seq Scan on perfiles p  (cost=7.77..209.40 rows=14 width=43) (actual time=1.796..2.331 rows=3568 loops=
+                                                                          Filter: ((NOT (InitPlan 11).col1) AND (((InitPlan 12).col1 = 'DIRECTOR'::text) OR ((COALESCE(NULLIF(c
+                                                                          Buffers: shared hit=61
+                                                        ->  Index Scan using idx_inscripciones_deportivas_una_por_deporte on inscripciones_deportivas i  (cost=0.28..0.81 rows=
+                                                              Index Cond: (alumno_id = a.perfil_id)
+                                                              Filter: ((NOT (InitPlan 1).col1) AND ((InitPlan 2).col1 OR ((alumno_id = (InitPlan 3).col1) AND ((InitPlan 4).col
+                                                              Buffers: shared hit=10225
+                                                  ->  Index Scan using grupos_deportivos_pkey on grupos_deportivos g  (cost=9.75..9.82 rows=1 width=51) (actual time=0.001..0.0
+                                                        Index Cond: (id = i.grupo_id)
+                                                        Filter: ((NOT (InitPlan 15).col1) AND ((InitPlan 16).col1 OR (((InitPlan 17).col1 = 'ESTUDIANTE'::text) AND ((activo AN
+                                                        Buffers: shared hit=6811
+                                                          ->  Index Scan using idx_inscripciones_deportivas_alumno on inscripciones_deportivas i_1  (cost=1.58..9.61 rows=1 wid
+                                                                Index Cond: (alumno_id = (InitPlan 19).col1)
+                                                                Filter: ((NOT (InitPlan 20).col1) AND ((InitPlan 21).col1 OR ((alumno_id = (InitPlan 22).col1) AND ((InitPlan 2
+                                            ->  Seq Scan on deportes d  (cost=0.00..1.12 rows=6 width=29) (actual time=0.001..0.001 rows=7 loops=3400)
+                                                  Filter: (NOT (InitPlan 25).col1)
+                                                  Buffers: shared hit=3403
+                                      ->  Seq Scan on niveles n  (cost=0.00..1.03 rows=2 width=13) (actual time=0.000..0.000 rows=2 loops=3400)
+                                            Filter: (NOT (InitPlan 26).col1)
+                                            Buffers: shared hit=3403
+                                ->  Index Scan using perfiles_pkey on perfiles pr  (cost=8.04..12.50 rows=1 width=30) (actual time=0.001..0.001 rows=1 loops=3400)
+                                      Index Cond: (id = g.profesor_id)
+                                      Filter: ((NOT (InitPlan 27).col1) AND (((InitPlan 28).col1 = 'DIRECTOR'::text) OR ((COALESCE(NULLIF(current_setting('request.jwt.claim.su
+                                      Buffers: shared hit=10211
+                          ->  Index Scan using idx_matriculas_una_activa_por_alumno on matriculas m  (cost=8.04..8.61 rows=1 width=32) (actual time=0.001..0.001 rows=1 loops=3
+                                Index Cond: (alumno_id = i.alumno_id)
+                                Filter: ((NOT (InitPlan 31).col1) AND ((InitPlan 32).col1 OR ((alumno_id = (InitPlan 33).col1) AND ((InitPlan 34).col1 = 'ESTUDIANTE'::text)) O
+                                Buffers: shared hit=10211
+                    ->  Seq Scan on cursos c  (cost=0.00..2.03 rows=52 width=32) (actual time=0.001..0.003 rows=50 loops=3400)
+                          Filter: (NOT (InitPlan 37).col1)
+                          Buffers: shared hit=3403
+ count 
+-------
+  1000
+(1 row)
+
+=== 4-alumnos-por-horario (página 41 de 1000)
+Duración total de la consulta: 544.634 ms
+Limit  (cost=396.93..396.93 rows=1 width=428) (actual time=543.093..544.197 rows=1000 loops=1)
+  Buffers: shared hit=464050, temp read=5348 written=4439
+  ->  Sort  (cost=395.10..395.11 rows=1 width=428) (actual time=503.936..542.663 rows=41000 loops=1)
+        Sort Key: "*SELECT* 1".dia_semana, "*SELECT* 1".hora_inicio, "*SELECT* 1".hora_fin, ((p.apellido)::text), ((p.nombre)::text), "*SELECT* 1".origen, "*SELECT* 1".fila_id
+        Sort Method: external merge  Disk: 18768kB
+        Buffers: shared hit=464050, temp read=5348 written=4439
+        ->  WindowAgg  (cost=119.33..395.09 rows=1 width=428) (actual time=264.003..283.005 rows=78800 loops=1)
+              Buffers: shared hit=464039, temp read=3764 written=2087
+              ->  Nested Loop Left Join  (cost=119.33..395.08 rows=1 width=264) (actual time=4.949..215.281 rows=78800 loops=1)
+                    Buffers: shared hit=464039
+                    ->  Nested Loop  (cost=111.29..385.49 rows=1 width=266) (actual time=4.945..139.928 rows=78800 loops=1)
+                          Buffers: shared hit=238608
+                          ->  Hash Join  (cost=103.24..366.50 rows=2 width=255) (actual time=4.248..62.154 rows=78800 loops=1)
+                                Hash Cond: ("*SELECT* 1".nivel_id = n.id)
+                                Buffers: shared hit=2197
+                                ->  Append  (cost=102.19..364.81 rows=238 width=246) (actual time=3.855..50.365 rows=78800 loops=1)
+                                      Buffers: shared hit=2189
+                                      ->  Subquery Scan on "*SELECT* 1"  (cost=102.19..243.37 rows=222 width=246) (actual time=3.853..35.341 rows=72000 loops=1)
+                                            Buffers: shared hit=131
+                                            ->  Hash Join  (cost=102.19..241.15 rows=222 width=246) (actual time=3.833..27.040 rows=72000 loops=1)
+                                                  Hash Cond: (m.curso_id = c.id)
+                                                  Buffers: shared hit=131
+                                                  ->  Seq Scan on matriculas m  (cost=7.77..137.82 rows=753 width=48) (actual time=0.523..1.216 rows=3003 loops=1)
+                                                        Filter: ((NOT (InitPlan 10).col1) AND (fecha_cierre IS NULL) AND ((InitPlan 11).col1 OR ((alumno_id = (InitPlan 12).col
+                                                        Rows Removed by Filter: 1200
+                                                        Buffers: shared hit=57
+                                                  ->  Hash  (cost=91.19..91.19 rows=30 width=117) (actual time=3.297..3.306 rows=2400 loops=1)
+                                                        Buckets: 4096 (originally 1024)  Batches: 1 (originally 1)  Memory Usage: 401kB
+                                                        Buffers: shared hit=74
+                                                        ->  Hash Join  (cost=36.17..91.19 rows=30 width=117) (actual time=1.754..2.675 rows=2400 loops=1)
+                                                              Hash Cond: (ah.horario_id = h.id)
+                                                              Buffers: shared hit=74
+                                                              ->  Hash Join  (cost=34.35..89.20 rows=61 width=115) (actual time=1.598..2.215 rows=2400 loops=1)
+                                                                    Hash Cond: (ah.asignacion_id = mc.id)
+                                                                    Buffers: shared hit=70
+                                                                    ->  Seq Scan on materias_cursos_horarios ah  (cost=0.00..52.00 rows=600 width=48) (actual time=0.402..0.635
+                                                                          Filter: ((NOT (InitPlan 19).col1) AND (InitPlan 20).col1 AND activo)
+                                                                          Buffers: shared hit=39
+                                                                    ->  Hash  (cost=32.84..32.84 rows=121 width=99) (actual time=1.192..1.197 rows=1200 loops=1)
+                                                                          Buckets: 2048 (originally 1024)  Batches: 1 (originally 1)  Memory Usage: 175kB
+                                                                          Buffers: shared hit=31
+                                                                          ->  Hash Join  (cost=4.58..32.84 rows=121 width=99) (actual time=0.538..0.901 rows=1200 loops=1)
+                                                                                Hash Cond: (mc.materia_id = ma.id)
+                                                                                Buffers: shared hit=31
+                                                                                ->  Hash Join  (cost=2.68..30.50 rows=151 width=88) (actual time=0.522..0.754 rows=1200 loops=1
+                                                                                      Hash Cond: (mc.curso_id = c.id)
+                                                                                      Buffers: shared hit=30
+                                                                                      ->  Seq Scan on materias_cursos mc  (cost=0.00..27.00 rows=300 width=52) (actual time=0.3
+                                                                                            Filter: ((NOT (InitPlan 17).col1) AND (InitPlan 18).col1 AND activo)
+                                                                                            Buffers: shared hit=26
+                                                                                      ->  Hash  (cost=2.03..2.03 rows=52 width=36) (actual time=0.154..0.155 rows=103 loops=1)
+                                                                                            Buckets: 1024  Batches: 1  Memory Usage: 16kB
+                                                                                            Buffers: shared hit=4
+                                                                                            ->  Seq Scan on cursos c  (cost=0.00..2.03 rows=52 width=36) (actual time=0.134..0.
+                                                                                                  Filter: (NOT (InitPlan 16).col1)
+                                                                                                  Buffers: shared hit=4
+                                                                                ->  Hash  (cost=1.50..1.50 rows=32 width=19) (actual time=0.013..0.014 rows=32 loops=1)
+                                                                                      Buckets: 1024  Batches: 1  Memory Usage: 10kB
+                                                                                      Buffers: shared hit=1
+                                                                                      ->  Seq Scan on actividades ma  (cost=0.00..1.50 rows=32 width=19) (actual time=0.006..0.
+                                                                                            Filter: (activo AND ((tipo)::text = 'CURRICULAR'::text))
+                                                                                            Rows Removed by Filter: 8
+                                                                                            Buffers: shared hit=1
+                                                              ->  Hash  (cost=1.50..1.50 rows=25 width=34) (actual time=0.152..0.154 rows=50 loops=1)
+                                                                    Buckets: 1024  Batches: 1  Memory Usage: 12kB
+                                                                    Buffers: shared hit=4
+                                                                    ->  Seq Scan on horarios h  (cost=0.00..1.50 rows=25 width=34) (actual time=0.142..0.146 rows=50 loops=1)
+                                                                          Filter: (NOT (InitPlan 21).col1)
+                                                                          Buffers: shared hit=4
+                                      ->  Subquery Scan on "*SELECT* 2"  (cost=43.70..120.25 rows=16 width=246) (actual time=3.340..9.879 rows=6800 loops=1)
+                                            Buffers: shared hit=2058
+                                            ->  Hash Join  (cost=43.70..120.09 rows=16 width=246) (actual time=3.339..9.037 rows=6800 loops=1)
+                                                  Hash Cond: (i.deporte_id = d.id)
+                                                  Buffers: shared hit=2058
+                                                  ->  Nested Loop  (cost=39.65..115.63 rows=33 width=117) (actual time=2.840..6.331 rows=6800 loops=1)
+                                                        Join Filter: (g.id = i.grupo_id)
+                                                        Buffers: shared hit=2054
+                                                        ->  Hash Join  (cost=39.37..51.77 rows=15 width=101) (actual time=2.169..2.641 rows=480 loops=1)
+                                                              Hash Cond: (gh.horario_id = h_1.id)
+                                                              Buffers: shared hit=43
+                                                              ->  Hash Join  (cost=37.55..49.87 rows=30 width=99) (actual time=1.780..2.142 rows=480 loops=1)
+                                                                    Hash Cond: (gh.grupo_id = g.id)
+                                                                    Buffers: shared hit=39
+                                                                    ->  Seq Scan on grupos_deportivos_horarios gh  (cost=19.00..31.00 rows=120 width=48) (actual time=0.847..1.
+                                                                          Filter: ((NOT (InitPlan 37).col1) AND activo AND (ANY (grupo_id = (hashed SubPlan 48).col1)))
+                                                                          Buffers: shared hit=24
+                                                                            ->  Seq Scan on grupos_deportivos g_1  (cost=10.65..18.85 rows=60 width=16) (actual time=0.537..0.5
+                                                                                  Filter: ((NOT (InitPlan 38).col1) AND ((InitPlan 39).col1 OR (((InitPlan 40).col1 = 'ESTUDIAN
+                                                                                  Buffers: shared hit=15
+                                                                                    ->  Index Scan using idx_inscripciones_deportivas_alumno on inscripciones_deportivas i_2  (
+                                                                                          Index Cond: (alumno_id = (InitPlan 42).col1)
+                                                                                          Filter: ((NOT (InitPlan 43).col1) AND ((InitPlan 44).col1 OR ((alumno_id = (InitPlan 
+                                                                    ->  Hash  (cost=17.81..17.81 rows=60 width=51) (actual time=0.922..0.924 rows=240 loops=1)
+                                                                          Buckets: 1024  Batches: 1  Memory Usage: 28kB
+                                                                          Buffers: shared hit=15
+                                                                          ->  Seq Scan on grupos_deportivos g  (cost=9.61..17.81 rows=60 width=51) (actual time=0.833..0.876 ro
+                                                                                Filter: ((NOT (InitPlan 26).col1) AND activo AND ((InitPlan 27).col1 OR (((InitPlan 28).col1 = 
+                                                                                Buffers: shared hit=15
+                                                                                  ->  Index Scan using idx_inscripciones_deportivas_alumno on inscripciones_deportivas i_1  (co
+                                                                                        Index Cond: (alumno_id = (InitPlan 30).col1)
+                                                                                        Filter: ((NOT (InitPlan 31).col1) AND ((InitPlan 32).col1 OR ((alumno_id = (InitPlan 33
+                                                              ->  Hash  (cost=1.50..1.50 rows=25 width=34) (actual time=0.379..0.380 rows=50 loops=1)
+                                                                    Buckets: 1024  Batches: 1  Memory Usage: 12kB
+                                                                    Buffers: shared hit=4
+                                                                    ->  Seq Scan on horarios h_1  (cost=0.00..1.50 rows=25 width=34) (actual time=0.362..0.368 rows=50 loops=1)
+                                                                          Filter: (NOT (InitPlan 49).col1)
+                                                                          Buffers: shared hit=4
+                                                        ->  Index Scan using idx_inscripciones_deportivas_grupo on inscripciones_deportivas i  (cost=0.28..4.23 rows=2 width=64
+                                                              Index Cond: (grupo_id = gh.grupo_id)
+                                                              Filter: ((NOT (InitPlan 22).col1) AND ((InitPlan 23).col1 OR ((alumno_id = (InitPlan 24).col1) AND ((InitPlan 25)
+                                                              Rows Removed by Filter: 3
+                                                              Buffers: shared hit=2011
+                                                  ->  Hash  (cost=1.12..1.12 rows=6 width=29) (actual time=0.484..0.485 rows=12 loops=1)
+                                                        Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                                        Buffers: shared hit=4
+                                                        ->  Seq Scan on deportes d  (cost=0.00..1.12 rows=6 width=29) (actual time=0.472..0.475 rows=12 loops=1)
+                                                              Filter: (NOT (InitPlan 36).col1)
+                                                              Buffers: shared hit=4
+                                ->  Hash  (cost=1.03..1.03 rows=2 width=13) (actual time=0.379..0.380 rows=3 loops=1)
+                                      Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                      Buffers: shared hit=8
+                                      ->  Seq Scan on niveles n  (cost=0.00..1.03 rows=2 width=13) (actual time=0.375..0.376 rows=3 loops=1)
+                                            Filter: (NOT (InitPlan 5).col1)
+                                            Buffers: shared hit=8
+                          ->  Index Scan using perfiles_pkey on perfiles p  (cost=8.04..9.41 rows=1 width=43) (actual time=0.001..0.001 rows=1 loops=78800)
+                                Index Cond: (id = "*SELECT* 1".alumno_id)
+                                Filter: ((NOT (InitPlan 1).col1) AND (((InitPlan 2).col1 = 'DIRECTOR'::text) OR ((COALESCE(NULLIF(current_setting('request.jwt.claim.sub'::text
+                                Buffers: shared hit=236411
+                    ->  Index Scan using perfiles_pkey on perfiles pr  (cost=8.04..9.41 rows=1 width=30) (actual time=0.001..0.001 rows=1 loops=78800)
+                          Index Cond: (id = "*SELECT* 1".responsable_id)
+                          Filter: ((NOT (InitPlan 6).col1) AND (((InitPlan 7).col1 = 'DIRECTOR'::text) OR ((COALESCE(NULLIF(current_setting('request.jwt.claim.sub'::text, true
+                          Buffers: shared hit=225431
+
+=== 5-alumnos-por-recorrido (primera página de 1000)
+Duración total de la consulta: 48.526 ms
+Limit  (cost=328.42..328.42 rows=1 width=374) (actual time=47.995..48.108 rows=1000 loops=1)
+  Buffers: shared hit=20162
+  ->  Sort  (cost=323.22..323.22 rows=1 width=374) (actual time=47.994..48.041 rows=1000 loops=1)
+        Sort Key: ((s.codigo)::text), ((p.apellido)::text), ((p.nombre)::text), i.fecha_inscripcion DESC, i.id
+        Sort Method: top-N heapsort  Memory: 576kB
+        Buffers: shared hit=20162
+        ->  WindowAgg  (cost=116.64..323.21 rows=1 width=374) (actual time=43.869..44.330 rows=2500 loops=1)
+              Buffers: shared hit=20153
+              ->  Nested Loop Left Join  (cost=116.64..323.20 rows=1 width=172) (actual time=5.663..42.143 rows=2500 loops=1)
+                    Buffers: shared hit=20153
+                    ->  Nested Loop Left Join  (cost=115.19..321.72 rows=1 width=140) (actual time=5.406..31.982 rows=2500 loops=1)
+                          Join Filter: (n.id = c.nivel_id)
+                          Rows Removed by Join Filter: 2475
+                          Buffers: shared hit=17647
+                          ->  Nested Loop Left Join  (cost=115.19..320.67 rows=1 width=131) (actual time=5.169..29.125 rows=2500 loops=1)
+                                Join Filter: (c.id = m.curso_id)
+                                Rows Removed by Join Filter: 123750
+                                Buffers: shared hit=15144
+                                ->  Nested Loop Left Join  (cost=115.19..317.99 rows=1 width=127) (actual time=4.752..12.920 rows=2500 loops=1)
+                                      Buffers: shared hit=12641
+                                      ->  Nested Loop  (cost=107.14..309.15 rows=1 width=127) (actual time=3.951..8.468 rows=2500 loops=1)
+                                            Buffers: shared hit=5130
+                                            ->  Hash Join  (cost=99.10..300.80 rows=1 width=143) (actual time=3.140..4.974 rows=2500 loops=1)
+                                                  Hash Cond: (p.id = i.alumno_id)
+                                                  Buffers: shared hit=118
+                                                  ->  Seq Scan on perfiles p  (cost=7.77..209.40 rows=14 width=43) (actual time=0.623..1.352 rows=3568 loops=1)
+                                                        Filter: ((NOT (InitPlan 12).col1) AND (((InitPlan 13).col1 = 'DIRECTOR'::text) OR ((COALESCE(NULLIF(current_setting('re
+                                                        Buffers: shared hit=65
+                                                  ->  Hash  (cost=90.39..90.39 rows=75 width=100) (actual time=2.455..2.458 rows=2500 loops=1)
+                                                        Buckets: 4096 (originally 1024)  Batches: 1 (originally 1)  Memory Usage: 351kB
+                                                        Buffers: shared hit=53
+                                                        ->  Hash Join  (cost=1.07..90.39 rows=75 width=100) (actual time=0.752..1.704 rows=2500 loops=1)
+                                                              Hash Cond: (i.servicio_id = s.id)
+                                                              Buffers: shared hit=53
+                                                              ->  Seq Scan on inscripciones_servicios i  (cost=0.00..87.50 rows=375 width=68) (actual time=0.600..1.057 rows=25
+                                                                    Filter: ((NOT (InitPlan 1).col1) AND (((alumno_id = (InitPlan 2).col1) AND ((InitPlan 3).col1 = 'ESTUDIANTE
+                                                                    Rows Removed by Filter: 500
+                                                                    Buffers: shared hit=49
+                                                              ->  Hash  (cost=1.06..1.06 rows=1 width=48) (actual time=0.148..0.149 rows=4 loops=1)
+                                                                    Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                                                    Buffers: shared hit=4
+                                                                    ->  Seq Scan on servicios_escolares s  (cost=0.00..1.06 rows=1 width=48) (actual time=0.144..0.145 rows=4 l
+                                                                          Filter: ((NOT (InitPlan 5).col1) AND (tipo = 'TRANSPORTE'::public.tipo_servicio_escolar))
+                                                                          Rows Removed by Filter: 1
+                                                                          Buffers: shared hit=4
+                                            ->  Index Only Scan using alumnos_pkey on alumnos a  (cost=8.04..8.35 rows=1 width=16) (actual time=0.001..0.001 rows=1 loops=2500)
+                                                  Index Cond: (perfil_id = i.alumno_id)
+                                                  Filter: ((NOT (InitPlan 6).col1) AND ((InitPlan 7).col1 OR ((perfil_id = (InitPlan 8).col1) AND ((InitPlan 9).col1 = 'ESTUDIA
+                                                  Heap Fetches: 0
+                                                  Buffers: shared hit=5012
+                                      ->  Index Scan using idx_matriculas_una_activa_por_alumno on matriculas m  (cost=8.04..8.83 rows=1 width=32) (actual time=0.001..0.001 ro
+                                            Index Cond: (alumno_id = i.alumno_id)
+                                            Filter: ((NOT (InitPlan 16).col1) AND ((InitPlan 17).col1 OR ((alumno_id = (InitPlan 18).col1) AND ((InitPlan 19).col1 = 'ESTUDIANT
+                                            Buffers: shared hit=7511
+                                ->  Seq Scan on cursos c  (cost=0.00..2.03 rows=52 width=36) (actual time=0.001..0.003 rows=50 loops=2500)
+                                      Filter: (NOT (InitPlan 22).col1)
+                                      Buffers: shared hit=2503
+                          ->  Seq Scan on niveles n  (cost=0.00..1.03 rows=2 width=13) (actual time=0.000..0.001 rows=2 loops=2500)
+                                Filter: (NOT (InitPlan 23).col1)
+                                Buffers: shared hit=2503
+                    ->  Aggregate  (cost=1.45..1.46 rows=1 width=32) (actual time=0.004..0.004 rows=1 loops=2500)
+                          Buffers: shared hit=2506
+                          ->  Sort  (cost=1.16..1.16 rows=2 width=13) (actual time=0.002..0.002 rows=3 loops=2500)
+                                Sort Key: pr.orden
+                                Sort Method: quicksort  Memory: 25kB
+                                Buffers: shared hit=2506
+                                ->  Seq Scan on paradas_recorrido pr  (cost=0.00..1.15 rows=2 width=13) (actual time=0.001..0.001 rows=3 loops=2500)
+                                      Filter: ((NOT (InitPlan 24).col1) AND (servicio_id = s.id))
+                                      Rows Removed by Filter: 9
+                                      Buffers: shared hit=2503
+
+=== 6-docentes-por-nivel (primera página de 1000)
+Duración total de la consulta: 11.020 ms
+Limit  (cost=81.99..82.00 rows=1 width=359) (actual time=10.548..10.656 rows=1000 loops=1)
+  Buffers: shared hit=6978
+  ->  Sort  (cost=79.91..79.92 rows=1 width=359) (actual time=10.547..10.602 rows=1000 loops=1)
+        Sort Key: ((n.nombre)::text), ((p.apellido)::text), ((p.nombre)::text), "*SELECT* 1".origen, "*SELECT* 1".actividad_nombre, "*SELECT* 1".fila_id
+        Sort Method: quicksort  Memory: 404kB
+        Buffers: shared hit=6978
+        ->  WindowAgg  (cost=14.61..79.90 rows=1 width=359) (actual time=8.246..8.468 rows=1379 loops=1)
+              Buffers: shared hit=6975
+              ->  Nested Loop Left Join  (cost=14.61..79.89 rows=1 width=233) (actual time=1.862..7.485 rows=1379 loops=1)
+                    Buffers: shared hit=6975
+                    ->  Nested Loop  (cost=14.46..79.58 rows=1 width=235) (actual time=1.447..4.708 rows=1379 loops=1)
+                          Buffers: shared hit=4206
+                          ->  Hash Join  (cost=6.42..58.79 rows=2 width=221) (actual time=1.059..2.741 rows=1379 loops=1)
+                                Hash Cond: ("*SELECT* 1".nivel_id = n.id)
+                                Buffers: shared hit=58
+                                ->  Append  (cost=5.36..57.34 rows=145 width=212) (actual time=0.686..2.171 rows=1379 loops=1)
+                                      Buffers: shared hit=50
+                                      ->  Subquery Scan on "*SELECT* 1"  (cost=5.36..35.58 rows=115 width=212) (actual time=0.685..1.360 rows=1139 loops=1)
+                                            Buffers: shared hit=31
+                                            ->  Hash Join  (cost=5.36..34.43 rows=115 width=212) (actual time=0.684..1.260 rows=1139 loops=1)
+                                                  Hash Cond: (mc.materia_id = ma.id)
+                                                  Buffers: shared hit=31
+                                                  ->  Hash Join  (cost=2.68..30.46 rows=144 width=56) (actual time=0.658..0.945 rows=1139 loops=1)
+                                                        Hash Cond: (mc.curso_id = c.id)
+                                                        Buffers: shared hit=30
+                                                        ->  Seq Scan on materias_cursos mc  (cost=0.00..27.00 rows=285 width=52) (actual time=0.511..0.637 rows=1139 loops=1)
+                                                              Filter: ((NOT (InitPlan 10).col1) AND (InitPlan 11).col1 AND activo AND (profesor_id IS NOT NULL))
+                                                              Rows Removed by Filter: 61
+                                                              Buffers: shared hit=26
+                                                        ->  Hash  (cost=2.03..2.03 rows=52 width=36) (actual time=0.142..0.143 rows=103 loops=1)
+                                                              Buckets: 1024  Batches: 1  Memory Usage: 15kB
+                                                              Buffers: shared hit=4
+                                                              ->  Seq Scan on cursos c  (cost=0.00..2.03 rows=52 width=36) (actual time=0.124..0.130 rows=103 loops=1)
+                                                                    Filter: (NOT (InitPlan 12).col1)
+                                                                    Buffers: shared hit=4
+                                                  ->  Hash  (cost=1.50..1.50 rows=32 width=19) (actual time=0.021..0.021 rows=32 loops=1)
+                                                        Buckets: 1024  Batches: 1  Memory Usage: 10kB
+                                                        Buffers: shared hit=1
+                                                        ->  Seq Scan on actividades ma  (cost=0.00..1.50 rows=32 width=19) (actual time=0.011..0.014 rows=32 loops=1)
+                                                              Filter: (activo AND ((tipo)::text = 'CURRICULAR'::text))
+                                                              Rows Removed by Filter: 8
+                                                              Buffers: shared hit=1
+                                      ->  Subquery Scan on "*SELECT* 2"  (cost=12.10..21.04 rows=30 width=212) (actual time=0.579..0.722 rows=240 loops=1)
+                                            Buffers: shared hit=19
+                                            ->  Hash Join  (cost=12.10..20.74 rows=30 width=212) (actual time=0.578..0.698 rows=240 loops=1)
+                                                  Hash Cond: (g.deporte_id = d.id)
+                                                  Buffers: shared hit=19
+                                                  ->  Seq Scan on grupos_deportivos g  (cost=9.61..17.81 rows=60 width=67) (actual time=0.381..0.423 rows=240 loops=1)
+                                                        Filter: ((NOT (InitPlan 13).col1) AND activo AND ((InitPlan 14).col1 OR (((InitPlan 15).col1 = 'ESTUDIANTE'::text) AND 
+                                                        Buffers: shared hit=15
+                                                          ->  Index Scan using idx_inscripciones_deportivas_alumno on inscripciones_deportivas i  (cost=1.58..9.61 rows=1 width
+                                                                Index Cond: (alumno_id = (InitPlan 17).col1)
+                                                                Filter: ((NOT (InitPlan 18).col1) AND ((InitPlan 19).col1 OR ((alumno_id = (InitPlan 20).col1) AND ((InitPlan 2
+                                                  ->  Hash  (cost=1.12..1.12 rows=6 width=29) (actual time=0.190..0.190 rows=12 loops=1)
+                                                        Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                                        Buffers: shared hit=4
+                                                        ->  Seq Scan on deportes d  (cost=0.00..1.12 rows=6 width=29) (actual time=0.185..0.187 rows=12 loops=1)
+                                                              Filter: (NOT (InitPlan 23).col1)
+                                                              Buffers: shared hit=4
+                                ->  Hash  (cost=1.03..1.03 rows=2 width=13) (actual time=0.360..0.361 rows=3 loops=1)
+                                      Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                      Buffers: shared hit=8
+                                      ->  Seq Scan on niveles n  (cost=0.00..1.03 rows=2 width=13) (actual time=0.353..0.354 rows=3 loops=1)
+                                            Filter: (NOT (InitPlan 5).col1)
+                                            Buffers: shared hit=8
+                          ->  Index Scan using perfiles_pkey on perfiles p  (cost=8.04..10.25 rows=1 width=30) (actual time=0.001..0.001 rows=1 loops=1379)
+                                Index Cond: (id = "*SELECT* 1".docente_id)
+                                Filter: ((NOT (InitPlan 1).col1) AND (((InitPlan 2).col1 = 'DIRECTOR'::text) OR ((COALESCE(NULLIF(current_setting('request.jwt.claim.sub'::text
+                                Buffers: shared hit=4148
+                    ->  Index Scan using profesores_pkey on profesores pf  (cost=0.14..0.31 rows=1 width=30) (actual time=0.002..0.002 rows=1 loops=1379)
+                          Index Cond: (perfil_id = "*SELECT* 1".docente_id)
+                          Filter: ((NOT (InitPlan 6).col1) AND ((InitPlan 7).col1 OR ((perfil_id = (InitPlan 8).col1) AND ((InitPlan 9).col1 = 'DOCENTE'::text))))
+                          Buffers: shared hit=2769
+
+=== 7-cruce alumnos-por-curso: materia × deporte × recorrido
+Duración total de la consulta: 10.671 ms
+Limit  (cost=416.58..416.59 rows=1 width=275) (actual time=10.638..10.649 rows=29 loops=1)
+  Buffers: shared hit=2340
+  ->  Sort  (cost=412.68..412.69 rows=1 width=275) (actual time=10.637..10.643 rows=29 loops=1)
+        Sort Key: ((p.apellido)::text), ((p.nombre)::text), m.fecha_inicio DESC, m.id
+        Sort Method: quicksort  Memory: 32kB
+        Buffers: shared hit=2340
+        ->  WindowAgg  (cost=206.59..412.67 rows=1 width=275) (actual time=10.571..10.580 rows=29 loops=1)
+              Buffers: shared hit=2331
+              ->  Nested Loop  (cost=206.59..412.66 rows=1 width=112) (actual time=9.587..10.547 rows=29 loops=1)
+                    Join Filter: (c.nivel_id = n.id)
+                    Rows Removed by Join Filter: 23
+                    Buffers: shared hit=2331
+                    ->  Nested Loop  (cost=206.59..411.61 rows=1 width=103) (actual time=9.411..10.340 rows=29 loops=1)
+                          Join Filter: (c.id = m.curso_id)
+                          Rows Removed by Join Filter: 1538
+                          Buffers: shared hit=2299
+                          ->  Nested Loop  (cost=206.59..408.93 rows=1 width=83) (actual time=9.189..9.929 rows=29 loops=1)
+                                Buffers: shared hit=2267
+                                ->  Hash Join  (cost=198.55..400.27 rows=1 width=111) (actual time=8.596..9.256 rows=29 loops=1)
+                                      Hash Cond: (p.id = m.alumno_id)
+                                      Buffers: shared hit=2169
+                                      ->  Seq Scan on perfiles p  (cost=7.77..209.40 rows=14 width=43) (actual time=0.580..1.052 rows=3568 loops=1)
+                                            Filter: ((NOT (InitPlan 14).col1) AND (((InitPlan 15).col1 = 'DIRECTOR'::text) OR ((COALESCE(NULLIF(current_setting('request.jwt.cl
+                                            Buffers: shared hit=65
+                                      ->  Hash  (cost=186.08..186.08 rows=376 width=68) (actual time=7.979..7.981 rows=29 loops=1)
+                                            Buckets: 1024  Batches: 1  Memory Usage: 11kB
+                                            Buffers: shared hit=2104
+                                            ->  Seq Scan on matriculas m  (cost=45.52..186.08 rows=376 width=68) (actual time=7.654..7.971 rows=29 loops=1)
+                                                  Filter: ((NOT (InitPlan 2).col1) AND (fecha_cierre IS NULL) AND ((InitPlan 3).col1 OR ((alumno_id = (InitPlan 4).col1) AND ((
+                                                  Rows Removed by Filter: 4174
+                                                  Buffers: shared hit=2104
+                                                    ->  Function Scan on reporte_alumnos_filtrados f  (cost=0.25..30.25 rows=3000 width=16) (actual time=6.951..6.953 rows=29 l
+                                                          Buffers: shared hit=2047
+                                ->  Index Scan using alumnos_pkey on alumnos a  (cost=8.04..8.66 rows=1 width=20) (actual time=0.023..0.023 rows=1 loops=29)
+                                      Index Cond: (perfil_id = m.alumno_id)
+                                      Filter: ((NOT (InitPlan 8).col1) AND ((InitPlan 9).col1 OR ((perfil_id = (InitPlan 10).col1) AND ((InitPlan 11).col1 = 'ESTUDIANTE'::text
+                                      Buffers: shared hit=98
+                          ->  Seq Scan on cursos c  (cost=0.00..2.03 rows=52 width=36) (actual time=0.008..0.011 rows=54 loops=29)
+                                Filter: (NOT (InitPlan 18).col1)
+                                Buffers: shared hit=32
+                    ->  Seq Scan on niveles n  (cost=0.00..1.03 rows=2 width=13) (actual time=0.006..0.006 rows=2 loops=29)
+                          Filter: (NOT (InitPlan 19).col1)
+                          Buffers: shared hit=32
+ count 
+-------
+    29
+(1 row)
+
+=== 8-cruce alumnos-por-horario: curso × búsqueda
+Duración total de la consulta: 41.351 ms
+Limit  (cost=479.61..479.61 rows=1 width=428) (actual time=41.276..41.345 rows=0 loops=1)
+  Buffers: shared hit=2573
+  ->  Sort  (cost=477.79..477.79 rows=1 width=428) (actual time=41.274..41.337 rows=0 loops=1)
+        Sort Key: "*SELECT* 1".dia_semana, "*SELECT* 1".hora_inicio, "*SELECT* 1".hora_fin, ((p.apellido)::text), ((p.nombre)::text), "*SELECT* 1".origen, "*SELECT* 1".fila_id
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=2573
+        ->  WindowAgg  (cost=156.03..477.78 rows=1 width=428) (actual time=41.234..41.286 rows=0 loops=1)
+              Buffers: shared hit=2562
+              ->  Nested Loop Left Join  (cost=156.03..477.76 rows=1 width=264) (actual time=41.231..41.282 rows=0 loops=1)
+                    Buffers: shared hit=2562
+                    ->  Nested Loop  (cost=147.98..466.69 rows=1 width=266) (actual time=41.230..41.280 rows=0 loops=1)
+                          Buffers: shared hit=2562
+                          ->  Nested Loop  (cost=139.94..444.90 rows=2 width=255) (actual time=41.229..41.277 rows=0 loops=1)
+                                Join Filter: (n.id = "*SELECT* 1".nivel_id)
+                                Buffers: shared hit=2562
+                                ->  Append  (cost=139.94..440.31 rows=119 width=246) (actual time=41.229..41.275 rows=0 loops=1)
+                                      Buffers: shared hit=2562
+                                      ->  Subquery Scan on "*SELECT* 1"  (cost=139.94..281.67 rows=111 width=246) (actual time=33.049..33.072 rows=0 loops=1)
+                                            Filter: (ANY ("*SELECT* 1".alumno_id = (hashed SubPlan 1).col1))
+                                            Rows Removed by Filter: 72000
+                                            Buffers: shared hit=504
+                                            ->  Hash Join  (cost=102.19..241.15 rows=222 width=246) (actual time=4.228..23.022 rows=72000 loops=1)
+                                                  Hash Cond: (m.curso_id = c.id)
+                                                  Buffers: shared hit=135
+                                                  ->  Seq Scan on matriculas m  (cost=7.77..137.82 rows=753 width=48) (actual time=0.818..1.333 rows=3003 loops=1)
+                                                        Filter: ((NOT (InitPlan 11).col1) AND (fecha_cierre IS NULL) AND ((InitPlan 12).col1 OR ((alumno_id = (InitPlan 13).col
+                                                        Rows Removed by Filter: 1200
+                                                        Buffers: shared hit=61
+                                                  ->  Hash  (cost=91.19..91.19 rows=30 width=117) (actual time=3.399..3.411 rows=2400 loops=1)
+                                                        Buckets: 4096 (originally 1024)  Batches: 1 (originally 1)  Memory Usage: 401kB
+                                                        Buffers: shared hit=74
+                                                        ->  Hash Join  (cost=36.17..91.19 rows=30 width=117) (actual time=1.899..2.856 rows=2400 loops=1)
+                                                              Hash Cond: (ah.horario_id = h.id)
+                                                              Buffers: shared hit=74
+                                                              ->  Hash Join  (cost=34.35..89.20 rows=61 width=115) (actual time=1.731..2.411 rows=2400 loops=1)
+                                                                    Hash Cond: (ah.asignacion_id = mc.id)
+                                                                    Buffers: shared hit=70
+                                                                    ->  Seq Scan on materias_cursos_horarios ah  (cost=0.00..52.00 rows=600 width=48) (actual time=0.429..0.655
+                                                                          Filter: ((NOT (InitPlan 20).col1) AND (InitPlan 21).col1 AND activo)
+                                                                          Buffers: shared hit=39
+                                                                    ->  Hash  (cost=32.84..32.84 rows=121 width=99) (actual time=1.298..1.304 rows=1200 loops=1)
+                                                                          Buckets: 2048 (originally 1024)  Batches: 1 (originally 1)  Memory Usage: 175kB
+                                                                          Buffers: shared hit=31
+                                                                          ->  Hash Join  (cost=4.58..32.84 rows=121 width=99) (actual time=0.576..0.973 rows=1200 loops=1)
+                                                                                Hash Cond: (mc.materia_id = ma.id)
+                                                                                Buffers: shared hit=31
+                                                                                ->  Hash Join  (cost=2.68..30.50 rows=151 width=88) (actual time=0.557..0.827 rows=1200 loops=1
+                                                                                      Hash Cond: (mc.curso_id = c.id)
+                                                                                      Buffers: shared hit=30
+                                                                                      ->  Seq Scan on materias_cursos mc  (cost=0.00..27.00 rows=300 width=52) (actual time=0.4
+                                                                                            Filter: ((NOT (InitPlan 18).col1) AND (InitPlan 19).col1 AND activo)
+                                                                                            Buffers: shared hit=26
+                                                                                      ->  Hash  (cost=2.03..2.03 rows=52 width=36) (actual time=0.139..0.141 rows=103 loops=1)
+                                                                                            Buckets: 1024  Batches: 1  Memory Usage: 16kB
+                                                                                            Buffers: shared hit=4
+                                                                                            ->  Seq Scan on cursos c  (cost=0.00..2.03 rows=52 width=36) (actual time=0.119..0.
+                                                                                                  Filter: (NOT (InitPlan 17).col1)
+                                                                                                  Buffers: shared hit=4
+                                                                                ->  Hash  (cost=1.50..1.50 rows=32 width=19) (actual time=0.015..0.016 rows=32 loops=1)
+                                                                                      Buckets: 1024  Batches: 1  Memory Usage: 10kB
+                                                                                      Buffers: shared hit=1
+                                                                                      ->  Seq Scan on actividades ma  (cost=0.00..1.50 rows=32 width=19) (actual time=0.007..0.
+                                                                                            Filter: (activo AND ((tipo)::text = 'CURRICULAR'::text))
+                                                                                            Rows Removed by Filter: 8
+                                                                                            Buffers: shared hit=1
+                                                              ->  Hash  (cost=1.50..1.50 rows=25 width=34) (actual time=0.164..0.165 rows=50 loops=1)
+                                                                    Buckets: 1024  Batches: 1  Memory Usage: 12kB
+                                                                    Buffers: shared hit=4
+                                                                    ->  Seq Scan on horarios h  (cost=0.00..1.50 rows=25 width=34) (actual time=0.153..0.156 rows=50 loops=1)
+                                                                          Filter: (NOT (InitPlan 22).col1)
+                                                                          Buffers: shared hit=4
+                                              ->  Function Scan on reporte_alumnos_filtrados x  (cost=0.25..30.25 rows=3000 width=16) (actual time=3.260..3.260 rows=0 loops=2)
+                                                    Buffers: shared hit=369
+                                      ->  Subquery Scan on "*SELECT* 2"  (cost=81.45..158.04 rows=8 width=246) (actual time=8.174..8.195 rows=0 loops=1)
+                                            Filter: (ANY ("*SELECT* 2".alumno_id = (hashed SubPlan 1).col1))
+                                            Rows Removed by Filter: 6800
+                                            Buffers: shared hit=2058
+                                            ->  Hash Join  (cost=43.70..120.09 rows=16 width=246) (actual time=2.995..7.827 rows=6800 loops=1)
+                                                  Hash Cond: (i.deporte_id = d.id)
+                                                  Buffers: shared hit=2058
+                                                  ->  Nested Loop  (cost=39.65..115.63 rows=33 width=117) (actual time=2.487..5.348 rows=6800 loops=1)
+                                                        Join Filter: (g.id = i.grupo_id)
+                                                        Buffers: shared hit=2054
+                                                        ->  Hash Join  (cost=39.37..51.77 rows=15 width=101) (actual time=1.972..2.296 rows=480 loops=1)
+                                                              Hash Cond: (gh.horario_id = h_1.id)
+                                                              Buffers: shared hit=43
+                                                              ->  Hash Join  (cost=37.55..49.87 rows=30 width=99) (actual time=1.620..1.865 rows=480 loops=1)
+                                                                    Hash Cond: (gh.grupo_id = g.id)
+                                                                    Buffers: shared hit=39
+                                                                    ->  Seq Scan on grupos_deportivos_horarios gh  (cost=19.00..31.00 rows=120 width=48) (actual time=0.873..1.
+                                                                          Filter: ((NOT (InitPlan 38).col1) AND activo AND (ANY (grupo_id = (hashed SubPlan 49).col1)))
+                                                                          Buffers: shared hit=24
+                                                                            ->  Seq Scan on grupos_deportivos g_1  (cost=10.65..18.85 rows=60 width=16) (actual time=0.511..0.5
+                                                                                  Filter: ((NOT (InitPlan 39).col1) AND ((InitPlan 40).col1 OR (((InitPlan 41).col1 = 'ESTUDIAN
+                                                                                  Buffers: shared hit=15
+                                                                                    ->  Index Scan using idx_inscripciones_deportivas_alumno on inscripciones_deportivas i_2  (
+                                                                                          Index Cond: (alumno_id = (InitPlan 43).col1)
+                                                                                          Filter: ((NOT (InitPlan 44).col1) AND ((InitPlan 45).col1 OR ((alumno_id = (InitPlan 
+                                                                    ->  Hash  (cost=17.81..17.81 rows=60 width=51) (actual time=0.737..0.741 rows=240 loops=1)
+                                                                          Buckets: 1024  Batches: 1  Memory Usage: 28kB
+                                                                          Buffers: shared hit=15
+                                                                          ->  Seq Scan on grupos_deportivos g  (cost=9.61..17.81 rows=60 width=51) (actual time=0.654..0.692 ro
+                                                                                Filter: ((NOT (InitPlan 27).col1) AND activo AND ((InitPlan 28).col1 OR (((InitPlan 29).col1 = 
+                                                                                Buffers: shared hit=15
+                                                                                  ->  Index Scan using idx_inscripciones_deportivas_alumno on inscripciones_deportivas i_1  (co
+                                                                                        Index Cond: (alumno_id = (InitPlan 31).col1)
+                                                                                        Filter: ((NOT (InitPlan 32).col1) AND ((InitPlan 33).col1 OR ((alumno_id = (InitPlan 34
+                                                              ->  Hash  (cost=1.50..1.50 rows=25 width=34) (actual time=0.343..0.344 rows=50 loops=1)
+                                                                    Buckets: 1024  Batches: 1  Memory Usage: 12kB
+                                                                    Buffers: shared hit=4
+                                                                    ->  Seq Scan on horarios h_1  (cost=0.00..1.50 rows=25 width=34) (actual time=0.324..0.329 rows=50 loops=1)
+                                                                          Filter: (NOT (InitPlan 50).col1)
+                                                                          Buffers: shared hit=4
+                                                        ->  Index Scan using idx_inscripciones_deportivas_grupo on inscripciones_deportivas i  (cost=0.28..4.23 rows=2 width=64
+                                                              Index Cond: (grupo_id = gh.grupo_id)
+                                                              Filter: ((NOT (InitPlan 23).col1) AND ((InitPlan 24).col1 OR ((alumno_id = (InitPlan 25).col1) AND ((InitPlan 26)
+                                                              Rows Removed by Filter: 3
+                                                              Buffers: shared hit=2011
+                                                  ->  Hash  (cost=1.12..1.12 rows=6 width=29) (actual time=0.486..0.487 rows=12 loops=1)
+                                                        Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                                        Buffers: shared hit=4
+                                                        ->  Seq Scan on deportes d  (cost=0.00..1.12 rows=6 width=29) (actual time=0.475..0.479 rows=12 loops=1)
+                                                              Filter: (NOT (InitPlan 37).col1)
+                                                              Buffers: shared hit=4
+                                ->  Materialize  (cost=0.00..1.04 rows=2 width=13) (never executed)
+                                      ->  Seq Scan on niveles n  (cost=0.00..1.03 rows=2 width=13) (never executed)
+                                            Filter: (NOT (InitPlan 6).col1)
+                          ->  Index Scan using perfiles_pkey on perfiles p  (cost=8.04..10.72 rows=1 width=43) (never executed)
+                                Index Cond: (id = "*SELECT* 1".alumno_id)
+                                Filter: ((NOT (InitPlan 2).col1) AND (((InitPlan 3).col1 = 'DIRECTOR'::text) OR ((COALESCE(NULLIF(current_setting('request.jwt.claim.sub'::text
+                    ->  Index Scan using perfiles_pkey on perfiles pr  (cost=8.04..10.72 rows=1 width=30) (never executed)
+                          Index Cond: (id = "*SELECT* 1".responsable_id)
+                          Filter: ((NOT (InitPlan 7).col1) AND (((InitPlan 8).col1 = 'DIRECTOR'::text) OR ((COALESCE(NULLIF(current_setting('request.jwt.claim.sub'::text, true
+

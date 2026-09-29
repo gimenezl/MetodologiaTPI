@@ -1,0 +1,163 @@
+TIEMPOS SQL (psql \timing) — EPT-63
+Entorno: PostgreSQL 17.6 en Docker local; rol authenticated con sesión de Dirección (RLS activo); volumen sintético de reportes_benchmark_datos.sql.
+Cada línea 'Time:' corresponde a la sentencia inmediata anterior. Tres corridas seguidas; se lee la última (caché caliente) y la primera (fría).
+
+##### corrida 1
+Time: 2.154 ms
+Time: 371.470 ms
+Time: 0.092 ms
+Time: 0.156 ms
+(1 row)
+Time: 0.287 ms
+ curso |  1000
+(1 row)
+Time: 23.253 ms
+ curso p100 |   100 | 3003
+(1 row)
+Time: 19.969 ms
+ materia p1000 |  1000 | 36000
+(1 row)
+Time: 140.325 ms
+ deporte p1000 |  1000 | 3400
+(1 row)
+Time: 44.368 ms
+ horario p1000 |  1000 | 78800
+(1 row)
+Time: 261.448 ms
+ recorrido p1000 |  1000 | 2500
+(1 row)
+Time: 31.757 ms
+ docentes p1000 |  1000 | 1379
+(1 row)
+Time: 11.338 ms
+ horario off 77000 |  1000 | 78800
+(1 row)
+Time: 480.985 ms
+ materia off 33000 |  1000 | 36000
+(1 row)
+Time: 180.370 ms
+ curso x materia x deporte x recorrido |    24
+(1 row)
+Time: 7.150 ms
+ horario x curso |   788 | 788
+(1 row)
+Time: 32.701 ms
+ horario x busqueda |  1000 | 1210
+(1 row)
+Time: 44.627 ms
+ docentes horario |    43 |  43
+(1 row)
+Time: 5.162 ms
+ curso historial |  1000 | 4203
+(1 row)
+Time: 25.963 ms
+ catalogos |  36242
+(1 row)
+Time: 3.237 ms
+Time: 0.210 ms
+##### corrida 2
+Time: 1.754 ms
+Time: 399.099 ms
+Time: 0.195 ms
+Time: 0.171 ms
+(1 row)
+Time: 0.195 ms
+ curso |  1000
+(1 row)
+Time: 24.533 ms
+ curso p100 |   100 | 3003
+(1 row)
+Time: 19.533 ms
+ materia p1000 |  1000 | 36000
+(1 row)
+Time: 136.951 ms
+ deporte p1000 |  1000 | 3400
+(1 row)
+Time: 43.307 ms
+ horario p1000 |  1000 | 78800
+(1 row)
+Time: 263.940 ms
+ recorrido p1000 |  1000 | 2500
+(1 row)
+Time: 32.732 ms
+ docentes p1000 |  1000 | 1379
+(1 row)
+Time: 8.899 ms
+ horario off 77000 |  1000 | 78800
+(1 row)
+Time: 528.296 ms
+ materia off 33000 |  1000 | 36000
+(1 row)
+Time: 177.924 ms
+ curso x materia x deporte x recorrido |    24
+(1 row)
+Time: 6.928 ms
+ horario x curso |   788 | 788
+(1 row)
+Time: 32.654 ms
+ horario x busqueda |  1000 | 1210
+(1 row)
+Time: 44.477 ms
+ docentes horario |    43 |  43
+(1 row)
+Time: 4.938 ms
+ curso historial |  1000 | 4203
+(1 row)
+Time: 27.270 ms
+ catalogos |  36242
+(1 row)
+Time: 4.108 ms
+Time: 0.180 ms
+##### corrida 3
+Time: 1.837 ms
+Time: 348.371 ms
+Time: 0.081 ms
+Time: 0.115 ms
+(1 row)
+Time: 0.190 ms
+ curso |  1000
+(1 row)
+Time: 22.796 ms
+ curso p100 |   100 | 3003
+(1 row)
+Time: 19.277 ms
+ materia p1000 |  1000 | 36000
+(1 row)
+Time: 138.335 ms
+ deporte p1000 |  1000 | 3400
+(1 row)
+Time: 44.494 ms
+ horario p1000 |  1000 | 78800
+(1 row)
+Time: 246.062 ms
+ recorrido p1000 |  1000 | 2500
+(1 row)
+Time: 30.426 ms
+ docentes p1000 |  1000 | 1379
+(1 row)
+Time: 8.469 ms
+ horario off 77000 |  1000 | 78800
+(1 row)
+Time: 479.615 ms
+ materia off 33000 |  1000 | 36000
+(1 row)
+Time: 182.118 ms
+ curso x materia x deporte x recorrido |    24
+(1 row)
+Time: 6.750 ms
+ horario x curso |   788 | 788
+(1 row)
+Time: 31.356 ms
+ horario x busqueda |  1000 | 1210
+(1 row)
+Time: 44.467 ms
+ docentes horario |    43 |  43
+(1 row)
+Time: 4.543 ms
+ curso historial |  1000 | 4203
+(1 row)
+Time: 27.104 ms
+ catalogos |  36242
+(1 row)
+Time: 3.150 ms
+Time: 0.161 ms
