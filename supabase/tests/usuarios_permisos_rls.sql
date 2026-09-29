@@ -544,6 +544,14 @@ BEGIN
     PERFORM pg_temp.rpc('public.agregar_horario_grupo_deportivo', 'x', pg_catalog.format('public.agregar_horario_grupo_deportivo(%L, 4::smallint, %L, %L)', GR, '10:00', '11:00'));
     PERFORM pg_temp.rpc('public.asignar_materia_curso', 'x', pg_catalog.format('public.asignar_materia_curso(%s, %L, %L)', MAT, C2, DOC));
     PERFORM pg_temp.rpc('public.calcular_porcentaje_asistencia', 'v', pg_catalog.format('public.calcular_porcentaje_asistencia(%L)', EST));
+    -- EPT-63: reportes oficiales (solo Dirección habilitada; el resto recibe 42501).
+    PERFORM pg_temp.rpc('public.catalogos_reportes', 'v', 'public.catalogos_reportes()');
+    PERFORM pg_temp.rpc('public.reporte_alumnos_curso', 'n', 'public.reporte_alumnos_curso()');
+    PERFORM pg_temp.rpc('public.reporte_alumnos_deporte', 'n', 'public.reporte_alumnos_deporte()');
+    PERFORM pg_temp.rpc('public.reporte_alumnos_horario', 'n', 'public.reporte_alumnos_horario()');
+    PERFORM pg_temp.rpc('public.reporte_alumnos_materia', 'n', 'public.reporte_alumnos_materia()');
+    PERFORM pg_temp.rpc('public.reporte_alumnos_recorrido', 'n', 'public.reporte_alumnos_recorrido()');
+    PERFORM pg_temp.rpc('public.reporte_docentes_nivel', 'n', 'public.reporte_docentes_nivel()');
     PERFORM pg_temp.rpc('public.cambiar_curso_alumno', 'x', pg_catalog.format('public.cambiar_curso_alumno(%L, %L)', EST, C2));
     PERFORM pg_temp.rpc('public.cambiar_estado_asignacion', 'x', pg_catalog.format('public.cambiar_estado_asignacion(%L, false)', ASIG));
     PERFORM pg_temp.rpc('public.cambiar_estado_deporte', 'x', pg_catalog.format('public.cambiar_estado_deporte(%L, false)', 'e0000000-0000-4000-8000-000000000103'));
