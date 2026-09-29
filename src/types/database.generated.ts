@@ -266,6 +266,81 @@ export type Database = {
           },
         ]
       }
+      credenciales_qr: {
+        Row: {
+          alumno_id: string
+          clave_kid: string
+          emitida_en: string
+          emitida_por: string
+          estado: Database["public"]["Enums"]["estado_credencial_qr"]
+          id: string
+          motivo_revocacion: string | null
+          reemplaza_a: string | null
+          revocada_en: string | null
+          revocada_por: string | null
+        }
+        Insert: {
+          alumno_id: string
+          clave_kid: string
+          emitida_en?: string
+          emitida_por: string
+          estado?: Database["public"]["Enums"]["estado_credencial_qr"]
+          id?: string
+          motivo_revocacion?: string | null
+          reemplaza_a?: string | null
+          revocada_en?: string | null
+          revocada_por?: string | null
+        }
+        Update: {
+          alumno_id?: string
+          clave_kid?: string
+          emitida_en?: string
+          emitida_por?: string
+          estado?: Database["public"]["Enums"]["estado_credencial_qr"]
+          id?: string
+          motivo_revocacion?: string | null
+          reemplaza_a?: string | null
+          revocada_en?: string | null
+          revocada_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credenciales_qr_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos"
+            referencedColumns: ["perfil_id"]
+          },
+          {
+            foreignKeyName: "credenciales_qr_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos_academicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credenciales_qr_emitida_por_fkey"
+            columns: ["emitida_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credenciales_qr_reemplaza_a_fkey"
+            columns: ["reemplaza_a"]
+            isOneToOne: false
+            referencedRelation: "credenciales_qr"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credenciales_qr_revocada_por_fkey"
+            columns: ["revocada_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cursos: {
         Row: {
           activo: boolean
@@ -2313,6 +2388,16 @@ export type Database = {
           vinculo_pendiente_vence_en: string
         }[]
       }
+      consultar_validez_credencial_qr: {
+        Args: { p_credencial_id: string }
+        Returns: {
+          acceso_alumno: Database["public"]["Enums"]["estado_acceso"]
+          credencial_id: string
+          estado_alumno: Database["public"]["Enums"]["estado_alumno"]
+          estado_credencial: Database["public"]["Enums"]["estado_credencial_qr"]
+          valida: boolean
+        }[]
+      }
       consultar_vinculo: {
         Args: { p_operacion_id: string }
         Returns: {
@@ -2469,6 +2554,27 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      emitir_credencial_qr: {
+        Args: { p_alumno_id: string; p_clave_kid: string }
+        Returns: {
+          alumno_id: string
+          clave_kid: string
+          emitida_en: string
+          emitida_por: string
+          estado: Database["public"]["Enums"]["estado_credencial_qr"]
+          id: string
+          motivo_revocacion: string | null
+          reemplaza_a: string | null
+          revocada_en: string | null
+          revocada_por: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "credenciales_qr"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       emitir_desafio_vinculo: {
         Args: {
           p_correo: string
@@ -2504,6 +2610,19 @@ export type Database = {
         Returns: {
           estado_acceso: Database["public"]["Enums"]["estado_acceso"]
           user_id: string
+        }[]
+      }
+      historial_credenciales_qr: {
+        Args: { p_alumno_id: string }
+        Returns: {
+          emitida_en: string
+          emitida_por_nombre: string
+          estado: Database["public"]["Enums"]["estado_credencial_qr"]
+          id: string
+          motivo_revocacion: string
+          reemplaza_a: string
+          revocada_en: string
+          revocada_por_nombre: string
         }[]
       }
       inactivar_alumno: { Args: { p_alumno_id: string }; Returns: string }
@@ -2741,6 +2860,27 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reponer_credencial_qr: {
+        Args: { p_clave_kid: string; p_credencial_id: string; p_motivo: string }
+        Returns: {
+          alumno_id: string
+          clave_kid: string
+          emitida_en: string
+          emitida_por: string
+          estado: Database["public"]["Enums"]["estado_credencial_qr"]
+          id: string
+          motivo_revocacion: string | null
+          reemplaza_a: string | null
+          revocada_en: string | null
+          revocada_por: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "credenciales_qr"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       reporte_alumnos_curso: {
         Args: {
           p_busqueda?: string
@@ -2954,6 +3094,27 @@ export type Database = {
           vence_en: string
         }[]
       }
+      revocar_credencial_qr: {
+        Args: { p_credencial_id: string; p_motivo: string }
+        Returns: {
+          alumno_id: string
+          clave_kid: string
+          emitida_en: string
+          emitida_por: string
+          estado: Database["public"]["Enums"]["estado_credencial_qr"]
+          id: string
+          motivo_revocacion: string | null
+          reemplaza_a: string | null
+          revocada_en: string | null
+          revocada_por: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "credenciales_qr"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       rol_actual: { Args: never; Returns: string }
       verificar_desafio_vinculo: {
         Args: {
@@ -2971,6 +3132,7 @@ export type Database = {
       dominio_inscripcion: "MATRICULA" | "DEPORTE" | "SERVICIO"
       estado_acceso: "HABILITADO" | "BLOQUEADO"
       estado_alumno: "ACTIVO" | "INACTIVO"
+      estado_credencial_qr: "ACTIVA" | "REVOCADA"
       estado_inscripcion_deportiva: "ACTIVA" | "CANCELADA"
       estado_inscripcion_servicio: "ACTIVA" | "CANCELADA"
       estado_profesor: "ACTIVO" | "INACTIVO"
@@ -3109,6 +3271,7 @@ export const Constants = {
       dominio_inscripcion: ["MATRICULA", "DEPORTE", "SERVICIO"],
       estado_acceso: ["HABILITADO", "BLOQUEADO"],
       estado_alumno: ["ACTIVO", "INACTIVO"],
+      estado_credencial_qr: ["ACTIVA", "REVOCADA"],
       estado_inscripcion_deportiva: ["ACTIVA", "CANCELADA"],
       estado_inscripcion_servicio: ["ACTIVA", "CANCELADA"],
       estado_profesor: ["ACTIVO", "INACTIVO"],

@@ -659,7 +659,7 @@ test.describe('PADRE autenticado', () => {
     }
     await page.setViewportSize({ width: 375, height: 812 })
     expect(await sinDesborde(page)).toBe(true)
-    await captura(page, 'padre-hijos')
+    // Sin captura: con un hijo activo la pantalla muestra un QR, y la evidencia no incluye QR válidos.
     await page.setViewportSize({ width: 1280, height: 720 })
 
     // API y otras pantallas.

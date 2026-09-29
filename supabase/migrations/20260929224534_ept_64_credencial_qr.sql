@@ -692,30 +692,23 @@ REVOKE ALL ON public.credenciales_qr FROM PUBLIC, anon, authenticated, service_r
 GRANT SELECT (id, alumno_id, estado, clave_kid, emitida_en, revocada_en)
     ON public.credenciales_qr TO authenticated;
 
--- Dirección habilitada lee todas.
-CREATE POLICY "La dirección consulta las credenciales QR"
-    ON public.credenciales_qr
-    FOR SELECT TO authenticated
-    USING ((SELECT public.es_director_actual()));
-
--- El alumno lee solo las suyas.
-CREATE POLICY "El alumno consulta sus credenciales QR"
-    ON public.credenciales_qr
-    FOR SELECT TO authenticated
-    USING (
-        alumno_id = (SELECT app_private.perfil_actual())
-        AND (SELECT app_private.rol_actual()) = 'ESTUDIANTE'
-    );
-
--- El padre lee solo las de hijos actualmente vinculados: desvincular quita el
--- acceso de inmediato, porque el vínculo vigente es la propia fila de
--- `padres_hijos`.
-CREATE POLICY "El padre consulta las credenciales QR de sus hijos"
+-- UNA sola política permisiva de lectura, por actor (el mismo patrón que
+-- «Consulta académica por actor» de la 016): tres políticas permisivas para el
+-- mismo rol y acción se evalúan todas en cada consulta.
+--   * Dirección habilitada lee todas.
+--   * El alumno lee solo las suyas.
+--   * El padre lee solo las de hijos actualmente vinculados: desvincular quita
+--     el acceso de inmediato, porque el vínculo vigente es la propia fila de
+--     `padres_hijos`.
+CREATE POLICY "Consulta de credenciales QR por actor"
     ON public.credenciales_qr
     FOR SELECT TO authenticated
     USING (
-        (SELECT app_private.rol_actual()) = 'PADRE'
-        AND alumno_id IN (SELECT app_private.mis_hijos_ids())
+        (SELECT public.es_director_actual())
+        OR (alumno_id = (SELECT app_private.perfil_actual())
+            AND (SELECT app_private.rol_actual()) = 'ESTUDIANTE')
+        OR ((SELECT app_private.rol_actual()) = 'PADRE'
+            AND alumno_id IN (SELECT app_private.mis_hijos_ids()))
     );
 
 -- Réplica de la política RESTRICTIVE de bloqueo de cuenta (EPT-59): esa

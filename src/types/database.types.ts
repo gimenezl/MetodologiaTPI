@@ -8,6 +8,14 @@
  *
  * Reconciliación verificada entre este archivo y el esquema real (EPT-57):
  *
+ * - EPT-64 (credencial digital QR) agrega la tabla `credenciales_qr`, el tipo
+ *   enumerado `estado_credencial_qr` y las funciones públicas
+ *   `emitir_credencial_qr`, `reponer_credencial_qr`, `revocar_credencial_qr`,
+ *   `historial_credenciales_qr` y `consultar_validez_credencial_qr`. La
+ *   aplicación NO representa la tabla acá: la lee con columnas explícitas (los
+ *   datos internos no tienen privilegio de lectura) y la escribe solo por esas
+ *   funciones. Los tipos completos están en `database.generated.ts`. La base no
+ *   guarda el payload del QR, su firma ni la clave de firma.
  * - EPT-63 (reportes oficiales de Dirección) agrega las funciones públicas
  *   `reporte_alumnos_curso`, `reporte_alumnos_materia`,
  *   `reporte_alumnos_deporte`, `reporte_alumnos_horario`,
