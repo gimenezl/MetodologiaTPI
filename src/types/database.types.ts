@@ -8,6 +8,20 @@
  *
  * Reconciliación verificada entre este archivo y el esquema real (EPT-57):
  *
+ * - EPT-63 (reportes oficiales de Dirección) agrega las funciones públicas
+ *   `reporte_alumnos_curso`, `reporte_alumnos_materia`,
+ *   `reporte_alumnos_deporte`, `reporte_alumnos_horario`,
+ *   `reporte_alumnos_recorrido`, `reporte_docentes_nivel` y
+ *   `catalogos_reportes`. No crea tablas, vistas, columnas ni tipos
+ *   enumerados. Los seis reportes devuelven filas de solo lectura con su grano
+ *   declarado (una matrícula, un alumno × materia, una inscripción deportiva,
+ *   un alumno × franja, una inscripción a un recorrido, un docente ×
+ *   asignación) y `total_filas`, el total del conjunto filtrado. Todos los
+ *   argumentos tienen valor por defecto (el generador los declara opcionales);
+ *   las columnas que pueden ser `null` (curso vigente, responsable, fecha de
+ *   cierre) el generador las tipa como no nulas, igual que en
+ *   `listar_grupos_deportivos`. `catalogos_reportes` devuelve `jsonb`
+ *   (`Json`). Solo Dirección los ejecuta con éxito.
  * - EPT-62 (administración de inscripciones) agrega las tres vistas
  *   `matriculas_administracion`, `inscripciones_deportivas_administracion` e
  *   `inscripciones_servicios_administracion` (solo Dirección obtiene filas) y las
@@ -1017,6 +1031,203 @@ export type Database = {
       cancelar_inscripcion_servicio_administrativa: {
         Args: { p_inscripcion_id: string; p_tipo: 'COMEDOR' | 'TRANSPORTE' }
         Returns: Database['public']['Tables']['inscripciones_servicios']['Row']
+      }
+      reporte_alumnos_curso: {
+        Args: {
+          p_busqueda?: string
+          p_nivel_id?: number
+          p_curso_id?: string
+          p_materia_id?: number
+          p_deporte_id?: string
+          p_servicio_id?: string
+          p_horario_id?: string
+          p_profesor_id?: string
+          p_incluir_historial?: boolean
+          p_limite?: number
+          p_desplazamiento?: number
+        }
+        Returns: {
+          id: string
+          alumno_apellido: string
+          alumno_nombre: string
+          legajo_nro: string | null
+          alumno_estado: 'ACTIVO' | 'INACTIVO'
+          nivel_id: number
+          nivel_nombre: string
+          curso_id: string
+          curso_denominacion: string
+          curso_division: string
+          fecha_inicio: string
+          fecha_cierre: string | null
+          motivo_cierre: 'CAMBIO_DE_CURSO' | 'INACTIVACION' | null
+          vigente: boolean
+          total_filas: number
+        }[]
+      }
+      reporte_alumnos_materia: {
+        Args: {
+          p_busqueda?: string
+          p_nivel_id?: number
+          p_curso_id?: string
+          p_materia_id?: number
+          p_deporte_id?: string
+          p_servicio_id?: string
+          p_horario_id?: string
+          p_profesor_id?: string
+          p_limite?: number
+          p_desplazamiento?: number
+        }
+        Returns: {
+          id: string
+          alumno_apellido: string
+          alumno_nombre: string
+          legajo_nro: string | null
+          nivel_id: number
+          nivel_nombre: string
+          curso_id: string
+          curso_denominacion: string
+          curso_division: string
+          materia_id: number
+          materia_nombre: string
+          responsable_apellido: string | null
+          responsable_nombre: string | null
+          total_filas: number
+        }[]
+      }
+      reporte_alumnos_deporte: {
+        Args: {
+          p_busqueda?: string
+          p_nivel_id?: number
+          p_curso_id?: string
+          p_materia_id?: number
+          p_deporte_id?: string
+          p_servicio_id?: string
+          p_horario_id?: string
+          p_profesor_id?: string
+          p_incluir_historial?: boolean
+          p_limite?: number
+          p_desplazamiento?: number
+        }
+        Returns: {
+          id: string
+          alumno_apellido: string
+          alumno_nombre: string
+          legajo_nro: string | null
+          curso_denominacion: string | null
+          curso_division: string | null
+          nivel_id: number
+          nivel_nombre: string
+          deporte_id: string
+          deporte_nombre: string
+          grupo_id: string
+          grupo_nombre: string
+          responsable_apellido: string | null
+          responsable_nombre: string | null
+          estado: 'ACTIVA' | 'CANCELADA'
+          fecha_inscripcion: string
+          fecha_cancelacion: string | null
+          total_filas: number
+        }[]
+      }
+      reporte_alumnos_horario: {
+        Args: {
+          p_busqueda?: string
+          p_nivel_id?: number
+          p_curso_id?: string
+          p_materia_id?: number
+          p_deporte_id?: string
+          p_servicio_id?: string
+          p_horario_id?: string
+          p_profesor_id?: string
+          p_origen?: 'ACADEMICO' | 'DEPORTIVO'
+          p_limite?: number
+          p_desplazamiento?: number
+        }
+        Returns: {
+          id: string
+          origen: 'ACADEMICO' | 'DEPORTIVO'
+          alumno_apellido: string
+          alumno_nombre: string
+          legajo_nro: string | null
+          dia_semana: number
+          hora_inicio: string
+          hora_fin: string
+          actividad_nombre: string
+          curso_denominacion: string | null
+          curso_division: string | null
+          grupo_nombre: string | null
+          nivel_id: number
+          nivel_nombre: string
+          responsable_apellido: string | null
+          responsable_nombre: string | null
+          total_filas: number
+        }[]
+      }
+      reporte_alumnos_recorrido: {
+        Args: {
+          p_busqueda?: string
+          p_nivel_id?: number
+          p_curso_id?: string
+          p_materia_id?: number
+          p_deporte_id?: string
+          p_servicio_id?: string
+          p_horario_id?: string
+          p_profesor_id?: string
+          p_incluir_historial?: boolean
+          p_limite?: number
+          p_desplazamiento?: number
+        }
+        Returns: {
+          id: string
+          alumno_apellido: string
+          alumno_nombre: string
+          legajo_nro: string | null
+          nivel_id: number | null
+          nivel_nombre: string | null
+          curso_denominacion: string | null
+          curso_division: string | null
+          recorrido_id: string
+          recorrido_codigo: string
+          recorrido_nombre: string
+          paradas: string | null
+          estado: 'ACTIVA' | 'CANCELADA'
+          fecha_inscripcion: string
+          fecha_cancelacion: string | null
+          total_filas: number
+        }[]
+      }
+      reporte_docentes_nivel: {
+        Args: {
+          p_busqueda?: string
+          p_nivel_id?: number
+          p_curso_id?: string
+          p_materia_id?: number
+          p_deporte_id?: string
+          p_horario_id?: string
+          p_profesor_id?: string
+          p_origen?: 'ACADEMICO' | 'DEPORTIVO'
+          p_limite?: number
+          p_desplazamiento?: number
+        }
+        Returns: {
+          id: string
+          origen: 'ACADEMICO' | 'DEPORTIVO'
+          docente_apellido: string
+          docente_nombre: string
+          docente_estado: 'ACTIVO' | 'INACTIVO' | null
+          especialidad: string | null
+          nivel_id: number
+          nivel_nombre: string
+          actividad_nombre: string
+          curso_denominacion: string | null
+          curso_division: string | null
+          grupo_nombre: string | null
+          total_filas: number
+        }[]
+      }
+      catalogos_reportes: {
+        Args: Record<string, never>
+        Returns: Json
       }
       renombrar_nivel: {
         Args: { p_nivel_id: number; p_nombre: string }

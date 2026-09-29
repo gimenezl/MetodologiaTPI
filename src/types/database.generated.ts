@@ -2207,6 +2207,7 @@ export type Database = {
           vinculado: boolean
         }[]
       }
+      catalogos_reportes: { Args: never; Returns: Json }
       configurar_horario_materia: {
         Args: {
           p_asignacion_id: string
@@ -2739,6 +2740,199 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      reporte_alumnos_curso: {
+        Args: {
+          p_busqueda?: string
+          p_curso_id?: string
+          p_deporte_id?: string
+          p_desplazamiento?: number
+          p_horario_id?: string
+          p_incluir_historial?: boolean
+          p_limite?: number
+          p_materia_id?: number
+          p_nivel_id?: number
+          p_profesor_id?: string
+          p_servicio_id?: string
+        }
+        Returns: {
+          alumno_apellido: string
+          alumno_estado: Database["public"]["Enums"]["estado_alumno"]
+          alumno_nombre: string
+          curso_denominacion: string
+          curso_division: string
+          curso_id: string
+          fecha_cierre: string
+          fecha_inicio: string
+          id: string
+          legajo_nro: string
+          motivo_cierre: Database["public"]["Enums"]["motivo_cierre_matricula"]
+          nivel_id: number
+          nivel_nombre: string
+          total_filas: number
+          vigente: boolean
+        }[]
+      }
+      reporte_alumnos_deporte: {
+        Args: {
+          p_busqueda?: string
+          p_curso_id?: string
+          p_deporte_id?: string
+          p_desplazamiento?: number
+          p_horario_id?: string
+          p_incluir_historial?: boolean
+          p_limite?: number
+          p_materia_id?: number
+          p_nivel_id?: number
+          p_profesor_id?: string
+          p_servicio_id?: string
+        }
+        Returns: {
+          alumno_apellido: string
+          alumno_nombre: string
+          curso_denominacion: string
+          curso_division: string
+          deporte_id: string
+          deporte_nombre: string
+          estado: Database["public"]["Enums"]["estado_inscripcion_deportiva"]
+          fecha_cancelacion: string
+          fecha_inscripcion: string
+          grupo_id: string
+          grupo_nombre: string
+          id: string
+          legajo_nro: string
+          nivel_id: number
+          nivel_nombre: string
+          responsable_apellido: string
+          responsable_nombre: string
+          total_filas: number
+        }[]
+      }
+      reporte_alumnos_horario: {
+        Args: {
+          p_busqueda?: string
+          p_curso_id?: string
+          p_deporte_id?: string
+          p_desplazamiento?: number
+          p_horario_id?: string
+          p_limite?: number
+          p_materia_id?: number
+          p_nivel_id?: number
+          p_origen?: string
+          p_profesor_id?: string
+          p_servicio_id?: string
+        }
+        Returns: {
+          actividad_nombre: string
+          alumno_apellido: string
+          alumno_nombre: string
+          curso_denominacion: string
+          curso_division: string
+          dia_semana: number
+          grupo_nombre: string
+          hora_fin: string
+          hora_inicio: string
+          id: string
+          legajo_nro: string
+          nivel_id: number
+          nivel_nombre: string
+          origen: string
+          responsable_apellido: string
+          responsable_nombre: string
+          total_filas: number
+        }[]
+      }
+      reporte_alumnos_materia: {
+        Args: {
+          p_busqueda?: string
+          p_curso_id?: string
+          p_deporte_id?: string
+          p_desplazamiento?: number
+          p_horario_id?: string
+          p_limite?: number
+          p_materia_id?: number
+          p_nivel_id?: number
+          p_profesor_id?: string
+          p_servicio_id?: string
+        }
+        Returns: {
+          alumno_apellido: string
+          alumno_nombre: string
+          curso_denominacion: string
+          curso_division: string
+          curso_id: string
+          id: string
+          legajo_nro: string
+          materia_id: number
+          materia_nombre: string
+          nivel_id: number
+          nivel_nombre: string
+          responsable_apellido: string
+          responsable_nombre: string
+          total_filas: number
+        }[]
+      }
+      reporte_alumnos_recorrido: {
+        Args: {
+          p_busqueda?: string
+          p_curso_id?: string
+          p_deporte_id?: string
+          p_desplazamiento?: number
+          p_horario_id?: string
+          p_incluir_historial?: boolean
+          p_limite?: number
+          p_materia_id?: number
+          p_nivel_id?: number
+          p_profesor_id?: string
+          p_servicio_id?: string
+        }
+        Returns: {
+          alumno_apellido: string
+          alumno_nombre: string
+          curso_denominacion: string
+          curso_division: string
+          estado: Database["public"]["Enums"]["estado_inscripcion_servicio"]
+          fecha_cancelacion: string
+          fecha_inscripcion: string
+          id: string
+          legajo_nro: string
+          nivel_id: number
+          nivel_nombre: string
+          paradas: string
+          recorrido_codigo: string
+          recorrido_id: string
+          recorrido_nombre: string
+          total_filas: number
+        }[]
+      }
+      reporte_docentes_nivel: {
+        Args: {
+          p_busqueda?: string
+          p_curso_id?: string
+          p_deporte_id?: string
+          p_desplazamiento?: number
+          p_horario_id?: string
+          p_limite?: number
+          p_materia_id?: number
+          p_nivel_id?: number
+          p_origen?: string
+          p_profesor_id?: string
+        }
+        Returns: {
+          actividad_nombre: string
+          curso_denominacion: string
+          curso_division: string
+          docente_apellido: string
+          docente_estado: Database["public"]["Enums"]["estado_profesor"]
+          docente_nombre: string
+          especialidad: string
+          grupo_nombre: string
+          id: string
+          nivel_id: number
+          nivel_nombre: string
+          origen: string
+          total_filas: number
+        }[]
       }
       reservar_vinculo_cuenta: {
         Args: {
