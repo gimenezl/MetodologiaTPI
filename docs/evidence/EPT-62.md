@@ -53,7 +53,9 @@ Commits del candidato (convencionales, con pruebas junto al comportamiento):
 | `c9ef9a4` | pruebas de interfaz y E2E con sesión real |
 | `ce698aa` | RPC nuevas en la batería de permisos de EPT-59; orden de una aserción de deportes |
 | `7310ca9` | evidencia y capturas |
-| (corrección) | paginación de los listados administrativos y ficha filtrada por alumno en el servidor, con prueba de más de 1000 filas |
+| `3ea46e6` | paginación de los listados administrativos y ficha filtrada por alumno en el servidor, con prueba de más de 1000 filas |
+| `5f89775` | cota exacta de la lectura paginada (módulo `src/lib/paginacion.ts` y sus pruebas) y conteo por tipo de servicio en la prueba de paginación |
+| (evidencia) | procedencia por SHA de las pruebas (solo `docs/evidence/`) |
 
 ---
 
@@ -174,53 +176,78 @@ Acceso directo a tablas: ningún rol de aplicación tiene `INSERT`, `UPDATE`, `D
 
 ---
 
-## 8. Pruebas y resultados (candidato final)
+## 8. Pruebas y resultados
 
-Base local descartable reconstruida desde cero con `npx supabase db reset` (23
-migraciones, sin errores). Ninguna prueba tocó producción. Los comandos se corrieron
-sobre el candidato con la migración definitiva (`1fd6ed7` y posteriores).
+**Cada resultado indica sobre qué SHA se ejecutó.** No se atribuye al HEAD final ninguna
+prueba que no se repitió allí. Hubo cuatro rondas:
 
-### Base de datos
-
-| Comando | Exit | Resultado |
+| Ronda | SHA sobre el que corrió | Alcance |
 |---|---|---|
-| `npx supabase db reset --local` | 0 | cadena completa aplicada, autoverificación de la migración incluida |
-| `npx supabase migration list --local` | 0 | 23 migraciones, la de EPT-62 posterior a `20260928155706` |
-| `npx supabase db lint --local` | 0 | sin errores |
-| `npx supabase db advisors --local --type security` / `--type performance` | 0 / 0 | seguridad: 2 `function_search_path_mutable` y 2 `rls_policy_always_true`; rendimiento: 1 `auth_rls_initplan` y 5 `multiple_permissive_policies`. **Ninguno recae sobre objetos de EPT-62** (se filtró por nombre y metadatos); son de objetos anteriores y no se tocaron |
-| `node supabase/tests/tipos-generados.mjs` | 0 | `database.generated.ts` coincide byte a byte con el generador |
-| SQL: `inscripciones_administracion_rls.sql` | 0 | 41 comprobaciones OK (incluye TRUNCATE del registro) |
-| SQL: alumnos_academicos, comedor, cursos, deportes, deportes_administracion, horarios, horarios_academicos, inscripcion_hijos, materias, niveles, perfiles_privacidad, preflight_ept59, profesores, reconciliacion_esquema_remoto, transporte, usuarios_alta_atomica (esta y la siguiente como `supabase_admin`) | 0 | todas |
-| SQL: `usuarios_permisos_rls.sql` (`supabase_admin`) | 3 → 0 | la primera corrida falló: «06 RPC sin cubrir en la batería» (exige listar toda RPC pública nueva). Se agregaron las cinco RPC de EPT-62 y la corrida final salió **0** |
-| Concurrencia (32 carreras): `inscripciones_administracion_concurrencia.mjs` | 0 | ejecutada dos veces seguidas; base limpia y trigger habilitado |
-| Concurrencia: alumnos_academicos, comedor, deportes, deportes_administracion, horarios, horarios_academicos, niveles, profesores, transporte, usuarios_permisos | 0 | todas |
+| A | `c9ef9a4` | verificación completa inicial (base, código, aplicación, E2E entera) |
+| B | `ce698aa` | repeticiones tras corregir los fallos de la ronda A (batería de permisos, lint, E2E entera, capturas) |
+| C | `3ea46e6` | **solo suites focalizadas** tras agregar la paginación; **no** hubo E2E completa |
+| D | `5f89775` | verificación sobre el código final: `tsc`, ESLint, lint, `build`, prueba de la cota y **E2E entera** |
+
+`5f89775` es el último commit que cambia código o pruebas. Los commits posteriores solo
+tocan `docs/evidence/`. La base de datos y sus suites SQL y de concurrencia no cambian
+desde `ce698aa` (`git diff ce698aa HEAD -- supabase` vacío), y por eso se detallan con la
+ronda que efectivamente las ejecutó.
+
+### Base de datos (rondas A y B; sin cambios de base desde `ce698aa`)
+
+| Comando | Exit | SHA | Resultado |
+|---|---|---|---|
+| `npx supabase db reset --local` | 0 | `c9ef9a4` | cadena completa (23 migraciones) con la autoverificación de la migración; el archivo de la migración no cambió después de `1fd6ed7` |
+| `npx supabase migration list --local` | 0 | `c9ef9a4` | 23 migraciones, la de EPT-62 posterior a `20260928155706` |
+| `npx supabase db lint --local` | 0 | `c9ef9a4` | sin errores |
+| `npx supabase db advisors --local --type security` / `--type performance` | 0 / 0 | `c9ef9a4` | seguridad: 2 `function_search_path_mutable` y 2 `rls_policy_always_true`; rendimiento: 1 `auth_rls_initplan` y 5 `multiple_permissive_policies`. **Ninguno recae sobre objetos de EPT-62** (se filtró por nombre y metadatos); son de objetos anteriores y no se tocaron |
+| `node supabase/tests/tipos-generados.mjs` | 0 | `c9ef9a4` | `database.generated.ts` coincide byte a byte con el generador |
+| SQL: `inscripciones_administracion_rls.sql` | 0 | `c9ef9a4` | 41 comprobaciones OK (incluye TRUNCATE del registro) |
+| SQL: alumnos_academicos, comedor, cursos, deportes, deportes_administracion, horarios, horarios_academicos, inscripcion_hijos, materias, niveles, perfiles_privacidad, preflight_ept59, profesores, reconciliacion_esquema_remoto, transporte, usuarios_alta_atomica (esta como `supabase_admin`) | 0 | `c9ef9a4` | todas |
+| SQL: `usuarios_permisos_rls.sql` (`supabase_admin`) | 3 | `c9ef9a4` | falló: «06 RPC sin cubrir en la batería» (exige listar toda RPC pública nueva) |
+| SQL: `usuarios_permisos_rls.sql` (`supabase_admin`), tras agregar las cinco RPC | 0 | `ce698aa` | corrección verificada |
+| Concurrencia (32 carreras): `inscripciones_administracion_concurrencia.mjs` | 0 | `c9ef9a4` | dos veces seguidas; base limpia y trigger habilitado |
+| Concurrencia: alumnos_academicos, comedor, deportes, deportes_administracion, horarios, horarios_academicos, niveles, profesores, transporte, usuarios_permisos | 0 | `c9ef9a4` | todas |
 
 ### Código y aplicación
 
-| Comando | Exit | Resultado |
-|---|---|---|
-| `git diff --check origin/main` | 0 | sin errores de espacios (solo avisos LF/CRLF del entorno) |
-| `npx tsc --noEmit --incremental false` | 0 | sin errores |
-| `npx eslint` focalizado sobre los archivos de EPT-62 | 0 | limpio |
-| `npm run lint` | 1 | **14 errores y 107 advertencias, idéntico a la línea base** (EPT-61: 14 y 107). Los 14 errores están en 8 archivos que EPT-62 no toca (`inscripcion`, `noticias`, `quienes-somos`, `asistencias`, `solicitudes`, `testimonios`, `global-error`, `login`); se comprobó que ninguno figura en el diff. Es una falla **preexistente**, no una regresión, y no se llama «verde» |
-| `npm run build` (credenciales locales de `supabase status -o env`, API verificada como loopback) | 0 | correcto |
-| `node supabase/tests/correr-autenticadas.mjs` (toda la E2E, sesión real + bancos) | 0 | **1136 aprobadas, 4 omitidas** (19,9 min) |
-| Playwright de las specs nuevas | 0 | `inscripciones-administracion.spec` 6; `-auth` 69 (dos corridas); `-ui` 160 + 2 omitidas (tres perfiles); `-e2e-auth` 52 (varias corridas) |
+| Comando | Exit | SHA | Resultado |
+|---|---|---|---|
+| `git diff --check origin/main` | 0 | `5f89775` | sin errores de espacios (solo avisos LF/CRLF del entorno) |
+| `npx tsc --noEmit --incremental false` | 0 | `5f89775` | sin errores |
+| `npx eslint` focalizado (servicio, módulo de paginación, ficha, specs nuevas, `playwright.config.ts`) | 0 | `5f89775` | limpio |
+| `npm run lint` | 1 | `5f89775` | **14 errores y 107 advertencias, idéntico a la línea base** (EPT-61: 14 y 107) y a las rondas B y C. Los 14 errores están en 8 archivos que EPT-62 no toca (`inscripcion`, `noticias`, `quienes-somos`, `asistencias`, `solicitudes`, `testimonios`, `global-error`, `login`). Falla **preexistente**, no una regresión; no se llama «verde» |
+| `npm run build` (credenciales locales de `supabase status -o env`, API verificada como loopback) | 0 | `5f89775` | correcto |
+| `npx playwright test tests/paginacion.spec.ts --project=chromium` | 0 | `5f89775` | 12 aprobadas (borde de la cota y contrato de la lectura paginada) |
+| `node supabase/tests/correr-autenticadas.mjs` (toda la E2E: sesión real + bancos, tres perfiles) | 0 | `5f89775` | **1155 aprobadas, 4 omitidas** (18,4 min): **única E2E entera que corresponde al código final** |
+
+Ejecuciones anteriores (no se repitieron con esos números en el HEAD final):
+
+| Comando | Exit | SHA | Resultado |
+|---|---|---|---|
+| E2E entera, primera corrida | 1 | `c9ef9a4` | 1133 aprobadas, 4 omitidas y 3 fallidas (`deportes-ui.spec.ts:152`, tres perfiles) |
+| E2E entera, tras corregir esa aserción | 0 | `ce698aa` | 1136 aprobadas, 4 omitidas (19,9 min); en la misma ronda se regeneraron las capturas |
+| Suites focalizadas tras la paginación: autenticadas de inscripciones (107), de comedor, transporte, deportes, alumnos y administración de deportes (172), y UI sin sesión (335 + 4 omitidas) | 0 | `3ea46e6` | **no fue una E2E completa** |
+| `inscripciones-administracion-paginacion-auth.spec.ts` (28), dos corridas | 0 | `5f89775` (árbol idéntico al commit) | además de la E2E entera de la ronda D |
 
 Historial honesto de fallos durante la verificación:
 
-1. `usuarios_permisos_rls.sql` (exit 3): cobertura de RPC de EPT-59 → corregido (arriba).
-2. `deportes-ui.spec.ts:152`, tres perfiles: la aserción del botón «Confirmar» se ejecutaba
-   después de filtrar por «Todas» y buscar «atletismo», donde la fila es una baja y no
-   ofrece acciones. Se movió antes del filtro. Corrido tras el arreglo: 3 aprobadas, y la
-   E2E completa final en 0.
+1. `usuarios_permisos_rls.sql` (exit 3, `c9ef9a4`): cobertura de RPC de EPT-59 → corregido y
+   verificado en `ce698aa`.
+2. `deportes-ui.spec.ts:152`, tres perfiles (`c9ef9a4`): la aserción del botón «Confirmar»
+   se ejecutaba después de filtrar por «Todas» y buscar «atletismo», donde la fila es una
+   baja y no ofrece acciones. Se movió antes del filtro; E2E entera en 0 en `ce698aa`.
 3. `tests/auth.setup.ts` borraba matrículas e inscripciones sin tocar las confirmaciones:
    con las FK `RESTRICT` habría fallado tras la primera confirmación. Se limpia antes,
    deshabilitando el trigger de protección solo en esa transacción de pruebas.
 
-Omisiones: 4 pruebas omitidas en la E2E completa, por condición explícita en el propio
-test (p. ej. interacción de teclado que no aplica al perfil táctil de WebKit); no se
-midió cuántas ya existían antes de esta historia, así que no se afirma que sean idénticas a la línea base.
+Omisiones: 4 pruebas omitidas en la E2E entera, por condición explícita en el propio test
+(p. ej. interacción de teclado que no aplica al perfil táctil de WebKit); no se midió
+cuántas ya existían antes de esta historia, así que no se afirma que sean idénticas a la
+línea base.
+
+Las capturas (§11) se generaron en la ronda B (`ce698aa`) y no se regeneraron después: la
+paginación no cambia el marcado de las pantallas.
 
 ### Casos permitidos y denegados (resumen)
 
@@ -252,11 +279,21 @@ cambian:
   (`fecha` descendente e `id` ascendente como desempate único). No supone que el servidor
   devuelva exactamente 1000 filas: el siguiente pedido arranca donde terminó el anterior y
   la lectura termina con una página vacía. Descarta repetidos por identificador. Ante un
-  error de cualquier página devuelve el error (nunca un listado parcial) y, si superara la
-  cota de 500 páginas, también falla en lugar de recortar.
+  error de cualquier página devuelve el error (nunca un listado parcial).
+- **Cota exacta** (corregida en `5f89775`; el módulo vive en `src/lib/paginacion.ts`): se
+  aceptan hasta 500 páginas **con datos** (500 000 filas con páginas de 1000) y se hace un
+  pedido más que comprueba que no queda ninguna. Con exactamente 500 páginas llenas la
+  lectura es válida; con una sola fila más falla con `ERROR_LIMITE_DE_PAGINAS` en lugar de
+  recortar. La primera versión (`3ea46e6`) devolvía error con 500 páginas llenas sin
+  comprobar si había otra fila; ese borde estaba mal.
 - `listarMatriculasAdministracion(alumnoId?)` aplica `alumno_id = …` **en PostgreSQL**
   antes de paginar. La ficha llama `listarMatriculasAdministracion(id)`; ya no filtra en
   memoria.
+
+**Prueba de la cota** `tests/paginacion.spec.ts` (12 pruebas, sin navegador ni base): rangos
+contiguos, servidor con tope menor que la página, repetidos, error a mitad de lectura, y el
+borde con valores reducidos y con los reales (500 000 filas se leen completas; 500 001
+fallan). Con el borde anterior (`<` en lugar de `<=`) fallan 4 de esas pruebas.
 
 **Prueba nueva** `tests/inscripciones-administracion-paginacion-auth.spec.ts` (sesión real
 de Dirección, base local; enrutada en `playwright.config.ts`). Siembra con las reglas de
@@ -266,8 +303,14 @@ relleno y **una** matrícula de 2001 de un alumno objetivo, que en el orden glob
 después de la fila 1000 (se comprueba con `row_number()`). Verifica:
 
 1. el fixture supera 1000 filas en cada dominio;
-2. comedor, transporte y deportes muestran **todas** las filas con el filtro «Todas» (el
-   total mostrado coincide con `count(*)` de la base);
+2. comedor, transporte y deportes muestran **todas** las filas con el filtro «Todas». La
+   pantalla de comedor o de transporte lista todas las inscripciones de **todos** los
+   servicios de ese tipo, así que la base se cuenta con el mismo conjunto
+   (`inscripciones_servicios` unida a `servicios_escolares` por `tipo`), no por un solo
+   `servicio_id` (`5f89775` corrige la primera versión, que contaba un único servicio). El
+   fixture usa **dos servicios por tipo** (`COMEDOR` y un segundo servicio `COMEDOR-PAG62`
+   propio de la suite; TR-NORTE y TR-SUR) y comprueba que el total por tipo es mayor que el
+   de un solo `servicio_id`;
 3. la ficha del alumno objetivo encuentra su matrícula vigente y la de 2001;
 4. la ficha del alumno de relleno muestra sus 1101 matrículas;
 5. de forma estática: la ficha llama `listarMatriculasAdministracion(id)` sin filtrar en
@@ -280,7 +323,10 @@ con `git stash`, ya devueltos) los tres listados fallan con `Expected: 1100`,
 `Received: 1000`, y la ficha del alumno objetivo con `Expected: 2`, `Received: 1`. Con la
 corrección pasan las 28 pruebas, dos corridas seguidas.
 
-| Comando (sobre el candidato corregido) | Exit | Resultado |
+Verificaciones de la ronda C, ejecutadas sobre `3ea46e6` (**suites focalizadas, no una E2E
+completa**; la E2E entera del código final está en la ronda D de §8):
+
+| Comando | Exit | Resultado |
 |---|---|---|
 | `npx tsc --noEmit --incremental false` | 0 | sin errores |
 | `npx eslint` (servicio, ficha, spec nueva, `playwright.config.ts`) | 0 | limpio |
@@ -290,7 +336,7 @@ corrección pasan las 28 pruebas, dos corridas seguidas.
 | `npx playwright test` sobre `inscripciones-administracion`, `-ui`, `comedor-ui`, `transporte-ui`, `deportes-ui`, `alumnos-ui` (tres perfiles) | 0 | 335 aprobadas, 4 omitidas |
 | `npm run lint` | 1 | 14 errores y 107 advertencias, **idéntico a la línea base** y a la corrida anterior; los errores siguen en los 8 archivos ajenos ya listados |
 
-No se regeneraron capturas en esta corrección (sin `EPT_CAPTURAS=1`) y no hubo cambios
+Las cotas y el conteo por tipo se verificaron después, en `5f89775` (ronda D de §8). No se regeneraron capturas en esta corrección (sin `EPT_CAPTURAS=1`) y no hubo cambios
 en la base ni en la migración, por lo que no se repitieron el `db reset`, las suites SQL
 ni la concurrencia, que no dependen del código modificado.
 
@@ -466,10 +512,16 @@ ni menciones de IA en commits ni documentos.
 > Migración `20260928193259_ept_62_administracion_inscripciones.sql`, 5 RPC, 3 vistas,
 > API `/api/inscripciones/[dominio]/[id]/{confirmacion,cancelacion}` y pantallas de
 > Comedor, Transporte, Deportes y Alumnos.
-> Verificación local: `db reset` 0; SQL (41 comprobaciones propias + todas las suites) 0;
-> 32 carreras de concurrencia 0; listados administrativos paginados (prueba con 1100 filas por dominio); `tsc` 0; `build` 0; E2E completa 1136 aprobadas / 4
-> omitidas; `npm run lint` sale 1 por 14 errores preexistentes en archivos no tocados
-> (idéntico a la línea base). Evidencia: `docs/evidence/EPT-62.md`.
+> Verificación local (cada una indica el SHA sobre el que corrió; el último commit de código
+> es `5f89775`): sobre `c9ef9a4` y `ce698aa` — `db reset` 0, SQL (41 comprobaciones propias +
+> todas las suites; la batería de permisos de EPT-59 se corrigió y pasó en `ce698aa`) 0, 32
+> carreras de concurrencia 0, sin cambios de base desde `ce698aa`; sobre `3ea46e6` — solo
+> suites focalizadas tras agregar la paginación (no fue una E2E completa); sobre `5f89775` —
+> `tsc` 0, `build` 0, prueba de la cota 12/12 y **E2E entera 1155 aprobadas / 4 omitidas**.
+> Los listados administrativos se paginan sin perder filas (prueba con más de 1000 filas por
+> dominio, incluidos dos servicios por tipo). `npm run lint` sale 1 por 14 errores
+> preexistentes en archivos no tocados (idéntico a la línea base). Evidencia:
+> `docs/evidence/EPT-62.md`.
 > Pendiente: revisión por el otro integrante, integración y aplicación de la migración en
 > producción (no realizadas). Deuda separada: modelo legado `public.inscripciones` con
 > `DELETE` físico (no incluido en EPT-62).
