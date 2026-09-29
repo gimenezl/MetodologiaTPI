@@ -1,4 +1,5 @@
 import type { DominioInscripcion } from '@/lib/validations'
+import { leerTodasLasFilas } from '@/lib/paginacion'
 import { createServerSupabaseClient } from '@/services/supabase.server'
 
 /**
@@ -292,60 +293,6 @@ const COLUMNAS_DEPORTIVA =
 const COLUMNAS_SERVICIO =
   `id, ${COLUMNAS_ALUMNO}, servicio_id, servicio_tipo, servicio_codigo, servicio_nombre, servicio_activo, ` +
   `estado, fecha_inscripcion, fecha_cancelacion, ${COLUMNAS_CONFIRMACION}`
-
-/**
- * Tamaño de página de las lecturas. Coincide con el `max_rows` por defecto de
- * PostgREST (1000): un pedido sin paginar se recorta en silencio a ese tope y
- * el listado quedaría incompleto sin ningún error.
- */
-const TAMANO_PAGINA = 1000
-
-/** Cota de seguridad: se prefiere fallar antes que devolver un listado recortado. */
-const MAXIMO_PAGINAS = 500
-
-type FilaConId = { id: string }
-
-/**
- * Recorre TODAS las filas de una lectura ordenada, página a página.
- *
- * `pagina(desde, hasta)` debe pedir siempre el mismo orden TOTAL (un criterio
- * de fecha y el identificador como desempate único); sin él, dos páginas
- * podrían repetir o saltear filas. No se asume que el servidor devuelva
- * exactamente `TAMANO_PAGINA` filas: si su tope fuera menor, el siguiente pedido
- * arranca donde terminó el anterior, y la lectura solo termina con una página
- * vacía. Las filas repetidas por una alta concurrente se descartan por
- * identificador. Ante un error de cualquier página se devuelve el error, nunca
- * un listado parcial.
- */
-async function leerTodasLasFilas<T extends FilaConId>(
-  pagina: (
-    desde: number,
-    hasta: number
-  ) => PromiseLike<{ data: unknown[] | null; error: ErrorPostgres | null }>
-): Promise<{ ok: true; datos: T[] } | { ok: false; error: ErrorPostgres | null }> {
-  const vistas = new Set<string>()
-  const filas: T[] = []
-  let desde = 0
-
-  for (let paginas = 0; paginas < MAXIMO_PAGINAS; paginas += 1) {
-    const { data, error } = await pagina(desde, desde + TAMANO_PAGINA - 1)
-    if (error) return { ok: false, error }
-
-    const lote = (data ?? []) as T[]
-    if (lote.length === 0) return { ok: true, datos: filas }
-
-    for (const fila of lote) {
-      if (!vistas.has(fila.id)) {
-        vistas.add(fila.id)
-        filas.push(fila)
-      }
-    }
-    desde += lote.length
-  }
-
-  // Más filas que la cota: no se devuelve un listado recortado como si fuera completo.
-  return { ok: false, error: { code: 'ERROR_LIMITE_DE_PAGINAS' } }
-}
 
 /**
  * Las matrículas —vigentes y cerradas— con su confirmación. Más recientes

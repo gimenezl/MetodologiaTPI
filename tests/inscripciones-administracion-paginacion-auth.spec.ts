@@ -39,6 +39,13 @@ const LEGAJO_OBJETIVO = 'LEG-PAG62-0002'
 const FILAS = 1100
 const SERVICIO_COMEDOR = 'e0000000-0000-4000-8000-000000000010'
 const SERVICIO_TRANSPORTE = 'e0000000-0000-4000-8000-000000000020'
+/** Segundo recorrido sembrado por EPT-60 (TR-SUR): otro servicio del MISMO tipo. */
+const SERVICIO_TRANSPORTE_2 = 'e0000000-0000-4000-8000-000000000021'
+/** Segundo servicio de tipo COMEDOR, propio de esta suite (se retira al terminar). */
+const SERVICIO_COMEDOR_2 = 'e0000000-0000-4000-8000-0000000062c2'
+const CODIGO_COMEDOR_2 = 'COMEDOR-PAG62'
+/** Ciclos por servicio: dos servicios por tipo suman más que el tope de 1000 filas. */
+const CICLOS_POR_SERVICIO = 600
 const SESION_DIRECTORA = 'tests/.auth/directora.json'
 const CAPTURAR = process.env.EPT_CAPTURAS === '1'
 
@@ -71,6 +78,7 @@ function limpiar() {
       WHERE alumno_id IN (${perfil(DNI_RELLENO)}, ${perfil(DNI_OBJETIVO)});
     DELETE FROM public.inscripciones_deportivas
       WHERE alumno_id IN (${perfil(DNI_RELLENO)}, ${perfil(DNI_OBJETIVO)});
+    DELETE FROM public.servicios_escolares WHERE codigo = '${CODIGO_COMEDOR_2}';
     DELETE FROM public.matriculas
       WHERE alumno_id IN (${perfil(DNI_RELLENO)}, ${perfil(DNI_OBJETIVO)});
     DELETE FROM public.alumnos
@@ -137,14 +145,14 @@ function sembrarMatriculasCerradas() {
 }
 
 /** Altas y bajas lógicas reales (con sus triggers): `FILAS` ciclos cancelados. */
-function sembrarCiclos(servicioId: string) {
+function sembrarCiclos(servicioId: string, cantidad: number) {
   sql(`
     DO $$
     DECLARE
       v_alumno UUID := ${perfil(DNI_RELLENO)};
       v_id UUID;
     BEGIN
-      FOR i IN 1..${FILAS} LOOP
+      FOR i IN 1..${cantidad} LOOP
         INSERT INTO public.inscripciones_servicios (alumno_id, servicio_id)
         VALUES (v_alumno, '${servicioId}') RETURNING id INTO v_id;
         UPDATE public.inscripciones_servicios SET estado = 'CANCELADA' WHERE id = v_id;
@@ -192,10 +200,26 @@ function total(consulta: string): number {
   return Number(sql(consulta))
 }
 
-const TOTAL_COMEDOR = () =>
-  total(`SELECT count(*) FROM public.inscripciones_servicios WHERE servicio_id = '${SERVICIO_COMEDOR}';`)
-const TOTAL_TRANSPORTE = () =>
-  total(`SELECT count(*) FROM public.inscripciones_servicios WHERE servicio_id = '${SERVICIO_TRANSPORTE}';`)
+/**
+ * Filas de un TIPO de servicio: el mismo conjunto que lista la pantalla (todas las
+ * inscripciones de todos los servicios de ese tipo), no las de un `servicio_id`.
+ */
+const totalPorTipo = (tipo: 'COMEDOR' | 'TRANSPORTE') =>
+  total(`
+    SELECT count(*) FROM public.inscripciones_servicios i
+    JOIN public.servicios_escolares s ON s.id = i.servicio_id
+    WHERE s.tipo = '${tipo}';
+  `)
+const serviciosConFilas = (tipo: 'COMEDOR' | 'TRANSPORTE') =>
+  total(`
+    SELECT count(DISTINCT i.servicio_id) FROM public.inscripciones_servicios i
+    JOIN public.servicios_escolares s ON s.id = i.servicio_id
+    WHERE s.tipo = '${tipo}';
+  `)
+const filasDeUnServicio = (servicioId: string) =>
+  total(`SELECT count(*) FROM public.inscripciones_servicios WHERE servicio_id = '${servicioId}';`)
+const TOTAL_COMEDOR = () => totalPorTipo('COMEDOR')
+const TOTAL_TRANSPORTE = () => totalPorTipo('TRANSPORTE')
 const TOTAL_DEPORTES = () => total(`SELECT count(*) FROM public.inscripciones_deportivas;`)
 
 /**
@@ -228,8 +252,16 @@ test.describe('DIRECTOR autenticado — más de 1000 filas por dominio', () => {
     limpiar()
     sembrarAlumnos()
     sembrarMatriculasCerradas()
-    sembrarCiclos(SERVICIO_COMEDOR)
-    sembrarCiclos(SERVICIO_TRANSPORTE)
+    sql(`
+      INSERT INTO public.servicios_escolares (id, tipo, codigo, nombre)
+      VALUES ('${SERVICIO_COMEDOR_2}', 'COMEDOR', '${CODIGO_COMEDOR_2}', '${PREFIJO} Comedor 2');
+    `)
+    // Dos servicios por tipo: la lista de un tipo abarca ambos, y el conteo de la
+    // prueba también.
+    sembrarCiclos(SERVICIO_COMEDOR, CICLOS_POR_SERVICIO)
+    sembrarCiclos(SERVICIO_COMEDOR_2, CICLOS_POR_SERVICIO)
+    sembrarCiclos(SERVICIO_TRANSPORTE, CICLOS_POR_SERVICIO)
+    sembrarCiclos(SERVICIO_TRANSPORTE_2, CICLOS_POR_SERVICIO)
 
     const contexto = await browser.newContext({ storageState: SESION_DIRECTORA, baseURL: 'http://localhost:3000' })
     const pagina = await contexto.newPage()
@@ -245,6 +277,12 @@ test.describe('DIRECTOR autenticado — más de 1000 filas por dominio', () => {
   test('el fixture supera el límite y deja la matrícula del objetivo fuera de la primera página', () => {
     expect(TOTAL_COMEDOR()).toBeGreaterThan(1000)
     expect(TOTAL_TRANSPORTE()).toBeGreaterThan(1000)
+    // Cada tipo tiene filas en más de un servicio, y el conteo por tipo difiere del
+    // de un solo `servicio_id`: comparar contra uno solo daría un número menor.
+    expect(serviciosConFilas('COMEDOR')).toBeGreaterThanOrEqual(2)
+    expect(serviciosConFilas('TRANSPORTE')).toBeGreaterThanOrEqual(2)
+    expect(TOTAL_COMEDOR()).toBeGreaterThan(filasDeUnServicio(SERVICIO_COMEDOR))
+    expect(TOTAL_TRANSPORTE()).toBeGreaterThan(filasDeUnServicio(SERVICIO_TRANSPORTE))
     expect(TOTAL_DEPORTES()).toBeGreaterThan(1000)
     expect(total(`SELECT count(*) FROM public.matriculas;`)).toBeGreaterThan(1000)
 
