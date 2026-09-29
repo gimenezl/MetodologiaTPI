@@ -52,7 +52,8 @@ Commits del candidato (convencionales, con pruebas junto al comportamiento):
 | `66f1833` | interfaz de Dirección: comedor, transporte, deportes y matrículas |
 | `c9ef9a4` | pruebas de interfaz y E2E con sesión real |
 | `ce698aa` | RPC nuevas en la batería de permisos de EPT-59; orden de una aserción de deportes |
-| (este) | evidencia y capturas |
+| `7310ca9` | evidencia y capturas |
+| (corrección) | paginación de los listados administrativos y ficha filtrada por alumno en el servidor, con prueba de más de 1000 filas |
 
 ---
 
@@ -234,6 +235,67 @@ tablas, correos, DNI ni legajos (verificado en cada respuesta).
 
 ---
 
+## 8bis. Corrección: los listados administrativos no pierden filas (paginación)
+
+**Defecto.** PostgREST recorta cada respuesta a `max_rows = 1000` (`supabase/config.toml`)
+sin devolver error. Los tres listados administrativos (`matriculas_administracion`,
+`inscripciones_deportivas_administracion`, `inscripciones_servicios_administracion`)
+perdían en silencio las filas posteriores a la 1000, y la ficha del alumno descargaba
+el listado global de matrículas para filtrarlo después, así que un alumno cuyas
+matrículas quedaran fuera de la primera página aparecía sin ellas.
+
+**Corrección** (`src/services/inscripciones-administracion.service.ts`,
+`src/app/dashboard/alumnos/[id]/page.tsx`); el contrato aprobado, la API y la base no
+cambian:
+
+- `leerTodasLasFilas` recorre las páginas con `.range()` y un orden **total y estable**
+  (`fecha` descendente e `id` ascendente como desempate único). No supone que el servidor
+  devuelva exactamente 1000 filas: el siguiente pedido arranca donde terminó el anterior y
+  la lectura termina con una página vacía. Descarta repetidos por identificador. Ante un
+  error de cualquier página devuelve el error (nunca un listado parcial) y, si superara la
+  cota de 500 páginas, también falla en lugar de recortar.
+- `listarMatriculasAdministracion(alumnoId?)` aplica `alumno_id = …` **en PostgreSQL**
+  antes de paginar. La ficha llama `listarMatriculasAdministracion(id)`; ya no filtra en
+  memoria.
+
+**Prueba nueva** `tests/inscripciones-administracion-paginacion-auth.spec.ts` (sesión real
+de Dirección, base local; enrutada en `playwright.config.ts`). Siembra con las reglas de
+la aplicación (altas y bajas lógicas con sus triggers) 1100 ciclos cancelados en comedor,
+en transporte y en deportes, más 1100 matrículas cerradas recientes de un alumno de
+relleno y **una** matrícula de 2001 de un alumno objetivo, que en el orden global queda
+después de la fila 1000 (se comprueba con `row_number()`). Verifica:
+
+1. el fixture supera 1000 filas en cada dominio;
+2. comedor, transporte y deportes muestran **todas** las filas con el filtro «Todas» (el
+   total mostrado coincide con `count(*)` de la base);
+3. la ficha del alumno objetivo encuentra su matrícula vigente y la de 2001;
+4. la ficha del alumno de relleno muestra sus 1101 matrículas;
+5. de forma estática: la ficha llama `listarMatriculasAdministracion(id)` sin filtrar en
+   memoria y el servicio filtra con `.eq('alumno_id', …)` y `.range(…)`.
+
+Limpieza completa al terminar (`afterAll`): la suite es re-ejecutable.
+
+**Prueba de que la prueba discrimina.** Con el servicio y la ficha anteriores (restaurados
+con `git stash`, ya devueltos) los tres listados fallan con `Expected: 1100`,
+`Received: 1000`, y la ficha del alumno objetivo con `Expected: 2`, `Received: 1`. Con la
+corrección pasan las 28 pruebas, dos corridas seguidas.
+
+| Comando (sobre el candidato corregido) | Exit | Resultado |
+|---|---|---|
+| `npx tsc --noEmit --incremental false` | 0 | sin errores |
+| `npx eslint` (servicio, ficha, spec nueva, `playwright.config.ts`) | 0 | limpio |
+| `git diff --check` | 0 | sin errores |
+| `node supabase/tests/correr-autenticadas.mjs` sobre `inscripciones-administracion-auth`, `-e2e-auth` y `-paginacion-auth` | 0 | 107 aprobadas |
+| ídem sobre `comedor-auth`, `transporte-auth`, `deportes-auth`, `alumnos-auth`, `administracion-deportes-auth` | 0 | 172 aprobadas |
+| `npx playwright test` sobre `inscripciones-administracion`, `-ui`, `comedor-ui`, `transporte-ui`, `deportes-ui`, `alumnos-ui` (tres perfiles) | 0 | 335 aprobadas, 4 omitidas |
+| `npm run lint` | 1 | 14 errores y 107 advertencias, **idéntico a la línea base** y a la corrida anterior; los errores siguen en los 8 archivos ajenos ya listados |
+
+No se regeneraron capturas en esta corrección (sin `EPT_CAPTURAS=1`) y no hubo cambios
+en la base ni en la migración, por lo que no se repitieron el `db reset`, las suites SQL
+ni la concurrencia, que no dependen del código modificado.
+
+---
+
 ## 9. Concurrencia real (dos conexiones `psql`)
 
 `supabase/tests/inscripciones_administracion_concurrencia.mjs`, coordinada con
@@ -346,8 +408,13 @@ pruebas de permisos y concurrencia de esta historia.
 2. Confirmar no exige alumno ACTIVO: una inscripción vigente de un alumno luego inactivado
    se puede confirmar; inactivar al alumno no cancela sus inscripciones deportivas ni de
    servicios (comportamiento previo, no cambiado).
-3. Las tres lecturas administrativas traen todas las filas; PostgREST aplica su `max_rows`
-   por defecto. Si el volumen crece (y para EPT-63) habrá que paginar o filtrar por alumno.
+3. **Resuelto en la corrección de paginación (§8bis).** Las tres lecturas administrativas
+   se recortaban en silencio al `max_rows = 1000` de la API; ahora recorren todas las
+   páginas. Límite residual: la paginación es por desplazamiento; una alta o baja
+   concurrente durante la lectura puede mover una fila entre páginas (las repetidas se
+   descartan por identificador; una fila omitida aparecería en la lectura siguiente).
+   Para volúmenes muy superiores (cota de 500 páginas = 500 000 filas) convendría
+   paginar por clave o filtrar también en las pantallas de comedor, transporte y deportes.
 4. El propietario de la base puede desactivar los triggers de protección: es un privilegio
    de administración, no de la aplicación.
 5. Mensajes de error del servicio de matrículas por API dicen «inscripción» donde
@@ -400,7 +467,7 @@ ni menciones de IA en commits ni documentos.
 > API `/api/inscripciones/[dominio]/[id]/{confirmacion,cancelacion}` y pantallas de
 > Comedor, Transporte, Deportes y Alumnos.
 > Verificación local: `db reset` 0; SQL (41 comprobaciones propias + todas las suites) 0;
-> 32 carreras de concurrencia 0; `tsc` 0; `build` 0; E2E completa 1136 aprobadas / 4
+> 32 carreras de concurrencia 0; listados administrativos paginados (prueba con 1100 filas por dominio); `tsc` 0; `build` 0; E2E completa 1136 aprobadas / 4
 > omitidas; `npm run lint` sale 1 por 14 errores preexistentes en archivos no tocados
 > (idéntico a la línea base). Evidencia: `docs/evidence/EPT-62.md`.
 > Pendiente: revisión por el otro integrante, integración y aplicación de la migración en
@@ -430,7 +497,8 @@ Implementa RF16 de punta a punta sobre los tres modelos de inscripción, sin uni
 **Fuera de alcance:** EPT-63 (reportes); modelo legado `public.inscripciones` (deuda con
 `DELETE` físico documentada en la evidencia).
 
-**Riesgos:** ver §14 de la evidencia (sin registro de quién cancela; lecturas sin paginar).
+**Riesgos:** ver §14 de la evidencia (sin registro de quién cancela; paginación por desplazamiento).
+**Corrección incluida:** los listados administrativos se paginan para no perder filas por el `max_rows` de la API, y la ficha del alumno filtra por `alumno_id` en el servidor (§8bis).
 **Reversión:** soltar funciones y vistas; conservar la tabla de auditoría.
 **Antes de mergear:** revisión del otro integrante; aplicar la migración con el flujo de
 producción acordado (no incluido acá).

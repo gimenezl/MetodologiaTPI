@@ -294,23 +294,84 @@ const COLUMNAS_SERVICIO =
   `estado, fecha_inscripcion, fecha_cancelacion, ${COLUMNAS_CONFIRMACION}`
 
 /**
- * Todas las matrículas —vigentes y cerradas— con su confirmación. Más recientes
- * primero; el identificador desempata para que el orden sea estable entre
- * lecturas. No recibe ni filtra por alumno: la vista solo devuelve filas a
- * Dirección. Es la base que EPT-63 reutiliza; no es un reporte.
+ * Tamaño de página de las lecturas. Coincide con el `max_rows` por defecto de
+ * PostgREST (1000): un pedido sin paginar se recorta en silencio a ese tope y
+ * el listado quedaría incompleto sin ningún error.
  */
-export async function listarMatriculasAdministracion(): Promise<
-  ResultadoInscripciones<MatriculaAdministracion[]>
-> {
-  const supabase = await createServerSupabaseClient()
-  const { data, error } = await supabase
-    .from('matriculas_administracion')
-    .select(COLUMNAS_MATRICULA)
-    .order('fecha_inicio', { ascending: false })
-    .order('id', { ascending: true })
+const TAMANO_PAGINA = 1000
 
-  if (error) return traducirError(error, 'listar', 'matriculas')
-  return { ok: true, datos: (data ?? []) as unknown as MatriculaAdministracion[] }
+/** Cota de seguridad: se prefiere fallar antes que devolver un listado recortado. */
+const MAXIMO_PAGINAS = 500
+
+type FilaConId = { id: string }
+
+/**
+ * Recorre TODAS las filas de una lectura ordenada, página a página.
+ *
+ * `pagina(desde, hasta)` debe pedir siempre el mismo orden TOTAL (un criterio
+ * de fecha y el identificador como desempate único); sin él, dos páginas
+ * podrían repetir o saltear filas. No se asume que el servidor devuelva
+ * exactamente `TAMANO_PAGINA` filas: si su tope fuera menor, el siguiente pedido
+ * arranca donde terminó el anterior, y la lectura solo termina con una página
+ * vacía. Las filas repetidas por una alta concurrente se descartan por
+ * identificador. Ante un error de cualquier página se devuelve el error, nunca
+ * un listado parcial.
+ */
+async function leerTodasLasFilas<T extends FilaConId>(
+  pagina: (
+    desde: number,
+    hasta: number
+  ) => PromiseLike<{ data: unknown[] | null; error: ErrorPostgres | null }>
+): Promise<{ ok: true; datos: T[] } | { ok: false; error: ErrorPostgres | null }> {
+  const vistas = new Set<string>()
+  const filas: T[] = []
+  let desde = 0
+
+  for (let paginas = 0; paginas < MAXIMO_PAGINAS; paginas += 1) {
+    const { data, error } = await pagina(desde, desde + TAMANO_PAGINA - 1)
+    if (error) return { ok: false, error }
+
+    const lote = (data ?? []) as T[]
+    if (lote.length === 0) return { ok: true, datos: filas }
+
+    for (const fila of lote) {
+      if (!vistas.has(fila.id)) {
+        vistas.add(fila.id)
+        filas.push(fila)
+      }
+    }
+    desde += lote.length
+  }
+
+  // Más filas que la cota: no se devuelve un listado recortado como si fuera completo.
+  return { ok: false, error: { code: 'ERROR_LIMITE_DE_PAGINAS' } }
+}
+
+/**
+ * Las matrículas —vigentes y cerradas— con su confirmación. Más recientes
+ * primero; el identificador desempata para que el orden sea total y estable
+ * entre páginas y entre lecturas. La vista solo devuelve filas a Dirección. Es la
+ * base que EPT-63 reutiliza; no es un reporte.
+ *
+ * Con `alumnoId` el filtro lo aplica PostgreSQL (`alumno_id = …`) antes de
+ * paginar: la ficha de un alumno no descarga el listado global para filtrarlo
+ * después.
+ */
+export async function listarMatriculasAdministracion(
+  alumnoId?: string
+): Promise<ResultadoInscripciones<MatriculaAdministracion[]>> {
+  const supabase = await createServerSupabaseClient()
+  const resultado = await leerTodasLasFilas<MatriculaAdministracion>((desde, hasta) => {
+    let consulta = supabase.from('matriculas_administracion').select(COLUMNAS_MATRICULA)
+    if (alumnoId !== undefined) consulta = consulta.eq('alumno_id', alumnoId)
+    return consulta
+      .order('fecha_inicio', { ascending: false })
+      .order('id', { ascending: true })
+      .range(desde, hasta)
+  })
+
+  if (!resultado.ok) return traducirError(resultado.error ?? {}, 'listar', 'matriculas')
+  return { ok: true, datos: resultado.datos }
 }
 
 /** Todas las inscripciones deportivas —activas y canceladas— con su confirmación. */
@@ -318,14 +379,17 @@ export async function listarInscripcionesDeportivasAdministracion(): Promise<
   ResultadoInscripciones<InscripcionDeportivaAdministracion[]>
 > {
   const supabase = await createServerSupabaseClient()
-  const { data, error } = await supabase
-    .from('inscripciones_deportivas_administracion')
-    .select(COLUMNAS_DEPORTIVA)
-    .order('fecha_inscripcion', { ascending: false })
-    .order('id', { ascending: true })
+  const resultado = await leerTodasLasFilas<InscripcionDeportivaAdministracion>((desde, hasta) =>
+    supabase
+      .from('inscripciones_deportivas_administracion')
+      .select(COLUMNAS_DEPORTIVA)
+      .order('fecha_inscripcion', { ascending: false })
+      .order('id', { ascending: true })
+      .range(desde, hasta)
+  )
 
-  if (error) return traducirError(error, 'listar', 'deportes')
-  return { ok: true, datos: (data ?? []) as unknown as InscripcionDeportivaAdministracion[] }
+  if (!resultado.ok) return traducirError(resultado.error ?? {}, 'listar', 'deportes')
+  return { ok: true, datos: resultado.datos }
 }
 
 /**
@@ -336,17 +400,24 @@ export async function listarInscripcionesServiciosAdministracion(
   tipo: TipoServicio
 ): Promise<ResultadoInscripciones<InscripcionServicioAdministracion[]>> {
   const supabase = await createServerSupabaseClient()
-  const { data, error } = await supabase
-    .from('inscripciones_servicios_administracion')
-    .select(COLUMNAS_SERVICIO)
-    .eq('servicio_tipo', tipo)
-    .order('fecha_inscripcion', { ascending: false })
-    .order('id', { ascending: true })
+  const resultado = await leerTodasLasFilas<InscripcionServicioAdministracion>((desde, hasta) =>
+    supabase
+      .from('inscripciones_servicios_administracion')
+      .select(COLUMNAS_SERVICIO)
+      .eq('servicio_tipo', tipo)
+      .order('fecha_inscripcion', { ascending: false })
+      .order('id', { ascending: true })
+      .range(desde, hasta)
+  )
 
-  if (error) {
-    return traducirError(error, 'listar', tipo === 'COMEDOR' ? 'comedor' : 'transporte')
+  if (!resultado.ok) {
+    return traducirError(
+      resultado.error ?? {},
+      'listar',
+      tipo === 'COMEDOR' ? 'comedor' : 'transporte'
+    )
   }
-  return { ok: true, datos: (data ?? []) as unknown as InscripcionServicioAdministracion[] }
+  return { ok: true, datos: resultado.datos }
 }
 
 // ----------------------------------------------------------------

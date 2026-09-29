@@ -77,7 +77,7 @@ export default async function DetalleAlumnoPage({
 
   const [historial, matriculas] = await Promise.all([
     listarHistorialAlumno(id),
-    listarMatriculasAdministracion(),
+    listarMatriculasAdministracion(id),
   ])
 
   return (
@@ -101,11 +101,7 @@ export default async function DetalleAlumnoPage({
 
       <MatriculasAdministracion
         alumno={`${alumno.datos.apellido}, ${alumno.datos.nombre}`}
-        matriculas={
-          matriculas.ok
-            ? matriculas.datos.filter((matricula) => matricula.alumno_id === id)
-            : []
-        }
+        matriculas={matriculas.ok ? matriculas.datos : []}
         errorLectura={matriculas.ok ? undefined : matriculas.mensaje}
       />
     </div>
