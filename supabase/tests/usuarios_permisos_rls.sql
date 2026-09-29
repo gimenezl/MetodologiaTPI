@@ -318,6 +318,12 @@ BEGIN
     PERFORM pg_temp.esperar(v, 'OK', 'fixture inscribir_en_servicio');
     INSERT INTO fx VALUES ('insc_serv', pg_catalog.substr(v, 4));
 
+    -- EPT-64: una credencial QR vigente del estudiante 04 (la emite la Dirección con la RPC real).
+    v := pg_temp.ejecutar('authenticated', D1, pg_catalog.format(
+        'SELECT (public.emitir_credencial_qr(%L, %L)).id::TEXT', pg_temp.u('04'), 'k1'));
+    PERFORM pg_temp.esperar(v, 'OK', 'fixture emitir_credencial_qr');
+    INSERT INTO fx VALUES ('cred_qr', pg_catalog.substr(v, 4));
+
     v := pg_temp.ejecutar('authenticated', D1, $q$SELECT (public.crear_nivel('NIVEL EPT59')).id::TEXT$q$);
     PERFORM pg_temp.esperar(v, 'OK', 'fixture crear_nivel');
     INSERT INTO fx VALUES ('nivel', pg_catalog.substr(v, 4));
@@ -534,6 +540,7 @@ DECLARE
     MAT TEXT := pg_temp.fx('materia'); ASIG TEXT := pg_temp.fx('asig'); FR TEXT := pg_temp.fx('franja');
     GR TEXT := pg_temp.fx('grupo'); GFR TEXT := pg_temp.fx('gfranja'); NIV TEXT := pg_temp.fx('nivel');
     IDEP TEXT := pg_temp.fx('insc_dep'); ISERV TEXT := pg_temp.fx('insc_serv');
+    CRED TEXT := pg_temp.fx('cred_qr');
     f TEXT := 'e0000000-0000-4000-8000-000000000101';
     s TEXT := 'e0000000-0000-4000-8000-000000000010';
     t TEXT := 'e0000000-0000-4000-8000-000000000020';
@@ -569,6 +576,12 @@ BEGIN
     PERFORM pg_temp.rpc('public.confirmar_inscripcion_deportiva', 'x', pg_catalog.format('public.confirmar_inscripcion_deportiva(%L)', IDEP));
     PERFORM pg_temp.rpc('public.confirmar_inscripcion_servicio', 'x', pg_catalog.format('public.confirmar_inscripcion_servicio(%L, ''COMEDOR'')', ISERV));
     PERFORM pg_temp.rpc('public.confirmar_matricula', 'x', pg_catalog.format('public.confirmar_matricula((SELECT m.id FROM public.matriculas m WHERE m.alumno_id = %L AND m.fecha_cierre IS NULL))', EST));
+    -- EPT-64: credencial digital QR. Solo Dirección habilitada opera y consulta; cada intento se revierte.
+    PERFORM pg_temp.rpc('public.emitir_credencial_qr', 'x', pg_catalog.format('public.emitir_credencial_qr(%L, %L)', EST2, 'k1'));
+    PERFORM pg_temp.rpc('public.reponer_credencial_qr', 'x', pg_catalog.format('public.reponer_credencial_qr(%L, %L, %L)', CRED, 'k1', 'Prueba de batería'));
+    PERFORM pg_temp.rpc('public.revocar_credencial_qr', 'x', pg_catalog.format('public.revocar_credencial_qr(%L, %L)', CRED, 'Prueba de batería'));
+    PERFORM pg_temp.rpc('public.historial_credenciales_qr', 'n', pg_catalog.format('public.historial_credenciales_qr(%L)', EST));
+    PERFORM pg_temp.rpc('public.consultar_validez_credencial_qr', 'n', pg_catalog.format('public.consultar_validez_credencial_qr(%L)', CRED));
     PERFORM pg_temp.rpc('public.configurar_horario_materia', 'x', pg_catalog.format('public.configurar_horario_materia(%L, 2::smallint, %L, %L, NULL)', ASIG, '09:00', '10:00'));
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria', 'n', 'public.consultar_compatibilidad_horaria()');
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria_alumno', 'n', pg_catalog.format('public.consultar_compatibilidad_horaria_alumno(%L)', EST));
