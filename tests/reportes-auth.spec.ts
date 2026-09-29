@@ -135,8 +135,27 @@ async function conPrivilegioRetirado(retirar: string, restituir: string, cuerpo:
   }
 }
 
-async function hayScrollHorizontal(page: Page) {
-  return page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)
+/**
+ * Elementos que sobresalen del ancho visible, o `[]` si no hay desplazamiento
+ * horizontal. Se reintenta unos segundos: la fuente y el diseño terminan de
+ * asentarse después de que el total es visible.
+ */
+async function sinScrollHorizontal(page: Page, contexto: string) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const ancho = document.documentElement.clientWidth
+          if (document.documentElement.scrollWidth <= ancho + 1) return ''
+          return Array.from(document.querySelectorAll('body *'))
+            .filter((e) => e.getBoundingClientRect().right > ancho + 1)
+            .slice(0, 5)
+            .map((e) => e.tagName + '.' + (e.getAttribute('class') ?? '').slice(0, 40) + ' ' + Math.round(e.getBoundingClientRect().right))
+            .join(' | ')
+        }),
+      { message: contexto + ' sin desplazamiento horizontal', timeout: 8_000 }
+    )
+    .toBe('')
 }
 
 async function capturar(page: Page, nombre: string) {
@@ -573,7 +592,7 @@ test.describe('DIRECTOR autenticado — reportes oficiales con volumen', () => {
       await page.goto(`/dashboard/reportes/${id}?tamano=25`)
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
       await expect(page.getByRole('status').filter({ hasText: /Mostrando/ })).toBeVisible()
-      expect(await hayScrollHorizontal(page), `${id} a 375 px`).toBe(false)
+      await sinScrollHorizontal(page, `${id} a 375 px`)
       await expect(page.getByRole('table')).toHaveCount(0)
       await expect(page.getByRole('list').filter({ has: page.getByRole('listitem') }).last().getByRole('listitem').first()).toBeVisible()
     }
@@ -582,10 +601,10 @@ test.describe('DIRECTOR autenticado — reportes oficiales con volumen', () => {
     await capturar(page, 'movil-alumnos-por-horario')
     await page.goto('/dashboard/reportes')
     await expect(page.getByRole('heading', { name: 'Reportes oficiales', level: 1 })).toBeVisible()
-    expect(await hayScrollHorizontal(page)).toBe(false)
+    await sinScrollHorizontal(page, 'pantalla')
     await capturar(page, 'movil-indice')
     await page.goto('/dashboard/reportes/alumnos-por-curso/imprimir?q=Garc%C3%ADa&nivel=1')
-    expect(await hayScrollHorizontal(page)).toBe(false)
+    await sinScrollHorizontal(page, 'pantalla')
   })
 
   test('1280 px: la tabla de cada reporte entra sin desplazamiento horizontal', async ({ page }) => {
@@ -593,7 +612,7 @@ test.describe('DIRECTOR autenticado — reportes oficiales con volumen', () => {
     for (const id of REPORTES) {
       await page.goto(`/dashboard/reportes/${id}?tamano=25`)
       await expect(page.getByRole('table')).toBeVisible()
-      expect(await hayScrollHorizontal(page), `${id} a 1280 px`).toBe(false)
+      await sinScrollHorizontal(page, `${id} a 1280 px`)
       const cabeceras = page.getByRole('table').getByRole('columnheader')
       expect(await cabeceras.count()).toBeGreaterThan(5)
     }
