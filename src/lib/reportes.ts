@@ -36,7 +36,7 @@ export function esIdReporte(valor: unknown): valor is IdReporte {
   return typeof valor === 'string' && (IDS_REPORTE as readonly string[]).includes(valor)
 }
 
-/** Dimensiones por las que se filtra. `q` es el texto libre (nombre, apellido o legajo). */
+/** Dimensiones por las que se filtra. `q` es texto libre; el legajo solo aplica a alumnos. */
 export const IDS_FILTRO = [
   'q',
   'nivel',
@@ -200,6 +200,10 @@ export const ETIQUETAS_FILTRO: Record<IdFiltro, string> = {
   responsable: 'Profesor responsable',
   origen: 'Origen',
   historial: 'Incluir historial',
+}
+
+export function etiquetaBusqueda(id: IdReporte): string {
+  return id === 'docentes-por-nivel' ? 'Buscar por nombre o apellido' : ETIQUETAS_FILTRO.q
 }
 
 // ----------------------------------------------------------------
