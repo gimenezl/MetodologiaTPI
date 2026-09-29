@@ -3,10 +3,11 @@
 El paquete original se integró a `origin/main` mediante el PR #22 (merge
 `6673d747`). La corrección del rótulo de búsqueda de docentes está en la rama
 `codex/ept-63-legajo-label`, basada en ese merge: **pendiente de integrar y
-desplegar**. No se verificó el estado de producción ni se ejecutaron pruebas
-productivas para esta corrección; las pruebas y mediciones históricas de este
-documento corresponden al candidato original en un entorno local aislado. El
-estado actual de Jira también requiere una consulta nueva antes de actualizarlo.
+desplegar**. La inspección productiva de solo lectura confirmó que la migración
+todavía está pendiente; no se ejecutaron pruebas funcionales productivas para
+esta corrección. Las pruebas y mediciones históricas de este documento
+corresponden al candidato original en un entorno local aislado. Jira EPT-63
+continúa «En curso» al momento de esta inspección.
 
 La base histórica del candidato original fue `origin/main` =
 `50bef50cc0afb79274849ef179261efce3397f28`; su rama fue
@@ -361,7 +362,12 @@ nombre, apellido o legajo». La migración y el comportamiento de búsqueda no c
 La aserción de accesibilidad en `reportes-auth.spec.ts` también verifica el rótulo
 renderizado de docentes, pero no se ejecutó en esta corrección porque requiere el
 stack local aislado y sesiones autenticadas. No se ejecutaron pruebas ni consultas
-contra producción. Quedan pendientes merge, despliegue y verificación productiva.
+funcionales contra producción. La inspección de solo lectura de Supabase confirmó
+23 migraciones previas alineadas y únicamente `20260929012923` pendiente; el
+`db push --dry-run --skip-vault` enumeró solo esa migración. El respaldo previo
+del esquema falló porque Docker no estaba disponible, por lo que **no se aplicó
+la migración**. Quedan pendientes el respaldo verificable, la aplicación controlada,
+el merge de esta corrección, el despliegue y la verificación funcional productiva.
 
 ---
 
@@ -402,18 +408,18 @@ No se regeneraron las capturas de otras historias.
    cualquier corrimiento se reintenta una vez y luego se informa (409). Las filas que
    se dan de alta o de baja mientras se lee pueden o no figurar, como en cualquier
    lectura confirmada.
-8. **Memoria y duración**: el CSV y la impresión se arman en memoria (un objeto por fila)
+5. **Memoria y duración**: el CSV y la impresión se arman en memoria (un objeto por fila)
    y el tope es de 500 000 filas; con el volumen medido (78 800) el archivo pesa 9,1 MiB
    y tarda ~11 s. No se fijó `maxDuration` de la ruta: conviene comprobar el límite del
    plan de despliegue con datos reales tras desplegar (no se siembra producción).
-4. **Búsqueda de docentes**: la consulta solo compara nombre y apellido, no legajo.
+6. **Búsqueda de docentes**: la consulta solo compara nombre y apellido, no legajo.
    La rama `codex/ept-63-legajo-label` corrige el rótulo a «Buscar por nombre o
    apellido» y mantiene «Buscar por nombre, apellido o legajo» en alumnos. La
    corrección está pendiente de integración y despliegue; no está verificada en
    producción.
-5. **Un stack compartido** entre checkouts sigue siendo frágil (`db reset` ajeno).
-6. La descarga con `fetch` requiere JavaScript (el panel ya lo requiere).
-7. Preexistente: 14 errores de ESLint en archivos ajenos (no se tocaron).
+7. **Un stack compartido** entre checkouts sigue siendo frágil (`db reset` ajeno).
+8. La descarga con `fetch` requiere JavaScript (el panel ya lo requiere).
+9. Preexistente: 14 errores de ESLint en archivos ajenos (no se tocaron).
 
 ---
 
