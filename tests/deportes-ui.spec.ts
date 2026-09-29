@@ -149,13 +149,15 @@ test.describe('pantalla de la dirección (fixture)', () => {
     if (!esMovil(page)) await page.setViewportSize(ESCRITORIO)
   })
 
-  test('muestra grupos con ocupación e inscripciones filtrables, sin controles de inscripción', async ({
+  test('muestra grupos con ocupación e inscripciones filtrables, sin los controles de inscripción del alumno', async ({
     page,
   }) => {
     await page.goto('/pruebas-ui/deportes?vista=director')
     await expect(page.getByRole('heading', { name: 'Grupos deportivos' })).toBeVisible()
     await expect(aplicacion(page).getByText('Completo')).toBeVisible()
     await expect(page.getByText('2 inscripciones')).toBeVisible()
+    // La dirección sí administra las inscripciones (EPT-62): confirmar y cancelar en nombre del alumno.
+    await expect(page.getByRole('button', { name: /^Confirmar inscripción de/ }).first()).toBeVisible()
     await page.getByRole('button', { name: 'Todas' }).click()
     await expect(page.getByText('3 inscripciones')).toBeVisible()
     await page.getByLabel('Buscar').fill('atletismo')

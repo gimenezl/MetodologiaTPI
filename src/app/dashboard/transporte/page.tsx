@@ -1,9 +1,9 @@
 import type { Metadata } from 'next'
-import { Lock, WarningCircle } from '@phosphor-icons/react/dist/ssr'
-import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 import { requerirSesionConRol } from '@/services/autorizacion'
 import { obtenerEstadoAcademicoPropio } from '@/services/comedor.service'
+import { listarInscripcionesServiciosAdministracion } from '@/services/inscripciones-administracion.service'
 import { listarInscripcionesTransporte, listarRecorridos } from '@/services/transporte.service'
+import { PanelErrorLectura, PanelRestringido } from './_components/Paneles'
 import { GestionTransporte } from './_components/GestionTransporte'
 import { MiTransporte } from './_components/MiTransporte'
 
@@ -49,6 +49,26 @@ export default async function TransportePage() {
     )
   }
 
+  if (sesion.rol === 'DIRECTOR') {
+    // Dirección lee la vista administrativa: además de las inscripciones trae la
+    // confirmación (quién y cuándo), que ningún otro rol puede ver.
+    const [recorridos, administracion] = await Promise.all([
+      listarRecorridos(),
+      listarInscripcionesServiciosAdministracion('TRANSPORTE'),
+    ])
+    if (!administracion.ok) {
+      return <PanelErrorLectura mensaje={administracion.mensaje} />
+    }
+    // El catálogo es la sustancia de esta vista: si no se pudo leer, un
+    // catálogo vacío se vería igual que «no hay recorridos», que no es lo que
+    // pasó. Se distingue con el mismo panel de error que ya usa la falta de
+    // inscripciones, en vez de degradar a una lista vacía silenciosa.
+    if (!recorridos.ok) {
+      return <PanelErrorLectura mensaje={recorridos.mensaje} />
+    }
+    return <GestionTransporte recorridos={recorridos.datos} inscripciones={administracion.datos} />
+  }
+
   const [recorridos, inscripciones] = await Promise.all([
     listarRecorridos(),
     listarInscripcionesTransporte(),
@@ -58,19 +78,6 @@ export default async function TransportePage() {
   // un estado vacío que parezca real.
   if (!inscripciones.ok) {
     return <PanelErrorLectura mensaje={inscripciones.mensaje} />
-  }
-
-  if (sesion.rol === 'DIRECTOR') {
-    // El catálogo es la sustancia de esta vista: si no se pudo leer, un
-    // catálogo vacío se vería igual que «no hay recorridos», que no es lo que
-    // pasó. Se distingue con el mismo panel de error que ya usa la falta de
-    // inscripciones, en vez de degradar a una lista vacía silenciosa.
-    if (!recorridos.ok) {
-      return <PanelErrorLectura mensaje={recorridos.mensaje} />
-    }
-    return (
-      <GestionTransporte recorridos={recorridos.datos} inscripciones={inscripciones.datos} />
-    )
   }
 
   // Para el alumno el catálogo sí puede degradarse: la pantalla sigue siendo
@@ -115,55 +122,4 @@ function impedimentoDeAlta(
     return 'Tu legajo académico no está activo, así que no podés usar el transporte. Comunicate con la administración del centro educativo.'
   }
   return undefined
-}
-
-function PanelRestringido({
-  mensaje,
-  accion,
-}: {
-  mensaje: string
-  accion?: { href: string; texto: string }
-}) {
-  return (
-    <div className="max-w-md mx-auto mt-12 text-center">
-      <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4">
-        <Lock size={32} weight="fill" className="text-red-500" />
-      </div>
-      <h1 className="text-xl font-extrabold text-neutral-900 tracking-tight">
-        Acceso restringido
-      </h1>
-      <p className="text-neutral-500 text-sm mt-2">{mensaje}</p>
-      <EnlaceBoton href={accion?.href ?? '/dashboard'} className="mt-6">
-        {accion?.texto ?? 'Volver al panel'}
-      </EnlaceBoton>
-    </div>
-  )
-}
-
-function PanelErrorLectura({ mensaje }: { mensaje: string }) {
-  return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">
-          Transporte
-        </h1>
-        <p className="text-neutral-500 text-sm mt-1">Recorridos de transporte escolar</p>
-      </div>
-      <div
-        role="alert"
-        className="bg-red-50 border border-red-200 rounded-2xl p-6 flex gap-3 items-start"
-      >
-        <WarningCircle size={22} weight="fill" className="text-red-500 shrink-0 mt-0.5" />
-        <div>
-          <p className="text-sm font-semibold text-red-800">
-            No pudimos cargar el transporte
-          </p>
-          <p className="text-sm text-red-700 mt-1">{mensaje}</p>
-          <EnlaceBoton href="/dashboard/transporte" variant="outline" className="mt-4">
-            Reintentar
-          </EnlaceBoton>
-        </div>
-      </div>
-    </div>
-  )
 }

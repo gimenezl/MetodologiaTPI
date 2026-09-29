@@ -2,10 +2,12 @@ import { notFound } from 'next/navigation'
 import ComedorLoading from '@/app/dashboard/comedor/loading'
 import { InscriptosComedor } from '@/app/dashboard/comedor/_components/InscriptosComedor'
 import { MiComedor } from '@/app/dashboard/comedor/_components/MiComedor'
+import { PanelErrorLectura } from '@/app/dashboard/comedor/_components/Paneles'
 import type {
   InscripcionServicio,
   ServicioEscolar,
 } from '@/services/comedor.service'
+import type { InscripcionServicioAdministracion } from '@/services/inscripciones-administracion.service'
 
 /**
  * Banco visual determinista del comedor (EPT-10).
@@ -66,6 +68,37 @@ const INSCRIPCION_AJENA: InscripcionServicio = {
   fecha_inscripcion: '2026-09-10T09:15:00.000Z',
 }
 
+/**
+ * Lo que lee Dirección (EPT-62): las mismas inscripciones con su confirmación.
+ * La activa está sin confirmar (sigue siendo válida), la ajena está confirmada y
+ * la cancelada no se confirmó, así que ya no se puede confirmar.
+ */
+const SIN_CONFIRMAR = {
+  confirmada: false,
+  confirmada_en: null,
+  confirmada_por_nombre: null,
+  confirmada_por_apellido: null,
+} as const
+
+function administrativa(
+  inscripcion: InscripcionServicio,
+  confirmacion: Pick<
+    InscripcionServicioAdministracion,
+    'confirmada' | 'confirmada_en' | 'confirmada_por_nombre' | 'confirmada_por_apellido'
+  > = SIN_CONFIRMAR
+): InscripcionServicioAdministracion {
+  return { ...inscripcion, servicio_activo: true, ...confirmacion }
+}
+
+const ADMIN_ACTIVA = administrativa(INSCRIPCION_ACTIVA)
+const ADMIN_AJENA = administrativa(INSCRIPCION_AJENA, {
+  confirmada: true,
+  confirmada_en: '2026-09-11T14:05:00.000Z',
+  confirmada_por_nombre: 'Dora',
+  confirmada_por_apellido: 'Directora',
+})
+const ADMIN_CANCELADA = administrativa(INSCRIPCION_CANCELADA)
+
 const MENSAJE_DUPLICADO = 'Ya tenés una inscripción activa al comedor.'
 
 const MENSAJE_ALUMNO_INACTIVO =
@@ -85,6 +118,7 @@ export default async function BancoComedor({
       | 'inactivo'
       | 'servicio-inactivo'
       | 'error'
+      | 'error-lectura'
     vacio?: string
   }>
 }) {
@@ -102,6 +136,14 @@ export default async function BancoComedor({
     )
   }
 
+  if (estado === 'error-lectura') {
+    return (
+      <main className="min-h-[100dvh] bg-neutral-50 p-4 lg:p-8">
+        <PanelErrorLectura mensaje="No pudimos completar la operación. Volvé a intentarlo en unos minutos." />
+      </main>
+    )
+  }
+
   if (vista === 'director') {
     return (
       <main className="min-h-[100dvh] bg-neutral-50 p-4 lg:p-8">
@@ -110,7 +152,7 @@ export default async function BancoComedor({
           inscripciones={
             vacio === '1'
               ? []
-              : [INSCRIPCION_ACTIVA, INSCRIPCION_AJENA, INSCRIPCION_CANCELADA]
+              : [ADMIN_ACTIVA, ADMIN_AJENA, ADMIN_CANCELADA]
           }
         />
       </main>

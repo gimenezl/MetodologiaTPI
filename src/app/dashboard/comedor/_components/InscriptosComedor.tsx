@@ -1,100 +1,52 @@
 'use client'
 
-import { useId, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { ForkKnife } from '@phosphor-icons/react'
-import { Badge } from '@/components/ui/Badge'
-import { Input } from '@/components/ui/Input'
-import { cn } from '@/lib/utils'
-import type {
-  InscripcionServicio,
-  ServicioEscolar,
-} from '@/services/comedor.service'
+import { ListaInscripcionesAdministrativas } from '@/components/inscripciones/ListaInscripcionesAdministrativas'
+import {
+  confirmacionDe,
+  textoDeBusqueda,
+  type FilaInscripcion,
+} from '@/components/inscripciones/tipos'
+import { nombreAlumno } from '@/components/inscripciones/formato'
+import type { ServicioEscolar } from '@/services/comedor.service'
+import type { InscripcionServicioAdministracion } from '@/services/inscripciones-administracion.service'
 
 interface InscriptosComedorProps {
   servicio: ServicioEscolar | null
-  inscripciones: InscripcionServicio[]
+  inscripciones: InscripcionServicioAdministracion[]
 }
 
-type Filtro = 'ACTIVAS' | 'CANCELADAS' | 'TODAS'
+/** Las fechas se formatean con `components/inscripciones/formato`: zona y reloj de 24 h fijos, para que servidor y navegador coincidan. */
 
-const FILTROS: { valor: Filtro; etiqueta: string }[] = [
-  { valor: 'ACTIVAS', etiqueta: 'Inscriptos' },
-  { valor: 'CANCELADAS', etiqueta: 'Bajas' },
-  { valor: 'TODAS', etiqueta: 'Todas' },
-]
-
-/**
- * Formato de fecha estable entre el servidor y el navegador.
- *
- * `timeZone` explícito: sin él, el servidor formatea en la zona del proceso y
- * el navegador en la de la persona, así que una misma inscripción se vería con
- * dos horas distintas según el dispositivo y React descartaría el árbol
- * hidratado. El centro educativo está en Argentina, que es la referencia
- * correcta para todas las fechas del servicio.
- *
- * `hour12: false`: en formato de 12 horas, Node y los navegadores separan el
- * «a. m.» con caracteres de espacio distintos (uno usa el espacio estrecho sin
- * separación U+202F). La diferencia es invisible en pantalla, pero React la ve
- * y vuelve a generar el árbol. El horario de 24 horas evita el problema de
- * raíz y además es el uso corriente en el país.
- */
-const FORMATO_FECHA = new Intl.DateTimeFormat('es-AR', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-  timeZone: 'America/Argentina/Buenos_Aires',
-})
-
-function fecha(valor: string | null) {
-  if (!valor) return '—'
-  const momento = new Date(valor)
-  return Number.isNaN(momento.getTime()) ? '—' : FORMATO_FECHA.format(momento)
-}
-
-function nombreCompleto(inscripcion: InscripcionServicio) {
-  return `${inscripcion.alumno_apellido}, ${inscripcion.alumno_nombre}`
+function aFila(inscripcion: InscripcionServicioAdministracion): FilaInscripcion {
+  const alumno = nombreAlumno(inscripcion.alumno_apellido, inscripcion.alumno_nombre)
+  return {
+    id: inscripcion.id,
+    alumno,
+    legajo: inscripcion.legajo_nro,
+    detalles: {},
+    descripcion: inscripcion.servicio_nombre,
+    estado: inscripcion.estado,
+    fechaAlta: inscripcion.fecha_inscripcion,
+    fechaBaja: inscripcion.fecha_cancelacion,
+    confirmacion: confirmacionDe(inscripcion),
+    busqueda: textoDeBusqueda(alumno, inscripcion.legajo_nro),
+  }
 }
 
 /**
- * Consulta administrativa de inscriptos al comedor (EPT-28).
+ * Administración de las inscripciones al comedor por Dirección (EPT-28, EPT-62).
  *
- * Es de solo lectura por decisión explícita: ni Jira ni el plan le atribuyen al
- * DIRECTOR la facultad de inscribir o cancelar en nombre del alumno, así que
- * esta pantalla no inventa controles de escritura. Las filas que se ven son
- * exactamente las que RLS devuelve; no hay ningún filtro de autorización acá.
+ * Dirección consulta a los alumnos inscriptos con su legajo, el estado de cada
+ * inscripción (activa o cancelada) y, aparte, su confirmación. Puede confirmar
+ * una inscripción vigente y cancelarla en nombre del alumno. Nada se elimina: la
+ * cancelación es una baja lógica que conserva el historial y la confirmación
+ * previa. Las filas que se ven son exactamente las que la vista administrativa
+ * devuelve a Dirección; no hay ningún filtro de autorización acá.
  */
-export function InscriptosComedor({
-  servicio,
-  inscripciones,
-}: InscriptosComedorProps) {
-  const [filtro, setFiltro] = useState<Filtro>('ACTIVAS')
-  const [busqueda, setBusqueda] = useState('')
-  const idBusqueda = useId()
-
-  const visibles = useMemo(() => {
-    const termino = busqueda.trim().toLocaleLowerCase('es-AR')
-    return inscripciones
-      .filter((inscripcion) =>
-        filtro === 'TODAS'
-          ? true
-          : filtro === 'ACTIVAS'
-            ? inscripcion.estado === 'ACTIVA'
-            : inscripcion.estado === 'CANCELADA'
-      )
-      .filter((inscripcion) => {
-        if (!termino) return true
-        const legajo = (inscripcion.legajo_nro ?? '').toLocaleLowerCase('es-AR')
-        return (
-          nombreCompleto(inscripcion).toLocaleLowerCase('es-AR').includes(termino) ||
-          legajo.includes(termino)
-        )
-      })
-  }, [inscripciones, filtro, busqueda])
-
-  const activas = inscripciones.filter((i) => i.estado === 'ACTIVA').length
+export function InscriptosComedor({ servicio, inscripciones }: InscriptosComedorProps) {
+  const filas = useMemo(() => inscripciones.map(aFila), [inscripciones])
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -102,174 +54,42 @@ export function InscriptosComedor({
         <p className="text-xs font-semibold uppercase tracking-widest text-brand-600 mb-2">
           Servicios escolares
         </p>
-        <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">
-          Comedor
-        </h1>
-        <p className="text-neutral-500 text-sm mt-1 max-w-[72ch]">
-          Alumnos inscriptos a {servicio?.nombre ?? 'el comedor escolar'}, con su legajo
-          y el estado de cada inscripción. Esta consulta es de solo lectura: la
-          inscripción y la baja las realiza el propio alumno.
+        <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">Comedor</h1>
+        <p className="text-neutral-600 text-sm mt-1 max-w-[72ch]">
+          Alumnos inscriptos a {servicio?.nombre ?? 'el comedor escolar'}, con su legajo, el
+          estado de cada inscripción y su confirmación. Podés confirmar una inscripción o
+          cancelarla en nombre del alumno: la cancelación conserva el historial y el alumno
+          puede volver a inscribirse.
         </p>
       </div>
 
-      <p
-        aria-live="polite"
-        aria-label="Resumen de inscripciones al comedor"
-        className="text-sm text-neutral-600"
-      >
-        {activas === 1
-          ? '1 alumno con inscripción activa.'
-          : `${activas} alumnos con inscripción activa.`}{' '}
-        Se muestran {visibles.length} de {inscripciones.length} registros.
-      </p>
-
-      <div className="flex flex-col sm:flex-row sm:items-end gap-3">
-        <div
-          role="group"
-          aria-label="Filtrar inscripciones por estado"
-          className="flex gap-2 flex-wrap"
-        >
-          {FILTROS.map((opcion) => (
-            <button
-              key={opcion.valor}
-              type="button"
-              onClick={() => setFiltro(opcion.valor)}
-              aria-pressed={filtro === opcion.valor}
-              className={cn(
-                'px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors',
-                filtro === opcion.valor
-                  ? 'bg-brand-600 text-white'
-                  : 'bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50'
-              )}
-            >
-              {opcion.etiqueta}
-            </button>
-          ))}
-        </div>
-
-        <div className="sm:ml-auto sm:w-72">
-          <Input
-            id={idBusqueda}
-            label="Buscar por apellido o legajo"
-            placeholder="Apellido o número de legajo"
-            value={busqueda}
-            onChange={(evento) => setBusqueda(evento.target.value)}
-          />
-        </div>
-      </div>
-
-      {visibles.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-neutral-200 py-16 px-5 text-center">
-          <ForkKnife size={40} className="text-neutral-300 mx-auto mb-3" />
-          <p className="font-semibold text-neutral-700">
-            No hay inscripciones que coincidan
-          </p>
-          <p className="text-neutral-400 text-sm mt-1">
-            Probá con otro estado o con otro término de búsqueda.
-          </p>
-        </div>
-      ) : (
-        <>
-          {/* Escritorio: tabla con encabezados asociados a cada celda. */}
-          <div className="hidden md:block bg-white rounded-2xl border border-neutral-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <caption className="sr-only">
-                Alumnos inscriptos al comedor con legajo, estado y fechas
-              </caption>
-              <thead className="bg-neutral-50 text-neutral-600">
-                <tr>
-                  <th scope="col" className="text-left font-semibold px-4 py-3">
-                    Alumno
-                  </th>
-                  <th scope="col" className="text-left font-semibold px-4 py-3">
-                    Legajo
-                  </th>
-                  <th scope="col" className="text-left font-semibold px-4 py-3">
-                    Estado
-                  </th>
-                  <th scope="col" className="text-left font-semibold px-4 py-3">
-                    Inscripción
-                  </th>
-                  <th scope="col" className="text-left font-semibold px-4 py-3">
-                    Baja
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {visibles.map((inscripcion) => (
-                  <tr key={inscripcion.id}>
-                    <th
-                      scope="row"
-                      className="text-left font-semibold text-neutral-900 px-4 py-3"
-                    >
-                      {nombreCompleto(inscripcion)}
-                    </th>
-                    <td className="px-4 py-3 text-neutral-700">
-                      {inscripcion.legajo_nro ?? '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <EstadoInscripcion estado={inscripcion.estado} />
-                    </td>
-                    <td className="px-4 py-3 text-neutral-700">
-                      {fecha(inscripcion.fecha_inscripcion)}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-700">
-                      {fecha(inscripcion.fecha_cancelacion)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Móvil: una tarjeta por inscripción, con el mismo contenido. */}
-          <ul className="md:hidden space-y-3">
-            {visibles.map((inscripcion) => (
-              <li
-                key={inscripcion.id}
-                className="bg-white rounded-2xl border border-neutral-200 p-4 space-y-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <p className="font-semibold text-neutral-900 min-w-0 break-words">
-                    {nombreCompleto(inscripcion)}
-                  </p>
-                  <EstadoInscripcion estado={inscripcion.estado} />
-                </div>
-                <dl className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="col-span-2">
-                    <dt className="text-neutral-500">Legajo</dt>
-                    <dd className="text-neutral-900 font-medium break-words">
-                      {inscripcion.legajo_nro ?? '—'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-neutral-500">Inscripción</dt>
-                    <dd className="text-neutral-900">
-                      {fecha(inscripcion.fecha_inscripcion)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-neutral-500">Baja</dt>
-                    <dd className="text-neutral-900">
-                      {fecha(inscripcion.fecha_cancelacion)}
-                    </dd>
-                  </div>
-                </dl>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+      <ListaInscripcionesAdministrativas
+        dominio="comedor"
+        filas={filas}
+        columnas={[]}
+        caption="Alumnos inscriptos al comedor con legajo, estado, confirmación, fechas y acciones"
+        filtroEstado={{
+          etiquetaGrupo: 'Filtrar inscripciones por estado',
+          etiquetas: { ACTIVAS: 'Inscriptos', CANCELADAS: 'Bajas', TODAS: 'Todas' },
+        }}
+        busqueda={{
+          etiqueta: 'Buscar por apellido o legajo',
+          placeholder: 'Apellido o número de legajo',
+        }}
+        etiquetaResumen="Resumen de inscripciones al comedor"
+        resumen={({ visibles, total, activas }) =>
+          `${
+            activas === 1
+              ? '1 alumno con inscripción activa.'
+              : `${activas} alumnos con inscripción activa.`
+          } Se muestran ${visibles} de ${total} registros.`
+        }
+        vacio={{
+          icono: <ForkKnife size={40} className="text-neutral-300 mx-auto mb-3" aria-hidden="true" />,
+          titulo: 'No hay inscripciones que coincidan',
+          ayuda: 'Probá con otro estado, con otra confirmación o con otro término de búsqueda.',
+        }}
+      />
     </div>
-  )
-}
-
-function EstadoInscripcion({ estado }: { estado: 'ACTIVA' | 'CANCELADA' }) {
-  return estado === 'ACTIVA' ? (
-    <Badge variant="success" dot>
-      Activa
-    </Badge>
-  ) : (
-    <Badge variant="default">Cancelada</Badge>
   )
 }

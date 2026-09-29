@@ -555,6 +555,12 @@ BEGIN
     PERFORM pg_temp.rpc('public.cambiar_profesor_asignacion', 'x', pg_catalog.format('public.cambiar_profesor_asignacion(%L, %L)', ASIG, DOCA));
     PERFORM pg_temp.rpc('public.cancelar_inscripcion_deportiva', 'x', pg_catalog.format('public.cancelar_inscripcion_deportiva(%L)', IDEP));
     PERFORM pg_temp.rpc('public.cancelar_inscripcion_servicio', 'x', pg_catalog.format('public.cancelar_inscripcion_servicio(%L)', ISERV));
+    -- EPT-62: administración de inscripciones (solo Dirección habilitada completa).
+    PERFORM pg_temp.rpc('public.cancelar_inscripcion_deportiva_administrativa', 'x', pg_catalog.format('public.cancelar_inscripcion_deportiva_administrativa(%L)', IDEP));
+    PERFORM pg_temp.rpc('public.cancelar_inscripcion_servicio_administrativa', 'x', pg_catalog.format('public.cancelar_inscripcion_servicio_administrativa(%L, ''COMEDOR'')', ISERV));
+    PERFORM pg_temp.rpc('public.confirmar_inscripcion_deportiva', 'x', pg_catalog.format('public.confirmar_inscripcion_deportiva(%L)', IDEP));
+    PERFORM pg_temp.rpc('public.confirmar_inscripcion_servicio', 'x', pg_catalog.format('public.confirmar_inscripcion_servicio(%L, ''COMEDOR'')', ISERV));
+    PERFORM pg_temp.rpc('public.confirmar_matricula', 'x', pg_catalog.format('public.confirmar_matricula((SELECT m.id FROM public.matriculas m WHERE m.alumno_id = %L AND m.fecha_cierre IS NULL))', EST));
     PERFORM pg_temp.rpc('public.configurar_horario_materia', 'x', pg_catalog.format('public.configurar_horario_materia(%L, 2::smallint, %L, %L, NULL)', ASIG, '09:00', '10:00'));
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria', 'n', 'public.consultar_compatibilidad_horaria()');
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria_alumno', 'n', pg_catalog.format('public.consultar_compatibilidad_horaria_alumno(%L)', EST));

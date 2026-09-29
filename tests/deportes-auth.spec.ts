@@ -726,13 +726,19 @@ test.describe('DIRECTOR autenticado — deportes', () => {
     )
 
     await abrirDeportes(page)
-    const fila = aplicacion(page).getByRole('listitem').filter({ hasText: 'Estudiante, Beto' })
+    // Desde EPT-62 la dirección ve las inscripciones en una tabla con su estado
+    // vigente y su confirmación (escritorio: tabla; móvil: tarjetas).
+    const fila = aplicacion(page).getByRole('row').filter({ hasText: 'Estudiante, Beto' })
     await expect(fila).toContainText('Atletismo')
-    await expect(fila).toContainText('Legajo LEG-PRUEBA-0002')
+    await expect(fila).toContainText('LEG-PRUEBA-0002')
+    await expect(fila).toContainText('Sin confirmar')
     // EPT-12 agrega la inscripción administrativa, que pasa por las mismas
-    // reglas de la base (horarios-auth.spec.ts). Cancelar en nombre de un
-    // alumno sigue sin existir (EPT-62).
-    await expect(page.getByRole('button', { name: /Cancelar/ })).toHaveCount(0)
+    // reglas de la base (horarios-auth.spec.ts). EPT-62 agrega confirmar y
+    // cancelar en nombre del alumno, que viajan por su propia API de Dirección
+    // (`inscripciones-administracion-e2e-auth.spec.ts`), nunca por la del alumno.
+    await expect(fila.getByRole('button', { name: 'Confirmar inscripción de Estudiante, Beto' })).toBeVisible()
+    await expect(fila.getByRole('button', { name: 'Cancelar inscripción de Estudiante, Beto' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Cancelar mi/ })).toHaveCount(0)
     await expect(page.getByRole('button', { name: /Inscribir/ })).toHaveText(['Inscribir alumno'])
     await capturar(page, 'escritorio-director-inscripciones')
 

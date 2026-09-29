@@ -1,7 +1,9 @@
 import { notFound } from 'next/navigation'
 import AlumnosLoading from '@/app/dashboard/alumnos/loading'
 import { GestionAlumnos } from '@/app/dashboard/alumnos/_components/GestionAlumnos'
+import { MatriculasAdministracion } from '@/components/inscripciones/MatriculasAdministracion'
 import type { AlumnoAcademico, CursoAsignable } from '@/services/alumnos.service'
+import type { MatriculaAdministracion } from '@/services/inscripciones-administracion.service'
 
 /**
  * Banco visual determinista. Solo existe en desarrollo y además exige la
@@ -124,6 +126,64 @@ const ALUMNOS: AlumnoAcademico[] = [
   },
 ]
 
+/**
+ * Matrículas de una alumna, como las lee Dirección (EPT-62): la vigente y dos
+ * tramos cerrados del historial, uno por cada motivo de cierre. Sirven para
+ * fotografiar el estado de confirmación sin depender de una base.
+ */
+const MATRICULA_VIGENTE: MatriculaAdministracion = {
+  id: 'b1111111-1111-4111-8111-111111111111',
+  alumno_id: 'a1111111-1111-4111-8111-111111111111',
+  alumno_nombre: 'Camila',
+  alumno_apellido: 'Arrieta',
+  legajo_nro: 'LEG-2027-018',
+  alumno_estado: 'ACTIVO',
+  curso_id: '11111111-1111-4111-8111-111111111111',
+  curso_denominacion: '1er Grado',
+  curso_division: 'A',
+  nivel_id: 2,
+  nivel_nombre: 'PRIMARIO',
+  fecha_inicio: '2026-03-02T12:00:00.000Z',
+  fecha_cierre: null,
+  motivo_cierre: null,
+  vigente: true,
+  confirmada: false,
+  confirmada_en: null,
+  confirmada_por_nombre: null,
+  confirmada_por_apellido: null,
+}
+
+const MATRICULAS_CERRADAS: MatriculaAdministracion[] = [
+  {
+    ...MATRICULA_VIGENTE,
+    id: 'b2222222-2222-4222-8222-222222222222',
+    curso_denominacion: 'Sala de 5',
+    curso_division: 'A',
+    nivel_id: 1,
+    nivel_nombre: 'INICIAL',
+    fecha_inicio: '2025-03-03T12:00:00.000Z',
+    fecha_cierre: '2026-03-02T12:00:00.000Z',
+    motivo_cierre: 'CAMBIO_DE_CURSO',
+    vigente: false,
+    confirmada: true,
+    confirmada_en: '2025-03-05T13:10:00.000Z',
+    confirmada_por_nombre: 'Dora',
+    confirmada_por_apellido: 'Directora',
+  },
+  {
+    ...MATRICULA_VIGENTE,
+    id: 'b3333333-3333-4333-8333-333333333333',
+    curso_denominacion: 'Sala de 4',
+    curso_division: 'B',
+    nivel_id: 1,
+    nivel_nombre: 'INICIAL',
+    fecha_inicio: '2024-03-04T12:00:00.000Z',
+    fecha_cierre: '2025-03-03T12:00:00.000Z',
+    motivo_cierre: 'INACTIVACION',
+    vigente: false,
+  },
+]
+
 export default async function PruebasAlumnosPage({
   searchParams,
 }: {
@@ -131,6 +191,7 @@ export default async function PruebasAlumnosPage({
     vacio?: string
     'sin-cursos'?: string
     estado?: 'carga' | 'error' | 'exito'
+    matriculas?: 'sin-confirmar' | 'confirmada' | 'vacio' | 'error-lectura'
   }>
 }) {
   if (process.env.NODE_ENV === 'production' || process.env.EPT_UI_HARNESS !== '1') {
@@ -140,6 +201,34 @@ export default async function PruebasAlumnosPage({
   const parametros = await searchParams
   const { vacio, estado } = parametros
   const sinCursos = parametros['sin-cursos']
+
+  if (parametros.matriculas) {
+    const vigente: MatriculaAdministracion =
+      parametros.matriculas === 'confirmada'
+        ? {
+            ...MATRICULA_VIGENTE,
+            confirmada: true,
+            confirmada_en: '2026-03-03T15:40:00.000Z',
+            confirmada_por_nombre: 'Dora',
+            confirmada_por_apellido: 'Directora',
+          }
+        : MATRICULA_VIGENTE
+    return (
+      <main className="min-h-[100dvh] bg-neutral-50 p-4 lg:p-8">
+        <div className="max-w-4xl mx-auto">
+          <MatriculasAdministracion
+            alumno="Arrieta, Camila"
+            matriculas={parametros.matriculas === 'vacio' ? [] : [vigente, ...MATRICULAS_CERRADAS]}
+            errorLectura={
+              parametros.matriculas === 'error-lectura'
+                ? 'No pudimos completar la operación. Volvé a intentarlo en unos minutos.'
+                : undefined
+            }
+          />
+        </div>
+      </main>
+    )
+  }
 
   if (estado === 'carga') {
     return (

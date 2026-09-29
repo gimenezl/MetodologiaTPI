@@ -358,6 +358,16 @@ function vaciarModeloAcademico() {
     {
       input: `
         BEGIN;
+        -- EPT-62: las confirmaciones de inscripción son de solo agregado y
+        -- referencian matrículas, inscripciones y perfiles con ON DELETE
+        -- RESTRICT. Mismo criterio que el historial de profesores: solo esta
+        -- limpieza local deshabilita la guarda, dentro de la transacción, y va
+        -- primero porque el resto de los borrados depende de que no queden.
+        ALTER TABLE public.confirmaciones_inscripcion
+          DISABLE TRIGGER proteger_confirmacion_inscripcion_antes_de_escribir;
+        DELETE FROM public.confirmaciones_inscripcion;
+        ALTER TABLE public.confirmaciones_inscripcion
+          ENABLE TRIGGER proteger_confirmacion_inscripcion_antes_de_escribir;
         DELETE FROM public.grupos_deportivos_horarios;
         DELETE FROM public.inscripciones_deportivas;
         DELETE FROM public.grupos_deportivos;

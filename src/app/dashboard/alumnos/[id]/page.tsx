@@ -4,6 +4,8 @@ import { ArrowLeft, Lock, WarningCircle } from '@phosphor-icons/react/dist/ssr'
 import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 import { requerirDirector } from '@/services/autorizacion'
 import { listarHistorialAlumno, obtenerAlumno } from '@/services/alumnos.service'
+import { MatriculasAdministracion } from '@/components/inscripciones/MatriculasAdministracion'
+import { listarMatriculasAdministracion } from '@/services/inscripciones-administracion.service'
 import { SituacionAcademica } from '../_components/SituacionAcademica'
 
 export const metadata: Metadata = {
@@ -16,9 +18,11 @@ const MENSAJE_NO_AUTORIZADO =
   'Solo el director puede administrar los legajos académicos.'
 
 /**
- * Detalle de solo lectura. Las operaciones académicas viven en el listado, que
- * es donde el director trabaja sobre varios estudiantes a la vez; acá se
- * consulta la trayectoria completa de uno.
+ * Detalle del legajo. Las operaciones académicas (cambiar de curso, inactivar)
+ * viven en el listado, que es donde el director trabaja sobre varios
+ * estudiantes a la vez; acá se consulta la trayectoria completa de uno y, desde
+ * EPT-62, se confirma su matrícula vigente. La confirmación es solo de
+ * Dirección: esta pantalla ya exige `requerirDirector`.
  */
 export default async function DetalleAlumnoPage({
   params,
@@ -71,7 +75,10 @@ export default async function DetalleAlumnoPage({
     )
   }
 
-  const historial = await listarHistorialAlumno(id)
+  const [historial, matriculas] = await Promise.all([
+    listarHistorialAlumno(id),
+    listarMatriculasAdministracion(id),
+  ])
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -90,6 +97,12 @@ export default async function DetalleAlumnoPage({
         historial={historial.ok ? historial.datos : []}
         errorHistorial={historial.ok ? undefined : historial.mensaje}
         rutaReintento={`/dashboard/alumnos/${id}`}
+      />
+
+      <MatriculasAdministracion
+        alumno={`${alumno.datos.apellido}, ${alumno.datos.nombre}`}
+        matriculas={matriculas.ok ? matriculas.datos : []}
+        errorLectura={matriculas.ok ? undefined : matriculas.mensaje}
       />
     </div>
   )

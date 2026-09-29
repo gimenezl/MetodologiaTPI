@@ -1,13 +1,19 @@
 'use client'
 
-import { useEffect, useId, useMemo, useRef, useState, useTransition, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle, Clock, Plus, SoccerBall, UserPlus, WarningCircle } from '@phosphor-icons/react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Dialogo } from '@/components/ui/Dialogo'
 import { Input, Select } from '@/components/ui/Input'
-import { cn } from '@/lib/utils'
+import { ListaInscripcionesAdministrativas } from '@/components/inscripciones/ListaInscripcionesAdministrativas'
+import { nombreAlumno } from '@/components/inscripciones/formato'
+import {
+  confirmacionDe,
+  textoDeBusqueda,
+  type FilaInscripcion,
+} from '@/components/inscripciones/tipos'
 import { crearGrupoDeportivoRemoto, ErrorDeportes } from '@/services/deportes.client'
 import type {
   AdministracionDeportes,
@@ -15,18 +21,19 @@ import type {
   CatalogoAltaGrupo,
   GrupoDeportivo,
   HorariosPorGrupo,
-  InscripcionDeportiva,
 } from '@/services/deportes.service'
+import type { InscripcionDeportivaAdministracion } from '@/services/inscripciones-administracion.service'
 import { AccionesGrupo } from './AccionesGrupo'
 import { CatalogoDeportes } from './CatalogoDeportes'
-import { fecha, nombreNivel, plazas } from './formato'
+import { nombreNivel, plazas } from './formato'
 import { HorariosGrupo } from './HorariosGrupo'
 import { InscripcionAdministrativa } from './InscripcionAdministrativa'
 import { ListaFranjas } from './ListaFranjas'
 
 interface GestionDeportesProps {
   grupos: GrupoDeportivo[]
-  inscripciones: InscripcionDeportiva[]
+  /** Inscripciones activas y canceladas con su confirmación, tal como las lee Dirección (EPT-62). */
+  inscripciones: InscripcionDeportivaAdministracion[]
   /** Franjas activas por grupo (EPT-12). */
   horarios: HorariosPorGrupo
   /** `null` si no se pudieron cargar las opciones del alta. */
@@ -40,13 +47,33 @@ interface GestionDeportesProps {
   administracion: AdministracionDeportes | null
 }
 
-type Filtro = 'ACTIVAS' | 'CANCELADAS' | 'TODAS'
-
-const FILTROS: { valor: Filtro; etiqueta: string }[] = [
-  { valor: 'ACTIVAS', etiqueta: 'Activas' },
-  { valor: 'CANCELADAS', etiqueta: 'Canceladas' },
-  { valor: 'TODAS', etiqueta: 'Todas' },
-]
+function aFila(inscripcion: InscripcionDeportivaAdministracion): FilaInscripcion {
+  const alumno = nombreAlumno(inscripcion.alumno_apellido, inscripcion.alumno_nombre)
+  return {
+    id: inscripcion.id,
+    alumno,
+    legajo: inscripcion.legajo_nro,
+    detalles: {
+      deporte: { principal: inscripcion.deporte_nombre },
+      grupo: {
+        principal: inscripcion.grupo_nombre,
+        secundario: `Nivel: ${nombreNivel(inscripcion.nivel_nombre)}`,
+      },
+    },
+    descripcion: `${inscripcion.deporte_nombre} (${inscripcion.grupo_nombre})`,
+    estado: inscripcion.estado,
+    fechaAlta: inscripcion.fecha_inscripcion,
+    fechaBaja: inscripcion.fecha_cancelacion,
+    confirmacion: confirmacionDe(inscripcion),
+    busqueda: textoDeBusqueda(
+      inscripcion.alumno_apellido,
+      inscripcion.alumno_nombre,
+      inscripcion.legajo_nro,
+      inscripcion.deporte_nombre,
+      inscripcion.grupo_nombre
+    ),
+  }
+}
 
 type CampoFormulario = 'deporte_id' | 'nivel_id' | 'nombre' | 'cupo' | 'profesor_id'
 type ErroresFormulario = Partial<Record<CampoFormulario, string>>
@@ -69,8 +96,8 @@ const FORMULARIO_VACIO = {
  * inactivar y reactivar), crea y edita grupos (nombre, cupo y profesor; el
  * deporte y el nivel no cambian), los inactiva y reactiva, asigna o da de baja
  * franjas e inscribe a un alumno. Las reglas las aplica PostgreSQL con las filas
- * bloqueadas: lo que la pantalla anticipa es una ayuda. No cancela inscripciones
- * ajenas ni borra nada: eso es EPT-62 y no existe por ninguna vía.
+ * bloqueadas: lo que la pantalla anticipa es una ayuda. Desde EPT-62 confirma y
+ * cancela inscripciones en nombre del alumno (baja lógica: no borra nada).
  */
 export function GestionDeportes({
   grupos,
@@ -90,38 +117,12 @@ export function GestionDeportes({
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [exito, setExito] = useState<string | null>(null)
-  const [filtro, setFiltro] = useState<Filtro>('ACTIVAS')
-  const [busqueda, setBusqueda] = useState('')
-  const idBusqueda = useId()
   const regionExito = useRef<HTMLDivElement>(null)
 
   const sinProfesores = catalogo !== null && catalogo.profesores.length === 0
   const grupoSeleccionado = grupos.find((grupo) => grupo.grupo_id === grupoHorarios)
 
-  const visibles = useMemo(() => {
-    const termino = busqueda.trim().toLocaleLowerCase('es-AR')
-    return inscripciones
-      .filter((inscripcion) =>
-        filtro === 'TODAS'
-          ? true
-          : filtro === 'ACTIVAS'
-            ? inscripcion.estado === 'ACTIVA'
-            : inscripcion.estado === 'CANCELADA'
-      )
-      .filter((inscripcion) => {
-        if (!termino) return true
-        return [
-          inscripcion.alumno_apellido,
-          inscripcion.alumno_nombre,
-          inscripcion.legajo_nro ?? '',
-          inscripcion.deporte_nombre,
-          inscripcion.grupo_nombre,
-        ]
-          .join(' ')
-          .toLocaleLowerCase('es-AR')
-          .includes(termino)
-      })
-  }, [inscripciones, filtro, busqueda])
+  const filas = useMemo(() => inscripciones.map(aFila), [inscripciones])
 
   // La confirmación aparece arriba de la página: si la operación se hizo sobre
   // una tarjeta lejana, se la acerca a la vista sin mover el foco.
@@ -364,89 +365,27 @@ export function GestionDeportes({
         <h2 id="inscripciones-titulo" className="text-lg font-bold text-neutral-900">
           Inscripciones de los alumnos
         </h2>
-        <div className="flex flex-col md:flex-row md:items-end gap-3">
-          <div role="group" aria-label="Filtrar por estado" className="flex flex-wrap gap-2">
-            {FILTROS.map(({ valor, etiqueta }) => (
-              <button
-                key={valor}
-                type="button"
-                onClick={() => setFiltro(valor)}
-                aria-pressed={filtro === valor}
-                className={cn(
-                  'px-4 py-2 rounded-full text-sm font-semibold border transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2',
-                  filtro === valor
-                    ? 'bg-brand-500 text-white border-brand-500'
-                    : 'bg-white text-neutral-700 border-neutral-300 hover:border-brand-400'
-                )}
-              >
-                {etiqueta}
-              </button>
-            ))}
-          </div>
-          <div className="md:ml-auto md:w-80">
-            <Input
-              id={idBusqueda}
-              label="Buscar"
-              placeholder="Alumno, legajo, deporte o grupo"
-              value={busqueda}
-              onChange={(evento) => setBusqueda(evento.target.value)}
-            />
-          </div>
-        </div>
-
-        <p className="text-sm text-neutral-500" role="status">
-          {visibles.length === 1 ? '1 inscripción' : `${visibles.length} inscripciones`}
-        </p>
-
-        {visibles.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-neutral-200 py-8 px-5 text-center">
-            <p className="text-sm text-neutral-600 font-semibold">
-              No hay inscripciones para mostrar
-            </p>
-            <p className="text-neutral-500 text-sm mt-1">
-              Probá con otro filtro o con otra búsqueda.
-            </p>
-          </div>
-        ) : (
-          <ul className="space-y-2">
-            {visibles.map((inscripcion) => (
-              <li
-                key={inscripcion.id}
-                className="bg-white rounded-2xl border border-neutral-200 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-neutral-900 break-words">
-                    {inscripcion.alumno_apellido}, {inscripcion.alumno_nombre}
-                    <span className="font-normal text-neutral-500">
-                      {' '}
-                      · Legajo {inscripcion.legajo_nro ?? '—'}
-                    </span>
-                  </p>
-                  <p className="text-sm text-neutral-600 break-words">
-                    {inscripcion.deporte_nombre} · {inscripcion.grupo_nombre} ·{' '}
-                    {nombreNivel(inscripcion.nivel_nombre)}
-                  </p>
-                  <p className="text-xs text-neutral-500">
-                    Alta: {fecha(inscripcion.fecha_inscripcion)}
-                    {inscripcion.fecha_cancelacion
-                      ? ` · Baja: ${fecha(inscripcion.fecha_cancelacion)}`
-                      : ''}
-                  </p>
-                </div>
-                {inscripcion.estado === 'ACTIVA' ? (
-                  <Badge variant="success" dot className="self-start md:self-auto">
-                    Activa
-                  </Badge>
-                ) : (
-                  <Badge variant="default" className="self-start md:self-auto">
-                    Cancelada
-                  </Badge>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+        <ListaInscripcionesAdministrativas
+          dominio="deportes"
+          filas={filas}
+          columnas={[
+            { clave: 'deporte', titulo: 'Deporte' },
+            { clave: 'grupo', titulo: 'Grupo y nivel' },
+          ]}
+          caption="Alumnos inscriptos a deportes con legajo, deporte, grupo, nivel, estado, confirmación, fechas y acciones"
+          filtroEstado={{
+            etiquetaGrupo: 'Filtrar por estado',
+            etiquetas: { ACTIVAS: 'Activas', CANCELADAS: 'Canceladas', TODAS: 'Todas' },
+          }}
+          busqueda={{ etiqueta: 'Buscar', placeholder: 'Alumno, legajo, deporte o grupo' }}
+          resumen={({ visibles }) =>
+            visibles === 1 ? '1 inscripción' : `${visibles} inscripciones`
+          }
+          vacio={{
+            titulo: 'No hay inscripciones para mostrar',
+            ayuda: 'Probá con otro filtro o con otra búsqueda.',
+          }}
+        />
       </section>
 
       {dialogoAbierto && catalogo && (

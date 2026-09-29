@@ -11,6 +11,7 @@ import type {
   HorariosPorGrupo,
   InscripcionDeportiva,
 } from '@/services/deportes.service'
+import type { InscripcionDeportivaAdministracion } from '@/services/inscripciones-administracion.service'
 
 /**
  * Banco visual determinista de deportes (EPT-11).
@@ -113,6 +114,35 @@ const INSCRIPCION_CANCELADA: InscripcionDeportiva = {
   fecha_inscripcion: '2026-09-01T11:00:00.000Z',
   fecha_cancelacion: '2026-09-10T15:45:00.000Z',
 }
+
+/**
+ * Lo que lee Dirección (EPT-62): las mismas inscripciones con su confirmación.
+ * Natación está sin confirmar (sigue siendo válida), Atletismo confirmada y la
+ * cancelada no se confirmó, así que ya no se puede confirmar.
+ */
+function administrativa(
+  inscripcion: InscripcionDeportiva,
+  confirmacion: Pick<
+    InscripcionDeportivaAdministracion,
+    'confirmada' | 'confirmada_en' | 'confirmada_por_nombre' | 'confirmada_por_apellido'
+  > = {
+    confirmada: false,
+    confirmada_en: null,
+    confirmada_por_nombre: null,
+    confirmada_por_apellido: null,
+  }
+): InscripcionDeportivaAdministracion {
+  return { ...inscripcion, alumno_estado: 'ACTIVO', ...confirmacion }
+}
+
+const ADMIN_NATACION = administrativa(INSCRIPCION)
+const ADMIN_ATLETISMO = administrativa(INSCRIPCION_ATLETISMO, {
+  confirmada: true,
+  confirmada_en: '2026-09-22T14:05:00.000Z',
+  confirmada_por_nombre: 'Dora',
+  confirmada_por_apellido: 'Directora',
+})
+const ADMIN_CANCELADA = administrativa(INSCRIPCION_CANCELADA)
 
 /** Franjas sintéticas (EPT-12). Fútbol choca con Natación el lunes. */
 const franja = (id: string, grupoId: string, dia: number, inicio: string, fin: string) => ({
@@ -324,7 +354,7 @@ export default async function BancoDeportes({
                 ? GRUPOS_ADMINISTRACION
                 : GRUPOS.map((grupo) => ({ ...grupo, profesor_id: PROFESOR_ACTIVO }))
           }
-          inscripciones={estado === 'vacio' ? [] : [INSCRIPCION, INSCRIPCION_ATLETISMO, INSCRIPCION_CANCELADA]}
+          inscripciones={estado === 'vacio' ? [] : [ADMIN_NATACION, ADMIN_ATLETISMO, ADMIN_CANCELADA]}
           horarios={estado === 'vacio' ? {} : HORARIOS}
           administracion={
             estado === 'sin-administracion'
