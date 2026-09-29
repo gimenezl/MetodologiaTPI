@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
+import { decodeQR } from '@paulmillr/qr/decode.js'
 import {
   cargarClavesQr,
   ErrorClaveNoDisponible,
@@ -411,6 +412,28 @@ test.describe('imagen del QR', () => {
     expect(svg).not.toContain(payload.split('.')[2])
     expect(svg).not.toContain(payload.split('.')[3])
     expect(svg.length).toBeLessThan(12_000)
+  })
+
+  test('el SVG generado se decodifica de vuelta al mismo texto (legibilidad real)', () => {
+    const { claves } = clavesEfimeras()
+    const payload = construirPayload(randomUUID(), 'k1', claves)
+    const svg = generarSvgQr(payload)
+
+    const lado = Number(/viewBox="0 0 (\d+) \d+"/.exec(svg)![1])
+    const escala = 8
+    const pixeles = new Uint8ClampedArray(lado * escala * lado * escala * 4).fill(255)
+    for (const m of svg.matchAll(/M(\d+) (\d+)h(\d+)v1h-\d+z/g)) {
+      const [x0, y0, largo] = [Number(m[1]), Number(m[2]), Number(m[3])]
+      for (let y = y0 * escala; y < (y0 + 1) * escala; y += 1) {
+        for (let x = x0 * escala; x < (x0 + largo) * escala; x += 1) {
+          const i = (y * lado * escala + x) * 4
+          pixeles[i] = pixeles[i + 1] = pixeles[i + 2] = 0
+        }
+      }
+    }
+
+    const decodificado = decodeQR({ width: lado * escala, height: lado * escala, data: pixeles })
+    expect(decodificado).toBe(payload)
   })
 
   test('respeta la zona silenciosa de 4 módulos en los cuatro bordes', () => {

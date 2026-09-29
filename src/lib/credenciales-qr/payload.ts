@@ -39,8 +39,6 @@ export const VERSION_PAYLOAD = 'EPT1'
 const DOMINIO_DE_FIRMA = 'EPT-QR-V1'
 const BYTES_ID = 16
 const BYTES_FIRMA = 32
-const LARGO_ID = 22 // base64url de 16 bytes, sin relleno
-const LARGO_FIRMA = 43 // base64url de 32 bytes, sin relleno
 /** Tope de entrada: acota el trabajo antes de mirar el contenido. */
 const LARGO_MAXIMO_PAYLOAD = 128
 
