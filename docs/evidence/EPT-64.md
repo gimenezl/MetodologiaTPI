@@ -1,10 +1,10 @@
 # EPT-64 — RF20: Credencial digital QR por alumno
 
-**Estado al 30/09/2026: integrada y desplegada, con verificación productiva parcial.** La migración y las variables de servidor están presentes en producción; no se emitió ninguna credencial real. EPT-64 sigue «En curso» porque falta el recorrido autenticado por rol con un sujeto de prueba autorizado. EPT-65 no se tocó. La sección 9 conserva las pruebas previas al merge; la sección 13 registra el postflight.
+**Estado al 30/09/2026: integrada y desplegada, con verificación productiva parcial.** La migración y las variables de servidor están presentes en producción. Lucas autorizó un único alumno de prueba activo: Dirección emitió, repuso y revocó sus credenciales desde la aplicación; quedaron dos filas REVOCADAS y ninguna ACTIVA. EPT-64 sigue «En curso» porque faltan la verificación autenticada, las denegaciones por otros roles, la comprobación concluyente de descarga e impresión y la integración de esta evidencia. EPT-65 no se tocó. La sección 9 conserva las pruebas previas al merge; la sección 13 registra el postflight.
 
 | Dato | Valor |
 |---|---|
-| Integración | PR #26 integrado en `main`: `cbb6f1be9ca5d8e8c640e5d78dc30ecf56661757` |
+| Integración | PR #26 (implementación) integrado en `cbb6f1be9ca5d8e8c640e5d78dc30ecf56661757`; PR #27 (primera evidencia de postflight) integrado en `8c3c513d38018e6e73d89de03f90dac51badef28`. La actualización del recorrido productivo de este documento requiere otro PR |
 | Base y código de las pruebas originales | `origin/main` `1e00169` fue la base de implementación. La sección 9 corresponde a `cd54c21`; los commits posteriores hasta el merge solo modificaron documentación. La implementación original se probó sobre `777626a`; ese resultado **no** se reutiliza para el código corregido |
 | Jira | EPT-64 (tarea hija de EPT-7). EPT-65 no se toca |
 | Migración | `supabase/migrations/20260929224534_ept_64_credencial_qr.sql` (aditiva; la última anterior era `20260929012923`) |
@@ -222,17 +222,17 @@ Se generan con `EPT_CAPTURAS=1` únicamente; sin esa variable la suite no reescr
 
 ## 12. Reversión
 
-La reversión del esquema se probó **solo en el stack local** (`credenciales_qr_rls.sql`, sección R): elimina las diez funciones (`public` y `app_private`), la tabla `public.credenciales_qr`, las tres funciones de trigger y de validación, y el tipo `estado_credencial_qr`; no toca objetos preexistentes. La migración **ya está aplicada en producción** y allí hay cero credenciales al cierre de este postflight, pero eso no autoriza un `DROP TABLE` automático. Antes de cualquier reversión productiva hay que verificar de nuevo el recuento, el alcance, el respaldo y la decisión de Dirección. Si ya existen credenciales reales, `DROP TABLE` destruye el historial: primero se debe preservar la información, retirar la clave del servidor para fallar cerrado y acordar el plan. El respaldo de la sección 13 no tiene una restauración aislada probada. Volver a una versión anterior de la aplicación retira las pantallas y rutas, pero no revierte por sí solo la migración.
+La reversión del esquema se probó **solo en el stack local** (`credenciales_qr_rls.sql`, sección R): elimina las diez funciones (`public` y `app_private`), la tabla `public.credenciales_qr`, las tres funciones de trigger y de validación, y el tipo `estado_credencial_qr`; no toca objetos preexistentes. La migración **ya está aplicada en producción** y hay dos credenciales de prueba REVOCADAS, ninguna ACTIVA, según la consulta posterior. Esto no autoriza un `DROP TABLE` automático: destruiría incluso el historial de prueba. Antes de cualquier reversión productiva hay que verificar de nuevo el recuento, el alcance, el respaldo y la decisión de Dirección. Si ya existen credenciales reales, `DROP TABLE` destruye también su historial: primero se debe preservar la información, retirar la clave del servidor para fallar cerrado y acordar el plan. El respaldo de la sección 13 no tiene una restauración aislada probada. Volver a una versión anterior de la aplicación retira las pantallas y rutas, pero no revierte por sí solo la migración.
 
 ## 13. Despliegue y postflight de producción — 30/09/2026
 
-**Veredicto: infraestructura y estructura desplegadas; comportamiento autenticado productivo pendiente.** No se emitió, repuso ni revocó una credencial de producción porque no se autorizó un sujeto de prueba. Los resultados locales de la sección 9 no sustituyen esa comprobación.
+**Veredicto: infraestructura y estructura desplegadas; ciclo de emisión, reposición y revocación comprobado parcialmente con una sesión productiva de Dirección.** Lucas confirmó expresamente un único alumno activo como sujeto de prueba. El recorrido no cubrió la verificación autenticada del QR, otros roles ni la descarga e impresión concluyentes. Los resultados locales de la sección 9 no sustituyen esas comprobaciones.
 
 ### 13.1 Identidad y preflight
 
 | Control | Evidencia y resultado | Límite |
 |---|---|---|
-| Código integrado | PR #26 `MERGED`; commit de merge `cbb6f1be9ca5d8e8c640e5d78dc30ecf56661757`. El árbol de `origin/main` contiene la implementación | El `main` local estaba atrasado; la operación usó un worktree limpio en el merge, no ese checkout |
+| Código y evidencia previa integrados | PR #26 `MERGED` en `cbb6f1be9ca5d8e8c640e5d78dc30ecf56661757`; PR #27 `MERGED` en `8c3c513d38018e6e73d89de03f90dac51badef28`. `origin/main` contiene la implementación y el postflight inicial | El recorrido productivo autorizado se documenta en esta actualización todavía no integrada; no usar el `main` local atrasado |
 | Proyecto de base | Supabase `ycvrpmrogvjnntnoosbh`; antes: 24 migraciones remotas alineadas con 24 locales y solo `20260929224534_ept_64_credencial_qr.sql` pendiente | No se aplicaron migraciones ajenas |
 | Simulación SQL | `supabase db push --dry-run --skip-vault` terminó con exit 0 y enumeró únicamente la migración QR | Una simulación no demuestra reversibilidad |
 | Datos antes de migrar | `public.alumnos`: 6 filas; `public.credenciales_qr` todavía no existía | «Tabla inexistente» no equivale a «cero credenciales» en el preflight |
@@ -243,24 +243,26 @@ La reversión del esquema se probó **solo en el stack local** (`credenciales_qr
 
 | Control | Evidencia y resultado | Límite |
 |---|---|---|
-| Variables de firma | `QR_CREDENCIAL_KID_ACTIVA` y `QR_CREDENCIAL_CLAVES` presentes en Vercel **Production**; clave generada con CSPRNG y copia cotejada desde Bitwarden | Se verificaron nombres y ámbito, **no** se leyeron valores desde Vercel ni se demostró aún su uso en una sesión autenticada |
+| Variables de firma | `QR_CREDENCIAL_KID_ACTIVA` y `QR_CREDENCIAL_CLAVES` presentes en Vercel **Production**; clave generada con CSPRNG y copia cotejada desde Bitwarden | No se leyeron valores desde Vercel. La sesión de Dirección obtuvo tarjetas QR; falta verificar sus firmas y estados mediante el endpoint autenticado |
 | Migración | `supabase db push` terminó con exit 0 y aplicó **una vez** `20260929224534_ept_64_credencial_qr.sql` al proyecto verificado | No volver a ejecutarla como paso manual sin comprobar el ledger |
-| Ledger posterior | 25 migraciones locales y 25 remotas alineadas; `public.alumnos` sigue con 6 filas y `public.credenciales_qr` existe con 0 filas | El recuento no prueba por sí solo permisos de cada actor |
+| Ledger tras la migración, **antes de la prueba** | 25 migraciones locales y 25 remotas alineadas; `public.alumnos` tenía 6 filas y `public.credenciales_qr` existía con 0 filas | Es el corte anterior al recorrido autenticado, no el estado final |
+| Estado **después de la prueba** | Ledger 25/25; `public.alumnos`: 6; `public.credenciales_qr`: 2 filas, 0 ACTIVA y 2 REVOCADAS | Consulta SQL productiva agregada de solo lectura; no acredita por sí sola la verificación del payload ni permisos de otros roles |
 | Estructura posterior | 10 columnas; 4 FK `RESTRICT`; 4 `CHECK`; índice único parcial para `ACTIVA`; triggers que impiden `DELETE`/`TRUNCATE`; 5 funciones privadas y 5 envoltorios públicos; RLS y 2 políticas; DML directo denegado | Es una inspección estructural y de privilegios, no un ciclo funcional autenticado |
 | Asesores | 33 → 37 avisos: +4 `INFO` por índices nuevos aún sin uso; 9 `WARN`, 4 de seguridad y 0 `ERROR`, sin aumento de advertencias | Los avisos preexistentes no se resolvieron en EPT-64 |
-| Vercel | `dpl_G9CjhYKvW9jFet93M7WF3SVqCqWQ` quedó `READY` y `Current`, asociado a `cbb6f1b`; snapshot con ambos nombres de variables. `/` y `/login`: HTTP 200 | La respuesta pública no acredita que los recorridos autenticados funcionen |
+| Vercel | Tras integrar PR #27, el despliegue `dpl_DWezug2e3H41Vb5zGp73YVN3Ge9d` quedó `READY` y `Current`, asociado a `8c3c513`; solo cambia documentación respecto de `cbb6f1b`. Los nombres de ambas variables QR siguen en Production. `/` y `/login`: HTTP 200; anónimo: 401 con `no-store` | Los resultados públicos y anónimos no acreditan los recorridos autenticados; sus resultados y límites están en la matriz siguiente |
 
 ### 13.3 Matriz contrato → prueba → resultado → límite
 
 | Contrato o actor | Prueba local | Prueba productiva | Resultado y límite |
 |---|---|---|---|
-| Firma, formato, rotación y rechazo previo a base | `credenciales-qr-cripto.spec.ts`: 24/24 sobre el código integrado | No se envió un QR válido | Pasa localmente; la clave desplegada no se ejercitó con una sesión |
-| Dirección: emitir, ver, descargar, reponer, revocar, historial y verificar | SQL/RLS y sesión local de la sección 9 | No ejecutada: falta sujeto de prueba autorizado | **Pendiente**; no se alteraron credenciales reales |
+| Firma, formato, rotación y rechazo previo a base | `credenciales-qr-cripto.spec.ts`: 24/24 sobre el código integrado | Dos imágenes QR decodificadas solo en memoria: formato `EPT1` correcto y contenido diferente tras la reposición | Formato y cambio comprobados sin exponer el contenido; **no** se invocó la verificación autenticada de firma y estado |
+| Dirección: emitir, ver, descargar, reponer, revocar, historial y verificar | SQL/RLS y sesión local de la sección 9 | En UI productiva se emitió, vio la tarjeta, repuso con motivo genérico y revocó la nueva. Tras recargar siguió sin tarjeta vigente | Emisión, reposición y revocación comprobadas para el alumno de prueba; historial y verificación autenticada pendientes. Descarga e impresión no concluyentes |
+| Verificación de estado «válida» y «revocada» por Dirección | API y sesión local de la sección 9 | No se invocó el `POST /api/credenciales-qr/verificacion` autenticado: no había formulario en la UI ni vía disponible en el control usado | **Pendiente**: decodificar la imagen y comprobar el formato no demuestra firma ni estado; tampoco se probó el rechazo tras revocación |
 | Alumno propio/ajeno/inactivo, padre vinculado/desvinculado, docente, PERSONAL y roles bloqueados | SQL, API y UI local de la sección 9 | No ejecutada con cuentas autenticadas | Matriz de permisos productiva **pendiente** |
 | Anónimo en API de credenciales y verificación | Casos locales de la sección 9 | GET/POST/verificación sintéticos: HTTP 401, JSON, `Cache-Control: no-store`, sin filtración observada | Denegación anónima comprobada; no cubre autorizaciones por rol |
 | GET no admitido de verificación | Contrato de ruta solo POST | HTTP 405 con caché pública; no se observó dato sensible | Conviene revisar el encabezado de caché de esa respuesta; no equivale a exposición de un QR |
-| Pantalla: tarjeta, PNG, impresión individual, accesibilidad y móvil | UI QR: 72/72 en escritorio, Pixel 5 e iPhone 13; regresiones EPT-63/alumnos/familia/comedor/transporte/deportes: 101/101 | Solo `/` y `/login` públicos: 200; no se abrió una tarjeta autenticada | Impresión individual de dos hijos, PNG, foco/teclado, contraste AA y español cubiertos localmente; sin recorrido visual productivo |
-| SQL/RLS y concurrencia locales de la sección 9 | 147 aserciones SQL y escenarios de concurrencia en la corrida previa al merge | Inspección estructural productiva; sin transacción funcional | No se repitieron SQL/RLS ni E2E autenticados en esta sesión: Docker local no estaba disponible |
+| Pantalla: tarjeta, PNG, impresión individual, accesibilidad y móvil | UI QR: 72/72 en escritorio, Pixel 5 e iPhone 13; regresiones EPT-63/alumnos/familia/comedor/transporte/deportes: 101/101 | Tarjeta y QR visibles en sesión productiva de Dirección. «Descargar» mostró aviso de inicio, pero no se confirmó el archivo; «Imprimir» terminó en timeout del control | La prueba local cubre impresión individual de dos hijos, PNG, foco/teclado, contraste AA y español. No hay prueba productiva concluyente de archivo descargado ni de impresión |
+| SQL/RLS y concurrencia locales de la sección 9 | 147 aserciones SQL y escenarios de concurrencia en la corrida previa al merge | Inspección estructural y recuento posterior; las transacciones de UI se describen arriba | No se repitieron la batería SQL/RLS ni los E2E automatizados en esta sesión: Docker local no estaba disponible |
 
 ### 13.4 Dependencias ausentes: ensayos locales, no estado actual de producción
 
@@ -271,7 +273,9 @@ La reversión del esquema se probó **solo en el stack local** (`credenciales_qr
 
 **Riesgos conservados:** un QR estático puede copiarse hasta su revocación (aceptado por diseño). El botón individual «Imprimir» aísla la tarjeta elegida; el atajo del navegador `Ctrl+P` con varios hijos puede superponer tarjetas y no está cubierto por esa prueba. No se habilitó EPT-65 ni se probó el escaneo.
 
-**Siguiente acción para cerrar EPT-64:** Dirección debe autorizar una identidad y un alumno de prueba ACTIVO, más cuentas autorizadas para cubrir la matriz de actores. Recién entonces ejecutar en producción emisión → vista/descarga/impresión → verificación válida → reposición → verificación de la anterior como revocada → revocación, y comprobar denegaciones por rol sin exponer QR, datos personales ni claves en la evidencia. Registrar resultados y defectos; Lucas debe integrar el PR de esta evidencia. Solo con el recorrido productivo acreditado y la documentación integrada corresponde evaluar la transición de Jira a «Hecho». Hasta entonces EPT-64 permanece «En curso» y EPT-65 «Por hacer».
+No se incorporaron a esta evidencia payloads QR, datos personales, registros de auditoría ni capturas del recorrido productivo.
+
+**Siguiente acción para cerrar EPT-64:** con la identidad de prueba ya autorizada, obtener una vía controlada para invocar el `POST` de verificación autenticada y acreditar los estados «válida» y «revocada» (una comprobación de «válida» requeriría un nuevo ciclo de prueba autorizado, pues ya no hay credencial ACTIVA). Confirmar el archivo descargado y la impresión, y usar cuentas autorizadas para probar las denegaciones por rol. Registrar resultados y defectos sin exponer QR, datos personales ni claves; Lucas debe integrar el nuevo PR de esta actualización documental. Solo con el recorrido productivo faltante acreditado y la documentación integrada corresponde evaluar la transición de Jira a «Hecho». Hasta entonces EPT-64 permanece «En curso» y EPT-65 «Por hacer».
 
 **Mejoras operativas separadas del cierre:** la identidad de respaldo y la clave QR quedaron bajo custodia de Lucas y se cotejaron desde Bitwarden; compartir esa custodia requiere una decisión de equipo, no es un requisito nuevo de EPT-64. Una restauración aislada permitiría calificar el respaldo como recuperable; mientras no se pruebe, se lo describe únicamente como cifrado e íntegro.
 
