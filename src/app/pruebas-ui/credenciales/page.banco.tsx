@@ -131,6 +131,21 @@ export default async function BancoCredenciales({
       </div>
     )
   }
+  if (estado === 'dos-hijos') {
+    // Un padre con dos hijos, ambos con credencial vigente: cada botón imprime solo su tarjeta.
+    const primera = tarjetaDe('VIGENTE')
+    const segunda: Tarjeta = {
+      ...primera,
+      alumno: { ...primera.alumno, id: 'eeeeeeee-6400-4000-8000-000000000009', nombre: 'Mateo', apellido: 'Muestra Inventado' },
+    }
+    return (
+      <main className="mx-auto max-w-2xl space-y-10 p-4">
+        <h1 className="text-2xl font-extrabold text-neutral-900 print:hidden">Credenciales de mis hijos</h1>
+        <TarjetaCredencial tarjeta={primera} vista="HIJO" idTitulo="hijo-uno" />
+        <TarjetaCredencial tarjeta={segunda} vista="HIJO" idTitulo="hijo-dos" />
+      </main>
+    )
+  }
   if (estado === 'panel') return <div className="mx-auto max-w-4xl p-4"><PanelCredenciales filas={FILAS} /></div>
   if (estado === 'panel-vacio') return <div className="mx-auto max-w-4xl p-4"><PanelCredenciales filas={[]} /></div>
   if (estado === 'historial') return <div className="mx-auto max-w-2xl p-4"><HistorialCredenciales historial={HISTORIAL} /></div>

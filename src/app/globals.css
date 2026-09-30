@@ -261,4 +261,10 @@
     print-color-adjust: exact;
     break-inside: avoid;
   }
+  /* Varias tarjetas en la misma página (un padre con varios hijos): el botón «Imprimir»
+     marca la suya con data-imprimiendo y solo esa se imprime; sin la marca, ninguna
+     tarjeta se oculta. */
+  body:has(.imprimible[data-imprimiendo]) .imprimible:not([data-imprimiendo]) {
+    display: none !important;
+  }
 }

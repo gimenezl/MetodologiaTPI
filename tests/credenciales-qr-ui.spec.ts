@@ -172,6 +172,35 @@ test.describe('credencial vigente', () => {
     await page.emulateMedia({ media: 'screen' })
   })
 
+  test('con dos hijos, «Imprimir» de cada tarjeta imprime solo esa (no se superponen)', async ({ page }) => {
+    await irA(page, `${BANCO}?estado=dos-hijos&vista=hijo`)
+    await page.evaluate(() => {
+      window.print = () => {}
+    })
+    const tarjetas = page.locator('.imprimible')
+    await expect(tarjetas).toHaveCount(2)
+
+    for (const [indice, nombre] of ['Lucía', 'Mateo'].entries()) {
+      // El botón de cada tarjeta está en su propia sección.
+      await page.locator('section', { has: page.getByRole('article', { name: new RegExp(`de ${nombre}`) }) })
+        .getByRole('button', { name: 'Imprimir' }).click()
+      await page.emulateMedia({ media: 'print' })
+      const impresas = await page.evaluate(() =>
+        [...document.querySelectorAll('.imprimible')].map((el) => ({
+          visible: getComputedStyle(el).display !== 'none' && getComputedStyle(el).visibility === 'visible',
+          texto: el.textContent ?? '',
+        }))
+      )
+      const visibles = impresas.filter((t) => t.visible)
+      expect(visibles, `tarjeta ${indice + 1}: solo una se imprime`).toHaveLength(1)
+      expect(visibles[0].texto).toContain(nombre)
+      await page.emulateMedia({ media: 'screen' })
+      // Simula el fin de la impresión: la marca se retira y no queda ninguna oculta en pantalla.
+      await page.evaluate(() => window.dispatchEvent(new Event('afterprint')))
+      await expect(page.locator('.imprimible[data-imprimiendo]')).toHaveCount(0)
+    }
+  })
+
   test('el teclado alcanza descargar e imprimir con foco visible y objetivos táctiles de 44 px', async ({ page }) => {
     await irA(page, BANCO)
     const descargar = page.getByRole('button', { name: 'Descargar imagen' })

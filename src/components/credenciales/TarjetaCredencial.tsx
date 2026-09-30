@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   DownloadSimple,
   IdentificationBadge,
@@ -118,6 +118,7 @@ export function TarjetaCredencial({
 }) {
   const [mensaje, setMensaje] = useState<{ tipo: 'estado' | 'error'; texto: string } | null>(null)
   const [descargando, setDescargando] = useState(false)
+  const articulo = useRef<HTMLElement>(null)
 
   const nombre = nombreCompleto(tarjeta)
   const vigente = tarjeta.estado === 'VIGENTE' && tarjeta.qr !== null
@@ -146,6 +147,11 @@ export function TarjetaCredencial({
 
   function alImprimir() {
     setMensaje({ tipo: 'estado', texto: 'Abriendo la impresión…' })
+    // Con varias tarjetas en la página (un padre con varios hijos) solo se imprime la de este
+    // botón: se la marca y el CSS de impresión oculta las demás. La marca se quita al terminar.
+    const marcada = articulo.current
+    marcada?.setAttribute('data-imprimiendo', '')
+    window.addEventListener('afterprint', () => marcada?.removeAttribute('data-imprimiendo'), { once: true })
     window.print()
   }
 
@@ -155,6 +161,7 @@ export function TarjetaCredencial({
         <>
           {/* Único bloque que se imprime (ver el @media print de globals.css). */}
           <article
+            ref={articulo}
             className="imprimible mx-auto w-full max-w-md overflow-hidden rounded-2xl border border-neutral-300 bg-white shadow-sm"
             aria-label={`Credencial digital de ${nombre}`}
           >
