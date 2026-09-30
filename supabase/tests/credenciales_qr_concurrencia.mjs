@@ -16,14 +16,16 @@ import { esperarBloqueo, SesionPsql } from './_sesion-psql.mjs'
  *      (la de la primera); la segunda falla con P5623 y no revoca a la nueva.
  *   3. Reposición frente a revocación, en los dos órdenes, tiene un desenlace
  *      definido y jamás deja dos ACTIVAS.
- *   4. Una emisión frente a la inactivación o reactivación del mismo alumno se
- *      serializa, sin deadlock, y la credencial no se modifica por el cambio de
- *      estado del alumno (la validez se calcula al consultar).
+ *   4. Una emisión o reposición frente a la inactivación o reactivación del mismo
+ *      alumno se serializa, sin deadlock: quien llega después de inactivar recibe
+ *      P5627 y no deja filas ni toca la vigente; revocar sigue permitido. La
+ *      credencial no se modifica por el cambio de estado del alumno (la validez
+ *      se calcula al consultar).
  *   5. Una ráfaga de seis emisiones y de seis reposiciones simultáneas deja
  *      exactamente una ACTIVA y el resto rechazadas con el código previsto.
  *
  * Corre contra la base local descartable. Crea sus propios datos sintéticos y
- * los borra al final como propietario; para vaciar el historial append-only
+ * los borra al final como propietario; para vaciar el historial inmutable
  * desactiva EXPLÍCITAMENTE los triggers de la tabla dentro de esa transacción
  * de limpieza. Ese borrado no representa ninguna operación disponible en la
  * aplicación.
@@ -178,52 +180,82 @@ async function probarReposicionContraRevocacion(a, b, pids) {
   console.log('OK CONCURRENCIA 3: reposición y revocación compiten con desenlace definido en ambos órdenes y sin dos ACTIVAS')
 }
 
-/** 4. Emisión frente a inactivar y reactivar el mismo alumno. */
+/** 4. Emisión y reposición frente a inactivar y reactivar el mismo alumno. */
 async function probarCambioDeEstadoDelAlumno(a, b, pids) {
-  // 4a. Inactivar mantiene alumnos FOR UPDATE; la emisión espera y luego procede.
+  const alumno = ALUMNOS.estado
+  const estadoDelAlumno = (etiqueta) =>
+    a.escalar(`(SELECT estado FROM public.alumnos WHERE perfil_id = '${alumno}')`, etiqueta)
+
+  // 4a. Inactivar mantiene alumnos FOR UPDATE; la emisión espera y, al recibir el candado, ya
+  // encuentra al alumno INACTIVO: se rechaza (P5627) y no queda ninguna fila.
   await a.ejecutar(
     `${comoDirectora}
      BEGIN;
-     SELECT public.inactivar_alumno('${ALUMNOS.estado}');`,
+     SELECT public.inactivar_alumno('${alumno}');`,
     'estado_inactivar_a'
   )
-  const emisionB = b.ejecutar(`${comoDirectora}\n${tolerante(emitir(ALUMNOS.estado))}`, 'estado_emitir_b')
+  const emisionB = b.ejecutar(`${comoDirectora}
+${tolerante(emitir(alumno))}`, 'estado_emitir_b')
   await esperarBloqueo(a, pids.a, pids.b)
   await a.ejecutar('COMMIT;\nRESET ROLE;', 'estado_confirmar_inactivar')
   await emisionB
   const resultado4a = await resultadoDe(b, 'resultado_estado_emitir_b')
-  exigir(resultado4a === 'OK', `La emisión tras inactivar debía completarse y dio ${resultado4a}`)
-  const credencial = await idActiva(a, ALUMNOS.estado, 'estado_credencial')
-  exigir(
-    (await a.escalar(`(SELECT estado FROM public.alumnos WHERE perfil_id = '${ALUMNOS.estado}')`, 'estado_alumno_a')) ===
-      'INACTIVO',
-    'El alumno debía quedar INACTIVO'
-  )
-  // 4b. Emitida y sin confirmar, la reactivación espera y el resultado es coherente.
-  await a.ejecutar(
-    `${comoDirectora}
-     BEGIN;
-     SELECT public.reponer_credencial_qr('${credencial}', '${KID}', 'Reposición durante reactivación');`,
-    'estado_reponer_a'
-  )
-  const reactivarB = b.ejecutar(
-    `${comoDirectora}
-     ${tolerante(`public.reactivar_alumno('${ALUMNOS.estado}', '${CURSO}')`)}`,
-    'estado_reactivar_b'
-  )
+  exigir(resultado4a === 'P5627', `La emisión tras inactivar debía fallar con P5627 y dio ${resultado4a}`)
+  exigir((await estadoDelAlumno('estado_alumno_a')) === 'INACTIVO', 'El alumno debía quedar INACTIVO')
+  exigir((await filas(a, alumno, 'filas_estado_4a')) === '0', 'La emisión rechazada dejó una fila')
+
+  // 4b. Se reactiva y se emite. Con la reposición SIN confirmar, la inactivación espera y el
+  // resultado es coherente: la reposición ya estaba decidida y la inactivación va después.
+  await a.ejecutar(`${comoDirectora}
+${tolerante(`public.reactivar_alumno('${alumno}', '${CURSO}')`)}`, 'estado_reactivar')
+  exigir((await resultadoDe(a, 'resultado_estado_reactivar')) === 'OK', 'No se pudo reactivar al alumno')
+  const original = await emitirYConfirmar(a, alumno, 'estado')
+  await a.ejecutar(`${comoDirectora}
+BEGIN;
+SELECT ${reponer(original)};`, 'estado_reponer_a')
+  const inactivarB = b.ejecutar(`${comoDirectora}
+${tolerante(`public.inactivar_alumno('${alumno}')`)}`, 'estado_inactivar_b')
   await esperarBloqueo(a, pids.a, pids.b)
   await a.ejecutar('COMMIT;\nRESET ROLE;', 'estado_confirmar_reponer')
-  await reactivarB
-  const resultado4b = await resultadoDe(b, 'resultado_estado_reactivar_b')
-  exigir(resultado4b === 'OK', `La reactivación tras reponer debía completarse y dio ${resultado4b}`)
-  const n = await activas(a, ALUMNOS.estado, 'activas_estado')
-  const total = await filas(a, ALUMNOS.estado, 'filas_estado')
-  exigir(n === '1' && total === '2', `Tras inactivar, reponer y reactivar hay ${n} ACTIVA(s) y ${total} fila(s); se esperaba 1 y 2`)
+  await inactivarB
   exigir(
-    (await a.escalar(`(SELECT estado FROM public.alumnos WHERE perfil_id = '${ALUMNOS.estado}')`, 'estado_final')) === 'ACTIVO',
-    'El alumno debía quedar ACTIVO'
+    (await resultadoDe(b, 'resultado_estado_inactivar_b')) === 'OK',
+    'La inactivación tras reponer debía completarse'
   )
-  console.log('OK CONCURRENCIA 4: emisión y reposición se serializan con inactivar/reactivar sin deadlock ni credenciales duplicadas')
+  const vigente = await idActiva(a, alumno, 'estado_vigente_4b')
+  exigir(
+    (await activas(a, alumno, 'activas_estado_4b')) === '1' && (await filas(a, alumno, 'filas_estado_4b')) === '2',
+    'Tras reponer e inactivar debía haber 1 ACTIVA y 2 filas'
+  )
+  exigir(vigente !== original, 'La vigente debía ser la nueva')
+  exigir((await estadoDelAlumno('estado_alumno_4b')) === 'INACTIVO', 'El alumno debía quedar INACTIVO')
+
+  // 4c. Con la inactivación SIN confirmar, una reposición espera y luego se rechaza (P5627):
+  // la vigente NO se revoca y no se crea otra. Revocar, en cambio, sigue permitido.
+  await a.ejecutar(`${comoDirectora}
+BEGIN;
+SELECT public.reactivar_alumno('${alumno}', '${CURSO}');`, 'estado_reactivar_a')
+  await a.ejecutar('COMMIT;\nRESET ROLE;', 'estado_confirmar_reactivar')
+  await a.ejecutar(`${comoDirectora}
+BEGIN;
+SELECT public.inactivar_alumno('${alumno}');`, 'estado_inactivar_a2')
+  const reposicionB = b.ejecutar(`${comoDirectora}
+${tolerante(reponer(vigente))}`, 'estado_reponer_b')
+  await esperarBloqueo(a, pids.a, pids.b)
+  await a.ejecutar('COMMIT;\nRESET ROLE;', 'estado_confirmar_inactivar_2')
+  await reposicionB
+  const resultado4c = await resultadoDe(b, 'resultado_estado_reponer_b')
+  exigir(resultado4c === 'P5627', `La reposición tras inactivar debía fallar con P5627 y dio ${resultado4c}`)
+  exigir(
+    (await idActiva(a, alumno, 'estado_vigente_4c')) === vigente && (await filas(a, alumno, 'filas_estado_4c')) === '2',
+    'La reposición rechazada tocó la credencial vigente o creó otra'
+  )
+  await a.ejecutar(`${comoDirectora}
+${tolerante(revocar(vigente))}`, 'estado_revocar_inactivo')
+  exigir((await resultadoDe(a, 'resultado_estado_revocar')) === 'OK', 'Revocar con el alumno inactivo debía poder')
+  await a.ejecutar('RESET ROLE;', 'estado_reset_final')
+  exigir((await activas(a, alumno, 'activas_estado_4c')) === '0', 'Tras revocar no debía quedar ninguna ACTIVA')
+  console.log('OK CONCURRENCIA 4: emisión y reposición se serializan con inactivar/reactivar sin deadlock; con el alumno inactivo se rechazan (P5627) y revocar sigue permitido')
 }
 
 /** 5. Ráfagas de seis conexiones simultáneas. */
