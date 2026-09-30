@@ -1,15 +1,14 @@
 # EPT-64 — RF20: Credencial digital QR por alumno
 
-**Estado: revisado de forma independiente, con correcciones, y publicado como PR para la revisión y el merge de Lucas.** No hay merge, despliegue ni cambio alguno en producción: la migración no se aplicó y las claves del servidor no están configuradas. La tarea sigue «En curso» en Jira: faltan integración y verificación en producción.
+**Estado al 30/09/2026: integrada y desplegada, con verificación productiva parcial.** La migración y las variables de servidor están presentes en producción; no se emitió ninguna credencial real. EPT-64 sigue «En curso» porque falta el recorrido autenticado por rol con un sujeto de prueba autorizado. EPT-65 no se tocó. La sección 9 conserva las pruebas previas al merge; la sección 13 registra el postflight.
 
 | Dato | Valor |
 |---|---|
-| Rama | `codex/ept-64-credencial-qr` |
-| Base | `origin/main` `1e00169` (contiene los merges de EPT-63: PR #22, #23, #24 y #25) |
-| Código probado | `cd54c21` (el resultado de cada prueba de la sección 9 corresponde a ese SHA; los commits posteriores solo modifican documentación). La implementación original se probó sobre `777626a`; ese resultado **no** se reutiliza para el código corregido |
+| Integración | PR #26 integrado en `main`: `cbb6f1be9ca5d8e8c640e5d78dc30ecf56661757` |
+| Base y código de las pruebas originales | `origin/main` `1e00169` fue la base de implementación. La sección 9 corresponde a `cd54c21`; los commits posteriores hasta el merge solo modificaron documentación. La implementación original se probó sobre `777626a`; ese resultado **no** se reutiliza para el código corregido |
 | Jira | EPT-64 (tarea hija de EPT-7). EPT-65 no se toca |
 | Migración | `supabase/migrations/20260929224534_ept_64_credencial_qr.sql` (aditiva; la última anterior era `20260929012923`) |
-| Stack de prueba | Supabase local aislado (`project_id = ept64`, puertos 573xx). No se tocó la base compartida ni producción |
+| Entornos | Las pruebas de la sección 9 usaron Supabase local aislado (`project_id = ept64`, puertos 573xx). El postflight de producción figura en la sección 13 |
 
 ## 1. Resumen ejecutivo
 
@@ -23,7 +22,7 @@ Fuera de alcance, como se aprobó: escanear, registrar accesos, elegibilidad de 
 
 | Fuente | Resultado |
 |---|---|
-| Jira EPT-64 y EPT-65 (consulta en vivo) | Tareas hijas de EPT-7, «Por hacer», sin subtareas, comentarios ni vínculos. Coincide con la auditoría. EPT-64 pasó a «En curso» con el contrato aprobado como anexo; EPT-65 sin cambios |
+| Jira EPT-64 y EPT-65 | En la auditoría inicial ambas estaban «Por hacer», sin subtareas, comentarios ni vínculos. EPT-64 pasó a «En curso» con el contrato aprobado como anexo y permanece allí tras el postflight parcial; EPT-65 sigue «Por hacer» |
 | `PlanTrabajo_Grupo12_SistemaGestion (1).pdf` | RF20 «Emitir credenciales» (p. 2), tratamiento «Integración»; ventana 12/10 al 16/10. La Definición de Hecho exige validaciones en servidor y base, migraciones versionadas, prueba por rol, escritorio y móvil |
 | Otro PDF (aplicación de cobros) | Descartado: su RF20 trata pagos deportivos |
 | Auditoría del 2026-09-29 (sobre `7870f10`) | Contexto. `7870f10` es ancestro de la base actual; no se usó como base |
@@ -77,13 +76,7 @@ Variables de servidor (nunca `NEXT_PUBLIC_`):
 
 Falla cerrado ante: variable ausente, clave corta o de relleno, mal codificada, `kid` repetido o mal formado, o activa fuera de la lista. Ningún mensaje de error contiene material de clave (probado).
 
-**Generar** sin mostrarla en pantalla ni en el historial de la terminal: generarla y enviarla directo al gestor de variables.
-
-```bash
-node -e "process.stdout.write(require('crypto').randomBytes(32).toString('base64url'))" | vercel env add QR_CREDENCIAL_CLAVES production
-```
-
-Guardar además una copia en el gestor de contraseñas del equipo.
+**Formato de configuración**: `QR_CREDENCIAL_KID_ACTIVA` contiene solo el identificador (por ejemplo, `k1`); `QR_CREDENCIAL_CLAVES` contiene el par `kid:clave_base64url`, no la clave sola. El comando mostrado en una versión anterior de este documento omitía `kid:` y habría configurado una variable inválida: **no usarlo**. La clave desplegada se generó con un generador criptográfico del sistema, se transfirió sin imprimirse y se cotejó contra su copia en una nota segura de Bitwarden bajo custodia de Lucas. No se incluye su valor ni una huella derivada de él en esta evidencia. La disponibilidad para el equipo no se verificó y requiere un acuerdo de custodia independiente.
 
 **Rotar**: (1) agregar la clave nueva a `QR_CREDENCIAL_CLAVES` conservando las viejas; (2) cambiar `QR_CREDENCIAL_KID_ACTIVA`; (3) desplegar. Las credenciales existentes siguen valiendo con su clave vieja y las nuevas usan la activa. (4) Retirar una clave vieja solo cuando no quede ninguna credencial ACTIVA con ese `kid`:
 
@@ -97,7 +90,7 @@ SELECT clave_kid, count(*) FROM public.credenciales_qr WHERE estado = 'ACTIVA' G
 
 ## 7. Matriz de actores
 
-`✔` permitido, `✖` denegado (código en la prueba). Cada celda se probó en las tres capas: pantalla, API y PostgREST.
+`✔` permitido, `✖` denegado (código en la prueba). Cada celda se probó en las tres capas —pantalla, API y PostgREST— **en el stack local antes del merge**. No equivale a una prueba autenticada en producción; ver sección 13.
 
 | Actor | Ver la propia o de hijos | Emitir, reponer, revocar | Historial interno | Verificar |
 |---|---|---|---|---|
@@ -229,33 +222,58 @@ Se generan con `EPT_CAPTURAS=1` únicamente; sin esa variable la suite no reescr
 
 ## 12. Reversión
 
-Antes de que existan credenciales reales, la migración se revierte soltando lo que creó (probado en `credenciales_qr_rls.sql`, sección R): las diez funciones (`public` y `app_private`), la tabla `public.credenciales_qr`, las tres funciones de trigger y de validación, y el tipo `estado_credencial_qr`. No toca ninguna tabla, función ni política preexistente. **Con credenciales emitidas en producción, `DROP TABLE` destruye el historial:** en ese caso no se revierte por SQL; se hace un respaldo previo (sección 13), se retira la clave del servidor (todo falla cerrado) y se decide con Dirección. Volver atrás en la aplicación es desplegar el commit anterior: las pantallas y rutas desaparecen sin efecto sobre el resto.
+La reversión del esquema se probó **solo en el stack local** (`credenciales_qr_rls.sql`, sección R): elimina las diez funciones (`public` y `app_private`), la tabla `public.credenciales_qr`, las tres funciones de trigger y de validación, y el tipo `estado_credencial_qr`; no toca objetos preexistentes. La migración **ya está aplicada en producción** y allí hay cero credenciales al cierre de este postflight, pero eso no autoriza un `DROP TABLE` automático. Antes de cualquier reversión productiva hay que verificar de nuevo el recuento, el alcance, el respaldo y la decisión de Dirección. Si ya existen credenciales reales, `DROP TABLE` destruye el historial: primero se debe preservar la información, retirar la clave del servidor para fallar cerrado y acordar el plan. El respaldo de la sección 13 no tiene una restauración aislada probada. Volver a una versión anterior de la aplicación retira las pantallas y rutas, pero no revierte por sí solo la migración.
 
-## 13. Procedimiento futuro de despliegue (NO ejecutado en esta sesión)
+## 13. Despliegue y postflight de producción — 30/09/2026
 
-**Gate de despliegue.** La migración `20260929224534_ept_64_credencial_qr.sql` **no se aplicó en producción** y las variables `QR_CREDENCIAL_KID_ACTIVA` y `QR_CREDENCIAL_CLAVES` **no están configuradas** en ningún entorno. Ningún paso de esta sección está autorizado ni se ejecutó en la revisión.
+**Veredicto: infraestructura y estructura desplegadas; comportamiento autenticado productivo pendiente.** No se emitió, repuso ni revocó una credencial de producción porque no se autorizó un sujeto de prueba. Los resultados locales de la sección 9 no sustituyen esa comprobación.
 
-**Por qué el orden importa: el auto-despliegue de Vercel.** Integrar la rama en `main` dispara por sí solo un despliegue a Producción. Por eso la base y la clave deben estar listas **antes del merge**; el merge es el despliegue. Orden seguro:
+### 13.1 Identidad y preflight
 
-1. **Verificar el proyecto correcto**: el de producción del colegio (`ycvrpmrogvjnntnoosbh`, según `docs/evidence/EPT-63.md`). Confirmar el ref antes de cualquier comando; no usar el proyecto compartido ni otro.
-2. **Respaldo y preflight** de la base de producción; comparar `supabase migration list` contra el repositorio y confirmar que la última aplicada es `20260929012923`.
-3. **Aplicar la migración una sola vez** (`supabase db push` contra el proyecto verificado). No reaplicar. Es aditiva: el código actual en producción no la usa y sigue funcionando igual.
-4. **Configurar la clave en Vercel** (solo entorno Production; sección 6): `QR_CREDENCIAL_KID_ACTIVA` y `QR_CREDENCIAL_CLAVES`, generada sin mostrarla. Guardar la copia en el gestor de contraseñas del equipo. Vercel aplica las variables **en el próximo despliegue**, que será el del merge.
-5. **Merge del PR** (a cargo de Lucas). Vercel despliega a Producción.
-6. **Postflight**: (a) `supabase migration list`; (b) la autoverificación de la migración corrió sin errores; (c) con una cuenta de Dirección real, emitir la credencial de un alumno de prueba **activo**, verla, descargarla, reponerla y revocarla; (d) comprobar 403 con una cuenta de alumno y de docente; (e) comprobar que sin sesión la API responde 401; (f) confirmar que la verificación devuelve «válida» y luego «revocada».
-7. **Plan ante pérdida de clave**: sección 6.
-8. Recién entonces, cierre de EPT-64 tras revisión, integración y verificación productiva.
-
-**Cómo falla cerrada la aplicación si el código se despliega antes de tiempo.** El código nuevo nunca emite, muestra ni valida nada sin sus dos dependencias; ante su ausencia responde con un error genérico y no expone datos:
-
-| Situación | Efecto | Qué se ve |
+| Control | Evidencia y resultado | Límite |
 |---|---|---|
-| Código desplegado, **sin la clave** (o con una inválida) | Emitir, mostrar el QR, reponer y verificar responden 503 `SERVICIO_NO_DISPONIBLE`; el servidor no imprime la causa ni el nombre de la variable | «Las credenciales no están disponibles en este momento». Probado con un servidor sin variables (sección 9.3) |
-| Código desplegado, **sin la migración** | La tabla y las funciones no existen: cada consulta falla en la base y la API responde 500 `ERROR_INTERNO`, sin detalle técnico. Sin filas no hay credencial ni QR que mostrar | Pantallas de error «No pudimos cargar tu credencial» |
-| Migración aplicada, código anterior | Sin efecto: el código actual no conoce la tabla | Nada cambia |
-| Ambas listas | Funciona | Recorrido del postflight |
+| Código integrado | PR #26 `MERGED`; commit de merge `cbb6f1be9ca5d8e8c640e5d78dc30ecf56661757`. El árbol de `origin/main` contiene la implementación | El `main` local estaba atrasado; la operación usó un worktree limpio en el merge, no ese checkout |
+| Proyecto de base | Supabase `ycvrpmrogvjnntnoosbh`; antes: 24 migraciones remotas alineadas con 24 locales y solo `20260929224534_ept_64_credencial_qr.sql` pendiente | No se aplicaron migraciones ajenas |
+| Simulación SQL | `supabase db push --dry-run --skip-vault` terminó con exit 0 y enumeró únicamente la migración QR | Una simulación no demuestra reversibilidad |
+| Datos antes de migrar | `public.alumnos`: 6 filas; `public.credenciales_qr` todavía no existía | «Tabla inexistente» no equivale a «cero credenciales» en el preflight |
+| Respaldo previo | Cinco archivos `.age` cifrados fuera del repositorio: roles, esquema, datos, esquema y datos del historial de migraciones, en `E:\Escritorio\resguardos\MetodologiaTPI\EPT-64-20260930-pre-migration`. SHA-256 del manifiesto: `2afafb4306c19a6455496600018b0cbc894993de6f2b8115f2c845e6c4b00480`. Identidad de descifrado custodiada y cotejada en Bitwarden | Se verificó la integridad de archivos, **no** una restauración aislada. No incluye archivos físicos de Storage (había 9 objetos); no es un respaldo integral del proyecto |
+| Servicio de respaldos administrados | `backups list` informó WAL-G habilitado, PITR deshabilitado y cero copias visibles | No se presupuso un punto de restauración administrado |
 
-La vista previa de Vercel de una rama con este código se comporta como las dos primeras filas mientras el entorno de esa vista previa no tenga base migrada ni clave. Eso es esperado y no indica un defecto.
+### 13.2 Cambio aplicado y despliegue
+
+| Control | Evidencia y resultado | Límite |
+|---|---|---|
+| Variables de firma | `QR_CREDENCIAL_KID_ACTIVA` y `QR_CREDENCIAL_CLAVES` presentes en Vercel **Production**; clave generada con CSPRNG y copia cotejada desde Bitwarden | Se verificaron nombres y ámbito, **no** se leyeron valores desde Vercel ni se demostró aún su uso en una sesión autenticada |
+| Migración | `supabase db push` terminó con exit 0 y aplicó **una vez** `20260929224534_ept_64_credencial_qr.sql` al proyecto verificado | No volver a ejecutarla como paso manual sin comprobar el ledger |
+| Ledger posterior | 25 migraciones locales y 25 remotas alineadas; `public.alumnos` sigue con 6 filas y `public.credenciales_qr` existe con 0 filas | El recuento no prueba por sí solo permisos de cada actor |
+| Estructura posterior | 10 columnas; 4 FK `RESTRICT`; 4 `CHECK`; índice único parcial para `ACTIVA`; triggers que impiden `DELETE`/`TRUNCATE`; 5 funciones privadas y 5 envoltorios públicos; RLS y 2 políticas; DML directo denegado | Es una inspección estructural y de privilegios, no un ciclo funcional autenticado |
+| Asesores | 33 → 37 avisos: +4 `INFO` por índices nuevos aún sin uso; 9 `WARN`, 4 de seguridad y 0 `ERROR`, sin aumento de advertencias | Los avisos preexistentes no se resolvieron en EPT-64 |
+| Vercel | `dpl_G9CjhYKvW9jFet93M7WF3SVqCqWQ` quedó `READY` y `Current`, asociado a `cbb6f1b`; snapshot con ambos nombres de variables. `/` y `/login`: HTTP 200 | La respuesta pública no acredita que los recorridos autenticados funcionen |
+
+### 13.3 Matriz contrato → prueba → resultado → límite
+
+| Contrato o actor | Prueba local | Prueba productiva | Resultado y límite |
+|---|---|---|---|
+| Firma, formato, rotación y rechazo previo a base | `credenciales-qr-cripto.spec.ts`: 24/24 sobre el código integrado | No se envió un QR válido | Pasa localmente; la clave desplegada no se ejercitó con una sesión |
+| Dirección: emitir, ver, descargar, reponer, revocar, historial y verificar | SQL/RLS y sesión local de la sección 9 | No ejecutada: falta sujeto de prueba autorizado | **Pendiente**; no se alteraron credenciales reales |
+| Alumno propio/ajeno/inactivo, padre vinculado/desvinculado, docente, PERSONAL y roles bloqueados | SQL, API y UI local de la sección 9 | No ejecutada con cuentas autenticadas | Matriz de permisos productiva **pendiente** |
+| Anónimo en API de credenciales y verificación | Casos locales de la sección 9 | GET/POST/verificación sintéticos: HTTP 401, JSON, `Cache-Control: no-store`, sin filtración observada | Denegación anónima comprobada; no cubre autorizaciones por rol |
+| GET no admitido de verificación | Contrato de ruta solo POST | HTTP 405 con caché pública; no se observó dato sensible | Conviene revisar el encabezado de caché de esa respuesta; no equivale a exposición de un QR |
+| Pantalla: tarjeta, PNG, impresión individual, accesibilidad y móvil | UI QR: 72/72 en escritorio, Pixel 5 e iPhone 13; regresiones EPT-63/alumnos/familia/comedor/transporte/deportes: 101/101 | Solo `/` y `/login` públicos: 200; no se abrió una tarjeta autenticada | Impresión individual de dos hijos, PNG, foco/teclado, contraste AA y español cubiertos localmente; sin recorrido visual productivo |
+| SQL/RLS y concurrencia locales de la sección 9 | 147 aserciones SQL y escenarios de concurrencia en la corrida previa al merge | Inspección estructural productiva; sin transacción funcional | No se repitieron SQL/RLS ni E2E autenticados en esta sesión: Docker local no estaba disponible |
+
+### 13.4 Dependencias ausentes: ensayos locales, no estado actual de producción
+
+| Ensayo local | Resultado observado | Alcance |
+|---|---|---|
+| Servidor sin clave QR válida | Las operaciones ensayadas que requieren la clave respondieron 503 `SERVICIO_NO_DISPONIBLE`, sin material de clave en la respuesta ni credenciales persistidas | Confirma falla cerrada en esos casos locales; en producción ambas variables están presentes, pero sus valores no se leyeron |
+| Claves configuradas, pero objetos de la migración eliminados en el stack local | Las operaciones ensayadas que llegaron a consultar la base —lectura, emisión, verificación e historial— respondieron 500 `ERROR_INTERNO` sin detalles técnicos | No significa que **toda** solicitud sin tabla devuelva 500: autenticación, validación o ausencia de clave pueden detenerla antes. La migración sí existe ahora en producción |
+
+**Riesgos conservados:** un QR estático puede copiarse hasta su revocación (aceptado por diseño). El botón individual «Imprimir» aísla la tarjeta elegida; el atajo del navegador `Ctrl+P` con varios hijos puede superponer tarjetas y no está cubierto por esa prueba. No se habilitó EPT-65 ni se probó el escaneo.
+
+**Siguiente acción para cerrar EPT-64:** Dirección debe autorizar una identidad y un alumno de prueba ACTIVO, más cuentas autorizadas para cubrir la matriz de actores. Recién entonces ejecutar en producción emisión → vista/descarga/impresión → verificación válida → reposición → verificación de la anterior como revocada → revocación, y comprobar denegaciones por rol sin exponer QR, datos personales ni claves en la evidencia. Registrar resultados y defectos; Lucas debe integrar el PR de esta evidencia. Solo con el recorrido productivo acreditado y la documentación integrada corresponde evaluar la transición de Jira a «Hecho». Hasta entonces EPT-64 permanece «En curso» y EPT-65 «Por hacer».
+
+**Mejoras operativas separadas del cierre:** la identidad de respaldo y la clave QR quedaron bajo custodia de Lucas y se cotejaron desde Bitwarden; compartir esa custodia requiere una decisión de equipo, no es un requisito nuevo de EPT-64. Una restauración aislada permitiría calificar el respaldo como recuperable; mientras no se pruebe, se lo describe únicamente como cifrado e íntegro.
 
 ## 14. Riesgos y deuda
 
@@ -265,7 +283,7 @@ La vista previa de Vercel de una rama con este código se comporta como las dos 
 - Falta límite de tasa en la verificación (EPT-65).
 - La descarga dibuja la tarjeta en un canvas con la tipografía del sistema; no incluye foto porque el contrato no la prevé.
 - `tests/auth.setup.ts` y `usuarios_permisos_rls.sql` se tocaron (limpieza y batería): cualquier historia futura con una tabla que referencie alumnos deberá hacer lo mismo.
-- Dos avisos del asesor de la base tienen origen en migraciones anteriores y no se tocaron.
+- Los avisos preexistentes del asesor no se resolvieron en EPT-64; el postflight registró 9 `WARN`, 4 de seguridad y cuatro `INFO` nuevos por índices todavía sin uso, sin `ERROR` (sección 13.2).
 
 ## 15. Retrospectiva
 
