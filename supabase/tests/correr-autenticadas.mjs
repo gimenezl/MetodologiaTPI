@@ -13,6 +13,7 @@
  *     node supabase/tests/correr-autenticadas.mjs [argumentos de playwright]
  */
 
+import { randomBytes } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -136,6 +137,13 @@ if (!puertoDeBase || !puertosDelContenedor.split(/\r?\n/u).some((linea) => linea
 
 console.log(`Instancia local verificada: ${local.API_URL} (base: ${contenedorDeBase})`)
 
+// Clave de firma de la credencial QR (EPT-64), EFÍMERA: se genera en cada corrida,
+// vive solo en el entorno de este proceso y de sus hijos, y jamás se imprime ni se
+// guarda. Si el entorno ya trae una, se respeta (por ejemplo, para reproducir una
+// rotación). Nunca es una clave de producción: esta corrida solo apunta a un stack local.
+const kidQr = process.env.QR_CREDENCIAL_KID_ACTIVA ?? 'k1'
+const clavesQr = process.env.QR_CREDENCIAL_CLAVES ?? `${kidQr}:${randomBytes(32).toString('base64url')}`
+
 const resultado = spawnSync('npx', ['playwright', 'test', ...process.argv.slice(2)], {
   stdio: 'inherit',
   shell: process.platform === 'win32',
@@ -152,6 +160,8 @@ const resultado = spawnSync('npx', ['playwright', 'test', ...process.argv.slice(
     // Vínculo presencial de cuentas (EPT-59, D5), solo para esta corrida: el
     // servidor de Next envía el código por el SMTP local de Mailpit y
     // las pruebas lo leen desde su API. Nunca se usa un servidor de correo real.
+    QR_CREDENCIAL_KID_ACTIVA: kidQr,
+    QR_CREDENCIAL_CLAVES: clavesQr,
     EPT_VINCULO_CUENTAS: 'habilitado',
     EPT_SMTP_HOST: '127.0.0.1',
     EPT_SMTP_PORT: process.env.EPT_TEST_SMTP_PORT ?? '54325',

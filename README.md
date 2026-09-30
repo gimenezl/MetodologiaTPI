@@ -34,6 +34,17 @@ EPT_SMTP_REMITENTE="Educar para Transformar <no-responder@tu-dominio>"
 En la pila local, Mailpit recibe los correos por `127.0.0.1:54325` (sin usuario
 ni TLS) y los muestra en `http://127.0.0.1:54324`.
 
+- Obligatoria para la credencial digital QR (EPT-64). Solo del lado del servidor:
+  **nunca** con prefijo `NEXT_PUBLIC_`, nunca en el repositorio ni en la base. Sin
+  ellas —o con una clave corta, repetida o mal codificada— el servidor **falla
+  cerrado**: no emite, no muestra ni verifica ninguna credencial (503). Cómo
+  generar, rotar y recuperar la clave: `docs/evidence/EPT-64.md`.
+
+```bash
+QR_CREDENCIAL_KID_ACTIVA=k1                   # clave con la que se FIRMAN las credenciales nuevas
+QR_CREDENCIAL_CLAVES=k1:<base64url de >=32 bytes aleatorios>[,k2:<...>]
+```
+
 ## Desarrollo
 
 ```bash

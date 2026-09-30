@@ -7,7 +7,7 @@ import {
   House, Users, CalendarCheck, Pulse, FileText,
   SignOut, List, X, Briefcase, ChatCenteredText, UserPlus, Lock,
   Newspaper, UserCircle, Chalkboard, GraduationCap, Student, IdentificationCard,
-  BookOpen, ForkKnife, SoccerBall, Clock, ChalkboardTeacher, ListChecks, Bus, ChartBar
+  BookOpen, ForkKnife, SoccerBall, Clock, ChalkboardTeacher, ListChecks, Bus, ChartBar, QrCode
 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
@@ -30,6 +30,10 @@ const navItems: NavItem[] = [
   { href: '/dashboard/profesores', label: 'Profesores', icon: ChalkboardTeacher, roles: ['DIRECTOR'] },
   { href: '/dashboard/mi-legajo', label: 'Mi legajo', icon: IdentificationCard, roles: ['ESTUDIANTE'] },
   { href: '/dashboard/hijos', label: 'Mis hijos', icon: Student, roles: ['PADRE'] },
+  // Credencial digital QR (EPT-64): cada rol ve solo su propia entrada.
+  { href: '/dashboard/mi-credencial', label: 'Mi credencial', icon: QrCode, roles: ['ESTUDIANTE'] },
+  { href: '/dashboard/credenciales-hijos', label: 'Credenciales de mis hijos', icon: QrCode, roles: ['PADRE'] },
+  { href: '/dashboard/credenciales', label: 'Credenciales', icon: QrCode, roles: ['DIRECTOR'] },
   { href: '/dashboard/mis-asignaciones', label: 'Mis asignaciones', icon: ListChecks, roles: ['DOCENTE'] },
   { href: '/dashboard/cursos', label: 'Cursos', icon: Chalkboard, roles: ['DIRECTOR'] },
   { href: '/dashboard/niveles', label: 'Niveles', icon: GraduationCap, roles: ['DIRECTOR'] },

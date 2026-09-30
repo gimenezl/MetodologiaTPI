@@ -241,3 +241,30 @@
 }
 
 .btn:active { transform: scale(0.97); }
+
+/* ---- Impresión de la credencial QR (EPT-64) ----
+   Al imprimir una página que contiene la tarjeta (.imprimible) solo se ve la
+   tarjeta: se oculta el resto sin quitarlo del DOM y se fuerza el color de
+   fondo para que el QR conserve el contraste aunque el navegador ahorre tinta.
+   La regla está acotada con :has(): las demás páginas imprimibles (por
+   ejemplo los reportes oficiales) no se ven afectadas. */
+@media print {
+  body:has(.imprimible) * { visibility: hidden !important; }
+  body:has(.imprimible) .imprimible,
+  body:has(.imprimible) .imprimible * { visibility: visible !important; }
+  .imprimible {
+    position: absolute !important;
+    left: 0; top: 0;
+    margin: 0 !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    break-inside: avoid;
+  }
+  /* Varias tarjetas en la misma página (un padre con varios hijos): el botón «Imprimir»
+     marca la suya con data-imprimiendo y solo esa se imprime; sin la marca, ninguna
+     tarjeta se oculta. */
+  body:has(.imprimible[data-imprimiendo]) .imprimible:not([data-imprimiendo]) {
+    display: none !important;
+  }
+}
