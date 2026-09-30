@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { decodeQR } from '@paulmillr/qr/decode.js'
+import { decodeQR } from 'qr/decode.js'
 
 /**
  * Herramientas de las pruebas autenticadas de la credencial QR (EPT-64).

@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
-import { decodeQR } from '@paulmillr/qr/decode.js'
+import { decodeQR } from 'qr/decode.js'
 import {
   cargarClavesQr,
   ErrorClaveNoDisponible,

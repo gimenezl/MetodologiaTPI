@@ -1,4 +1,4 @@
-import { encodeQR } from '@paulmillr/qr'
+import { encodeQR } from 'qr'
 
 /**
  * Imagen del QR (EPT-64, RF20).
@@ -6,8 +6,9 @@ import { encodeQR } from '@paulmillr/qr'
  * Generar la imagen NO es validar la credencial: acá no se firma ni se verifica
  * nada, solo se dibuja el texto que ya construyó `construirPayload`.
  *
- * Librería: `@paulmillr/qr` 0.3.0 (MIT o Apache-2.0, sin dependencias, con
- * tipos propios, mantenida; sin advisories). Se usa únicamente la salida `raw`
+ * Librería: `qr` 0.7.2 (MIT o Apache-2.0, sin dependencias, con tipos
+ * propios). Es la sucesora del paquete `@paulmillr/qr`, que su autor deprecó
+ * («para recibir actualizaciones de seguridad, usar `qr`»). Se usa únicamente la salida `raw`
  * (matriz booleana) y el SVG lo arma este módulo, para controlar la zona
  * silenciosa, el contraste y el peso: la salida SVG de la librería dibuja un
  * `<rect>` por módulo (≈29 KB) y no incluye fondo.
