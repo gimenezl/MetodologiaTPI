@@ -159,7 +159,7 @@ Todo se ejecutó sobre el SHA `cd54c21` contra el stack local aislado `ept64` (o
 | `credenciales_qr_rls.sql` | 0 | **147** comprobaciones OK (137 originales + 10 de la regla del alumno inactivo): estructura, emisión, lectura por actor y por fila, escritura directa (incluido el propietario), reposición, revocación, validez, historial, curso/DNI/legajo y reversión |
 | `credenciales_qr_concurrencia.mjs` | 0 | cinco escenarios con conexiones `psql` independientes y `pg_blocking_pids`: doble emisión, doble reposición, reposición contra revocación (dos órdenes), emisión y reposición contra inactivar y reactivar (sin deadlock; con el alumno inactivo se rechazan con `P5627` y revocar sigue permitido), y ráfagas de 6 emisiones y 6 reposiciones. Siempre exactamente una ACTIVA |
 | `usuarios_permisos_rls.sql` (EPT-59) | 0 | 78 envoltorios públicos cubiertos; se ejecuta como `supabase_admin` |
-| Resto de las pruebas `*_rls.sql` y `usuarios_alta_atomica.sql` (17 archivos) | 0 | alumnos, vínculo familiar, matrícula parental, comedor, transporte, deportes, horarios, materias, niveles, cursos, profesores, inscripciones y reportes |
+| Resto de las pruebas `*_rls.sql` y `usuarios_alta_atomica.sql` (16 archivos; con las dos filas anteriores son 18) | 0 | alumnos, vínculo familiar, matrícula parental, comedor, transporte, deportes, horarios, materias, niveles, cursos, profesores, inscripciones y reportes |
 | Las otras 11 pruebas `*_concurrencia.mjs` | 0 | las mismas historias más usuarios y permisos |
 
 **La regresión falla antes y pasa después.** Con la migración anterior (`5bef912`), la comprobación `[B21]` del SQL falla: la base emitía la credencial a un alumno inactivo. Con la migración corregida pasa.
