@@ -61,6 +61,14 @@ export function AccionesCredencial({ tarjeta }: { tarjeta: TarjetaCredencial }) 
   // Safari no da foco a un botón al hacer clic: `document.activeElement` sería <body> al
   // abrir el diálogo. Se recuerda el disparador para devolverle el foco al cerrar.
   const disparador = useRef<HTMLElement | null>(null)
+  // Espejo síncrono de `enviando`: el diálogo guarda `onCerrar` en un efecto y, si Escape llega
+  // entre el render y ese efecto, vería un valor viejo. La referencia nunca está desactualizada.
+  const enviandoRef = useRef(false)
+
+  function marcarEnvio(valor: boolean) {
+    enviandoRef.current = valor
+    setEnviando(valor)
+  }
 
   const alumnoId = tarjeta.alumno.id
   const credencialId = tarjeta.credencial && tarjeta.estado !== 'REVOCADA' ? tarjeta.credencial.id : null
@@ -79,11 +87,11 @@ export function AccionesCredencial({ tarjeta }: { tarjeta: TarjetaCredencial }) 
   }
 
   async function emitir() {
-    setEnviando(true)
+    marcarEnvio(true)
     setError(null)
     setAviso(null)
     const resultado = await emitirCredencialRemota(alumnoId)
-    setEnviando(false)
+    marcarEnvio(false)
     if (!resultado.ok) return tratarFallo(resultado)
     refrescar('Credencial emitida.')
   }
@@ -98,6 +106,7 @@ export function AccionesCredencial({ tarjeta }: { tarjeta: TarjetaCredencial }) 
 
   /** Cierra sin operar y devuelve el foco al botón que abrió el diálogo. */
   function cerrarSinOperar() {
+    if (enviandoRef.current) return
     setAccion(null)
     const origen = disparador.current
     setTimeout(() => origen?.focus(), 0)
@@ -112,13 +121,13 @@ export function AccionesCredencial({ tarjeta }: { tarjeta: TarjetaCredencial }) 
       areaMotivo.current?.focus()
       return
     }
-    setEnviando(true)
+    marcarEnvio(true)
     setError(null)
     const resultado =
       accion === 'reponer'
         ? await reponerCredencialRemota(credencialId, texto)
         : await revocarCredencialRemota(credencialId, texto)
-    setEnviando(false)
+    marcarEnvio(false)
     if (!resultado.ok) {
       tratarFallo(resultado)
       return
@@ -174,7 +183,7 @@ export function AccionesCredencial({ tarjeta }: { tarjeta: TarjetaCredencial }) 
           titulo={CONFIGURACION[accion].titulo}
           descripcion={CONFIGURACION[accion].descripcion}
           selectorFocoInicial="#motivo-credencial"
-          onCerrar={() => (ocupado ? undefined : cerrarSinOperar())}
+          onCerrar={cerrarSinOperar}
         >
           <form onSubmit={confirmar} noValidate className="space-y-4">
             <div className="flex flex-col gap-1.5">
