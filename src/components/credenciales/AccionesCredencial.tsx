@@ -73,6 +73,9 @@ export function AccionesCredencial({ tarjeta }: { tarjeta: TarjetaCredencial }) 
   const alumnoId = tarjeta.alumno.id
   const credencialId = tarjeta.credencial && tarjeta.estado !== 'REVOCADA' ? tarjeta.credencial.id : null
   const ocupado = enviando || pendiente
+  // Espejo de la regla de la base (P5627): con el alumno inactivo no se emite ni se repone.
+  // Revocar sigue disponible. La base decide; esto solo evita ofrecer lo que falla.
+  const emisible = tarjeta.alumno.estado === 'ACTIVO'
 
   function refrescar(texto: string) {
     setAviso(texto)
@@ -142,22 +145,34 @@ export function AccionesCredencial({ tarjeta }: { tarjeta: TarjetaCredencial }) 
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
         {credencialId ? (
           <>
-            <Button type="button" variant="outline" className="min-h-11" onClick={(evento) => abrir('reponer', evento)} disabled={ocupado}>
-              <ArrowsClockwise size={18} weight="bold" aria-hidden="true" />
-              Reponer credencial
-            </Button>
+            {emisible && (
+              <Button type="button" variant="outline" className="min-h-11" onClick={(evento) => abrir('reponer', evento)} disabled={ocupado}>
+                <ArrowsClockwise size={18} weight="bold" aria-hidden="true" />
+                Reponer credencial
+              </Button>
+            )}
             <Button type="button" variant="peligro" className="min-h-11" onClick={(evento) => abrir('revocar', evento)} disabled={ocupado}>
               <Prohibit size={18} weight="bold" aria-hidden="true" />
               Revocar credencial
             </Button>
           </>
         ) : (
-          <Button type="button" variant="primary" className="min-h-11" onClick={emitir} loading={ocupado}>
-            <QrCode size={18} weight="bold" aria-hidden="true" />
-            {tarjeta.estado === 'REVOCADA' ? 'Emitir credencial nueva' : 'Emitir credencial'}
-          </Button>
+          emisible && (
+            <Button type="button" variant="primary" className="min-h-11" onClick={emitir} loading={ocupado}>
+              <QrCode size={18} weight="bold" aria-hidden="true" />
+              {tarjeta.estado === 'REVOCADA' ? 'Emitir credencial nueva' : 'Emitir credencial'}
+            </Button>
+          )
         )}
       </div>
+
+      {!emisible && (
+        <p data-testid="credencial-no-emisible" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900">
+          {credencialId
+            ? 'El alumno está inactivo: no se puede reponer su credencial. Reactivá al alumno primero; mientras tanto solo podés revocar la vigente.'
+            : 'El alumno está inactivo: no se puede emitir su credencial. Reactivá al alumno primero.'}
+        </p>
+      )}
 
       <div aria-live="polite" className="min-h-5 text-center text-sm">
         {aviso && !accion && (

@@ -305,6 +305,55 @@ test.describe('DIRECTOR autenticado', () => {
     expect(estadoAlumno(alumno)).toBe('ACTIVO')
   })
 
+  test('un alumno inactivo no recibe ni repone credencial, pero Dirección sí puede revocarla', async ({ page, request }) => {
+    const alumno = beto()
+    limpiarCredenciales([alumno])
+    const curso = sql(`SELECT curso_id FROM public.matriculas WHERE alumno_id = '${alumno}' ORDER BY fecha_inicio DESC LIMIT 1;`)
+    const creada = await request.post(`${RUTA}/${alumno}`)
+    expect(creada.status()).toBe(201)
+    const id = ((await json(creada)).credencial as { id: string }).id
+
+    try {
+      expect((await request.patch(`/api/alumnos/${alumno}`, { data: { accion: 'inactivar' } })).status()).toBe(200)
+
+      // Reponer: rechazado y la vigente no se toca (la transacción entera se revierte).
+      await exigirError(
+        await request.post(`${RUTA}/credenciales/${id}/reposicion`, { data: { motivo: 'Extravío de la tarjeta' } }),
+        409, 'ALUMNO_INACTIVO', 'reponer con el alumno inactivo'
+      )
+      expect(contarCredenciales(alumno)).toBe(1)
+      expect(contarCredenciales(alumno, 'ACTIVA')).toBe(1)
+
+      // La pantalla no ofrece lo que la base rechaza: solo queda Revocar, con su explicación.
+      await page.goto(`/dashboard/credenciales/${alumno}`)
+      await expect(page.getByRole('button', { name: 'Revocar credencial' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Reponer credencial' })).toHaveCount(0)
+      await expect(page.getByTestId('credencial-no-emisible')).toContainText('no se puede reponer')
+
+      // Revocar por seguridad sí se puede. Sin ACTIVA, emitir sigue rechazado y no deja filas.
+      expect((await request.post(`${RUTA}/credenciales/${id}/revocacion`, { data: { motivo: 'Baja por inactivación' } })).status()).toBe(200)
+      await exigirError(await request.post(`${RUTA}/${alumno}`), 409, 'ALUMNO_INACTIVO', 'emitir con el alumno inactivo')
+      expect(contarCredenciales(alumno, 'ACTIVA')).toBe(0)
+      expect(contarCredenciales(alumno)).toBe(1)
+
+      await page.goto(`/dashboard/credenciales/${alumno}`)
+      await expect(page.getByRole('button', { name: /Emitir credencial/ })).toHaveCount(0)
+      await expect(page.getByTestId('credencial-no-emisible')).toContainText('no se puede emitir')
+
+      // Reactivado, se emite una credencial nueva (otra fila): la revocada no revive.
+      expect((await request.patch(`/api/alumnos/${alumno}`, { data: { accion: 'reactivar', curso_id: curso } })).status()).toBe(200)
+      const nueva = await request.post(`${RUTA}/${alumno}`)
+      expect(nueva.status()).toBe(201)
+      expect(((await json(nueva)).credencial as { id: string }).id).not.toBe(id)
+    } finally {
+      if (estadoAlumno(alumno) === 'INACTIVO') {
+        await request.patch(`/api/alumnos/${alumno}`, { data: { accion: 'reactivar', curso_id: curso } })
+      }
+      limpiarCredenciales([alumno])
+    }
+    expect(estadoAlumno(alumno)).toBe('ACTIVO')
+  })
+
   test('cambiar curso, DNI o legajo no modifica el payload ni exige reemisión', async ({ request }) => {
     const alumno = beto()
     limpiarCredenciales([alumno])

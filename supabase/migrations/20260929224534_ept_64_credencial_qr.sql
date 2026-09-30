@@ -10,9 +10,12 @@
 --   1. Cada alumno tiene COMO MÁXIMO una credencial ACTIVA (índice único
 --      parcial). Cada emisión es una fila histórica propia.
 --   2. Reponer revoca la vigente y emite otra en UNA sola transacción. Una
---      credencial revocada no vuelve a valer ni se borra: la tabla es
---      append-only (sin DELETE, TRUNCATE ni UPDATE arbitrario, ni siquiera
---      para el propietario) y la única mutación admitida es ACTIVA → REVOCADA.
+--      credencial revocada no vuelve a valer ni se borra. Garantía real del
+--      historial: cada emisión es una fila que nunca se elimina (sin DELETE ni
+--      TRUNCATE) y que solo admite UNA modificación, ACTIVA → REVOCADA, con el
+--      resto de las columnas idénticas; ni siquiera el propietario puede
+--      reescribirla mientras el trigger esté activo. La fila se actualiza al
+--      revocarla, por eso NO es una tabla de «solo inserción».
 --   3. Solo Dirección habilitada emite, repone, revoca y consulta el historial
 --      completo. El alumno lee las suyas y el padre las de hijos actualmente
 --      vinculados; docente, PERSONAL, anónimo, bloqueados, sin perfil y padres
@@ -76,7 +79,8 @@
 --   P5620  el alumno no existe                P5621  el alumno ya tiene credencial activa
 --   P5622  la credencial no existe            P5623  la credencial ya no está vigente
 --   P5624  motivo inválido                    P5625  identificador de clave inválido
---   P5626  el historial es de solo agregado
+--   P5626  operación no permitida sobre el historial (borrar, vaciar o modificar)
+--   P5627  el alumno está inactivo: no se emite ni se repone (sí se revoca)
 
 
 -- ================================================================
@@ -117,7 +121,7 @@ CREATE TABLE public.credenciales_qr (
 );
 
 COMMENT ON TABLE public.credenciales_qr IS
-    'Credenciales digitales QR de los alumnos (RF20). Append-only: cada emisión es una fila; la única mutación admitida es ACTIVA → REVOCADA, por una operación autorizada. No guarda el payload, el MAC ni la clave de firma: el QR solo se reconstruye en el servidor con la clave. Máximo una ACTIVA por alumno.';
+    'Credenciales digitales QR de los alumnos (RF20). Historial inmutable: cada emisión es una fila que no se borra y la única modificación admitida sobre ella es ACTIVA → REVOCADA, por una operación autorizada. No guarda el payload, el MAC ni la clave de firma: el QR solo se reconstruye en el servidor con la clave. Máximo una ACTIVA por alumno.';
 COMMENT ON COLUMN public.credenciales_qr.id IS
     'Identificador aleatorio (UUID v4) que viaja en el QR junto con la versión, el kid y la firma. No es un secreto: la firma HMAC lo es.';
 COMMENT ON COLUMN public.credenciales_qr.clave_kid IS
@@ -165,7 +169,7 @@ BEGIN
     IF TG_OP = 'DELETE' THEN
         RAISE EXCEPTION USING
             ERRCODE = 'P5626',
-            MESSAGE = 'El historial de credenciales es de solo agregado: no se elimina.';
+            MESSAGE = 'Las credenciales no se eliminan: el historial se conserva.';
     END IF;
 
     IF TG_OP = 'INSERT' THEN
@@ -217,7 +221,7 @@ AS $$
 BEGIN
     RAISE EXCEPTION USING
         ERRCODE = 'P5626',
-        MESSAGE = 'El historial de credenciales es de solo agregado: no puede vaciarse.';
+        MESSAGE = 'El historial de credenciales no puede vaciarse.';
 END;
 $$;
 
@@ -274,6 +278,14 @@ $$;
 REVOKE ALL ON FUNCTION app_private.validar_datos_credencial_qr(TEXT, TEXT, BOOLEAN)
     FROM PUBLIC, anon, authenticated, service_role;
 
+-- Precondición de EMITIR y REPONER: el alumno debe estar ACTIVO. La validez
+-- exige alumno ACTIVO y la tarjeta muestra el legajo; desde 008 un alumno ACTIVO
+-- siempre tiene legajo (P5512, restricción diferida), así que esa sola condición
+-- garantiza ambas cosas y emitir a un inactivo generaría una credencial inútil.
+-- NO se aplica a revocar: Dirección puede, y por seguridad debe poder, revocar la
+-- credencial de un alumno inactivo. La comprobación se hace con la fila de
+-- `alumnos` ya bloqueada, así el estado no cambia entre leerlo y escribir.
+
 -- ----------------------------------------------------------------
 -- 3.1 Emitir
 -- ----------------------------------------------------------------
@@ -288,7 +300,8 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-    v_credencial public.credenciales_qr;
+    v_credencial     public.credenciales_qr;
+    v_estado_alumno  public.estado_alumno;
 BEGIN
     IF (SELECT auth.uid()) IS NULL THEN
         RAISE EXCEPTION USING ERRCODE = 'P5505', MESSAGE = 'Se requiere una identidad autenticada.';
@@ -308,7 +321,7 @@ BEGIN
 
     -- Primero el alumno (orden del dominio). Serializa con otra emisión, con una
     -- reposición y con la inactivación o reactivación del mismo alumno.
-    PERFORM 1
+    SELECT a.estado INTO v_estado_alumno
     FROM public.alumnos a
     WHERE a.perfil_id = p_alumno_id
     FOR NO KEY UPDATE;
@@ -324,6 +337,12 @@ BEGIN
         RAISE EXCEPTION USING
             ERRCODE = 'P5621',
             MESSAGE = 'El alumno ya tiene una credencial activa. Para cambiarla, reponela o revocala.';
+    END IF;
+
+    IF v_estado_alumno IS DISTINCT FROM 'ACTIVO' THEN
+        RAISE EXCEPTION USING
+            ERRCODE = 'P5627',
+            MESSAGE = 'El alumno está inactivo: no se emite ni se repone su credencial. Reactivá al alumno primero.';
     END IF;
 
     INSERT INTO public.credenciales_qr (alumno_id, clave_kid, emitida_por)
@@ -352,10 +371,11 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-    v_alumno_id  UUID;
-    v_estado     public.estado_credencial_qr;
-    v_motivo     TEXT;
-    v_nueva      public.credenciales_qr;
+    v_alumno_id      UUID;
+    v_estado         public.estado_credencial_qr;
+    v_estado_alumno  public.estado_alumno;
+    v_motivo         TEXT;
+    v_nueva          public.credenciales_qr;
 BEGIN
     IF (SELECT auth.uid()) IS NULL THEN
         RAISE EXCEPTION USING ERRCODE = 'P5505', MESSAGE = 'Se requiere una identidad autenticada.';
@@ -383,7 +403,10 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE = 'P5622', MESSAGE = 'La credencial solicitada no existe.';
     END IF;
 
-    PERFORM 1 FROM public.alumnos a WHERE a.perfil_id = v_alumno_id FOR NO KEY UPDATE;
+    SELECT a.estado INTO v_estado_alumno
+    FROM public.alumnos a
+    WHERE a.perfil_id = v_alumno_id
+    FOR NO KEY UPDATE;
 
     -- El estado se lee DESPUÉS de esperar: refleja una revocación o reposición
     -- que confirmó mientras tanto.
@@ -396,6 +419,14 @@ BEGIN
         RAISE EXCEPTION USING
             ERRCODE = 'P5623',
             MESSAGE = 'La credencial ya no está vigente: actualizá la pantalla para ver su estado actual.';
+    END IF;
+
+    -- Antes de revocar nada: con el alumno inactivo la vigente se conserva (para
+    -- quitarla, Dirección la revoca).
+    IF v_estado_alumno IS DISTINCT FROM 'ACTIVO' THEN
+        RAISE EXCEPTION USING
+            ERRCODE = 'P5627',
+            MESSAGE = 'El alumno está inactivo: no se emite ni se repone su credencial. Reactivá al alumno primero.';
     END IF;
 
     UPDATE public.credenciales_qr

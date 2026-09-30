@@ -14,6 +14,7 @@ export type CodigoCredencial =
   | 'CREDENCIAL_NO_ENCONTRADA'
   | 'CREDENCIAL_YA_ACTIVA'
   | 'CREDENCIAL_NO_VIGENTE'
+  | 'ALUMNO_INACTIVO'
   | 'MOTIVO_INVALIDO'
   | 'IDENTIFICADOR_INVALIDO'
   | 'CUERPO_INVALIDO'
@@ -34,6 +35,10 @@ export const CATALOGO_CREDENCIALES: Record<CodigoCredencial, { estado: number; m
   CREDENCIAL_NO_VIGENTE: {
     estado: 409,
     mensaje: 'La credencial ya no está vigente. Actualizá la pantalla para ver su estado actual.',
+  },
+  ALUMNO_INACTIVO: {
+    estado: 409,
+    mensaje: 'El alumno está inactivo: no se emite ni se repone su credencial. Reactivá al alumno primero.',
   },
   MOTIVO_INVALIDO: { estado: 422, mensaje: 'El motivo debe tener entre 3 y 200 caracteres.' },
   IDENTIFICADOR_INVALIDO: { estado: 400, mensaje: 'El identificador indicado no es válido.' },
@@ -60,6 +65,7 @@ const CODIGO_POR_SQLSTATE: Record<string, CodigoCredencial> = {
   P5624: 'MOTIVO_INVALIDO',
   // La base rechazó el `kid` que envió el servidor: es un problema de configuración, no del usuario.
   P5625: 'SERVICIO_NO_DISPONIBLE',
+  P5627: 'ALUMNO_INACTIVO',
 }
 
 export function codigoDesdeSqlstate(sqlstate: string | null | undefined): CodigoCredencial {

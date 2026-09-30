@@ -195,7 +195,8 @@ WITH base_libre AS (
         ('08', 'ESTUDIANTE', 'Dos',       'Alumno B',         'LEG-EPT64-0008', 8, 'HABILITADO'),
         ('09', 'ESTUDIANTE', 'Tres',      'Alumno Bloqueado', 'LEG-EPT64-0009', 9, 'BLOQUEADO'),
         ('0a', 'ESTUDIANTE', 'Cuatro',    'Alumna Inactiva',  'LEG-EPT64-000A', 10, 'HABILITADO'),
-        ('0b', 'PADRE',      'Pedro',     'Padre Bloqueado',  NULL,             11, 'BLOQUEADO')
+        ('0b', 'PADRE',      'Pedro',     'Padre Bloqueado',  NULL,             11, 'BLOQUEADO'),
+        ('0e', 'ESTUDIANTE', 'Seis',      'Alumna Ciclo',     'LEG-EPT64-000E', 12, 'HABILITADO')
 )
 INSERT INTO public.perfiles (id, user_id, rol_id, nombre, apellido, dni, legajo_nro, estado_acceso)
 SELECT pg_temp.u(i.sufijo), pg_temp.u(i.sufijo), r.id, i.nombre, i.apellido,
@@ -213,11 +214,12 @@ VALUES (pg_temp.u('c1'), (SELECT id FROM public.niveles WHERE nombre = 'PRIMARIO
 INSERT INTO public.matriculas (alumno_id, curso_id)
 VALUES (pg_temp.u('07'), pg_temp.u('c1')),
        (pg_temp.u('08'), pg_temp.u('c1')),
-       (pg_temp.u('09'), pg_temp.u('c1'));
+       (pg_temp.u('09'), pg_temp.u('c1')),
+       (pg_temp.u('0e'), pg_temp.u('c1'));
 
 -- La alumna 0a queda INACTIVA (sin matrícula), como nace.
 UPDATE public.alumnos SET estado = 'ACTIVO'
-WHERE perfil_id IN (pg_temp.u('07'), pg_temp.u('08'), pg_temp.u('09'));
+WHERE perfil_id IN (pg_temp.u('07'), pg_temp.u('08'), pg_temp.u('09'), pg_temp.u('0e'));
 
 SET CONSTRAINTS ALL IMMEDIATE;
 SET CONSTRAINTS ALL DEFERRED;
@@ -371,17 +373,24 @@ SELECT pg_temp.esperar(pg_temp.dir('SELECT public.emitir_credencial_qr(NULL, ''k
 SELECT pg_temp.esperar(pg_temp.dir(pg_catalog.format('SELECT public.emitir_credencial_qr(%L, ''k1'')', pg_temp.u('03'))),
     'P5620', '[B19] un perfil que no es alumno no recibe credencial');
 
--- B20/B21. Se emiten las demás credenciales del escenario (incluida la de un
--- alumno con acceso bloqueado y la de la alumna inactiva).
+-- B20. Se emiten las demás credenciales del escenario (incluida la de un alumno
+-- con acceso bloqueado, que sí es emisible: el bloqueo se evalúa al verificar).
 SELECT pg_temp.guardar('cred_08', pg_temp.valor(pg_temp.dir(pg_catalog.format(
     'SELECT (public.emitir_credencial_qr(%L, ''k1'')).id::TEXT', pg_temp.u('08')))));
 SELECT pg_temp.guardar('cred_09', pg_temp.valor(pg_temp.dir(pg_catalog.format(
     'SELECT (public.emitir_credencial_qr(%L, ''k1'')).id::TEXT', pg_temp.u('09')))));
-SELECT pg_temp.guardar('cred_0a', pg_temp.valor(pg_temp.dir(pg_catalog.format(
-    'SELECT (public.emitir_credencial_qr(%L, ''k1'')).id::TEXT', pg_temp.u('0a')))));
+SELECT pg_temp.guardar('cred_0e', pg_temp.valor(pg_temp.dir(pg_catalog.format(
+    'SELECT (public.emitir_credencial_qr(%L, ''k1'')).id::TEXT', pg_temp.u('0e')))));
 SELECT pg_temp.exigir(pg_temp.activas(pg_temp.u('08')) = 1 AND pg_temp.activas(pg_temp.u('09')) = 1
-                      AND pg_temp.activas(pg_temp.u('0a')) = 1,
-    '[B20] emisión para alumnos con datos distintos (incluye bloqueado e inactivo)');
+                      AND pg_temp.activas(pg_temp.u('0e')) = 1,
+    '[B20] emisión para alumnos activos con legajo (incluye uno con acceso bloqueado)');
+
+-- B21. Contrato: no se emite a un alumno INACTIVO (la alumna 0a nace inactiva).
+SELECT pg_temp.esperar(pg_temp.dir(pg_catalog.format('SELECT public.emitir_credencial_qr(%L, ''k1'')', pg_temp.u('0a'))),
+    'P5627', '[B21] un alumno inactivo no recibe credencial (P5627)');
+SELECT pg_temp.exigir(pg_temp.activas(pg_temp.u('0a')) = 0
+    AND (SELECT pg_catalog.count(*) FROM public.credenciales_qr WHERE alumno_id = pg_temp.u('0a')) = 0,
+    '[B22] el rechazo no dejó ninguna fila');
 
 
 -- ================================================================
@@ -642,9 +651,34 @@ SELECT pg_temp.esperar_valor(pg_temp.validez(pg_temp.fx('cred_07_b')::UUID), 'fa
 SELECT pg_temp.esperar_valor(pg_temp.validez(pg_temp.fx('cred_07_a')::UUID), 'false',
     '[F24] la primera revocada tampoco vale');
 
--- F25. Alumno que nace inactivo: la credencial existe pero no vale hasta que se lo active.
-SELECT pg_temp.esperar_valor(pg_temp.validez(pg_temp.fx('cred_0a')::UUID), 'false',
+-- F25. Un alumno que se inactiva con la credencial ACTIVA: la credencial sobrevive pero no vale.
+SELECT pg_temp.esperar(pg_temp.dir(pg_catalog.format('SELECT public.inactivar_alumno(%L)', pg_temp.u('0e'))),
+    'OK', '[F25a] se inactiva a la alumna del ciclo');
+SELECT pg_temp.esperar_valor(pg_temp.validez(pg_temp.fx('cred_0e')::UUID), 'false',
     '[F25] credencial de un alumno INACTIVO → no válida');
+
+-- F28. Contrato: con el alumno inactivo NO se repone (y la vigente no se toca), pero SÍ se revoca.
+SELECT pg_temp.esperar(pg_temp.dir(pg_catalog.format(
+    'SELECT public.reponer_credencial_qr(%L, ''k1'', ''Reposición de prueba'')', pg_temp.fx('cred_0e'))),
+    'P5627', '[F28] reponer con el alumno inactivo → P5627');
+SELECT pg_temp.exigir(pg_temp.activas(pg_temp.u('0e')) = 1
+    AND (SELECT pg_catalog.count(*) FROM public.credenciales_qr WHERE alumno_id = pg_temp.u('0e')) = 1
+    AND (SELECT c.estado = 'ACTIVA' FROM public.credenciales_qr c WHERE c.id = pg_temp.fx('cred_0e')::UUID),
+    '[F29] el rechazo no revocó la vigente ni creó otra (transacción entera revertida)');
+SELECT pg_temp.esperar(pg_temp.dir(pg_catalog.format(
+    'SELECT public.revocar_credencial_qr(%L, ''Baja por inactivación'')', pg_temp.fx('cred_0e'))),
+    'OK', '[F30] Dirección SÍ puede revocar la credencial de un alumno inactivo');
+SELECT pg_temp.esperar(pg_temp.dir(pg_catalog.format('SELECT public.emitir_credencial_qr(%L, ''k1'')', pg_temp.u('0e'))),
+    'P5627', '[F31] sin ACTIVA y con el alumno inactivo, emitir → P5627');
+SELECT pg_temp.esperar(pg_temp.dir(pg_catalog.format('SELECT public.reactivar_alumno(%L, %L)', pg_temp.u('0e'), pg_temp.u('c1'))),
+    'OK', '[F32] se reactiva a la alumna del ciclo');
+SELECT pg_temp.guardar('cred_0e_b', pg_temp.valor(pg_temp.dir(pg_catalog.format(
+    'SELECT (public.emitir_credencial_qr(%L, ''k1'')).id::TEXT', pg_temp.u('0e')))));
+SELECT pg_temp.exigir(pg_temp.activas(pg_temp.u('0e')) = 1
+    AND pg_temp.fx('cred_0e_b') <> pg_temp.fx('cred_0e'),
+    '[F33] reactivado, se emite una credencial nueva; la revocada no revive');
+SELECT pg_temp.esperar_valor(pg_temp.validez(pg_temp.fx('cred_0e')::UUID), 'false',
+    '[F34] la revocada sigue sin valer tras reactivar');
 SELECT pg_temp.esperar_valor(pg_temp.validez(pg_temp.fx('cred_09')::UUID), 'false',
     '[F26] credencial de un alumno con acceso BLOQUEADO → no válida');
 
