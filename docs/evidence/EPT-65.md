@@ -1,6 +1,8 @@
 # EPT-65 — RF21: Registrar accesos con QR
 
-**Estado al 01/10/2026: candidato local COMPLETO y verificado (`ready_for_review`), pero NO publicado y NO desplegable todavía.** Falta la decisión de Lucas sobre la estrategia de PR y su autorización para publicar; antes de desplegar hay que confirmar el ledger de producción y las fechas de retención contra el calendario oficial. El contrato aprobado está implementado y probado en las tres fronteras (base, servidor y navegador) sobre un stack local descartable. No se hizo push, PR, merge, despliegue ni cambio alguno en producción, y EPT-65 **no se transicionó** en Jira.
+**Estado actualizado el 01/10/2026 (postflight, sección 22): PR #30 integrado, código desplegado en Vercel Production y las dos migraciones aplicadas y verificadas en la base de producción; el recorrido funcional productivo (REGISTRADO, YA_REGISTRADO y anulación) NO está acreditado y EPT-65 permanece «En curso» en Jira.** Las secciones 1 a 21 conservan el estado del candidato local previo al merge (verificado sobre `6dec72a`) y no deben leerse como estado de producción; la sección 22 registra lo observado en producción.
+
+*Texto histórico previo al merge:* candidato local COMPLETO y verificado (`ready_for_review`), no publicado ni desplegable en ese momento. El contrato aprobado está implementado y probado en las tres fronteras (base, servidor y navegador) sobre un stack local descartable.
 
 **Cerrado:**
 
@@ -25,7 +27,7 @@
 | Commits | Ver la lista completa y verificada en la sección 12.1 (el informe inicial decía «9»; eran 11 y hoy son más, todos convencionales y sin atribución de IA) |
 | Código verificado | `6dec72a` (HEAD de código y pruebas de esta ronda); la E2E completa y los demás controles se asocian a ese SHA en la sección 12. Los commits de documentación posteriores no cambian código |
 | Jira | EPT-65 «Por hacer», asignada a Lucas Gimenez, hija de EPT-7, sin subtareas (consultado en vivo al comienzo de la tarea). EPT-64 «Listo». No se modificó ninguna issue |
-| Producción | **Sin cambios por esta tarea, y NO verificable desde este entorno.** El MCP de Supabase de esta sesión solo ve dos proyectos ajenos a EPT (no se tocaron) y el worktree no está enlazado a producción: «las migraciones de EPT-65 no están aplicadas» es lo informado por el orquestador, **no comprobado**. Confirmarlo con `supabase migration list --linked` antes de cualquier despliegue (sección 18) |
+| Producción | Estado previo al merge (histórico): sin cambios y no verificable desde aquel entorno. **Actualizado el 01/10/2026: ver la sección 22** (código desplegado y las dos migraciones aplicadas y verificadas; el recorrido funcional productivo sigue pendiente) |
 | Migraciones | `20261001012522_ept_65_registro_accesos_qr.sql` (original, **sin modificar**, bytes idénticos a los de `ce04d48`) y `20261001165229_ept_65_correcciones_registro_accesos.sql` (correctiva: `kid` atado, carrera anulación↔purga y límite 150/5 min con bloqueo de 2 min). La última anterior es `20260929224534` |
 | Entorno de prueba | Supabase local aislado (`project_id = ept65`, puertos 574xx, contenedor `supabase_db_ept65`), Next 16.3.3, `qr` 0.7.2 |
 
@@ -449,7 +451,7 @@ La reversión de Git **no** deshace la base. Plan compensatorio (**documentado, 
 4. Base, retirada total (solo si se decide): exportar antes `accesos_servicios` y `anulaciones_accesos_servicios` y recién entonces `DROP` de funciones y tablas, en ese orden (`anulaciones` antes que `accesos`; las dos referencian a `credenciales_qr`, de modo que **revertir EPT-65 es previo a revertir EPT-64**). Nunca se borran tablas con datos sin exportarlas.
 5. Las pruebas de EPT-64 ya contemplan ese orden (`credenciales_qr_rls.sql`, sección R).
 
-## 18. Plan de despliegue y postflight (DOCUMENTADO, NO EJECUTADO)
+## 18. Plan de despliegue y postflight (plan previo al merge; lo ejecutado figura en la sección 22)
 
 1. **Gates cerrados:** estrategia de PR decidida y autorización de Lucas para publicar; nombre de quien ejerce el cargo de administrador principal con acceso de propietario a la base, y fechas de retención confirmadas contra el calendario oficial (la sección 15 recoge las decisiones de Lucas, no una verificación institucional). La cámara en teléfonos reales (sección 11), el ajuste de límites (16.1) y la deuda de `consultar_validez_credencial_qr` (sección 13) ya están resueltos.
 2. Confirmar el **proyecto correcto** y el **ledger** de producción: `supabase migration list --linked`. Esta tarea **no pudo verificarlo**. Debe mostrar aplicada `20260929224534`. Si **ninguna** migración de EPT-65 figura aplicada, se aplican las dos en orden (`20261001012522` y luego `20261001165229`). Si **la original ya figura aplicada** (cualquiera que sea la razón), se aplica solo `20261001165229`: está probada sobre una base donde la original ya registró accesos, una anulación y una denegación, y no cambia ninguna fila.
@@ -519,3 +521,105 @@ Revisión de **solo lectura** del diff `origin/main..cbe5989` por un revisor ind
 | — | Info | 60 solicitudes en 5 min bloquean 15 min a la cuenta | **Medido, aprobado por Lucas e implementado** (sección 16.1) |
 
 Áreas inspeccionadas sin hallazgo alto ni medio (según el revisor): los únicos llamadores de `registrar_acceso_servicio` son el servicio (tras `verificarPayload`) y el envoltorio SQL; el esquema del cuerpo es estricto y sin campos de actor ni identificadores; el actor sale de `getUser()`; el verificador limita el largo, exige ASCII, comprueba base64url canónico y compara con `timingSafeEqual` (con `kid` desconocido calcula igual el HMAC); `REVOKE ALL` sobre las tablas, funciones `SECURITY DEFINER` con `search_path` vacío y autoverificación de ACL incluido `PUBLIC`; RLS sin políticas permisivas y triggers contra `UPDATE`/`DELETE`/`TRUNCATE`; orden de bloqueos y relecturas tras esperar, índice `(operador, intento)`, advisory lock propio sin ciclo; logs solo con SQLSTATE, errores de catálogo cerrado, `no-store`, sin `localStorage`/`sessionStorage`; cámara con gesto, contexto seguro, liberación de pistas en todos los caminos y `Permissions-Policy`; `origenPermitido`, `application/json`, 405 y sesión resuelta antes de cualquier consulta. **Límites de la revisión:** no ejecutó pruebas ni tocó una base real; el escenario 2 se demostró después con la carrera 12 y su mutante, y el escenario 1 con SQL E2b–E2c. Es **una** pasada acotada: no garantiza ausencia de defectos.
+
+
+## 22. Despliegue y postflight de producción — 01/10/2026
+
+**Veredicto: base migrada y verificada (estructura, privilegios, límites y datos previos), código desplegado y fallo cerrado sin sesión comprobado. El recorrido funcional productivo —registro válido, duplicado y anulación— y la matriz de roles con sesión NO se ejecutaron: no hay credencial ACTIVA en producción, no existe ningún perfil PERSONAL y no se dispuso de una sesión autorizada.** Las pruebas locales de las secciones 4 a 12 no sustituyen ese recorrido. Todas las cifras de esta sección son agregados o consultas de catálogo; no se leyó ningún nombre, QR, payload, clave ni identificador de alumno.
+
+### 22.1 Integración y despliegue
+
+| Control | Evidencia y resultado | Límite |
+|---|---|---|
+| Integración | PR #30 `MERGED` en `ea239bd4b3963201d2f4499d62b76da3f4ae552d`; `origin/main` apuntaba a ese commit tras `git fetch origin --prune` y el candidato `304d7f1fc18e517dc35b4fd616e99dac477c259e` es su ancestro | Verificado con `git merge-base --is-ancestor` |
+| Contenido integrado | Árbol `48e119487ddcddf95cbcb488a8d71c5defc57e5b` en ambos commits (`git rev-parse <commit>^{tree}`) | Las pruebas de la sección 12 se asociaron a `6dec72a`; **no se repitieron en esta sesión** la E2E, el SQL ni la concurrencia |
+| Despliegue Production | `dpl_tJvWPUjtNFxPFpGoJzqtkuHr5mA4`, estado `READY`, destino `production`, creado el 01/10/2026 a las 14:43:26 (UTC-03:00), commit `ea239bd`; el alias `metodologia-tpi.vercel.app` lo sirve | El despliegue Preview del PR no se toma como prueba de Production |
+| Verificación de tipos del árbol integrado | `npm ci` con exit 0 y `npx tsc --noEmit --incremental false`: exit 0 (sección 22.8) | El build de producción lo compiló Vercel (`READY`); no se repitió `npm run build` en local |
+| Ventana código sin esquema | El despliegue (14:43) precedió a la migración (14:52:34): durante unos 9 minutos Production sirvió el código nuevo con una base sin objetos de EPT-65 | Sin sesión, las rutas respondieron 401 y 307. El comportamiento con sesión en esa ventana **no se probó**: las operaciones de base no existían, y el servidor está diseñado para devolver un error cerrado y no una aprobación (diseño, no observación) |
+
+### 22.2 Proyecto y ledger
+
+| Control | Evidencia y resultado | Límite |
+|---|---|---|
+| Proyecto | Referencia `ycvrpmrogvjnntnoosbh`, nombre «MetodologiaTPI», región `sa-east-1`, PostgreSQL 17.6, listado por la CLI autenticada (`supabase projects list`) y enlazado con `supabase link` en un worktree limpio de `origin/main` | El MCP de Supabase de la sesión solo veía dos proyectos ajenos a EPT y **no se usó** |
+| Herramienta | CLI 2.119.0 (`npx supabase`) | `supabase` no figura en el PATH de esta máquina |
+| Ledger antes | 25 versiones remotas, la última `20260929224534`; `migration list --linked` mostraba `20261001012522` y `20261001165229` solo en el repositorio. Catálogo: 0 tablas y 0 funciones de EPT-65 | Caso esperado «ninguna EPT-65 aplicada» |
+| Simulación | `supabase db push --linked --dry-run`, exit 0: enumeró únicamente las dos migraciones de EPT-65, en orden | Sin `--include-all` ni reparación del ledger |
+| Aplicación | `supabase db push --linked --yes`, 14:52:28 a 14:52:34 (UTC-03:00), exit 0: `20261001012522_ept_65_registro_accesos_qr.sql` y luego `20261001165229_ept_65_correcciones_registro_accesos.sql`; ambas se autoverifican y abortan ante cualquier desvío | Un solo intento; ningún SQL manual |
+| Ledger después | 27 versiones; local y remoto alineados; cada migración de EPT-65 figura una vez (`supabase_migrations.schema_migrations`) | — |
+| Revisión del SQL | Se leyeron las dos migraciones completas: crean objetos nuevos y no alteran tablas ni funciones previas; los únicos `DROP` retiran firmas de la propia EPT-65 | Aditiva respecto de los datos existentes |
+
+### 22.3 Respaldo previo a la escritura
+
+| Control | Evidencia y resultado | Límite |
+|---|---|---|
+| Archivos | Carpeta `ept65-20261001`, fuera del repositorio, con acceso restringido por ACL a la cuenta de Lucas y cifrada con EFS. SHA-256: `schema_public_app_private.sql` (489 949 bytes) `b88d076ac1cde33a6c97ba9fcdcbbc9eec945cc29878bc6a7b2a4c33f978dbb3`; `data_public_app_private.sql` (33 393 bytes) `e9f9db8d8da179b4653cfe6c56cac77c5a2977dbd029d61498bc8a34bd8eaeaa`; `data_auth.sql` (20 629 bytes) `21f3936fe33e8f5011b4d8095c0d15a28c531101708898e737771fe0b7c61d04` | Los hashes se calcularon sobre los volcados recién generados, antes de cifrar la carpeta |
+| Generación | `supabase db dump --linked` (esquema de `public` y `app_private`; datos de ambos con `--use-copy`; datos de `auth`), exit 0 en los tres, desde las 14:50:58 (UTC-03:00) | Es un respaldo lógico |
+| Integridad | 33 tablas con `COPY`; el recuento de filas de cada una coincide con la base viva (0 diferencias; 141 filas en total) | `pg_dump` advierte que un volcado solo de datos con claves foráneas circulares requiere `--disable-triggers` para restaurar |
+| Restauración | **No se probó una restauración aislada.** El respaldo se describe como íntegro y cifrado, no como recuperable demostrado | No incluye objetos de Storage, roles del clúster ni el historial de migraciones; no es un respaldo integral del proyecto |
+| Respaldos administrados | `supabase backups list`: WAL-G habilitado, PITR deshabilitado, ninguna copia visible | Antes de migrar, este volcado era el único punto de recuperación disponible |
+
+### 22.4 Estructura y privilegios en la base real
+
+Consultas de catálogo y de agregados sobre el proyecto `ycvrpmrogvjnntnoosbh`, después de aplicar:
+
+| Objeto | Resultado |
+|---|---|
+| Tablas `accesos_servicios`, `anulaciones_accesos_servicios`, `app_private.contadores_escaneo` y `app_private.depuraciones_accesos_servicios` | RLS activo; `anon`, `authenticated` y `service_role` sin `SELECT`, `INSERT`, `UPDATE`, `DELETE` ni `TRUNCATE`; 0 filas en las cuatro |
+| Políticas de las dos tablas públicas | 2 `RESTRICTIVE` (bloqueo de cuenta) y 0 `PERMISSIVE` |
+| Restricciones e índices | 6 claves foráneas y 4 `CHECK` en las dos tablas públicas; 13 índices en las tres tablas indexables; 6 disparadores de protección (eventos, anulaciones, vaciado y auditoría de depuraciones) |
+| Registro de acceso, límite y registro de inválidos | `EXECUTE` solo para `service_role`; sin `PUBLIC`, `anon` ni `authenticated`; existe **una única** firma de `registrar_acceso_servicio` en `public` y otra en `app_private`, ambas con `p_clave_kid text`, y ninguna variante sin `kid` |
+| `anular_acceso_servicio` y `listar_accesos_servicios` | `EXECUTE` para `authenticated` (revalidan Dirección dentro de la base); no para `anon` ni `service_role` |
+| Funciones internas y `depurar_accesos_servicios` | Ningún rol de aplicación tiene `EXECUTE`; no está instalada la extensión `pg_cron` |
+| Parámetros del límite | `parametros_limite_escaneo()` devuelve 150 solicitudes, ventana de 5 minutos y bloqueo de 2 minutos; 10 inválidos, ventana de 10 minutos y bloqueo de 15 minutos |
+| `consultar_validez_credencial_qr` (EPT-64) | Sin cambios: `authenticated` sí, `anon` no; deuda separada aceptada por Lucas (sección 13) |
+| Datos previos | Recuento de todas las tablas posterior a la migración: las 33 tablas del respaldo mantienen exactamente su número de filas; las 4 tablas nuevas están vacías |
+
+Estas consultas prueban el estado de los permisos y la estructura. **No** prueban el comportamiento funcional autenticado ni la firma HMAC de producción.
+
+### 22.5 Asesores de Supabase
+
+El asesor **no se ejecutó antes de migrar**, así que no hay una línea base previa medida; los hallazgos se separaron por el objeto al que se refieren.
+
+| Tipo | Resultado |
+|---|---|
+| Seguridad (6 hallazgos, 0 `ERROR`) | 2 `INFO` de EPT-65 (`rls_enabled_no_policy` en `contadores_escaneo` y en `depuraciones_accesos_servicios`: RLS activo sin política es el diseño cerrado de esas tablas, igual que la preexistente `app_private.vinculos_cuenta`). Preexistentes: 1 `INFO`, 2 `WARN` por `function_search_path_mutable` (`calcular_porcentaje_asistencia` y `verificar_cupo_actividad`) y 1 `WARN` por protección de contraseñas filtradas desactivada |
+| Rendimiento (41 hallazgos, 0 `ERROR`) | 9 `INFO` de EPT-65 por índices nuevos todavía sin uso (tablas vacías). Ninguno `WARN` de EPT-65; los `WARN` (`auth_rls_initplan` en `perfiles` y 5 por `multiple_permissive_policies`) se refieren a tablas anteriores |
+
+No hay un hallazgo nuevo de seguridad de nivel `WARN` o `ERROR` atribuible a EPT-65.
+
+### 22.6 Comprobaciones HTTP sin sesión (Production, `https://metodologia-tpi.vercel.app`)
+
+| Solicitud | Resultado |
+|---|---|
+| `/` | 200, `Cache-Control: private, no-cache, no-store, max-age=0, must-revalidate` |
+| `/dashboard/accesos` | 307 a `/login?redirect=%2Fdashboard%2Faccesos`; `Permissions-Policy: camera=(self), microphone=(), geolocation=()` |
+| `/dashboard/accesos/auditoria` | 307 a `/login?redirect=%2Fdashboard%2Faccesos%2Fauditoria`; `Permissions-Policy: camera=(), microphone=(), geolocation=()` |
+| `POST /api/accesos-servicios/registro` | 401, `Cache-Control: no-store` (antes y después de migrar) |
+| `POST /api/accesos-servicios/<id inexistente>/anulacion` | 401, `Cache-Control: no-store` |
+| `GET`, `PUT` y `DELETE` sobre la ruta de registro; `GET` sobre la de anulación | 405 con `Allow: POST, OPTIONS` |
+| `OPTIONS` sobre la ruta de registro | 204 con `Allow: POST, OPTIONS` |
+| `/pruebas-ui/accesos` | 404, igual que una ruta inexistente (comparación de estado, no byte a byte) |
+
+**Observación:** las respuestas 405 y 204 llevan `Cache-Control: public, max-age=0, must-revalidate` y no `no-store`, a diferencia de lo que afirma la sección 9 («toda respuesta lleva `no-store`»). No contienen datos; es un encabezado por defecto de Next para esos casos, de gravedad baja, y no se corrigió en esta operación. EPT-64 registró el mismo comportamiento para su ruta de verificación.
+
+### 22.7 Lo que no se ejecutó y por qué
+
+| Pendiente | Motivo y estado |
+|---|---|
+| Matriz con sesión (Dirección, rol no autorizado, menú, página, API, auditoría) | No hubo una sesión autorizada en esta operación y no se pidieron ni usaron credenciales ajenas. **Sin ejecutar** |
+| PERSONAL | Producción no tiene ningún perfil PERSONAL (agregado por rol: DIRECTOR 3, DOCENTE 2, ESTUDIANTE 6, PADRE 4). Probar ese rol exigiría crear una cuenta, fuera de la autorización. **Sin ejecutar** |
+| REGISTRADO, YA_REGISTRADO y anulación | Hay 0 credenciales ACTIVAS (4 REVOCADAS, todas de EPT-64), 1 alumno ACTIVO con una inscripción ACTIVA de comedor y 4 servicios de transporte activos. Obtener un QR válido exige emitir una credencial (un cambio de datos de EPT-64) y que Dirección opere el escáner. Requiere un plan y la autorización explícita de Lucas. **No probado en producción** |
+| Variables de servidor por nombre (`SUPABASE_SERVICE_ROLE_KEY`, `QR_CREDENCIAL_KID_ACTIVA`, `QR_CREDENCIAL_CLAVES`) | La conexión de Vercel de esta sesión respondió 403 al listar variables. **No verificadas**; no se leyó ningún valor |
+| Teléfonos | La confirmación de Android Chrome real (modelo y versiones no informados) y de Safari en un iPhone 14 con iOS 26 sigue siendo declaración de Lucas, no una prueba del agente (sección 11) |
+| Retención | La decisión de Lucas de la sección 15 (responsable por cargo, fin de ciclo `2026-12-18` y primera purga `2027-03-19`, sin verificar contra el calendario oficial ni como cumplimiento legal) sigue vigente; falta que confirme si es el calendario operativo o será reemplazado. No se ejecutó ninguna purga |
+
+### 22.8 Verificación de tipos del árbol integrado
+
+`npm ci` (exit 0) y `npx tsc --noEmit --incremental false` sobre el árbol `48e11948…`: sin errores (exit 0, sin salida), el 01/10/2026 en un worktree limpio de origin/main. Esto acredita los tipos del árbol integrado; no sustituye la E2E ni el recorrido productivo.
+
+### 22.9 Riesgos y reversión
+
+- Revertir el PR no revierte PostgreSQL. No se borró ni se borrará auditoría. Para apagar el registro sin perder datos, una migración nueva debe retirar `EXECUTE` a `service_role` de las tres operaciones privilegiadas y de sus pares de `app_private` (sección 17); no se preparó ni aplicó porque no hubo causa.
+- El respaldo de la sección 22.3 es lógico y no tiene una restauración demostrada; el servicio administrado no ofrecía copias.
+- La compuerta funcional (sección 22.7) queda abierta hasta que Lucas autorice un plan de prueba mínimo o acepte expresamente el límite de la prueba productiva.
