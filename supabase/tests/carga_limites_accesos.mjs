@@ -169,12 +169,12 @@ try {
   // 2. Tope por volumen: se sigue hasta el primer 429.
   let permitidas = tiempos.length
   let primer429 = null
-  for (let i = 0; i < 100 && !primer429; i += 1) {
+  for (let i = 0; i < 250 && !primer429; i += 1) {
     const r = await escanear(payloadValido)
     if (r.estado === 429) primer429 = r
     else permitidas += 1
   }
-  if (!primer429) fallar('no apareció ningún 429 en 130 solicitudes.')
+  if (!primer429) fallar('no apareció ningún 429 en 280 solicitudes.')
   const siguientes = []
   for (let i = 0; i < 3; i += 1) siguientes.push((await escanear(payloadValido)).estado)
   resultado.tope = {
@@ -187,12 +187,18 @@ try {
     bloqueoDura_min: Number(sql(`SELECT round(extract(epoch FROM (bloqueado_hasta - ocurrido_en)) / 60) FROM app_private.contadores_escaneo WHERE operador_perfil_id = '${operador}' AND tipo = 'BLOQUEO' ORDER BY id DESC LIMIT 1;`)),
   }
 
-  // 3. Duración del bloqueo: se corre el reloj de los contadores (no se espera).
-  sql(`UPDATE app_private.contadores_escaneo SET ocurrido_en = ocurrido_en - INTERVAL '14 minutes', bloqueado_hasta = bloqueado_hasta - INTERVAL '14 minutes';`)
-  const aLos14 = (await escanear(payloadValido)).estado
-  sql(`UPDATE app_private.contadores_escaneo SET ocurrido_en = ocurrido_en - INTERVAL '2 minutes', bloqueado_hasta = bloqueado_hasta - INTERVAL '2 minutes';`)
-  const aLos16 = (await escanear(payloadValido)).estado
-  resultado.bloqueo = { estadoA_los14min: aLos14, estadoA_los16min: aLos16 }
+  // 3. Duración del bloqueo (2 min): se corre el reloj de los contadores, sin esperar.
+  const correr = (intervalo) =>
+    sql(`UPDATE app_private.contadores_escaneo SET ocurrido_en = ocurrido_en - INTERVAL '${intervalo}', bloqueado_hasta = bloqueado_hasta - INTERVAL '${intervalo}';`)
+  correr('60 seconds')
+  const a1min = (await escanear(payloadValido)).estado
+  correr('70 seconds')
+  // A los 130 s el bloqueo de 2 min venció, pero la ráfaga sigue dentro de la ventana de 5 min:
+  // la cuenta se vuelve a bloquear (las rechazadas no suman, así que converge).
+  const a130s = (await escanear(payloadValido)).estado
+  correr('6 minutes')
+  const a6min = (await escanear(payloadValido)).estado
+  resultado.bloqueo = { estadoA_1min: a1min, estadoA_130s_conRafagaEnVentana: a130s, estadoTrasEnvejecerLaRafaga: a6min }
 
   // 4. Intentos con firma inválida.
   limpiarContadores()
@@ -206,13 +212,14 @@ try {
     filasInvalido: contar('INVALIDO'),
   }
 
-  // 5. Modelo de cola de una sola cuenta.
-  resultado.modeloDeCola = [2, 3, 4, 5, 6, 8, 10].map((s) => ({
+  // 5. Modelo de cola de una sola cuenta contra el tope aprobado (150 por 5 min).
+  const TOPE = permitidas
+  resultado.modeloDeCola = [1, 1.5, 2, 3, 4, 5, 6, 8, 10].map((s) => ({
     segundosPorAlumno: s,
     alumnosPorMinuto: +(60 / s).toFixed(1),
     solicitudesEn5min: Math.floor(300 / s),
-    alcanzaElTope60: Math.floor(300 / s) >= 60,
-    minutosHastaElPrimer429: Math.floor(300 / s) >= 60 ? +((61 * s) / 60).toFixed(1) : null,
+    alcanzaElTope: Math.floor(300 / s) >= TOPE,
+    minutosHastaElPrimer429: Math.floor(300 / s) >= TOPE ? +(((TOPE + 1) * s) / 60).toFixed(1) : null,
   }))
   console.log(JSON.stringify(resultado, null, 2))
 } finally {

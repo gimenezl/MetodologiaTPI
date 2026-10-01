@@ -648,7 +648,7 @@ async function probarRafaga() {
       'Ráfaga: la base debía quedar con 1 REGISTRADO y 5 DENEGADO'
     )
 
-    // Límite atómico: 90 solicitudes simultáneas del mismo operador (tope 60).
+    // Límite atómico: 180 solicitudes simultáneas del mismo operador (tope 150).
     await sesiones[0].ejecutar(`RESET ROLE;\nDELETE FROM app_private.contadores_escaneo WHERE operador_perfil_id = '${P1}';\n${comoServidor}`, 'limpiar_contadores')
     const consumir = `DO $x$ DECLARE v BOOLEAN; BEGIN
         SELECT permitido INTO v FROM public.consumir_cupo_escaneo('${P1}');
@@ -658,17 +658,17 @@ async function probarRafaga() {
     await Promise.all(
       sesiones.map(async (s) => {
         await s.ejecutar("SELECT pg_catalog.set_config('ept65.acumulado', '', false);", 'acumulado_reset')
-        for (let i = 0; i < 15; i += 1) await s.ejecutar(consumir, `consumir_${i}`)
+        for (let i = 0; i < 30; i += 1) await s.ejecutar(consumir, `consumir_${i}`)
       })
     )
     const acumulados = await Promise.all(sesiones.map((s) => s.escalar(`pg_catalog.current_setting('ept65.acumulado', true)`, 'acumulado')))
     const permitidas = acumulados.join('').split('').filter((c) => c === 'S').length
-    exigir(permitidas === 60, `Límite: se permitieron ${permitidas} solicitudes de 90; el tope atómico es 60`)
+    exigir(permitidas === 150, `Límite: se permitieron ${permitidas} solicitudes de 180; el tope atómico es 150`)
     exigir(
-      (await n(lectora, `SELECT pg_catalog.count(*) FROM app_private.contadores_escaneo WHERE operador_perfil_id = '${P1}' AND tipo = 'SOLICITUD'`, 'contadores_finales')) === '60',
-      'Límite: debían quedar exactamente 60 solicitudes contadas'
+      (await n(lectora, `SELECT pg_catalog.count(*) FROM app_private.contadores_escaneo WHERE operador_perfil_id = '${P1}' AND tipo = 'SOLICITUD'`, 'contadores_finales')) === '150',
+      'Límite: debían quedar exactamente 150 solicitudes contadas'
     )
-    console.log('OK CONCURRENCIA 10: ráfaga de 6 escaneos deja un solo REGISTRADO; 90 solicitudes simultáneas permiten exactamente 60')
+    console.log('OK CONCURRENCIA 10: ráfaga de 6 escaneos deja un solo REGISTRADO; 180 solicitudes simultáneas permiten exactamente 150')
   } finally {
     await Promise.allSettled(sesiones.map((s) => s.ejecutar('RESET ROLE;\nROLLBACK;', 'limpieza')))
     await Promise.allSettled([...sesiones, lectora].map((s) => s.cerrar()))

@@ -912,10 +912,10 @@ SELECT pg_temp.esperar(pg_temp.srv(
 -- I. LÍMITE DE INTENTOS POR CUENTA OPERADORA
 -- ================================================================
 SELECT pg_temp.exigir(
-    (SELECT (solicitudes_maximas, ventana_solicitudes, invalidos_maximos, ventana_invalidos, bloqueo)
-          = (60, INTERVAL '5 minutes', 10, INTERVAL '10 minutes', INTERVAL '15 minutes')
+    (SELECT (solicitudes_maximas, ventana_solicitudes, bloqueo_solicitudes, invalidos_maximos, ventana_invalidos, bloqueo_invalidos)
+          = (150, INTERVAL '5 minutes', INTERVAL '2 minutes', 10, INTERVAL '10 minutes', INTERVAL '15 minutes')
      FROM app_private.parametros_limite_escaneo()),
-    '[I1] los parámetros iniciales son 60/5 min, 10/10 min y bloqueo de 15 min (valores de prueba, no medidos)');
+    '[I1] los parámetros aprobados son 150/5 min con bloqueo de 2 min y 10/10 min con bloqueo de 15 min (medidos en local, no en producción)');
 
 DO $$
 DECLARE
@@ -924,22 +924,31 @@ DECLARE
     v_permitidas INTEGER := 0;
 BEGIN
     DELETE FROM app_private.contadores_escaneo;
-    FOR v_i IN 1..60 LOOP
+    FOR v_i IN 1..150 LOOP
         v_res := pg_temp.srv(pg_catalog.format('SELECT permitido::TEXT FROM public.consumir_cupo_escaneo(%L)', pg_temp.u('03')));
         IF v_res = 'OK:true' THEN v_permitidas := v_permitidas + 1; END IF;
+        -- Borde: la solicitud 149 y la 150 todavía se permiten.
+        IF v_i IN (149, 150) THEN
+            PERFORM pg_temp.exigir(v_res = 'OK:true', '[I2b] la solicitud ' || v_i || ' todavía se permite');
+        END IF;
     END LOOP;
-    PERFORM pg_temp.exigir(v_permitidas = 60, '[I2] las primeras 60 solicitudes se permiten');
+    PERFORM pg_temp.exigir(v_permitidas = 150, '[I2] las primeras 150 solicitudes se permiten');
 
     v_res := pg_temp.srv(pg_catalog.format('SELECT permitido::TEXT || '':'' || reintentar_en_segundos::TEXT FROM public.consumir_cupo_escaneo(%L)', pg_temp.u('03')));
-    PERFORM pg_temp.exigir(v_res LIKE 'OK:false:%' AND pg_catalog.split_part(v_res, ':', 3)::INTEGER BETWEEN 890 AND 900,
-        '[I3] la solicitud 61 se rechaza con un reintento de unos 15 minutos (' || v_res || ')');
+    PERFORM pg_temp.exigir(v_res LIKE 'OK:false:%' AND pg_catalog.split_part(v_res, ':', 3)::INTEGER BETWEEN 110 AND 120,
+        '[I3] la solicitud 151 se rechaza con un reintento de unos 2 minutos (' || v_res || ')');
+    PERFORM pg_temp.exigir(
+        (SELECT pg_catalog.round(EXTRACT(EPOCH FROM (c.bloqueado_hasta - c.ocurrido_en)))
+         FROM app_private.contadores_escaneo c
+         WHERE c.operador_perfil_id = pg_temp.u('03') AND c.tipo = 'BLOQUEO') = 120,
+        '[I3b] el bloqueo por volumen dura exactamente 2 minutos');
 
     -- Mientras dura el bloqueo, todo se rechaza sin consumir más cupo.
     v_res := pg_temp.srv(pg_catalog.format('SELECT permitido::TEXT FROM public.consumir_cupo_escaneo(%L)', pg_temp.u('03')));
     PERFORM pg_temp.esperar_valor(v_res, 'false', '[I4] el bloqueo se mantiene');
     PERFORM pg_temp.exigir(
         (SELECT pg_catalog.count(*) FROM app_private.contadores_escaneo c
-         WHERE c.operador_perfil_id = pg_temp.u('03') AND c.tipo = 'SOLICITUD') = 60,
+         WHERE c.operador_perfil_id = pg_temp.u('03') AND c.tipo = 'SOLICITUD') = 150,
         '[I5] las solicitudes rechazadas no suman contadores');
 
     -- El límite es por cuenta: otro operador no se ve afectado.
@@ -950,19 +959,42 @@ BEGIN
         pg_temp.srv(pg_catalog.format('SELECT permitido::TEXT FROM public.consumir_cupo_escaneo(%L)', pg_temp.u('01'))),
         'true', '[I7] la Dirección tiene su propio contador');
 
-    -- Vencido el bloqueo vuelve a operar.
+    -- Borde del bloqueo corto: vence el bloqueo de 2 minutos pero la ráfaga sigue dentro
+    -- de la ventana de 5 minutos: la cuenta vuelve a bloquearse (no queda libre antes de tiempo).
+    UPDATE app_private.contadores_escaneo
+    SET bloqueado_hasta = pg_catalog.clock_timestamp() - INTERVAL '1 second'
+    WHERE operador_perfil_id = pg_temp.u('03') AND tipo = 'BLOQUEO';
+    PERFORM pg_temp.esperar_valor(
+        pg_temp.srv(pg_catalog.format('SELECT permitido::TEXT FROM public.consumir_cupo_escaneo(%L)', pg_temp.u('03'))),
+        'false', '[I8a] vencido el bloqueo pero con la ráfaga aún en la ventana, la cuenta se vuelve a bloquear');
+    PERFORM pg_temp.exigir(
+        (SELECT pg_catalog.count(*) FROM app_private.contadores_escaneo c
+         WHERE c.operador_perfil_id = pg_temp.u('03') AND c.tipo = 'SOLICITUD') = 150,
+        '[I8b] el re-bloqueo tampoco suma solicitudes');
+
+    -- Vencidos el bloqueo y la ventana, vuelve a operar.
     UPDATE app_private.contadores_escaneo
     SET bloqueado_hasta = pg_catalog.clock_timestamp() - INTERVAL '1 second'
     WHERE operador_perfil_id = pg_temp.u('03') AND tipo = 'BLOQUEO';
     UPDATE app_private.contadores_escaneo
-    SET ocurrido_en = pg_catalog.clock_timestamp() - INTERVAL '16 minutes'
+    SET ocurrido_en = pg_catalog.clock_timestamp() - INTERVAL '6 minutes'
     WHERE operador_perfil_id = pg_temp.u('03');
     PERFORM pg_temp.esperar_valor(
         pg_temp.srv(pg_catalog.format('SELECT permitido::TEXT FROM public.consumir_cupo_escaneo(%L)', pg_temp.u('03'))),
         'true', '[I8] vencidos el bloqueo y la ventana, el operador vuelve a operar');
+
+    -- Ráfaga repartida: con la mitad de las solicitudes ya fuera de la ventana no hay bloqueo.
+    DELETE FROM app_private.contadores_escaneo;
+    INSERT INTO app_private.contadores_escaneo (operador_perfil_id, tipo, ocurrido_en)
+    SELECT pg_temp.u('03'), 'SOLICITUD', pg_catalog.clock_timestamp() - INTERVAL '6 minutes' FROM pg_catalog.generate_series(1, 100);
+    INSERT INTO app_private.contadores_escaneo (operador_perfil_id, tipo, ocurrido_en)
+    SELECT pg_temp.u('03'), 'SOLICITUD', pg_catalog.clock_timestamp() - INTERVAL '1 minute' FROM pg_catalog.generate_series(1, 149);
+    PERFORM pg_temp.esperar_valor(
+        pg_temp.srv(pg_catalog.format('SELECT permitido::TEXT FROM public.consumir_cupo_escaneo(%L)', pg_temp.u('03'))),
+        'true', '[I8c] 149 solicitudes dentro de la ventana todavía dejan pasar la 150.ª (las de hace 6 min no cuentan)');
 END $$;
 
--- Inválidos: 10 en 10 minutos bloquean 15 minutos.
+-- Inválidos: 10 en 10 minutos bloquean 15 minutos (NO cambian con el ajuste del límite por volumen).
 DO $$
 DECLARE
     v_i INTEGER;
@@ -986,6 +1018,11 @@ BEGIN
         (SELECT pg_catalog.count(*) FROM app_private.contadores_escaneo
          WHERE operador_perfil_id = pg_temp.u('03') AND tipo = 'BLOQUEO') = 1,
         '[I13] un solo bloqueo registrado');
+    PERFORM pg_temp.exigir(
+        (SELECT pg_catalog.round(EXTRACT(EPOCH FROM (c.bloqueado_hasta - c.ocurrido_en)))
+         FROM app_private.contadores_escaneo c
+         WHERE c.operador_perfil_id = pg_temp.u('03') AND c.tipo = 'BLOQUEO') = 900,
+        '[I13b] el bloqueo por inválidos sigue siendo de 15 minutos');
     DELETE FROM app_private.contadores_escaneo;
 END $$;
 

@@ -25,6 +25,7 @@ const DIRECTORIO = process.env.EPT_SUPABASE_WORKDIR
 const CONTENEDOR = process.env.EPT_SUPABASE_DB_CONTAINER ?? 'supabase_db_ept65'
 const ANTERIOR = '20260929224534'
 const NUEVA = '20261001012522'
+const CORRECTIVA = '20261001165229'
 const TABLAS_NUEVAS = ['accesos_servicios', 'anulaciones_accesos_servicios']
 
 if (!DIRECTORIO) {
@@ -85,15 +86,7 @@ function huellas() {
   return mapa
 }
 
-console.log(`1. Reset de la base local hasta la migración anterior (${ANTERIOR}).`)
-cli(['db', 'reset', '--version', ANTERIOR, '--no-seed'])
-afirmar(
-  psql(`SELECT pg_catalog.to_regclass('public.credenciales_qr') IS NOT NULL AND pg_catalog.to_regclass('public.accesos_servicios') IS NULL;`).trim() === 't',
-  'la base parte con EPT-64 y SIN las tablas de EPT-65'
-)
-
-console.log('2. Siembra de datos funcionales sintéticos.')
-psql(`
+const SIEMBRA = `
   BEGIN;
   INSERT INTO public.cursos (id, nivel_id, denominacion, division, activo)
   VALUES ('${uuid(1)}', (SELECT id FROM public.niveles WHERE nombre = 'PRIMARIO' LIMIT 1), 'MIGRACIÓN EPT-65', 'A', TRUE);
@@ -115,7 +108,17 @@ psql(`
   VALUES ('${uuid(30)}', '${uuid(20)}', 'k1', '${uuid(10)}'),
          ('${uuid(31)}', '${uuid(21)}', 'k1', '${uuid(10)}');
   COMMIT;
-`)
+`
+
+console.log(`1. Reset de la base local hasta la migración anterior (${ANTERIOR}).`)
+cli(['db', 'reset', '--version', ANTERIOR, '--no-seed'])
+afirmar(
+  psql(`SELECT pg_catalog.to_regclass('public.credenciales_qr') IS NOT NULL AND pg_catalog.to_regclass('public.accesos_servicios') IS NULL;`).trim() === 't',
+  'la base parte con EPT-64 y SIN las tablas de EPT-65'
+)
+
+console.log('2. Siembra de datos funcionales sintéticos.')
+psql(SIEMBRA)
 
 const antes = huellas()
 afirmar(antes.size > 20, `se tomó la huella de ${antes.size} tablas de public`)
@@ -126,9 +129,12 @@ afirmar(
   'la siembra dejó personas, alumnos, inscripciones y credenciales'
 )
 
-console.log(`3. Se aplica SOLO la migración pendiente (${NUEVA}) con «supabase migration up».`)
+console.log(`3. Se aplican SOLO las migraciones pendientes (${NUEVA} y ${CORRECTIVA}) con «supabase migration up».`)
 const salida = cli(['migration', 'up', '--local'])
-afirmar(salida.includes(NUEVA) && !salida.includes('20260929224534_ept_64'), 'migration up aplicó únicamente la migración nueva')
+afirmar(
+  salida.includes(NUEVA) && salida.includes(CORRECTIVA) && !salida.includes('20260929224534_ept_64'),
+  'migration up aplicó únicamente las dos migraciones de EPT-65'
+)
 
 const despues = huellas()
 afirmar(despues.size === antes.size, 'las mismas tablas preexistentes antes y después')
@@ -148,8 +154,8 @@ afirmar(
   'las tablas nuevas existen y están vacías'
 )
 const ledger = psql(`SELECT pg_catalog.string_agg(version, ',' ORDER BY version) FROM supabase_migrations.schema_migrations;`).trim().split(',')
-afirmar(ledger.at(-1) === NUEVA && ledger.includes(ANTERIOR), `el ledger termina en ${NUEVA} y conserva ${ANTERIOR}`)
-afirmar(new Set(ledger).size === ledger.length && ledger.length === 26, `el ledger tiene 26 versiones sin duplicados (tiene ${ledger.length})`)
+afirmar(ledger.at(-1) === CORRECTIVA && ledger.includes(NUEVA) && ledger.includes(ANTERIOR), `el ledger termina en ${CORRECTIVA} y conserva ${NUEVA} y ${ANTERIOR}`)
+afirmar(new Set(ledger).size === ledger.length && ledger.length === 27, `el ledger tiene 27 versiones sin duplicados (tiene ${ledger.length})`)
 afirmar(
   psql(`
     SELECT NOT pg_catalog.has_function_privilege('authenticated', 'public.registrar_acceso_servicio(uuid,uuid,uuid,text,uuid,public.sentido_acceso_transporte)'::pg_catalog.regprocedure, 'EXECUTE')
@@ -159,7 +165,70 @@ afirmar(
   'la operación privilegiada quedó solo para service_role tras aplicar sobre datos'
 )
 
-console.log('5. Limpieza: la base vuelve al estado de las migraciones, sin los datos sembrados.')
+console.log(`5. La migración CORRECTIVA (${CORRECTIVA}) sobre una base donde la original (${NUEVA}) YA registró accesos.`)
+// Es el escenario del despliegue si la migración original llegó a aplicarse: hay eventos,
+// una anulación y una denegación reales que la corrección no puede tocar.
+cli(['db', 'reset', '--version', NUEVA, '--no-seed'])
+afirmar(
+  psql(`SELECT pg_catalog.to_regprocedure('public.registrar_acceso_servicio(uuid,uuid,uuid,uuid,public.sentido_acceso_transporte)') IS NOT NULL;`).trim() === 't',
+  'la base parte con la migración original (firma de cinco argumentos) y SIN la correctiva'
+)
+psql(SIEMBRA)
+psql(`
+  INSERT INTO public.credenciales_qr (id, alumno_id, clave_kid, emitida_por)
+  VALUES ('${uuid(32)}', '${uuid(22)}', 'k1', '${uuid(10)}');
+`)
+const COMEDOR_ID = 'e0000000-0000-4000-8000-000000000010'
+const escanearOriginal = (credencial) =>
+  psql(`SELECT codigo_resultado FROM public.registrar_acceso_servicio('${uuid(11)}', pg_catalog.gen_random_uuid(), '${credencial}', '${COMEDOR_ID}', NULL);`).trim()
+afirmar(escanearOriginal(uuid(30)) === 'REGISTRADO', 'la original registra el acceso del alumno uno')
+afirmar(escanearOriginal(uuid(31)) === 'REGISTRADO', 'la original registra el acceso del alumno dos')
+afirmar(escanearOriginal(uuid(32)) === 'NO_HABILITADO', 'la original deniega al alumno tres (sin inscripción) y persiste la denegación')
+// Dirección no lee la tabla (por diseño): el id lo resuelve el propietario.
+const eventoAnulado = psql(`SELECT id FROM public.accesos_servicios WHERE credencial_id = '${uuid(31)}' AND resultado = 'REGISTRADO';`).trim()
+psql(`
+  SET ROLE authenticated;
+  SELECT pg_catalog.set_config('request.jwt.claims', '{"sub":"${uuid(10)}"}', false);
+  SELECT public.anular_acceso_servicio('${eventoAnulado}', 'Anulación de la prueba de migración');
+`)
+
+const FILAS_DE_EVENTOS = `
+  SELECT 'accesos' AS t, pg_catalog.count(*) AS filas, pg_catalog.md5(COALESCE(pg_catalog.string_agg(x::TEXT, '|' ORDER BY x::TEXT), '')) FROM public.accesos_servicios x
+  UNION ALL SELECT 'anulaciones', pg_catalog.count(*), pg_catalog.md5(COALESCE(pg_catalog.string_agg(x::TEXT, '|' ORDER BY x::TEXT), '')) FROM public.anulaciones_accesos_servicios x
+  UNION ALL SELECT 'contadores', pg_catalog.count(*), pg_catalog.md5(COALESCE(pg_catalog.string_agg(x::TEXT, '|' ORDER BY x::TEXT), '')) FROM app_private.contadores_escaneo x`
+const eventosAntes = psql(`${FILAS_DE_EVENTOS};`).trim()
+afirmar(/accesos\|3\|/u.test(eventosAntes) && /anulaciones\|1\|/u.test(eventosAntes), 'antes de corregir hay 3 eventos (2 REGISTRADO y 1 DENEGADO) y 1 anulación')
+
+const salidaCorrectiva = cli(['migration', 'up', '--local'])
+afirmar(
+  salidaCorrectiva.includes(CORRECTIVA) && !salidaCorrectiva.includes(NUEVA),
+  'migration up aplicó únicamente la migración correctiva'
+)
+afirmar(
+  psql(`${FILAS_DE_EVENTOS};`).trim() === eventosAntes,
+  'la corrección no cambió ni una fila de eventos, anulaciones ni contadores (cantidad y MD5 idénticos)'
+)
+afirmar(
+  psql(`SELECT pg_catalog.to_regprocedure('public.registrar_acceso_servicio(uuid,uuid,uuid,uuid,public.sentido_acceso_transporte)') IS NULL
+          AND pg_catalog.to_regprocedure('app_private.registrar_acceso_servicio(uuid,uuid,uuid,uuid,public.sentido_acceso_transporte)') IS NULL;`).trim() === 't',
+  'las firmas de la original sin kid desaparecieron'
+)
+const escanearCorregido = (credencial, kid) =>
+  psql(`SELECT codigo_resultado FROM public.registrar_acceso_servicio('${uuid(11)}', pg_catalog.gen_random_uuid(), '${credencial}', '${kid}', '${COMEDOR_ID}', NULL);`).trim()
+afirmar(escanearCorregido(uuid(30), 'k9') === 'NO_RECONOCIDO', 'con un kid que no es el de la credencial: NO_RECONOCIDO')
+afirmar(
+  psql(`SELECT pg_catalog.count(*) FROM public.accesos_servicios;`).trim() === '3',
+  'un kid que no corresponde no dejó ningún evento'
+)
+afirmar(escanearCorregido(uuid(30), 'k1') === 'YA_REGISTRADO', 'con el kid correcto el acceso ya registrado sigue siendo YA_REGISTRADO')
+afirmar(escanearCorregido(uuid(31), 'k1') === 'REGISTRADO', 'el acceso anulado antes de corregir libera el cupo: se vuelve a registrar')
+afirmar(
+  psql(`SELECT solicitudes_maximas || '/' || ventana_solicitudes || '/' || bloqueo_solicitudes || ' ' || invalidos_maximos || '/' || ventana_invalidos || '/' || bloqueo_invalidos FROM app_private.parametros_limite_escaneo();`).trim() ===
+    '150/00:05:00/00:02:00 10/00:10:00/00:15:00',
+  'los límites aprobados quedaron en 150/5 min con bloqueo de 2 min y 10/10 min con bloqueo de 15 min'
+)
+
+console.log('6. Limpieza: la base vuelve al estado de las migraciones, sin los datos sembrados.')
 cli(['db', 'reset', '--no-seed'])
 afirmar(psql(`SELECT pg_catalog.count(*) FROM public.perfiles WHERE dni LIKE '9865%';`).trim() === '0', 'la base quedó sin los datos de la prueba')
 
