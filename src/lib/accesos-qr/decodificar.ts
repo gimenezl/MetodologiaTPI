@@ -58,17 +58,52 @@ export async function decodificarArchivo(archivo: File): Promise<string | null> 
   if (!archivo.type.startsWith('image/') || archivo.size === 0 || archivo.size > BYTES_MAXIMOS_FOTO) {
     throw new Error('archivo no utilizable')
   }
-  const mapa = await createImageBitmap(archivo, { imageOrientation: 'from-image' })
+  const fuente = await abrirImagen(archivo)
   try {
     for (const maximo of ESCALAS_DE_FOTO) {
-      const imagen = dibujar(mapa, mapa.width, mapa.height, maximo)
+      const imagen = dibujar(fuente.imagen, fuente.ancho, fuente.alto, maximo)
       if (!imagen) continue
       const texto = await decodificarPixeles(imagen)
       if (texto) return texto
     }
     return null
   } finally {
-    mapa.close()
+    fuente.liberar()
+  }
+}
+
+type ImagenAbierta = { imagen: CanvasImageSource; ancho: number; alto: number; liberar: () => void }
+
+/**
+ * Abre la fotografía con el mejor método disponible. `createImageBitmap` con
+ * orientación EXIF es lo ideal (una foto vertical de iPhone llega girada sin
+ * ella); si el navegador no admite la opción se prueba sin ella, y como último
+ * recurso se carga con un `<img>` (los navegadores aplican allí la orientación).
+ */
+async function abrirImagen(archivo: File): Promise<ImagenAbierta> {
+  for (const opciones of [{ imageOrientation: 'from-image' as const }, undefined]) {
+    try {
+      const mapa = await (opciones ? createImageBitmap(archivo, opciones) : createImageBitmap(archivo))
+      return { imagen: mapa, ancho: mapa.width, alto: mapa.height, liberar: () => mapa.close() }
+    } catch {
+      // Se prueba el siguiente método.
+    }
+  }
+  const direccion = URL.createObjectURL(archivo)
+  try {
+    const elemento = new Image()
+    elemento.decoding = 'async'
+    elemento.src = direccion
+    await elemento.decode()
+    return {
+      imagen: elemento,
+      ancho: elemento.naturalWidth,
+      alto: elemento.naturalHeight,
+      liberar: () => URL.revokeObjectURL(direccion),
+    }
+  } catch (error) {
+    URL.revokeObjectURL(direccion)
+    throw error
   }
 }
 

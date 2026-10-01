@@ -80,7 +80,9 @@ export async function registrarAccesoRemoto(datos: DatosRegistroRemoto): Promise
   const alumno = contenido.alumno as { nombre?: unknown; apellido?: unknown; legajo?: unknown } | undefined
   const normalizada: RespuestaEscaneo = {
     codigo: contenido.codigo,
-    mensaje: typeof contenido.mensaje === 'string' ? contenido.mensaje : MENSAJES_RESULTADO[contenido.codigo],
+    // El texto de un resultado es SIEMPRE el del catálogo local (conjunto cerrado): lo que mande la
+    // red no se muestra, así una respuesta alterada no puede poner palabras en la pantalla.
+    mensaje: MENSAJES_RESULTADO[contenido.codigo],
   }
   if (contenido.codigo === 'REGISTRADO') {
     if (typeof alumno?.nombre !== 'string' || typeof alumno.apellido !== 'string') {

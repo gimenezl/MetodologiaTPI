@@ -90,10 +90,12 @@ export function useCamaraQr({ alLeer }: { alLeer: (texto: string) => void }) {
 
     setEstado('solicitando')
 
-    const pedido = navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false,
-    })
+    // Una excepción síncrona del navegador se trata igual que un rechazo: nunca deja la pantalla esperando.
+    const pedido = (async () =>
+      navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      }))()
     let vencido = false
     let reloj: ReturnType<typeof setTimeout> | undefined
     const limite = new Promise<'tiempo'>((resolver) => {
@@ -134,15 +136,25 @@ export function useCamaraQr({ alLeer }: { alLeer: (texto: string) => void }) {
       return
     }
 
+    let relojDeReproduccion: ReturnType<typeof setTimeout> | undefined
     try {
       video.srcObject = flujo
-      await video.play()
+      // Un video que no arranca (modo de bajo consumo, cámara tomada por otra app) no debe dejar la
+      // pantalla esperando para siempre.
+      await Promise.race([
+        video.play(),
+        new Promise<never>((_, rechazar) => {
+          relojDeReproduccion = setTimeout(() => rechazar(new Error('reproducción sin respuesta')), TIEMPO_PERMISO_MS)
+        }),
+      ])
     } catch {
       if (generacion === generacionRef.current) {
         liberar()
         setEstado('error')
       }
       return
+    } finally {
+      if (relojDeReproduccion) clearTimeout(relojDeReproduccion)
     }
     if (generacion !== generacionRef.current) return
     setEstado('activa')
