@@ -246,6 +246,12 @@ CREATE INDEX idx_accesos_servicios_alumno_dia
     ON public.accesos_servicios (alumno_id, servicio_id, dia_servicio)
     WHERE resultado = 'REGISTRADO' AND alumno_id IS NOT NULL;
 
+-- Clave foránea hacia `alumnos`: el índice anterior es parcial (solo REGISTRADO) y no
+-- sirve a la comprobación de ON DELETE RESTRICT ni al historial de un alumno.
+CREATE INDEX idx_accesos_servicios_alumno
+    ON public.accesos_servicios (alumno_id, registrado_en DESC)
+    WHERE alumno_id IS NOT NULL;
+
 -- Consulta de Dirección (más reciente primero) y depuración por antigüedad.
 CREATE INDEX idx_accesos_servicios_registrado
     ON public.accesos_servicios (registrado_en DESC, id);
