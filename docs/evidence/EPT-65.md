@@ -9,7 +9,7 @@
 |---|---|
 | Rama / worktree | `codex/ept-65-accesos-qr` en `E:\Escritorio\codigo\MetodologiaTPI-ept65` (el checkout principal no se tocó) |
 | Base | `origin/main` = `d4fa26f5bd0e76c1418822f6446c899b957c5b59` (verificado con `git fetch origin --prune`; coincide con el SHA informado por el orquestador) |
-| Código y pruebas verificados | `[[SHA_FINAL]]` (ver sección 12). El commit posterior solo agrega esta documentación y las capturas |
+| Código y pruebas verificados | `9870bee0717781ea6927059cf595cd57e93eb4d9` (ver sección 12). El commit posterior solo agrega esta documentación y las capturas; `src/` y la migración no cambian desde `72b4078` |
 | Jira | EPT-65 «Por hacer», asignada a Lucas Gimenez, hija de EPT-7, sin subtareas (consultado en vivo). EPT-64 «Listo». No se modificó ninguna issue |
 | Migración | `supabase/migrations/20261001012522_ept_65_registro_accesos_qr.sql` (aditiva; creada con `supabase migration new`; la última anterior es `20260929224534`) |
 | Entorno de prueba | Supabase local aislado (`project_id = ept65`, puertos 574xx, contenedor `supabase_db_ept65`), Next 16.3.3, `qr` 0.7.2 |
@@ -158,7 +158,7 @@ Orden: **perfil del operador (FOR SHARE) → [lectura sin bloqueo del `alumno_id
 | 10 Ráfaga | 6 escaneos simultáneos → 1 REGISTRADO + 5 YA_REGISTRADO | 90 solicitudes simultáneas → exactamente 60 permitidas |
 | 11 Estrés acotado | 6×12 escaneos + 3×10 cambios de estado (reponer, inactivar, reactivar, bloquear, desbloquear, anular) | sin deadlocks (40P01), sin escrituras parciales (cada respuesta quedó persistida exactamente una vez) y sin REGISTRADO vigentes duplicados |
 
-Corrida registrada: `[[RESULTADO_CONCURRENCIA]]`.
+Corrida registrada (exit 0): 11 grupos OK; el estrés dejó 13 REGISTRADO, 16 YA_REGISTRADO y 43 NO_HABILITADO (varía por corrida; lo que se afirma es que respuestas = filas persistidas).
 
 ## 9. Servidor y API
 
@@ -221,7 +221,31 @@ Criterio de aceptación pendiente (**`blocked` hasta que se haga**): probar al m
 
 ## 12. Verificación: comandos, exit codes y SHA
 
-`[[VERIFICACION]]`
+Stack aislado `ept65`; variables de corrida: `EPT_SUPABASE_WORKDIR=E:/Escritorio/codigo/_sb-ept65 EPT_PUERTO_APP=3100 EPT_TEST_SMTP_PORT=57425`. Base de código: ramas sobre `d4fa26f`; SHA de código `72b4078`, de pruebas `9870bee`.
+
+| Ronda | Comando | Exit | Resultado |
+|---|---|---|---|
+| Reset | `npx supabase db reset --workdir <_sb-ept65>` (tras el último cambio de la migración) y `supabase migration list --local` | 0 | 26 migraciones, local = remoto |
+| SQL EPT-65 | `psql -f supabase/tests/accesos_servicios_rls.sql` | 0 | 299 comprobaciones OK, 0 FALLO |
+| SQL regresión | `credenciales_qr_rls.sql` (148 OK), `usuarios_permisos_rls.sql` (como `supabase_admin`, como exige su fixture), y las demás `*_rls.sql` | 0 | sin regresión; `reportes_benchmark_datos.sql` exige `supabase_admin` y no se corrió |
+| Concurrencia EPT-65 | `node supabase/tests/accesos_servicios_concurrencia.mjs` | 0 | 11 grupos |
+| Concurrencia regresión | alumnos_academicos, comedor, credenciales_qr, deportes(+administración), horarios(+académicos), inscripciones_administracion, niveles, profesores, transporte, usuarios_permisos | 0 | todas OK |
+| Migración sobre datos | `node supabase/tests/accesos_servicios_migracion_sobre_datos.mjs` | 0 | 32 tablas idénticas por conteo y MD5; solo se aplicó la migración pendiente |
+| Tipos | `node supabase/tests/tipos-generados.mjs --escribir` y luego sin bandera | 0 | +235 líneas, solo adiciones; reproducible byte a byte |
+| `db lint` | `supabase db lint --local --level warning --fail-on error` | 0 | sin errores de esquema |
+| Advisors | `supabase db advisors --local --type security` y `performance` (`--level info`) | 0 | solo hallazgos **preexistentes** (2 funciones con `search_path` mutable, 2 políticas `INSERT true` públicas, multiplicidad de políticas en `asistencias`, `inscripciones`, `inscripciones_servicios`, `perfiles`, `initplan` de `perfiles`). Propios: 2 INFO «RLS sin política» en tablas de `app_private` (deliberado: nadie tiene acceso, igual que `vinculos_cuenta`) |
+| Hygiene | `git diff --check`; `npx tsc --noEmit --incremental false` | 0 / 0 | limpios |
+| ESLint focalizado | 49 archivos modificados o agregados | 0 | 0 errores, 0 advertencias |
+| `npm run lint` | repo completo | 1 | 14 errores y 107 advertencias, **idénticos a `origin/main`** (comparado en un worktree limpio: 0 nuevos); ninguno en archivos de EPT-65 |
+| `npm run build` | con la URL y la clave anónima del stack local | 0 | compila; rutas nuevas presentes; sin `/pruebas-ui` |
+| Bancos en producción | `node supabase/tests/harness_produccion.mjs` (agregado `/pruebas-ui/accesos`) | 0 | 404 idéntico al de una ruta inexistente |
+| Unitarias | `accesos-qr-cripto` (18), `accesos-qr-servicio` (27) | 0 | 45 OK |
+| Sin sesión | `accesos-qr.spec.ts` | 0 | 6 OK |
+| Playwright autenticado | `accesos-qr-auth.spec.ts`, 11 proyectos de actor | 0 | todos OK, incluida la cámara falsa |
+| Playwright UI | `accesos-qr-ui.spec.ts`: escritorio, Pixel 5, iPhone 13 | 0 | 88 OK + 2 omitidas con motivo (WebKit sin MediaStream) |
+| **E2E completa** | `node supabase/tests/correr-autenticadas.mjs` (equivale a `npm run test:e2e` con el stack local) sobre `72b4078` | 1 | **1575 OK, 14 omitidas, 2 fallos** (sección 14); tras corregir y reejecutar los dos archivos afectados: OK |
+
+Capturas regeneradas solo con `EPT_CAPTURAS=1` sobre mis dos archivos; la suite completa no las regeneró (`git status` limpio salvo la carpeta nueva).
 
 ## 13. Análisis focalizado de `consultar_validez_credencial_qr` (EPT-64)
 
@@ -239,7 +263,14 @@ El contrato de EPT-64 decía que no se expondría una función de evaluación po
 
 ## 14. Fallos preexistentes frente a regresiones
 
-`[[PREEXISTENTES]]`
+La E2E completa tuvo 2 fallos:
+
+1. **Regresión nueva y legítima**: `usuarios-permisos-auth.spec.ts` («PERSONAL solo tiene Inicio y Mi perfil») esperaba un menú de dos enlaces; ahora PERSONAL ve «Registrar accesos», que es el alcance de esta historia. Se actualizó la expectativa a `['Inicio', 'Registrar accesos', 'Mi perfil']` (y el título), sin debilitar el resto de la prueba, que sigue exigiendo que no vea ninguna otra sección.
+2. **Timeout de 30 s** en `usuarios-permisos-auth.spec.ts:390` («sin sesión, cada endpoint nuevo responde 401…»), 2 intentos seguidos dentro de la corrida larga. Reejecutado aislado junto con el resto del archivo (proyectos Dirección y Personal, sin reintentos): 40 OK. **No se reprodujo**; no se pudo atribuir con certeza a la carga de una corrida de 28 minutos ni se descarta. No toca código de EPT-65 (usa cookies vacías y el endpoint de EPT-59).
+
+Otros ajustes de pruebas ajenas por las nuevas claves foráneas y rutas, sin debilitar aserciones: `credenciales_qr_rls.sql` D10 (el `TRUNCATE` sin `CASCADE` ahora lo rechaza PostgreSQL con `0A000` antes del trigger; se agregó la variante `CASCADE` que sí dispara la guarda) y la sección R (revertir EPT-65 antes que EPT-64); la batería de `usuarios_permisos_rls.sql` (+2 RPC de Dirección); `auth.setup.ts` (limpieza de accesos); `harness_produccion.mjs` (+ el banco nuevo); 19 suites leen la URL base de `EPT_BASE_URL`.
+
+Fallos preexistentes comprobados contra `origin/main` en un worktree limpio: **solo el lint** (14 errores, mismos en ambas ramas). Ninguna prueba de la E2E falló por un defecto previo.
 
 ## 15. Retención: gate previo al despliegue (PENDIENTE)
 
@@ -326,4 +357,7 @@ La reversión de Git **no** deshace la base. Plan compensatorio (**documentado, 
 
 ## 20. Capturas
 
-`[[CAPTURAS]]`
+42 capturas en `docs/evidence/EPT-65/`, sin ningún QR ni datos de personas reales (todas las identidades son sintéticas):
+
+- `banco-<chromium|pixel-5-chromium|iphone-13-webkit>-*.png`: banco visual (escritorio y móvil, incluido 375 px): `inicio`, `transporte-375`, `registrado`, `no-habilitado`, `limite`, `sin-conexion`, `enviando`, `qr-ilegible`, `camara-denegada`, `camara-tiempo`, `auditoria`, `anular-dialogo`.
+- `chromium-directora-*.png` y `chromium-personal-*.png`: pantallas reales con sesión (`escaner-registrado`, `escaner-ya-registrado`, `auditoria`, `auditoria-anulado`, `escaner-inicio`, `escaner-denegado`).
