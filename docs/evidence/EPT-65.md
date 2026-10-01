@@ -13,7 +13,7 @@
 
 **Abierto (gates restantes):**
 
-1. **Retención: definiciones PROVISIONALES.** Responsable por cargo (Dirección o administrador principal, sin persona concreta) y fechas **ficticias** fijadas por Lucas (fin de ciclo 2026-12-18; primera purga no antes del 2027-03-19). Hay que reemplazarlas por las oficiales antes de la primera purga real (sección 15). Esto no es cumplimiento legal.
+1. **Retención: definiciones PROVISIONALES.** Responsable por cargo (**administrador principal**, definido por Lucas el 01/10/2026; sin nombre propio) y fechas **ficticias** fijadas por Lucas (fin de ciclo 2026-12-18; primera purga no antes del 2027-03-19). Hay que reemplazarlas por las oficiales antes de la primera purga real (sección 15). Esto no es cumplimiento legal.
 2. **Estrategia de PR: sin decidir** (sección 19).
 3. **Producción no verificada** desde este entorno (sección 18).
 
@@ -347,13 +347,13 @@ Política aprobada como decisión de producto, **no como afirmación legal**: ev
 
 | Dato | Decisión | Estado |
 |---|---|---|
-| Responsable de ejecutar y custodiar la purga | «el admin principal o el director»: se registra **por cargo** (Dirección o administrador principal del sistema), **sin nombre propio** | Definido por cargo; **falta la persona concreta** |
+| Responsable de ejecutar y custodiar la purga | Lucas lo precisó el 01/10/2026: **«admin principal nomás»**. Se registra **por cargo único: administrador principal del sistema**, **sin nombre propio** (primero había dicho «el admin principal o el director») | Definido por cargo; **falta el nombre de la persona** |
 | Fin del ciclo lectivo | Lucas indicó que se use una **fecha ficticia**; se fijó `2026-12-18` | **PROVISIONAL, ficticia, no institucional** |
 | Primera purga | Derivada de la regla de la función (corre solo si `fin de ciclo + 90 días < hoy`): **no antes del `2027-03-19`** | **PROVISIONAL**, calculada de la fecha ficticia |
 
 Las dos fechas deben **reemplazarse por las oficiales de la institución antes de ejecutar la primera purga real**. Que Lucas haya fijado valores provisionales **no demuestra cumplimiento legal** ni equivale a la fecha del calendario escolar.
 
-**Atención al «quién»:** ejecutar la purga exige **acceso de propietario a la base** (ningún rol de la aplicación tiene `EXECUTE`). Ser Director en la aplicación **no** da ese acceso. «Dirección o administrador principal» solo es operable si esa persona, o quien la asista, tiene ese acceso a la base; conviene nombrar a quien lo tenga.
+**Atención al «quién»:** ejecutar la purga exige **acceso de propietario a la base** (ningún rol de la aplicación tiene `EXECUTE`). Ser administrador de la aplicación **no** da ese acceso por sí solo: el administrador principal solo puede ejecutarla si tiene, o recibe de forma explícita y documentada, ese acceso a la base. Conviene dejar escrito el nombre de quien lo tenga.
 
 Runbook manual (lo ejecuta el propietario de la base, nunca un rol de aplicación):
 
@@ -473,7 +473,7 @@ La reversión de Git **no** deshace la base. Plan compensatorio (**documentado, 
 **Texto del comentario para Jira (EPT-65). NO publicado; el estado recomendado es mantener «En curso»:**
 
 > Candidato local de RF21 «Registrar accesos con QR», sin integrar ni desplegar y **con un gate institucional abierto** (retención). Rama `codex/ept-65-accesos-qr` sobre `origin/main` `d4fa26f`; evidencia en `docs/evidence/EPT-65.md`. El operador (Dirección o Personal, con su propia cuenta) elige comedor o recorrido y sentido y lee el QR con la cámara o una foto; el servidor verifica la firma HMAC **antes** de invocar la operación de PostgreSQL, que solo ejecuta `service_role` y revalida al operador. Un `credencial_id` conocido no permite registrar nada (probado por PostgREST con sesiones reales). Incluye límite de intentos por cuenta, idempotencia por intento, anulación de Dirección que libera el cupo sin borrar historia, auditoría de solo lectura y retención con mantenimiento manual. Una revisión independiente halló dos defectos medios (el `kid` del QR no se ataba a la credencial; carrera entre anulación y purga): corregidos y probados. Pruebas sobre el código final: SQL (309 comprobaciones), concurrencia real en 12 grupos, migraciones sobre datos (incluida la correctiva sobre una base con accesos ya registrados), API con sesiones reales por actor y E2E completa (1580 aprobadas, 14 omitidas de las cuales 12 son de otras historias, 0 fallos). Cámara y fotografía confirmadas manualmente por Lucas en un Android Chrome real (modelo no informado) y en el Safari de un iPhone 14 con iOS 26. Límite por volumen aprobado e implementado: 150 solicitudes por cuenta cada 5 minutos con bloqueo de 2 minutos (el de 10 firmas inválidas cada 10 minutos y 15 minutos no cambia). Las correcciones viven en una migración correctiva nueva; la original no se tocó.
-> **Pendiente / abierto:** (1) retención: responsable por cargo (Dirección o administrador principal, sin persona concreta) y fechas **ficticias provisionales** (fin de ciclo 2026-12-18, primera purga no antes del 2027-03-19) que deben reemplazarse por las oficiales; (2) `consultar_validez_credencial_qr` de EPT-64 (concedida a `authenticated`, sin capacidad adicional): **aceptada como deuda separada**; (3) estrategia de PR; (4) producción no verificada desde este entorno: confirmar el ledger antes de desplegar.
+> **Pendiente / abierto:** (1) retención: responsable por cargo (administrador principal, sin nombre propio) y fechas **ficticias provisionales** (fin de ciclo 2026-12-18, primera purga no antes del 2027-03-19) que deben reemplazarse por las oficiales; (2) `consultar_validez_credencial_qr` de EPT-64 (concedida a `authenticated`, sin capacidad adicional): **aceptada como deuda separada**; (3) estrategia de PR; (4) producción no verificada desde este entorno: confirmar el ledger antes de desplegar.
 
 **Título del PR:** `feat(accesos): registrar accesos al comedor y al transporte con QR (EPT-65)`
 
