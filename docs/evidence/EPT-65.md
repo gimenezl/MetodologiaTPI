@@ -1,6 +1,6 @@
 # EPT-65 — RF21: Registrar accesos con QR
 
-**Estado al 01/10/2026: candidato local, `blocked` por un gate institucional. NO está listo para desplegar y no se publicó.** El contrato aprobado está implementado y probado en las tres fronteras (base, servidor y navegador) sobre un stack local descartable. No se hizo push, PR, merge, despliegue ni cambio alguno en producción, y EPT-65 **no se transicionó** en Jira.
+**Estado al 01/10/2026: candidato local COMPLETO y verificado (`ready_for_review`), pero NO publicado y NO desplegable todavía.** Falta la decisión de Lucas sobre la estrategia de PR y su autorización para publicar; antes de desplegar hay que confirmar el ledger de producción y las fechas de retención contra el calendario oficial. El contrato aprobado está implementado y probado en las tres fronteras (base, servidor y navegador) sobre un stack local descartable. No se hizo push, PR, merge, despliegue ni cambio alguno en producción, y EPT-65 **no se transicionó** en Jira.
 
 **Cerrado:**
 
@@ -10,10 +10,11 @@
 4. **Revisión independiente:** dos defectos medios corregidos y probados (sección 21).
 5. **Migración:** no se pudo demostrar que la migración original nunca se aplicó fuera del stack local, así que **no se reescribió**: se restauró a sus bytes originales y todas las correcciones viven en una **migración correctiva nueva** (sección 3, decisión 14).
 6. **E2E completa final** verde sobre el código final (sección 12).
+7. **Retención: decisión explícita de Lucas registrada** (sección 15): responsable = **administrador principal** (por cargo, sin nombre propio); fin de ciclo **2026-12-18**; primera purga **2027-03-19**. No es cumplimiento legal y las fechas no están verificadas contra el calendario escolar oficial.
 
-**Abierto (gates restantes):**
+**Abierto (antes de publicar o desplegar):**
 
-1. **Retención: definiciones PROVISIONALES.** Responsable por cargo (**administrador principal**, definido por Lucas el 01/10/2026; sin nombre propio) y fecha de fin de ciclo **2026-12-18 aceptada por Lucas, sin verificar contra el calendario oficial** (primera purga: mínimo 2027-03-19, fecha elegida sin definir). Hay que confirmarlas antes de la primera purga real (sección 15). Esto no es cumplimiento legal.
+1. **Retención: confirmar contra la realidad de la institución.** Falta el **nombre** de quien ejerce el cargo de administrador principal y que tenga acceso de propietario a la base; y confirmar el fin de ciclo y la primera purga contra el calendario escolar oficial. Si cambian, se actualiza el runbook (sección 15).
 2. **Estrategia de PR: sin decidir** (sección 19).
 3. **Producción no verificada** desde este entorno (sección 18).
 
@@ -88,7 +89,7 @@ Los 17 puntos del contrato están implementados. Las decisiones que el contrato 
 | 13 | Anulación 3–200, sin doble, libera cupo | base | `anular_acceso_servicio` | SQL G1–G26; concurrencia 8; API; UI | Cumplido |
 | 14 | Sin registro manual ni modo sin conexión; cámara y foto con la misma verificación | servidor + UI | esquema estricto; `EscanerAcceso` | cripto (campos de identidad rechazados); auth (foto y cámara); **teléfonos reales: confirmación de Lucas** (§11) | Cumplido |
 | 15 | Límite atómico, 429 con `Retry-After`, antes de la firma | base + servidor | `consumir_cupo_escaneo`; ruta | SQL I1–I13b (149/150/151, bloqueo de 2 min, re-bloqueo, inválidos aún de 15 min); concurrencia 10 (180 simultáneas → 150); auth 429 (150 + 1) | Cumplido con los valores aprobados (150/5 min, bloqueo de 2 min); **medidos en local** (§16.1) |
-| 16 | Retención y mantenimiento cerrado y auditado | base | `depurar_accesos_servicios` | SQL K1–K22 | Cumplido; responsable por cargo y fechas **provisionales** (§15) |
+| 16 | Retención y mantenimiento cerrado y auditado | base | `depurar_accesos_servicios` | SQL K1–K22 | Cumplido; responsable por cargo, fin de ciclo y primera purga decididos por Lucas, a confirmar contra el calendario oficial (§15) |
 | 17 | Dispositivo compartido: datos a ~5 s, sin storage, sin imágenes, sin logs | UI + servidor | `EscanerAcceso`, `decodificar.ts` | UI; auth (sin payload en URL/almacenamiento); servicio (consola limpia) | Cumplido; inactividad: riesgo documentado |
 | 18 | El `kid` del QR coincide con el de la credencial | servidor + base | `registrar_acceso_servicio(…, p_clave_kid, …)`; `accesos-qr.service.ts` | SQL E2b–E2d; servicio (el cuerpo de la RPC lleva el `kid`); migración correctiva sobre datos | Cumplido (migración correctiva, `6dec72a`) |
 | 19 | Anulación y purga: ninguna anulación identificable sobre un evento anonimizado | base | `anular_acceso_servicio`, `depurar_accesos_servicios` | concurrencia 12a/12b; mutante | Cumplido (migración correctiva, `6dec72a`) |
@@ -339,17 +340,17 @@ Otros ajustes de pruebas ajenas por las nuevas claves foráneas y rutas, sin deb
 
 Fallos preexistentes comprobados contra `origin/main`: **solo el lint** (14 errores y 107 advertencias, medidos en la ronda anterior en un worktree limpio; ninguno en archivos de esta rama). Ninguna prueba de la E2E falló por un defecto previo.
 
-## 15. Retención: decisión provisional (gate previo a la primera purga real)
+## 15. Retención: decisiones de Lucas (a confirmar antes de la primera purga real)
 
 Política aprobada como decisión de producto, **no como afirmación legal**: eventos identificables hasta el fin del ciclo lectivo + 90 días y luego anonimización; denegaciones 90 días y luego eliminación; contadores 24 horas. v1 se ejecuta a mano; **no se habilitó `pg_cron`** y habilitarlo requiere una aprobación nueva.
 
-**Decisiones registradas de Lucas (01/10/2026), tal como las dio:**
+**Decisiones registradas de Lucas (01/10/2026), tal como las dio** (una a la vez; ninguna es cumplimiento legal):
 
 | Dato | Decisión | Estado |
 |---|---|---|
 | Responsable de ejecutar y custodiar la purga | Lucas lo precisó el 01/10/2026: **«admin principal nomás»**. Se registra **por cargo único: administrador principal del sistema**, **sin nombre propio** (primero había dicho «el admin principal o el director») | Definido por cargo; **falta el nombre de la persona** |
 | Fin del ciclo lectivo | Lucas pidió primero una **fecha ficticia** y se fijó `2026-12-18`; el 01/10/2026, consultado por la fecha oficial, respondió «si esa está bien» | **Aceptada por Lucas como la fecha a usar; origen NO verificado contra el calendario escolar oficial** |
-| Primera purga | Derivada de la regla de la función (corre solo si `fin de ciclo + 90 días < hoy`): **no antes del `2027-03-19`** | **Mínimo calculado; la fecha elegida no está definida** |
+| Primera purga | Lucas, el 01/10/2026: **«si usa esa fecha»**, es decir `2027-03-19`, el mínimo que permite la regla de la función (corre solo si `fin de ciclo + 90 días < hoy`; `2026-12-18 + 90 = 2027-03-18`) | **Fijada por Lucas: 2027-03-19.** Depende de que el fin de ciclo sea el correcto: si cambia, cambia esta fecha |
 
 Antes de ejecutar la primera purga real hay que **confirmar el fin de ciclo contra el calendario escolar oficial** y elegir la fecha de ejecución. Que Lucas haya aceptado `2026-12-18` **no demuestra cumplimiento legal** ni que coincida con el calendario de la institución.
 
@@ -450,7 +451,7 @@ La reversión de Git **no** deshace la base. Plan compensatorio (**documentado, 
 
 ## 18. Plan de despliegue y postflight (DOCUMENTADO, NO EJECUTADO)
 
-1. **Gates cerrados:** persona y fechas **oficiales** de la retención (la sección 15 es provisional) y estrategia de PR decidida. La cámara en teléfonos reales (sección 11), el ajuste de límites (16.1) y la deuda de `consultar_validez_credencial_qr` (sección 13) ya están resueltos.
+1. **Gates cerrados:** estrategia de PR decidida y autorización de Lucas para publicar; nombre de quien ejerce el cargo de administrador principal con acceso de propietario a la base, y fechas de retención confirmadas contra el calendario oficial (la sección 15 recoge las decisiones de Lucas, no una verificación institucional). La cámara en teléfonos reales (sección 11), el ajuste de límites (16.1) y la deuda de `consultar_validez_credencial_qr` (sección 13) ya están resueltos.
 2. Confirmar el **proyecto correcto** y el **ledger** de producción: `supabase migration list --linked`. Esta tarea **no pudo verificarlo**. Debe mostrar aplicada `20260929224534`. Si **ninguna** migración de EPT-65 figura aplicada, se aplican las dos en orden (`20261001012522` y luego `20261001165229`). Si **la original ya figura aplicada** (cualquiera que sea la razón), se aplica solo `20261001165229`: está probada sobre una base donde la original ya registró accesos, una anulación y una denegación, y no cambia ninguna fila.
 3. **Respaldo** de la base antes de aplicar (registrar su identificador, nunca su contenido).
 4. Revisar con `--dry-run` y aplicar **solo las migraciones pendientes**; cada una se autoverifica y aborta si algo no queda como se espera.
@@ -459,7 +460,7 @@ La reversión de Git **no** deshace la base. Plan compensatorio (**documentado, 
 7. Integrar el código **con autorización de Lucas** (PR → revisión → merge).
 8. Comprobar el despliegue: `/api/accesos-servicios/registro` responde 401 sin sesión y 405 a `GET`; `/dashboard/accesos` redirige al inicio de sesión; los encabezados `Permissions-Policy` coinciden; `/pruebas-ui/accesos` responde 404 idéntico al de una ruta inexistente.
 9. **Postflight con identidades de prueba autorizadas.** **No insertar eventos de prueba en producción sin autorización explícita y un plan de limpieza:** un REGISTRADO no se puede borrar (solo anular y, a su tiempo, anonimizar); una denegación de prueba se elimina a los 90 días. Si Lucas lo autoriza, acordar de antemano qué credencial y qué día se usan y aceptar que ese evento queda anulado en la auditoría.
-10. Programar la **primera purga** con la persona y la fecha oficiales que la institución defina.
+10. Programar la **primera purga** el 2027-03-19 (decisión de Lucas) o en la fecha que resulte de confirmar el calendario oficial, a cargo del administrador principal.
 
 ## 19. Entrega: política del repositorio, estrategia de PR y textos preparados (NO publicados)
 
@@ -472,8 +473,8 @@ La reversión de Git **no** deshace la base. Plan compensatorio (**documentado, 
 
 **Texto del comentario para Jira (EPT-65). NO publicado; el estado recomendado es mantener «En curso»:**
 
-> Candidato local de RF21 «Registrar accesos con QR», sin integrar ni desplegar y **con un gate institucional abierto** (retención). Rama `codex/ept-65-accesos-qr` sobre `origin/main` `d4fa26f`; evidencia en `docs/evidence/EPT-65.md`. El operador (Dirección o Personal, con su propia cuenta) elige comedor o recorrido y sentido y lee el QR con la cámara o una foto; el servidor verifica la firma HMAC **antes** de invocar la operación de PostgreSQL, que solo ejecuta `service_role` y revalida al operador. Un `credencial_id` conocido no permite registrar nada (probado por PostgREST con sesiones reales). Incluye límite de intentos por cuenta, idempotencia por intento, anulación de Dirección que libera el cupo sin borrar historia, auditoría de solo lectura y retención con mantenimiento manual. Una revisión independiente halló dos defectos medios (el `kid` del QR no se ataba a la credencial; carrera entre anulación y purga): corregidos y probados. Pruebas sobre el código final: SQL (309 comprobaciones), concurrencia real en 12 grupos, migraciones sobre datos (incluida la correctiva sobre una base con accesos ya registrados), API con sesiones reales por actor y E2E completa (1580 aprobadas, 14 omitidas de las cuales 12 son de otras historias, 0 fallos). Cámara y fotografía confirmadas manualmente por Lucas en un Android Chrome real (modelo no informado) y en el Safari de un iPhone 14 con iOS 26. Límite por volumen aprobado e implementado: 150 solicitudes por cuenta cada 5 minutos con bloqueo de 2 minutos (el de 10 firmas inválidas cada 10 minutos y 15 minutos no cambia). Las correcciones viven en una migración correctiva nueva; la original no se tocó.
-> **Pendiente / abierto:** (1) retención: responsable por cargo (administrador principal, sin nombre propio) y fin de ciclo 2026-12-18 **aceptado por Lucas, sin verificar contra el calendario oficial** (primera purga: mínimo 2027-03-19, fecha elegida sin definir), a confirmar; (2) `consultar_validez_credencial_qr` de EPT-64 (concedida a `authenticated`, sin capacidad adicional): **aceptada como deuda separada**; (3) estrategia de PR; (4) producción no verificada desde este entorno: confirmar el ledger antes de desplegar.
+> Candidato local de RF21 «Registrar accesos con QR», sin integrar ni desplegar; listo para revisión local, con la retención decidida por Lucas y pendiente de confirmar contra el calendario oficial. Rama `codex/ept-65-accesos-qr` sobre `origin/main` `d4fa26f`; evidencia en `docs/evidence/EPT-65.md`. El operador (Dirección o Personal, con su propia cuenta) elige comedor o recorrido y sentido y lee el QR con la cámara o una foto; el servidor verifica la firma HMAC **antes** de invocar la operación de PostgreSQL, que solo ejecuta `service_role` y revalida al operador. Un `credencial_id` conocido no permite registrar nada (probado por PostgREST con sesiones reales). Incluye límite de intentos por cuenta, idempotencia por intento, anulación de Dirección que libera el cupo sin borrar historia, auditoría de solo lectura y retención con mantenimiento manual. Una revisión independiente halló dos defectos medios (el `kid` del QR no se ataba a la credencial; carrera entre anulación y purga): corregidos y probados. Pruebas sobre el código final: SQL (309 comprobaciones), concurrencia real en 12 grupos, migraciones sobre datos (incluida la correctiva sobre una base con accesos ya registrados), API con sesiones reales por actor y E2E completa (1580 aprobadas, 14 omitidas de las cuales 12 son de otras historias, 0 fallos). Cámara y fotografía confirmadas manualmente por Lucas en un Android Chrome real (modelo no informado) y en el Safari de un iPhone 14 con iOS 26. Límite por volumen aprobado e implementado: 150 solicitudes por cuenta cada 5 minutos con bloqueo de 2 minutos (el de 10 firmas inválidas cada 10 minutos y 15 minutos no cambia). Las correcciones viven en una migración correctiva nueva; la original no se tocó.
+> **Pendiente / abierto:** (1) retención: responsable por cargo (administrador principal, sin nombre propio) y fin de ciclo 2026-12-18 con primera purga el 2027-03-19, **decididos por Lucas y sin verificar contra el calendario oficial** (a confirmar); (2) `consultar_validez_credencial_qr` de EPT-64 (concedida a `authenticated`, sin capacidad adicional): **aceptada como deuda separada**; (3) estrategia de PR; (4) producción no verificada desde este entorno: confirmar el ledger antes de desplegar.
 
 **Título del PR:** `feat(accesos): registrar accesos al comedor y al transporte con QR (EPT-65)`
 
