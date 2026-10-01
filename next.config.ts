@@ -40,6 +40,33 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   },
+  /**
+   * Política de cámara lo más acotada posible (EPT-65, RF21).
+   *
+   * Ninguna página pide la cámara, el micrófono ni la ubicación: se deshabilitan
+   * en todo el sitio. Solo el escáner de accesos (`/dashboard/accesos`) la
+   * habilita, y únicamente para su propio origen (`self`), nunca para un iframe
+   * de terceros. Cuando dos reglas fijan el mismo encabezado gana la última, de
+   * modo que la regla específica va después de la general.
+   */
+  async headers() {
+    const sinDispositivos = "camera=(), microphone=(), geolocation=()";
+    return [
+      {
+        source: "/:path*",
+        headers: [{ key: "Permissions-Policy", value: sinDispositivos }],
+      },
+      {
+        source: "/dashboard/accesos",
+        headers: [
+          {
+            key: "Permissions-Policy",
+            value: "camera=(self), microphone=(), geolocation=()",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

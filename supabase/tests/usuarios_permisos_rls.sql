@@ -582,6 +582,11 @@ BEGIN
     PERFORM pg_temp.rpc('public.revocar_credencial_qr', 'x', pg_catalog.format('public.revocar_credencial_qr(%L, %L)', CRED, 'Prueba de batería'));
     PERFORM pg_temp.rpc('public.historial_credenciales_qr', 'n', pg_catalog.format('public.historial_credenciales_qr(%L)', EST));
     PERFORM pg_temp.rpc('public.consultar_validez_credencial_qr', 'n', pg_catalog.format('public.consultar_validez_credencial_qr(%L)', CRED));
+    -- EPT-65: registro de accesos con QR. Solo Dirección habilitada anula y consulta; la operación
+    -- que REGISTRA (registrar_acceso_servicio) y el límite de intentos no la ejecuta ningún usuario
+    -- autenticado y por eso no figuran en esta batería. Cada intento se revierte.
+    PERFORM pg_temp.rpc('public.anular_acceso_servicio', 'x', pg_catalog.format('public.anular_acceso_servicio(%L, %L)', CRED, 'Prueba de batería'));
+    PERFORM pg_temp.rpc('public.listar_accesos_servicios', 'n', 'public.listar_accesos_servicios(NULL, NULL, NULL, 10, 0)');
     PERFORM pg_temp.rpc('public.configurar_horario_materia', 'x', pg_catalog.format('public.configurar_horario_materia(%L, 2::smallint, %L, %L, NULL)', ASIG, '09:00', '10:00'));
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria', 'n', 'public.consultar_compatibilidad_horaria()');
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria_alumno', 'n', pg_catalog.format('public.consultar_compatibilidad_horaria_alumno(%L)', EST));

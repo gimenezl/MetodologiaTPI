@@ -263,7 +263,7 @@ test.describe('DIRECTOR autenticado — más de 1000 filas por dominio', () => {
     sembrarCiclos(SERVICIO_TRANSPORTE, CICLOS_POR_SERVICIO)
     sembrarCiclos(SERVICIO_TRANSPORTE_2, CICLOS_POR_SERVICIO)
 
-    const contexto = await browser.newContext({ storageState: SESION_DIRECTORA, baseURL: 'http://localhost:3000' })
+    const contexto = await browser.newContext({ storageState: SESION_DIRECTORA, baseURL: process.env.EPT_BASE_URL ?? 'http://localhost:3000' })
     const pagina = await contexto.newPage()
     const grupoId = await crearGrupoDeportivo(pagina)
     sembrarCiclosDeportivos(grupoId)

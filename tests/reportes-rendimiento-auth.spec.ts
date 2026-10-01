@@ -32,7 +32,7 @@ import { DEPORTE_BENCH_1, ESPERADO, NORTE, REPORTES, analizarCsv, limpiarVolumen
 test.skip(process.env.EPT_SUPABASE_LOCAL !== '1', 'Requiere EPT_SUPABASE_LOCAL=1 y un reset de la base local.')
 test.skip(process.env.EPT_BENCH !== '1', 'Requiere EPT_BENCH=1: es una medición, no una prueba funcional.')
 
-const BASE_URL = process.env.EPT_BENCH_URL ?? 'http://localhost:3000'
+const BASE_URL = process.env.EPT_BENCH_URL ?? process.env.EPT_BASE_URL ?? 'http://localhost:3000'
 const SESION = 'tests/.auth/directora.json'
 const REPETICIONES = Number(process.env.EPT_BENCH_REPETICIONES ?? 5)
 const LIMITE_MS = 60_000

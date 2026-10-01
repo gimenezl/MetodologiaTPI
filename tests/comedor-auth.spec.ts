@@ -36,7 +36,7 @@ const SESION_PADRE = 'tests/.auth/padre.json'
 const SESION_PERSONAL = 'tests/.auth/personal.json'
 const SESION_SIN_PERFIL = 'tests/.auth/sin-perfil.json'
 
-const BASE_URL = 'http://localhost:3000'
+const BASE_URL = process.env.EPT_BASE_URL ?? 'http://localhost:3000'
 const SERVICIO_COMEDOR = 'e0000000-0000-4000-8000-000000000010'
 const LEGAJO_ESTUDIANTE = 'LEG-PRUEBA-0002'
 
@@ -627,7 +627,7 @@ test.describe('ESTUDIANTE autenticado — cierre de sesión desde el comedor', (
       await capturar(page, 'escritorio-cerrar-sesion-visible')
 
       await cerrar.first().click()
-      await page.waitForURL('http://localhost:3000/', { timeout: 20_000 })
+      await page.waitForURL(`${process.env.EPT_BASE_URL ?? 'http://localhost:3000'}/`, { timeout: 20_000 })
 
       await page.goto('/dashboard/comedor')
       await expect(page).toHaveURL(/\/login/)
@@ -661,7 +661,7 @@ test.describe('ESTUDIANTE autenticado — cierre de sesión desde el comedor', (
       await capturar(page, 'movil-cerrar-sesion-visible')
 
       await cerrarMovil.click()
-      await page.waitForURL('http://localhost:3000/', { timeout: 20_000 })
+      await page.waitForURL(`${process.env.EPT_BASE_URL ?? 'http://localhost:3000'}/`, { timeout: 20_000 })
 
       await page.goto('/dashboard/comedor')
       await expect(page).toHaveURL(/\/login/)

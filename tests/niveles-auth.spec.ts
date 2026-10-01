@@ -24,7 +24,7 @@ test.skip(
 
 const SESION_DIRECTORA = 'tests/.auth/directora.json'
 const SESION_ESTUDIANTE = 'tests/.auth/estudiante.json'
-const BASE_URL = 'http://localhost:3000'
+const BASE_URL = process.env.EPT_BASE_URL ?? 'http://localhost:3000'
 const contextosActivos: APIRequestContext[] = []
 const CAPTURAR = process.env.EPT_CAPTURAS === '1'
 

@@ -30,7 +30,7 @@ test.describe('PADRE autenticado', () => {
     const ajeno = await request.get(`/api/hijos/${'00000000-0000-4000-8000-000000000099'}`)
     expect(ajeno.status()).toBe(404)
     const anonimo = await crearContexto.newContext({
-      baseURL: 'http://localhost:3000',
+      baseURL: process.env.EPT_BASE_URL ?? 'http://localhost:3000',
       storageState: { cookies: [], origins: [] },
     })
     try {
@@ -90,7 +90,7 @@ test.describe('PADRE autenticado', () => {
     expect(segunda.status()).toBe(409)
     expect((await segunda.json()).error).toMatch(/alumno ya está activo|matrícula vigente/i)
 
-    const contextoDirector = await browser.newContext({ baseURL: 'http://localhost:3000', storageState: 'tests/.auth/directora.json' })
+    const contextoDirector = await browser.newContext({ baseURL: process.env.EPT_BASE_URL ?? 'http://localhost:3000', storageState: 'tests/.auth/directora.json' })
     try {
       const paginaDirector = await contextoDirector.newPage()
       await paginaDirector.goto('/dashboard/alumnos')

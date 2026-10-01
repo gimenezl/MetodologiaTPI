@@ -34,6 +34,106 @@ export type Database = {
   }
   public: {
     Tables: {
+      accesos_servicios: {
+        Row: {
+          alumno_id: string | null
+          anonimizado_en: string | null
+          credencial_id: string | null
+          dia_servicio: string | null
+          id: string
+          intento_id: string | null
+          motivo_denegacion:
+            | Database["public"]["Enums"]["motivo_denegacion_acceso"]
+            | null
+          operador_perfil_id: string | null
+          registrado_en: string
+          resultado: Database["public"]["Enums"]["resultado_acceso_servicio"]
+          sentido:
+            | Database["public"]["Enums"]["sentido_acceso_transporte"]
+            | null
+          servicio_id: string
+        }
+        Insert: {
+          alumno_id?: string | null
+          anonimizado_en?: string | null
+          credencial_id?: string | null
+          dia_servicio?: string | null
+          id?: string
+          intento_id?: string | null
+          motivo_denegacion?:
+            | Database["public"]["Enums"]["motivo_denegacion_acceso"]
+            | null
+          operador_perfil_id?: string | null
+          registrado_en?: string
+          resultado: Database["public"]["Enums"]["resultado_acceso_servicio"]
+          sentido?:
+            | Database["public"]["Enums"]["sentido_acceso_transporte"]
+            | null
+          servicio_id: string
+        }
+        Update: {
+          alumno_id?: string | null
+          anonimizado_en?: string | null
+          credencial_id?: string | null
+          dia_servicio?: string | null
+          id?: string
+          intento_id?: string | null
+          motivo_denegacion?:
+            | Database["public"]["Enums"]["motivo_denegacion_acceso"]
+            | null
+          operador_perfil_id?: string | null
+          registrado_en?: string
+          resultado?: Database["public"]["Enums"]["resultado_acceso_servicio"]
+          sentido?:
+            | Database["public"]["Enums"]["sentido_acceso_transporte"]
+            | null
+          servicio_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accesos_servicios_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos"
+            referencedColumns: ["perfil_id"]
+          },
+          {
+            foreignKeyName: "accesos_servicios_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos_academicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accesos_servicios_credencial_id_fkey"
+            columns: ["credencial_id"]
+            isOneToOne: false
+            referencedRelation: "credenciales_qr"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accesos_servicios_operador_perfil_id_fkey"
+            columns: ["operador_perfil_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accesos_servicios_servicio_id_fkey"
+            columns: ["servicio_id"]
+            isOneToOne: false
+            referencedRelation: "recorridos_transporte"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accesos_servicios_servicio_id_fkey"
+            columns: ["servicio_id"]
+            isOneToOne: false
+            referencedRelation: "servicios_escolares"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       actividades: {
         Row: {
           activo: boolean
@@ -114,6 +214,45 @@ export type Database = {
             foreignKeyName: "alumnos_perfil_id_fkey"
             columns: ["perfil_id"]
             isOneToOne: true
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      anulaciones_accesos_servicios: {
+        Row: {
+          acceso_id: string
+          anonimizada_en: string | null
+          anulado_en: string
+          anulado_por: string | null
+          motivo: string | null
+        }
+        Insert: {
+          acceso_id: string
+          anonimizada_en?: string | null
+          anulado_en?: string
+          anulado_por?: string | null
+          motivo?: string | null
+        }
+        Update: {
+          acceso_id?: string
+          anonimizada_en?: string | null
+          anulado_en?: string
+          anulado_por?: string | null
+          motivo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "anulaciones_accesos_servicios_acceso_id_fkey"
+            columns: ["acceso_id"]
+            isOneToOne: true
+            referencedRelation: "accesos_servicios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "anulaciones_accesos_servicios_anulado_por_fkey"
+            columns: ["anulado_por"]
+            isOneToOne: false
             referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
@@ -1999,6 +2138,22 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      anular_acceso_servicio: {
+        Args: { p_acceso_id: string; p_motivo: string }
+        Returns: {
+          acceso_id: string
+          anonimizada_en: string | null
+          anulado_en: string
+          anulado_por: string | null
+          motivo: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "anulaciones_accesos_servicios"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       anular_desafio_vinculo: {
         Args: { p_director_perfil_id: string; p_operacion_id: string }
         Returns: undefined
@@ -2412,6 +2567,13 @@ export type Database = {
           vinculado: boolean
         }[]
       }
+      consumir_cupo_escaneo: {
+        Args: { p_actor_user_id: string }
+        Returns: {
+          permitido: boolean
+          reintentar_en_segundos: number
+        }[]
+      }
       corregir_identidad_alumno: {
         Args: { p_alumno_id: string; p_dni: string; p_legajo_nro?: string }
         Returns: string
@@ -2679,6 +2841,35 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      listar_accesos_servicios: {
+        Args: {
+          p_desplazamiento?: number
+          p_dia?: string
+          p_limite?: number
+          p_resultado?: Database["public"]["Enums"]["resultado_acceso_servicio"]
+          p_servicio_id?: string
+        }
+        Returns: {
+          alumno_apellido: string
+          alumno_legajo: string
+          alumno_nombre: string
+          anonimizado: boolean
+          anulado: boolean
+          anulado_en: string
+          anulado_motivo: string
+          anulado_por_nombre: string
+          dia_servicio: string
+          id: string
+          motivo_denegacion: Database["public"]["Enums"]["motivo_denegacion_acceso"]
+          operador_nombre: string
+          registrado_en: string
+          resultado: Database["public"]["Enums"]["resultado_acceso_servicio"]
+          sentido: Database["public"]["Enums"]["sentido_acceso_transporte"]
+          servicio_nombre: string
+          servicio_tipo: Database["public"]["Enums"]["tipo_servicio_escolar"]
+          total: number
+        }[]
+      }
       listar_asignaciones_profesor: {
         Args: { p_profesor_id?: string }
         Returns: {
@@ -2813,6 +3004,30 @@ export type Database = {
       reactivar_alumno: {
         Args: { p_alumno_id: string; p_curso_id: string }
         Returns: string
+      }
+      registrar_acceso_servicio: {
+        Args: {
+          p_actor_user_id: string
+          p_clave_kid: string
+          p_credencial_id: string
+          p_intento_id: string
+          p_sentido?: Database["public"]["Enums"]["sentido_acceso_transporte"]
+          p_servicio_id: string
+        }
+        Returns: {
+          alumno_apellido: string
+          alumno_legajo: string
+          alumno_nombre: string
+          codigo_resultado: string
+          sellado_en: string
+        }[]
+      }
+      registrar_escaneo_invalido: {
+        Args: { p_actor_user_id: string }
+        Returns: {
+          bloqueado: boolean
+          reintentar_en_segundos: number
+        }[]
       }
       renombrar_deporte: {
         Args: { p_deporte_id: string; p_nombre: string }
@@ -3137,6 +3352,16 @@ export type Database = {
       estado_inscripcion_servicio: "ACTIVA" | "CANCELADA"
       estado_profesor: "ACTIVO" | "INACTIVO"
       motivo_cierre_matricula: "CAMBIO_DE_CURSO" | "INACTIVACION"
+      motivo_denegacion_acceso:
+        | "YA_REGISTRADO"
+        | "CREDENCIAL_REVOCADA"
+        | "ALUMNO_INACTIVO"
+        | "ACCESO_BLOQUEADO"
+        | "SERVICIO_INACTIVO"
+        | "SIN_INSCRIPCION"
+        | "RECORRIDO_DISTINTO"
+      resultado_acceso_servicio: "REGISTRADO" | "DENEGADO"
+      sentido_acceso_transporte: "IDA" | "VUELTA"
       tipo_servicio_escolar: "COMEDOR" | "TRANSPORTE"
     }
     CompositeTypes: {
@@ -3276,6 +3501,17 @@ export const Constants = {
       estado_inscripcion_servicio: ["ACTIVA", "CANCELADA"],
       estado_profesor: ["ACTIVO", "INACTIVO"],
       motivo_cierre_matricula: ["CAMBIO_DE_CURSO", "INACTIVACION"],
+      motivo_denegacion_acceso: [
+        "YA_REGISTRADO",
+        "CREDENCIAL_REVOCADA",
+        "ALUMNO_INACTIVO",
+        "ACCESO_BLOQUEADO",
+        "SERVICIO_INACTIVO",
+        "SIN_INSCRIPCION",
+        "RECORRIDO_DISTINTO",
+      ],
+      resultado_acceso_servicio: ["REGISTRADO", "DENEGADO"],
+      sentido_acceso_transporte: ["IDA", "VUELTA"],
       tipo_servicio_escolar: ["COMEDOR", "TRANSPORTE"],
     },
   },

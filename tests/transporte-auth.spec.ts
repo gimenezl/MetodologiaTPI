@@ -37,7 +37,7 @@ const SESION_PADRE = 'tests/.auth/padre.json'
 const SESION_PERSONAL = 'tests/.auth/personal.json'
 const SESION_SIN_PERFIL = 'tests/.auth/sin-perfil.json'
 
-const BASE_URL = 'http://localhost:3000'
+const BASE_URL = process.env.EPT_BASE_URL ?? 'http://localhost:3000'
 const TR_NORTE = 'e0000000-0000-4000-8000-000000000020'
 const TR_SUR = 'e0000000-0000-4000-8000-000000000021'
 const SERVICIO_COMEDOR = 'e0000000-0000-4000-8000-000000000010'

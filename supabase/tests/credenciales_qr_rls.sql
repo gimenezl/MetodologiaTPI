@@ -457,8 +457,13 @@ SELECT pg_temp.esperar(pg_temp.ejecutar('service_role', NULL, 'DELETE FROM publi
 -- D9..D16. Ni el propietario puede alterar el historial fuera de ACTIVA → REVOCADA.
 SELECT pg_temp.esperar(pg_temp.propietario('DELETE FROM public.credenciales_qr'),
     'P5626', '[D9] el propietario tampoco borra');
+-- Desde EPT-65 `accesos_servicios` referencia a `credenciales_qr`: un TRUNCATE sin
+-- CASCADE ya lo rechaza PostgreSQL por la clave foránea (0A000) ANTES de llegar al
+-- trigger. La guarda de EPT-64 se sigue probando con CASCADE, que sí la dispara.
 SELECT pg_temp.esperar(pg_temp.propietario('TRUNCATE public.credenciales_qr'),
-    'P5626', '[D10] el propietario tampoco trunca');
+    '0A000', '[D10a] el propietario no trunca la tabla referenciada por los accesos (clave foránea)');
+SELECT pg_temp.esperar(pg_temp.propietario('TRUNCATE public.credenciales_qr CASCADE'),
+    'P5626', '[D10] el propietario tampoco trunca (ni con CASCADE: lo detiene la guarda)');
 SELECT pg_temp.esperar(pg_temp.propietario(pg_catalog.format(
     'UPDATE public.credenciales_qr SET alumno_id = %L WHERE id = %L', pg_temp.u('08'), pg_temp.fx('cred_07_a'))),
     'P5626', '[D11] el alumno de una credencial es inmutable');
@@ -755,6 +760,12 @@ DROP TABLE antes_h;
 -- ================================================================
 -- Solo es válida en un entorno SIN credenciales emitidas de verdad: DROP TABLE
 -- destruye el historial. Se prueba dentro de esta transacción y se descarta.
+--
+-- Desde EPT-65 `accesos_servicios` tiene una clave foránea hacia `credenciales_qr`:
+-- la reversión de EPT-64 exige revertir ANTES la de EPT-65 (ver su migración y
+-- docs/evidence/EPT-65.md). Aquí solo se sueltan las dos tablas que la referencian.
+DROP TABLE public.anulaciones_accesos_servicios CASCADE;
+DROP TABLE public.accesos_servicios CASCADE;
 DROP FUNCTION public.emitir_credencial_qr(UUID, TEXT);
 DROP FUNCTION public.reponer_credencial_qr(UUID, TEXT, TEXT);
 DROP FUNCTION public.revocar_credencial_qr(UUID, TEXT);

@@ -7,6 +7,13 @@ import { loadEnvConfig } from '@next/env'
 // variables. Sin esto, el setup autenticado no encuentra la base local.
 loadEnvConfig(process.cwd())
 
+// Puerto del servidor de pruebas. Por defecto 3000. Si otro proceso ajeno ocupa ese
+// puerto (Playwright reutilizaría su respuesta creyendo que es esta aplicación), se
+// fija con EPT_PUERTO_APP. Las pruebas leen la URL base de EPT_BASE_URL.
+const puertoApp = process.env.EPT_PUERTO_APP ?? '3000'
+const urlBase = process.env.EPT_BASE_URL ?? `http://localhost:${puertoApp}`
+process.env.EPT_BASE_URL = urlBase
+
 // Los bancos de pruebas de interfaz (`/pruebas-ui/cursos`, `/pruebas-ui/niveles`
 // y `/pruebas-ui/alumnos`) solo se habilitan para
 // esta corrida. Las credenciales de Supabase se completan con valores de relleno
@@ -49,7 +56,7 @@ for (const clave of [
 const conBaseLocal = process.env.EPT_SUPABASE_LOCAL === '1'
 
 const PRUEBAS_AUTENTICADAS =
-  /(?:cursos|niveles|alumnos|usuarios|usuarios-permisos|materias|comedor|deportes|transporte|inscripciones-administracion|inscripciones-administracion-e2e|inscripciones-administracion-paginacion|horarios|horarios-academicos|hijos|profesores|gestion-estudiantes|reportes|reportes-rendimiento|credenciales-qr)-auth\.spec\.ts/
+  /(?:cursos|niveles|alumnos|usuarios|usuarios-permisos|materias|comedor|deportes|transporte|inscripciones-administracion|inscripciones-administracion-e2e|inscripciones-administracion-paginacion|horarios|horarios-academicos|hijos|profesores|gestion-estudiantes|reportes|reportes-rendimiento|credenciales-qr|accesos-qr)-auth\.spec\.ts/
 const PRUEBAS_SETUP = /auth\.setup\.ts/
 
 // `niveles-responsive` existe únicamente para los perfiles móviles.
@@ -60,7 +67,7 @@ const PRUEBAS_SOLO_MOVIL = /niveles-responsive\.spec\.ts/
 // ventana, de modo que un mismo archivo demuestra la presentación de escritorio
 // y la móvil.
 const PRUEBAS_MULTIPERFIL =
-  /(?:alumnos-(?:ui|contraste)|materias-ui|comedor-ui|deportes-ui|transporte-ui|inscripciones-administracion-ui|horarios-ui|hijos-ui|profesores-ui|credenciales-qr-ui)\.spec\.ts/
+  /(?:alumnos-(?:ui|contraste)|materias-ui|comedor-ui|deportes-ui|transporte-ui|inscripciones-administracion-ui|horarios-ui|hijos-ui|profesores-ui|credenciales-qr-ui|accesos-qr-ui)\.spec\.ts/
 
 const proyectoBase: Project = {
   name: 'chromium',
@@ -186,12 +193,12 @@ export default defineConfig({
   // aserciones históricas de Cursos; sin base local se conserva el paralelismo.
   workers: conBaseLocal ? 1 : undefined,
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: urlBase,
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
+    command: `npm run dev -- --port ${puertoApp}`,
+    url: urlBase,
     reuseExistingServer: true,
     env: entornoServidor,
   },
