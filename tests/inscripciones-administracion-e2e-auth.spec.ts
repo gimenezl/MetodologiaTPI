@@ -37,7 +37,7 @@ const SESION = {
   estudiante: 'tests/.auth/estudiante.json',
 }
 
-const BASE_URL = 'http://localhost:3000'
+const BASE_URL = process.env.EPT_BASE_URL ?? 'http://localhost:3000'
 const CONTENEDOR = process.env.EPT_SUPABASE_DB_CONTAINER ?? 'supabase_db_educar-para-transformar'
 const CAPTURAR = process.env.EPT_CAPTURAS === '1'
 

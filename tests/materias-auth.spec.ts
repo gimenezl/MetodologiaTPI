@@ -25,7 +25,7 @@ test.skip(
 
 const SESION_DIRECTORA = 'tests/.auth/directora.json'
 const SESION_ESTUDIANTE = 'tests/.auth/estudiante.json'
-const BASE_URL = 'http://localhost:3000'
+const BASE_URL = process.env.EPT_BASE_URL ?? 'http://localhost:3000'
 const contextosActivos: APIRequestContext[] = []
 const CAPTURAR = process.env.EPT_CAPTURAS === '1'
 
@@ -498,7 +498,7 @@ test.describe('DIRECTOR autenticado — cierre de sesión', () => {
       await capturar(page, 'escritorio-cerrar-sesion-visible')
 
       await cerrar.first().click()
-      await page.waitForURL('http://localhost:3000/', { timeout: 20_000 })
+      await page.waitForURL(`${process.env.EPT_BASE_URL ?? 'http://localhost:3000'}/`, { timeout: 20_000 })
 
       // Volver atrás no devuelve el panel: la sesión ya no existe.
       await page.goBack()
@@ -536,7 +536,7 @@ test.describe('DIRECTOR autenticado — cierre de sesión', () => {
       await capturar(page, 'movil-cerrar-sesion-visible')
 
       await cerrarMovil.click()
-      await page.waitForURL('http://localhost:3000/', { timeout: 20_000 })
+      await page.waitForURL(`${process.env.EPT_BASE_URL ?? 'http://localhost:3000'}/`, { timeout: 20_000 })
 
       await page.goto('/dashboard/materias')
       await expect(page).toHaveURL(/\/login/)

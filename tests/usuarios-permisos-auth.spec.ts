@@ -37,7 +37,7 @@ test.skip(
   'Requiere EPT_SUPABASE_LOCAL=1 y un reset de la base local.'
 )
 
-const BASE_URL = 'http://localhost:3000'
+const BASE_URL = process.env.EPT_BASE_URL ?? 'http://localhost:3000'
 const CONTENEDOR = process.env.EPT_SUPABASE_DB_CONTAINER ?? 'supabase_db_educar-para-transformar'
 const CAPTURAR = process.env.EPT_CAPTURAS === '1'
 const EVIDENCIA = 'docs/evidence/EPT-59'

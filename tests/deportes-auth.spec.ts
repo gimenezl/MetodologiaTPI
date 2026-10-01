@@ -58,7 +58,7 @@ const SESION = {
   sinPerfil: 'tests/.auth/sin-perfil.json',
 }
 
-const BASE_URL = 'http://localhost:3000'
+const BASE_URL = process.env.EPT_BASE_URL ?? 'http://localhost:3000'
 const CAPTURAR = process.env.EPT_CAPTURAS === '1'
 
 const DEPORTE = {

@@ -7,6 +7,13 @@ import { loadEnvConfig } from '@next/env'
 // variables. Sin esto, el setup autenticado no encuentra la base local.
 loadEnvConfig(process.cwd())
 
+// Puerto del servidor de pruebas. Por defecto 3000. Si otro proceso ajeno ocupa ese
+// puerto (Playwright reutilizaría su respuesta creyendo que es esta aplicación), se
+// fija con EPT_PUERTO_APP. Las pruebas leen la URL base de EPT_BASE_URL.
+const puertoApp = process.env.EPT_PUERTO_APP ?? '3000'
+const urlBase = process.env.EPT_BASE_URL ?? `http://localhost:${puertoApp}`
+process.env.EPT_BASE_URL = urlBase
+
 // Los bancos de pruebas de interfaz (`/pruebas-ui/cursos`, `/pruebas-ui/niveles`
 // y `/pruebas-ui/alumnos`) solo se habilitan para
 // esta corrida. Las credenciales de Supabase se completan con valores de relleno
@@ -186,12 +193,12 @@ export default defineConfig({
   // aserciones históricas de Cursos; sin base local se conserva el paralelismo.
   workers: conBaseLocal ? 1 : undefined,
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: urlBase,
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
+    command: `npm run dev -- --port ${puertoApp}`,
+    url: urlBase,
     reuseExistingServer: true,
     env: entornoServidor,
   },

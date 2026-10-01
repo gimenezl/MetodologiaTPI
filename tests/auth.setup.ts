@@ -287,7 +287,7 @@ export const CURSO_INICIAL_ALUMNOS = { denominacion: 'Sala de 5', division: 'A' 
 /** Se completa en la primera etapa y lo consumen las etapas siguientes. */
 export const perfilesCreados = new Map<string, string>()
 
-const BASE_URL = 'http://localhost:3000'
+const BASE_URL = process.env.EPT_BASE_URL ?? 'http://localhost:3000'
 
 function clienteAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL

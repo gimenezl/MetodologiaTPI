@@ -834,7 +834,7 @@ test.describe('SIN PERFIL autenticado', () => {
     expect((await cliente.rpc('emitir_credencial_qr', { p_alumno_id: alumno, p_clave_kid: 'k1' })).error?.code).toBe('42501')
 
     // Anónimo: sin cookies, cada ruta responde 401 sin revelar nada; PostgREST niega el privilegio.
-    const anonimo = await crearContexto.newContext({ baseURL: 'http://localhost:3000', storageState: { cookies: [], origins: [] } })
+    const anonimo = await crearContexto.newContext({ baseURL: process.env.EPT_BASE_URL ?? 'http://localhost:3000', storageState: { cookies: [], origins: [] } })
     try {
       const pedidos: [string, () => Promise<APIResponse>][] = [
         ['GET tarjeta', () => anonimo.get(`${RUTA}/${alumno}`)],

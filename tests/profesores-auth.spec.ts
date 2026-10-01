@@ -482,7 +482,7 @@ test.describe('DOCENTE autenticado — profesores', () => {
         COMMIT;`)
 
       // Contexto nuevo sin la sesión del proyecto.
-      const contexto = await browser.newContext({ storageState: undefined, baseURL: 'http://localhost:3000' })
+      const contexto = await browser.newContext({ storageState: undefined, baseURL: process.env.EPT_BASE_URL ?? 'http://localhost:3000' })
       const page = await contexto.newPage()
       await page.setViewportSize(ESCRITORIO)
       await page.goto('/login')
