@@ -45,6 +45,18 @@ QR_CREDENCIAL_KID_ACTIVA=k1                   # clave con la que se FIRMAN las c
 QR_CREDENCIAL_CLAVES=k1:<base64url de >=32 bytes aleatorios>[,k2:<...>]
 ```
 
+- Registro de accesos con QR al comedor y al transporte (EPT-65): reutiliza las dos
+  variables anteriores y **además exige `SUPABASE_SERVICE_ROLE_KEY`**, también solo
+  del lado del servidor. Con ella el servidor ejecuta, **después** de verificar la
+  firma del QR, la única operación de PostgreSQL que registra un acceso (ningún
+  usuario autenticado puede ejecutarla). Sin esa clave o sin las del QR, el registro
+  **falla cerrado** (503). Pantallas: `/dashboard/accesos` (Dirección y Personal) y
+  `/dashboard/accesos/auditoria` (solo Dirección). La retención de datos se ejecuta
+  a mano; el procedimiento, el plan de despliegue y los límites de la prueba están
+  en `docs/evidence/EPT-65.md`.
+- Pruebas end-to-end: si otro proceso ocupa el puerto 3000, definir `EPT_PUERTO_APP`
+  (por ejemplo `EPT_PUERTO_APP=3100`) antes de `npm run test:e2e`.
+
 ## Desarrollo
 
 ```bash

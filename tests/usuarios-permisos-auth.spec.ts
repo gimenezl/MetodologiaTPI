@@ -1086,11 +1086,11 @@ for (const actor of ['DOCENTE', 'ESTUDIANTE', 'PADRE', 'PERSONAL', 'SIN PERFIL']
     })
 
     if (actor === 'PERSONAL') {
-      test('PERSONAL solo tiene Inicio y Mi perfil, de solo lectura', async ({ page }) => {
+      test('PERSONAL solo tiene Inicio, Registrar accesos y Mi perfil', async ({ page }) => {
         await page.setViewportSize(ESCRITORIO)
         await page.goto('/dashboard')
         const menu = page.getByRole('navigation', { name: 'Menú del dashboard' })
-        await expect(menu.getByRole('link')).toHaveText(['Inicio', 'Mi perfil'])
+        await expect(menu.getByRole('link')).toHaveText(['Inicio', 'Registrar accesos', 'Mi perfil'])
         await expect(page.locator('main').getByRole('link', { name: /Mi perfil/u })).toBeVisible()
         await exigirSinDesbordeHorizontal(page, 'inicio de PERSONAL')
         await capturar(page, 'personal-inicio')
