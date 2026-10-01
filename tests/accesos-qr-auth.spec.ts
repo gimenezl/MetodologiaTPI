@@ -400,22 +400,25 @@ test.describe('DIRECTOR autenticado', () => {
   })
 
   test('API: el límite de solicitudes responde 429 con Retry-After ANTES de verificar la firma', async ({ request }) => {
+    // 150 llamadas HTTP reales en serie (~100 ms cada una): se amplía el tope de la prueba, no se oculta ningún fallo.
+    test.setTimeout(120_000)
     const alumno = beto()
     const { payload } = preparar(alumno, { comedor: true })
     const sinInscripcion = payloadFirmado(randomUUID())
     try {
-      // 60 solicitudes se admiten (firmas válidas de credenciales desconocidas: ningún evento).
-      for (let i = 0; i < 60; i += 1) {
+      // 150 solicitudes se admiten (firmas válidas de credenciales desconocidas: ningún evento).
+      for (let i = 0; i < 150; i += 1) {
         const r = await request.post(RUTA_REGISTRO, { data: { payload: sinInscripcion, intento_id: nuevoIntento(), servicio_id: SERVICIOS.comedor } })
         expect(r.status(), `solicitud ${i + 1}`).toBe(200)
       }
-      expect(contarContadores(IDENT.DIRECTORA.dni, 'SOLICITUD')).toBe(60)
+      expect(contarContadores(IDENT.DIRECTORA.dni, 'SOLICITUD')).toBe(150)
 
-      // La 61 se rechaza.
+      // La 151 se rechaza.
       const excedida = await request.post(RUTA_REGISTRO, { data: { payload, intento_id: nuevoIntento(), servicio_id: SERVICIOS.comedor } })
-      await exigirError(excedida, 429, 'LIMITE_EXCEDIDO', 'solicitud 61')
+      await exigirError(excedida, 429, 'LIMITE_EXCEDIDO', 'solicitud 151')
       const espera = Number(excedida.headers()['retry-after'])
-      expect(Number.isInteger(espera) && espera > 0 && espera <= 900, `Retry-After ${excedida.headers()['retry-after']}`).toBe(true)
+      // El bloqueo por volumen es de 2 minutos (el de firmas inválidas sigue siendo de 15).
+      expect(Number.isInteger(espera) && espera > 0 && espera <= 120, `Retry-After ${excedida.headers()['retry-after']}`).toBe(true)
       expect((await json(excedida)).reintentar_en_segundos).toBe(espera)
 
       // Bloqueada la cuenta, ni siquiera una credencial VÁLIDA y habilitada se registra
@@ -423,7 +426,7 @@ test.describe('DIRECTOR autenticado', () => {
       const valida = await request.post(RUTA_REGISTRO, { data: { payload, intento_id: nuevoIntento(), servicio_id: SERVICIOS.comedor } })
       await exigirError(valida, 429, 'LIMITE_EXCEDIDO', 'bloqueada')
       expect(contarAccesos(alumno)).toBe(0)
-      expect(contarContadores(IDENT.DIRECTORA.dni, 'SOLICITUD'), 'las rechazadas no suman').toBe(60)
+      expect(contarContadores(IDENT.DIRECTORA.dni, 'SOLICITUD'), 'las rechazadas no suman').toBe(150)
 
       // Otro operador no se ve afectado: el límite es por cuenta.
       expect(contarContadores(IDENT.PERSONAL.dni)).toBe(0)

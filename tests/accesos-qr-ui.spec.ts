@@ -309,6 +309,19 @@ test.describe('errores de red y límites', () => {
     await captura(page, 'limite')
   })
 
+  test('429 por volumen: el bloqueo de 2 minutos se informa como «unos 2 minutos»', async ({ page }) => {
+    await simular(page, {
+      estado: 429,
+      cuerpo: { error: 'Hiciste demasiados intentos en poco tiempo. Esperá unos minutos antes de volver a escanear.', codigo: 'LIMITE_EXCEDIDO', reintentar_en_segundos: 120 },
+      cabeceras: { 'retry-after': '120' },
+    })
+    await irA(page)
+    await escanearFoto(page)
+    const rechazo = page.locator('[role="alert"][aria-live="assertive"]').getByTestId('escaner-resultado')
+    await expect(rechazo).toContainText('Volvé a intentar en unos 2 minutos')
+    await expect(rechazo.getByRole('button', { name: 'Reintentar' })).toHaveCount(0)
+  })
+
   test('un corte de red conserva el MISMO intento: «Reintentar» no duplica ni crea un escaneo nuevo', async ({ page }) => {
     const peticiones: Capturado[] = []
     let intentos = 0
