@@ -373,6 +373,18 @@ function vaciarModeloAcademico() {
         -- limpieza local deshabilita la guarda, dentro de la transacción, y va
         -- antes de vaciar 'alumnos'. La clave de servicio no tiene ningún
         -- privilegio sobre la tabla.
+        -- EPT-65: los accesos con QR (y sus anulaciones) son de solo agregado y
+        -- referencian credenciales, alumnos y perfiles con ON DELETE RESTRICT. Mismo
+        -- criterio: solo esta limpieza local deshabilita sus guardas, dentro de la
+        -- transacción, y va ANTES de las credenciales. Los contadores del límite de
+        -- intentos son efímeros y se reinician para que cada corrida parta de cero.
+        ALTER TABLE public.anulaciones_accesos_servicios DISABLE TRIGGER USER;
+        ALTER TABLE public.accesos_servicios DISABLE TRIGGER USER;
+        DELETE FROM public.anulaciones_accesos_servicios;
+        DELETE FROM public.accesos_servicios;
+        ALTER TABLE public.accesos_servicios ENABLE TRIGGER USER;
+        ALTER TABLE public.anulaciones_accesos_servicios ENABLE TRIGGER USER;
+        DELETE FROM app_private.contadores_escaneo;
         ALTER TABLE public.credenciales_qr
           DISABLE TRIGGER proteger_credencial_qr_antes_de_escribir;
         DELETE FROM public.credenciales_qr;
