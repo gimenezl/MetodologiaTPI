@@ -51,7 +51,7 @@ const A = {
   rev1: 1, rev2: 2, rep: 3, ina1: 4, ina2: 5, blq1: 6, blq2: 7,
   op1: 8, op2: 9, can1: 10, can2: 11, srv1: 12, srv2: 13, cam1: 14, cam2: 15,
   anu1: 16, anu2: 17, doble: 18, int1: 19, int2a: 20, int2b: 21,
-  rafaga: 22,
+  rafaga: 22, purga1: 23, purga2: 24,
 }
 const ESTRES = [30, 31, 32, 33, 34, 35, 36, 37]
 const TODOS = [...Object.values(A), ...ESTRES]
@@ -102,7 +102,7 @@ function escanear(operador, intento, credencial, servicio, sentido = null) {
           BEGIN
             BEGIN
               SELECT codigo_resultado INTO v FROM public.registrar_acceso_servicio(
-                '${operador}', '${intento}', '${credencial}', '${servicio}', ${sentido ? `'${sentido}'` : 'NULL'});
+                '${operador}', '${intento}', '${credencial}', 'k1', '${servicio}', ${sentido ? `'${sentido}'` : 'NULL'});
               PERFORM pg_catalog.set_config('ept65.resultado', COALESCE(v, '<NULL>'), false);
             EXCEPTION
               WHEN OTHERS THEN
@@ -183,9 +183,14 @@ const limpiar = `RESET ROLE;
   ALTER TABLE public.anulaciones_accesos_servicios DISABLE TRIGGER USER;
   DELETE FROM public.anulaciones_accesos_servicios
    WHERE acceso_id IN (SELECT id FROM public.accesos_servicios
-                        WHERE alumno_id IN (${lista(TODOS_ALUMNOS)}) OR operador_perfil_id IN (${lista(OPERADORES)}));
+                        WHERE alumno_id IN (${lista(TODOS_ALUMNOS)}) OR operador_perfil_id IN (${lista(OPERADORES)})
+                           OR anonimizado_en IS NOT NULL);
   DELETE FROM public.accesos_servicios
-   WHERE alumno_id IN (${lista(TODOS_ALUMNOS)}) OR operador_perfil_id IN (${lista(OPERADORES)});
+   WHERE alumno_id IN (${lista(TODOS_ALUMNOS)}) OR operador_perfil_id IN (${lista(OPERADORES)})
+      OR anonimizado_en IS NOT NULL;
+  ALTER TABLE app_private.depuraciones_accesos_servicios DISABLE TRIGGER USER;
+  DELETE FROM app_private.depuraciones_accesos_servicios;
+  ALTER TABLE app_private.depuraciones_accesos_servicios ENABLE TRIGGER USER;
   ALTER TABLE public.anulaciones_accesos_servicios ENABLE TRIGGER USER;
   ALTER TABLE public.accesos_servicios ENABLE TRIGGER USER;
   DELETE FROM app_private.contadores_escaneo WHERE operador_perfil_id IN (${lista(OPERADORES)});
@@ -517,6 +522,63 @@ async function probarAnulacion(esc, otra, pids) {
 }
 
 // ---------------------------------------------------------------
+// 12. Anulación frente a la purga de retención (en los dos órdenes)
+// ---------------------------------------------------------------
+/** Evento REGISTRADO de hace 400 días, insertado por el propietario con las guardas apagadas. */
+async function envejecer(sesion, k, etiqueta) {
+  await sesion.ejecutar(
+    `RESET ROLE;
+     BEGIN;
+     ALTER TABLE public.accesos_servicios DISABLE TRIGGER USER;
+     INSERT INTO public.accesos_servicios (intento_id, operador_perfil_id, credencial_id, alumno_id, servicio_id, resultado, registrado_en)
+     VALUES ('${uuid()}', '${P1}', '${credId(k)}', '${alumnoId(k)}', '${COMEDOR}', 'REGISTRADO',
+             pg_catalog.clock_timestamp() - INTERVAL '400 days');
+     ALTER TABLE public.accesos_servicios ENABLE TRIGGER USER;
+     COMMIT;`,
+    etiqueta
+  )
+  return n(sesion, `SELECT id FROM public.accesos_servicios WHERE alumno_id = '${alumnoId(k)}' AND resultado = 'REGISTRADO'`, `${etiqueta}_id`)
+}
+
+const PURGA = 'SELECT app_private.depurar_accesos_servicios((CURRENT_DATE - 300)::DATE);'
+
+async function probarPurga(esc, otra, pids) {
+  // 12a. La purga retiene el evento; Dirección intenta anularlo y espera. Al confirmar la
+  // purga, la anulación relee `anonimizado_en` y se niega: no queda una anulación
+  // identificable sobre un evento anonimizado.
+  const ea = await envejecer(esc, A.purga1, 'purga_a_evento')
+  await otra.ejecutar(`RESET ROLE;\nBEGIN;\n${PURGA}`, 'purga_a_retiene')
+  const anulacion = esc.ejecutar(`${comoDirector}\n${tolerante(llamadas.anular(ea).replace(/;$/u, ''))}`, 'purga_a_anula_espera')
+  await esperarBloqueo(otra, pids.otra, pids.escaneo)
+  await otra.ejecutar('COMMIT;', 'purga_a_confirma')
+  await anulacion
+  await esc.ejecutar('RESET ROLE;', 'purga_a_reset')
+  exigir((await resultadoDe(esc, 'purga_a_res')) === 'E:P5666', 'Purga 12a: la anulación tras la purga debía rechazarse con P5666')
+  exigir(
+    (await n(esc, `SELECT pg_catalog.count(*) FROM public.anulaciones_accesos_servicios WHERE acceso_id = '${ea}'`, 'purga_a_filas')) === '0',
+    'Purga 12a: no debía quedar ninguna anulación sobre el evento anonimizado'
+  )
+
+  // 12b. La anulación confirma primero; la purga esperaba el evento y, al seguir, anonimiza
+  // también esa anulación (se ve confirmada en su segunda sentencia).
+  const eb = await envejecer(esc, A.purga2, 'purga_b_evento')
+  await esc.ejecutar(`BEGIN;\n${comoDirectorLocal}\n${llamadas.anular(eb)}`, 'purga_b_retiene')
+  const purga = otra.ejecutar(`RESET ROLE;\n${PURGA}`, 'purga_b_espera')
+  await esperarBloqueo(esc, pids.escaneo, pids.otra)
+  await esc.ejecutar('COMMIT;\nRESET ROLE;', 'purga_b_confirma')
+  await purga
+  exigir(
+    (await n(esc, `SELECT pg_catalog.count(*) FROM public.anulaciones_accesos_servicios WHERE acceso_id = '${eb}' AND anonimizada_en IS NULL`, 'purga_b_identificables')) === '0',
+    'Purga 12b: la anulación confirmada antes de la purga debía quedar anonimizada'
+  )
+  exigir(
+    (await n(esc, `SELECT pg_catalog.count(*) FROM public.anulaciones_accesos_servicios WHERE acceso_id = '${eb}' AND anulado_por IS NULL AND motivo IS NULL AND anonimizada_en IS NOT NULL`, 'purga_b_anonimizada')) === '1',
+    'Purga 12b: la anulación debía conservarse sin autora ni motivo'
+  )
+  console.log('OK CONCURRENCIA 12: anulación y purga de retención se serializan en los dos órdenes; nunca queda una anulación identificable sobre un evento anonimizado')
+}
+
+// ---------------------------------------------------------------
 // 9. Doble escaneo, reintentos y ráfagas
 // ---------------------------------------------------------------
 async function probarDobleEscaneo(esc, otra, pids) {
@@ -746,6 +808,7 @@ try {
   await probarServicio(sesionA, sesionB, parejas)
   await probarCambioDeRecorrido(sesionA, sesionB, parejas)
   await probarAnulacion(sesionA, sesionB, parejas)
+  await probarPurga(sesionA, sesionB, parejas)
   await probarDobleEscaneo(sesionA, sesionB, parejas)
   await probarRafaga()
   await probarEstres()

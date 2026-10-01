@@ -178,6 +178,8 @@ test.describe('con firma válida se usa el cliente administrativo, sin el token 
       p_actor_user_id: ACTOR,
       p_intento_id: INTENTO,
       p_credencial_id: credencialId,
+      // El kid del payload verificado viaja para que la base lo compare con el de la credencial.
+      p_clave_kid: 'k1',
       p_servicio_id: SERVICIO,
       p_sentido: 'IDA',
     })

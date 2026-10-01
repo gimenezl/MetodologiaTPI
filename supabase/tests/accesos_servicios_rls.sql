@@ -166,7 +166,7 @@ $$;
 CREATE FUNCTION pg_temp.escanear(p_actor TEXT, p_intento TEXT, p_cred TEXT, p_serv TEXT, p_sentido TEXT DEFAULT NULL)
 RETURNS TEXT LANGUAGE sql AS $$
     SELECT pg_temp.srv(pg_catalog.format(
-        'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, %L, %L, %L, %L)',
+        'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, %L, %L, ''k1'', %L, %L)',
         pg_temp.u(p_actor), p_intento, p_cred, p_serv, p_sentido));
 $$;
 
@@ -320,10 +320,10 @@ DECLARE
     v_firma TEXT;
 BEGIN
     FOREACH v_firma IN ARRAY ARRAY[
-        'public.registrar_acceso_servicio(uuid,uuid,uuid,uuid,public.sentido_acceso_transporte)',
+        'public.registrar_acceso_servicio(uuid,uuid,uuid,text,uuid,public.sentido_acceso_transporte)',
         'public.consumir_cupo_escaneo(uuid)',
         'public.registrar_escaneo_invalido(uuid)',
-        'app_private.registrar_acceso_servicio(uuid,uuid,uuid,uuid,public.sentido_acceso_transporte)',
+        'app_private.registrar_acceso_servicio(uuid,uuid,uuid,text,uuid,public.sentido_acceso_transporte)',
         'app_private.consumir_cupo_escaneo(uuid)',
         'app_private.registrar_escaneo_invalido(uuid)'
     ] LOOP
@@ -373,7 +373,7 @@ DECLARE
 BEGIN
     FOREACH v_s IN ARRAY ARRAY['01', '02', '03', '04', '05', '06', '10', '0c'] LOOP
         v_sql := pg_catalog.format(
-            'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, %L, %L, %L, NULL)',
+            'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, %L, %L, ''k1'', %L, NULL)',
             pg_temp.u(v_s), pg_catalog.gen_random_uuid(), pg_temp.fx('cred_10'), pg_temp.fx('comedor'));
         PERFORM pg_temp.esperar(pg_temp.como(v_s, v_sql), '42501',
             '[B1] authenticated (' || v_s || ') no ejecuta registrar_acceso_servicio, ni como su propio actor');
@@ -382,7 +382,7 @@ END $$;
 
 SELECT pg_temp.esperar(
     pg_temp.ejecutar('anon', NULL, pg_catalog.format(
-        'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, %L, %L, %L, NULL)',
+        'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, %L, %L, ''k1'', %L, NULL)',
         pg_temp.u('03'), pg_catalog.gen_random_uuid(), pg_temp.fx('cred_10'), pg_temp.fx('comedor'))),
     '42501', '[B2] anon no ejecuta registrar_acceso_servicio');
 
@@ -409,12 +409,12 @@ END $$;
 
 SELECT pg_temp.esperar(
     pg_temp.srv(pg_catalog.format(
-        'SELECT codigo_resultado FROM public.registrar_acceso_servicio(NULL, %L, %L, %L, NULL)',
+        'SELECT codigo_resultado FROM public.registrar_acceso_servicio(NULL, %L, %L, ''k1'', %L, NULL)',
         pg_catalog.gen_random_uuid(), pg_temp.fx('cred_10'), pg_temp.fx('comedor'))),
     'P5505', '[B6] sin actor → P5505');
 SELECT pg_temp.esperar(
     pg_temp.srv(pg_catalog.format(
-        'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, %L, %L, %L, NULL)',
+        'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, %L, %L, ''k1'', %L, NULL)',
         pg_catalog.gen_random_uuid(), pg_catalog.gen_random_uuid(), pg_temp.fx('cred_10'), pg_temp.fx('comedor'))),
     '42501', '[B7] un actor inventado (usuario inexistente) → 42501');
 
@@ -425,7 +425,7 @@ SELECT pg_temp.exigir(pg_temp.total_eventos() = (SELECT pg_catalog.count(*) FROM
 -- Argumentos nulos con un actor válido: error, sin evento.
 SELECT pg_temp.esperar(
     pg_temp.srv(pg_catalog.format(
-        'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, NULL, %L, %L, NULL)',
+        'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, NULL, %L, ''k1'', %L, NULL)',
         pg_temp.u('03'), pg_temp.fx('cred_10'), pg_temp.fx('comedor'))),
     'P5651', '[B9] intento nulo → P5651');
 
@@ -440,7 +440,7 @@ DECLARE
     v_resp    RECORD;
 BEGIN
     SELECT * INTO v_resp FROM public.registrar_acceso_servicio(pg_temp.u('03'), v_intento::UUID,
-        pg_temp.fx('cred_10')::UUID, pg_temp.fx('comedor')::UUID, NULL);
+        pg_temp.fx('cred_10')::UUID, 'k1', pg_temp.fx('comedor')::UUID, NULL);
     -- Como propietario: se comprueba la forma de la respuesta.
     PERFORM pg_temp.exigir(v_resp.codigo_resultado = 'REGISTRADO'
         AND v_resp.alumno_nombre = 'Uno' AND v_resp.alumno_apellido = 'Alumna Comedor'
@@ -568,6 +568,26 @@ BEGIN
         '[E2] un identificador inexistente no deja ningún evento');
 END $$;
 
+-- El kid del QR tiene que ser el MISMO con el que se emitió la credencial: una clave
+-- retenida tras una rotación no sirve para falsificar el QR de otra credencial.
+DO $$
+DECLARE
+    v_antes BIGINT := pg_temp.total_eventos();
+BEGIN
+    PERFORM pg_temp.esperar_valor(
+        pg_temp.srv(pg_catalog.format(
+            'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, %L, %L, ''k9'', %L, NULL)',
+            pg_temp.u('03'), pg_temp.intento(), pg_temp.fx('cred_10'), pg_temp.fx('comedor'))),
+        'NO_RECONOCIDO', '[E2b] un kid distinto al de la credencial → NO_RECONOCIDO');
+    PERFORM pg_temp.exigir(pg_temp.total_eventos() = v_antes,
+        '[E2c] un kid que no corresponde no deja ningún evento');
+END $$;
+SELECT pg_temp.esperar(
+    pg_temp.srv(pg_catalog.format(
+        'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, %L, %L, NULL, %L, NULL)',
+        pg_temp.u('03'), pg_temp.intento(), pg_temp.fx('cred_10'), pg_temp.fx('comedor'))),
+    'P5651', '[E2d] sin kid → P5651');
+
 -- Credencial revocada.
 SELECT pg_temp.valor(pg_temp.dir(pg_catalog.format(
     'SELECT (public.revocar_credencial_qr(%L, %L)).id::TEXT', pg_temp.fx('cred_15'), 'Revocada por la prueba')));
@@ -627,7 +647,7 @@ SELECT pg_temp.exigir(
 -- Ninguna respuesta de denegación revela datos del alumno.
 SELECT pg_temp.exigir(
     (SELECT pg_catalog.count(*) FROM public.registrar_acceso_servicio(
-        pg_temp.u('03'), pg_catalog.gen_random_uuid(), pg_temp.fx('cred_15')::UUID, pg_temp.fx('comedor')::UUID, NULL) r
+        pg_temp.u('03'), pg_catalog.gen_random_uuid(), pg_temp.fx('cred_15')::UUID, 'k1', pg_temp.fx('comedor')::UUID, NULL) r
      WHERE r.codigo_resultado = 'NO_HABILITADO' AND r.alumno_nombre IS NULL AND r.alumno_apellido IS NULL
        AND r.alumno_legajo IS NULL AND r.sellado_en IS NULL) = 1,
     '[E14] una denegación no devuelve nombre, apellido, legajo ni hora');
@@ -654,7 +674,7 @@ BEGIN
     -- El reintento devuelve también la misma hora sellada.
     PERFORM pg_temp.exigir(
         (SELECT sellado_en FROM public.registrar_acceso_servicio(pg_temp.u('03'), v_intento::UUID,
-            pg_temp.fx('cred_18')::UUID, pg_temp.fx('comedor')::UUID, NULL))
+            pg_temp.fx('cred_18')::UUID, 'k1', pg_temp.fx('comedor')::UUID, NULL))
         = (SELECT registrado_en FROM public.accesos_servicios WHERE intento_id = v_intento::UUID),
         '[F4] el reintento devuelve la hora ya sellada, no una nueva');
 END $$;
@@ -998,17 +1018,17 @@ BEGIN
     FOREACH v_s IN ARRAY ARRAY['01', '03'] LOOP
         -- RPC pública con el propio usuario como actor.
         PERFORM pg_temp.esperar(pg_temp.como(v_s, pg_catalog.format(
-            'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, %L, %L, %L, NULL)',
+            'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, %L, %L, ''k1'', %L, NULL)',
             pg_temp.u(v_s), pg_catalog.gen_random_uuid(), v_cred, pg_temp.fx('comedor'))),
             '42501', '[J1] ' || v_s || ' no registra por la RPC pública, ni con su propio actor');
         -- Con un actor inventado.
         PERFORM pg_temp.esperar(pg_temp.como(v_s, pg_catalog.format(
-            'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, %L, %L, %L, NULL)',
+            'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, %L, %L, ''k1'', %L, NULL)',
             pg_catalog.gen_random_uuid(), pg_catalog.gen_random_uuid(), v_cred, pg_temp.fx('comedor'))),
             '42501', '[J2] ' || v_s || ' no registra por la RPC pública con un actor inventado');
         -- La operación del esquema privado.
         PERFORM pg_temp.esperar(pg_temp.como(v_s, pg_catalog.format(
-            'SELECT codigo_resultado FROM app_private.registrar_acceso_servicio(%L, %L, %L, %L, NULL)',
+            'SELECT codigo_resultado FROM app_private.registrar_acceso_servicio(%L, %L, %L, ''k1'', %L, NULL)',
             pg_temp.u(v_s), pg_catalog.gen_random_uuid(), v_cred, pg_temp.fx('comedor'))),
             '42501', '[J3] ' || v_s || ' no registra por app_private');
         -- Funciones auxiliares.
@@ -1041,7 +1061,7 @@ SELECT pg_temp.esperar(pg_temp.srv(pg_catalog.format(
 
 -- EXECUTE por la vía de pseudo-usuario sin sesión en el JWT: sin sub, sin operación.
 SELECT pg_temp.esperar(pg_temp.ejecutar('authenticated', NULL, pg_catalog.format(
-    'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, %L, %L, %L, NULL)',
+    'SELECT codigo_resultado FROM public.registrar_acceso_servicio(%L, %L, %L, ''k1'', %L, NULL)',
     pg_temp.u('03'), pg_catalog.gen_random_uuid(), pg_temp.fx('cred_14'), pg_temp.fx('comedor'))),
     '42501', '[J10] authenticated sin sub tampoco');
 

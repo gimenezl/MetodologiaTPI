@@ -182,6 +182,9 @@ export async function registrarEscaneo(datos: DatosEscaneo): Promise<Resultado<R
     p_actor_user_id: datos.userId,
     p_intento_id: datos.intentoId,
     p_credencial_id: firma.id,
+    // El kid del QR debe ser el de la credencial: la base lo compara (una clave
+    // retenida tras una rotación no puede falsificar otra credencial).
+    p_clave_kid: firma.kid,
     p_servicio_id: datos.servicioId,
     ...(datos.sentido ? { p_sentido: datos.sentido } : {}),
   })

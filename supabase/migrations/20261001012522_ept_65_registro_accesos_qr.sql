@@ -739,6 +739,7 @@ CREATE OR REPLACE FUNCTION app_private.registrar_acceso_servicio(
     p_actor_user_id UUID,
     p_intento_id    UUID,
     p_credencial_id UUID,
+    p_clave_kid     TEXT,
     p_servicio_id   UUID,
     p_sentido       public.sentido_acceso_transporte
 )
@@ -759,6 +760,7 @@ DECLARE
     v_tipo            public.tipo_servicio_escolar;
     v_previo_id       UUID;
     v_alumno          UUID;
+    v_kid             TEXT;
     v_estado_alumno   public.estado_alumno;
     v_estado_cred     public.estado_credencial_qr;
     v_acceso          public.estado_acceso;
@@ -771,7 +773,8 @@ BEGIN
     -- 1. Identidad del operador (revalidada, con su fila de perfil bloqueada).
     v_operador := app_private.operador_de_escaneo(p_actor_user_id);
 
-    IF p_intento_id IS NULL OR p_credencial_id IS NULL OR p_servicio_id IS NULL THEN
+    IF p_intento_id IS NULL OR p_credencial_id IS NULL OR p_servicio_id IS NULL
+       OR p_clave_kid IS NULL THEN
         RAISE EXCEPTION USING ERRCODE = 'P5651', MESSAGE = 'Los datos del escaneo no son válidos.';
     END IF;
 
@@ -795,10 +798,14 @@ BEGIN
         RETURN;
     END IF;
 
-    -- 4. Credencial → alumno, SIN bloquear: `alumno_id` es inmutable y las filas no
-    --    se borran. Un identificador inexistente no deja ningún evento.
-    SELECT c.alumno_id INTO v_alumno FROM public.credenciales_qr c WHERE c.id = p_credencial_id;
-    IF NOT FOUND THEN
+    -- 4. Credencial → alumno, SIN bloquear: `alumno_id` y `clave_kid` son inmutables
+    --    y las filas no se borran. Un identificador inexistente no deja ningún evento.
+    --    El `kid` del QR tiene que ser el MISMO con el que se firmó esta credencial:
+    --    si no, una clave retenida tras una rotación podría falsificar el QR de una
+    --    credencial emitida con otra clave. No deja evento (el QR no corresponde).
+    SELECT c.alumno_id, c.clave_kid INTO v_alumno, v_kid
+    FROM public.credenciales_qr c WHERE c.id = p_credencial_id;
+    IF NOT FOUND OR v_kid IS DISTINCT FROM p_clave_kid THEN
         RETURN QUERY SELECT 'NO_RECONOCIDO'::TEXT, NULL::TEXT, NULL::TEXT, NULL::TEXT,
                             NULL::TIMESTAMP WITH TIME ZONE;
         RETURN;
@@ -929,7 +936,7 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION app_private.registrar_acceso_servicio(
-    UUID, UUID, UUID, UUID, public.sentido_acceso_transporte
+    UUID, UUID, UUID, TEXT, UUID, public.sentido_acceso_transporte
 ) FROM PUBLIC, anon, authenticated, service_role;
 
 
@@ -1066,6 +1073,7 @@ DECLARE
     v_motivo     TEXT;
     v_alumno     UUID;
     v_resultado  public.resultado_acceso_servicio;
+    v_anonimizado TIMESTAMP WITH TIME ZONE;
     v_anulacion  public.anulaciones_accesos_servicios;
 BEGIN
     IF (SELECT auth.uid()) IS NULL THEN
@@ -1103,10 +1111,19 @@ BEGIN
 
     PERFORM 1 FROM public.alumnos a WHERE a.perfil_id = v_alumno FOR NO KEY UPDATE;
 
-    SELECT e.resultado INTO v_resultado
+    SELECT e.resultado, e.anonimizado_en INTO v_resultado, v_anonimizado
     FROM public.accesos_servicios e
     WHERE e.id = p_acceso_id
     FOR SHARE;
+
+    -- Relectura tras esperar: la purga pudo anonimizarlo mientras se esperaba el
+    -- bloqueo. Una anulación identificable sobre un evento anonimizado no se
+    -- puede crear (nunca volvería a ser anonimizada).
+    IF v_anonimizado IS NOT NULL THEN
+        RAISE EXCEPTION USING
+            ERRCODE = 'P5666',
+            MESSAGE = 'El acceso ya fue anonimizado y no puede anularse.';
+    END IF;
 
     IF v_resultado IS DISTINCT FROM 'REGISTRADO' THEN
         RAISE EXCEPTION USING
@@ -1249,6 +1266,7 @@ DECLARE
     v_hoy         DATE := ((pg_catalog.clock_timestamp() AT TIME ZONE 'America/Argentina/Buenos_Aires'))::DATE;
     v_corte       TIMESTAMP WITH TIME ZONE := pg_catalog.clock_timestamp() - INTERVAL '90 days';
     v_accesos     INTEGER;
+    v_ids         UUID[];
     v_anulaciones INTEGER;
     v_denegados   INTEGER;
     v_contadores  INTEGER;
@@ -1269,24 +1287,28 @@ BEGIN
     -- Habilita las guardas SOLO dentro de esta transacción.
     PERFORM pg_catalog.set_config('ept65.mantenimiento', 'on', TRUE);
 
+    -- Primero los eventos; sus anulaciones DESPUÉS y en una sentencia nueva. Una
+    -- anulación concurrente retiene el bloqueo del evento hasta confirmar, así que
+    -- esta sentencia espera, y la siguiente ya ve la anulación confirmada (en el
+    -- orden inverso, `anular_acceso_servicio` relee `anonimizado_en` y se niega).
+    WITH anonimizados AS (
+        UPDATE public.accesos_servicios e
+        SET intento_id = NULL, operador_perfil_id = NULL, credencial_id = NULL,
+            alumno_id = NULL, anonimizado_en = v_ahora
+        WHERE e.resultado = 'REGISTRADO'
+          AND e.anonimizado_en IS NULL
+          AND e.dia_servicio <= p_fin_ciclo_lectivo
+        RETURNING e.id
+    )
+    SELECT pg_catalog.count(*), COALESCE(pg_catalog.array_agg(a.id), '{}'::UUID[])
+    INTO v_accesos, v_ids
+    FROM anonimizados a;
+
     UPDATE public.anulaciones_accesos_servicios n
     SET anulado_por = NULL, motivo = NULL, anonimizada_en = v_ahora
     WHERE n.anonimizada_en IS NULL
-      AND n.acceso_id IN (
-          SELECT e.id FROM public.accesos_servicios e
-          WHERE e.resultado = 'REGISTRADO'
-            AND e.anonimizado_en IS NULL
-            AND e.dia_servicio <= p_fin_ciclo_lectivo
-      );
+      AND n.acceso_id = ANY (v_ids);
     GET DIAGNOSTICS v_anulaciones = ROW_COUNT;
-
-    UPDATE public.accesos_servicios e
-    SET intento_id = NULL, operador_perfil_id = NULL, credencial_id = NULL,
-        alumno_id = NULL, anonimizado_en = v_ahora
-    WHERE e.resultado = 'REGISTRADO'
-      AND e.anonimizado_en IS NULL
-      AND e.dia_servicio <= p_fin_ciclo_lectivo;
-    GET DIAGNOSTICS v_accesos = ROW_COUNT;
 
     DELETE FROM public.accesos_servicios e
     WHERE e.resultado = 'DENEGADO' AND e.registrado_en < v_corte;
@@ -1346,6 +1368,7 @@ CREATE OR REPLACE FUNCTION public.registrar_acceso_servicio(
     p_actor_user_id UUID,
     p_intento_id    UUID,
     p_credencial_id UUID,
+    p_clave_kid     TEXT,
     p_servicio_id   UUID,
     p_sentido       public.sentido_acceso_transporte DEFAULT NULL
 )
@@ -1362,7 +1385,7 @@ SECURITY INVOKER
 SET search_path = ''
 AS $$
     SELECT * FROM app_private.registrar_acceso_servicio(
-        p_actor_user_id, p_intento_id, p_credencial_id, p_servicio_id, p_sentido);
+        p_actor_user_id, p_intento_id, p_credencial_id, p_clave_kid, p_servicio_id, p_sentido);
 $$;
 
 CREATE OR REPLACE FUNCTION public.anular_acceso_servicio(p_acceso_id UUID, p_motivo TEXT)
@@ -1417,7 +1440,7 @@ REVOKE ALL ON FUNCTION public.consumir_cupo_escaneo(UUID)
 REVOKE ALL ON FUNCTION public.registrar_escaneo_invalido(UUID)
     FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.registrar_acceso_servicio(
-    UUID, UUID, UUID, UUID, public.sentido_acceso_transporte
+    UUID, UUID, UUID, TEXT, UUID, public.sentido_acceso_transporte
 ) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.anular_acceso_servicio(UUID, TEXT)
     FROM PUBLIC, anon, authenticated, service_role;
@@ -1430,12 +1453,12 @@ REVOKE ALL ON FUNCTION public.listar_accesos_servicios(
 GRANT EXECUTE ON FUNCTION app_private.consumir_cupo_escaneo(UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION app_private.registrar_escaneo_invalido(UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION app_private.registrar_acceso_servicio(
-    UUID, UUID, UUID, UUID, public.sentido_acceso_transporte
+    UUID, UUID, UUID, TEXT, UUID, public.sentido_acceso_transporte
 ) TO service_role;
 GRANT EXECUTE ON FUNCTION public.consumir_cupo_escaneo(UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION public.registrar_escaneo_invalido(UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION public.registrar_acceso_servicio(
-    UUID, UUID, UUID, UUID, public.sentido_acceso_transporte
+    UUID, UUID, UUID, TEXT, UUID, public.sentido_acceso_transporte
 ) TO service_role;
 
 -- Dirección (authenticated): cada operación revalida auth.uid() y el rol.
@@ -1493,10 +1516,10 @@ BEGIN
 
     -- Operación privilegiada y límites: SOLO service_role.
     FOREACH v_firma IN ARRAY ARRAY[
-        'app_private.registrar_acceso_servicio(uuid,uuid,uuid,uuid,public.sentido_acceso_transporte)'::pg_catalog.regprocedure,
+        'app_private.registrar_acceso_servicio(uuid,uuid,uuid,text,uuid,public.sentido_acceso_transporte)'::pg_catalog.regprocedure,
         'app_private.consumir_cupo_escaneo(uuid)'::pg_catalog.regprocedure,
         'app_private.registrar_escaneo_invalido(uuid)'::pg_catalog.regprocedure,
-        'public.registrar_acceso_servicio(uuid,uuid,uuid,uuid,public.sentido_acceso_transporte)'::pg_catalog.regprocedure,
+        'public.registrar_acceso_servicio(uuid,uuid,uuid,text,uuid,public.sentido_acceso_transporte)'::pg_catalog.regprocedure,
         'public.consumir_cupo_escaneo(uuid)'::pg_catalog.regprocedure,
         'public.registrar_escaneo_invalido(uuid)'::pg_catalog.regprocedure
     ] LOOP

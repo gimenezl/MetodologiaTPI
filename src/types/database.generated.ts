@@ -3008,6 +3008,7 @@ export type Database = {
       registrar_acceso_servicio: {
         Args: {
           p_actor_user_id: string
+          p_clave_kid: string
           p_credencial_id: string
           p_intento_id: string
           p_sentido?: Database["public"]["Enums"]["sentido_acceso_transporte"]

@@ -152,9 +152,9 @@ afirmar(ledger.at(-1) === NUEVA && ledger.includes(ANTERIOR), `el ledger termina
 afirmar(new Set(ledger).size === ledger.length && ledger.length === 26, `el ledger tiene 26 versiones sin duplicados (tiene ${ledger.length})`)
 afirmar(
   psql(`
-    SELECT NOT pg_catalog.has_function_privilege('authenticated', 'public.registrar_acceso_servicio(uuid,uuid,uuid,uuid,public.sentido_acceso_transporte)'::pg_catalog.regprocedure, 'EXECUTE')
-       AND NOT pg_catalog.has_function_privilege('anon', 'public.registrar_acceso_servicio(uuid,uuid,uuid,uuid,public.sentido_acceso_transporte)'::pg_catalog.regprocedure, 'EXECUTE')
-       AND pg_catalog.has_function_privilege('service_role', 'public.registrar_acceso_servicio(uuid,uuid,uuid,uuid,public.sentido_acceso_transporte)'::pg_catalog.regprocedure, 'EXECUTE');
+    SELECT NOT pg_catalog.has_function_privilege('authenticated', 'public.registrar_acceso_servicio(uuid,uuid,uuid,text,uuid,public.sentido_acceso_transporte)'::pg_catalog.regprocedure, 'EXECUTE')
+       AND NOT pg_catalog.has_function_privilege('anon', 'public.registrar_acceso_servicio(uuid,uuid,uuid,text,uuid,public.sentido_acceso_transporte)'::pg_catalog.regprocedure, 'EXECUTE')
+       AND pg_catalog.has_function_privilege('service_role', 'public.registrar_acceso_servicio(uuid,uuid,uuid,text,uuid,public.sentido_acceso_transporte)'::pg_catalog.regprocedure, 'EXECUTE');
   `).trim() === 't',
   'la operación privilegiada quedó solo para service_role tras aplicar sobre datos'
 )

@@ -179,7 +179,7 @@ async function exigirSinEscaner(
   // PostgREST directo con la sesión real: la operación no existe para este actor.
   const cliente = await clienteAutenticado(identidad.email, identidad.password)
   for (const [nombre, llamada] of [
-    ['registrar_acceso_servicio', () => cliente.rpc('registrar_acceso_servicio', { p_actor_user_id: randomUUID(), p_intento_id: nuevoIntento(), p_credencial_id: randomUUID(), p_servicio_id: SERVICIOS.comedor })],
+    ['registrar_acceso_servicio', () => cliente.rpc('registrar_acceso_servicio', { p_actor_user_id: randomUUID(), p_intento_id: nuevoIntento(), p_credencial_id: randomUUID(), p_clave_kid: 'k1', p_servicio_id: SERVICIOS.comedor })],
     ['consumir_cupo_escaneo', () => cliente.rpc('consumir_cupo_escaneo', { p_actor_user_id: randomUUID() })],
     ['listar_accesos_servicios', () => cliente.rpc('listar_accesos_servicios', {})],
     ['anular_acceso_servicio', () => cliente.rpc('anular_acceso_servicio', { p_acceso_id: randomUUID(), p_motivo: 'Motivo de prueba' })],
@@ -468,8 +468,8 @@ test.describe('DIRECTOR autenticado', () => {
 
     // …pero ninguna vía de la Data API crea un REGISTRADO.
     const intentos = [
-      cliente.rpc('registrar_acceso_servicio', { p_actor_user_id: usuario, p_intento_id: nuevoIntento(), p_credencial_id: credencial, p_servicio_id: SERVICIOS.comedor }),
-      cliente.rpc('registrar_acceso_servicio', { p_actor_user_id: randomUUID(), p_intento_id: nuevoIntento(), p_credencial_id: credencial, p_servicio_id: SERVICIOS.comedor }),
+      cliente.rpc('registrar_acceso_servicio', { p_actor_user_id: usuario, p_intento_id: nuevoIntento(), p_credencial_id: credencial, p_clave_kid: 'k1', p_servicio_id: SERVICIOS.comedor }),
+      cliente.rpc('registrar_acceso_servicio', { p_actor_user_id: randomUUID(), p_intento_id: nuevoIntento(), p_credencial_id: credencial, p_clave_kid: 'k1', p_servicio_id: SERVICIOS.comedor }),
       cliente.rpc('consumir_cupo_escaneo', { p_actor_user_id: usuario }),
       cliente.rpc('registrar_escaneo_invalido', { p_actor_user_id: usuario }),
       cliente.from('accesos_servicios').insert({ intento_id: nuevoIntento(), operador_perfil_id: idPerfil(IDENT.DIRECTORA.dni), credencial_id: credencial, alumno_id: alumno, servicio_id: SERVICIOS.comedor, resultado: 'REGISTRADO' }),
@@ -687,8 +687,8 @@ test.describe('PERSONAL autenticado', () => {
     const usuario = sql(`SELECT user_id FROM public.perfiles WHERE dni = '${IDENT.PERSONAL.dni}';`)
 
     const intentos = [
-      cliente.rpc('registrar_acceso_servicio', { p_actor_user_id: usuario, p_intento_id: nuevoIntento(), p_credencial_id: credencial, p_servicio_id: SERVICIOS.comedor }),
-      cliente.rpc('registrar_acceso_servicio', { p_actor_user_id: randomUUID(), p_intento_id: nuevoIntento(), p_credencial_id: credencial, p_servicio_id: SERVICIOS.comedor }),
+      cliente.rpc('registrar_acceso_servicio', { p_actor_user_id: usuario, p_intento_id: nuevoIntento(), p_credencial_id: credencial, p_clave_kid: 'k1', p_servicio_id: SERVICIOS.comedor }),
+      cliente.rpc('registrar_acceso_servicio', { p_actor_user_id: randomUUID(), p_intento_id: nuevoIntento(), p_credencial_id: credencial, p_clave_kid: 'k1', p_servicio_id: SERVICIOS.comedor }),
       cliente.rpc('consumir_cupo_escaneo', { p_actor_user_id: usuario }),
       cliente.rpc('listar_accesos_servicios', { p_limite: 10 }),
       cliente.rpc('anular_acceso_servicio', { p_acceso_id: randomUUID(), p_motivo: 'Motivo de prueba' }),
