@@ -63,6 +63,8 @@ const RUTAS_DE_BANCO = [
   '/pruebas-ui/hijos',
   '/pruebas-ui/profesores',
   '/pruebas-ui/mis-asignaciones',
+  // EPT-65: banco del escáner y de la auditoría de accesos con QR.
+  '/pruebas-ui/accesos',
 ]
 const RUTA_LEGITIMA = '/login'
 

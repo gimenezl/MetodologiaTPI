@@ -58,7 +58,6 @@ const TODOS = [...Object.values(A), ...ESTRES]
 
 const lista = (ids) => ids.map((id) => `'${id}'`).join(', ')
 const TODOS_ALUMNOS = TODOS.map(alumnoId)
-const TODAS_CRED = TODOS.map(credId)
 const OPERADORES = [DIR, P1, P2]
 
 function exigir(condicion, mensaje) {
