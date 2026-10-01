@@ -7,7 +7,8 @@ import {
   House, Users, CalendarCheck, Pulse, FileText,
   SignOut, List, X, Briefcase, ChatCenteredText, UserPlus, Lock,
   Newspaper, UserCircle, Chalkboard, GraduationCap, Student, IdentificationCard,
-  BookOpen, ForkKnife, SoccerBall, Clock, ChalkboardTeacher, ListChecks, Bus, ChartBar, QrCode
+  BookOpen, ForkKnife, SoccerBall, Clock, ChalkboardTeacher, ListChecks, Bus, ChartBar, QrCode,
+  Scan, ClipboardText
 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
@@ -21,9 +22,14 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  // PERSONAL (EPT-59) tiene Inicio y Mi perfil, de solo lectura. Cualquier
+  // PERSONAL (EPT-59) tiene Inicio y Mi perfil, de solo lectura, y desde EPT-65
+  // «Registrar accesos» (el escáner del comedor y del transporte). Cualquier
   // otra ruta del panel le muestra «Acceso restringido».
   { href: '/dashboard', label: 'Inicio', icon: House, roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE', 'PERSONAL'] },
+  // Registro de accesos con QR (EPT-65): lo operan DIRECTOR y PERSONAL; solo
+  // Dirección ve la auditoría. La ruta más larga gana en `rutaPermitida`.
+  { href: '/dashboard/accesos', label: 'Registrar accesos', icon: Scan, roles: ['DIRECTOR', 'PERSONAL'] },
+  { href: '/dashboard/accesos/auditoria', label: 'Auditoría de accesos', icon: ClipboardText, roles: ['DIRECTOR'] },
   { href: '/dashboard/usuarios', label: 'Usuarios', icon: UserPlus, roles: ['DIRECTOR'] },
   { href: '/dashboard/legajos', label: 'Legajos', icon: Users, roles: ['DIRECTOR'] },
   { href: '/dashboard/alumnos', label: 'Alumnos', icon: Student, roles: ['DIRECTOR'] },
