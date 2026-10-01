@@ -1,6 +1,6 @@
 # EPT-65 — RF21: Registrar accesos con QR
 
-**Estado actualizado el 01/10/2026 (postflight, sección 22): PR #30 integrado, código desplegado en Vercel Production y las dos migraciones aplicadas y verificadas en la base de producción; el recorrido funcional productivo (REGISTRADO, YA_REGISTRADO y anulación) NO está acreditado y EPT-65 permanece «En curso» en Jira.** Las secciones 1 a 21 conservan el estado del candidato local previo al merge (verificado sobre `6dec72a`) y no deben leerse como estado de producción; la sección 22 registra lo observado en producción.
+**Estado actualizado el 01/10/2026 (sección 23): PR #30 y #31 integrados; Production `b138b246…` READY y ledger 27/27 alineado. Lucas completó el recorrido de Dirección para comedor, corroborado fase por fase mediante agregados SQL de solo lectura; confirmó el calendario operativo académico y aceptó la cobertura residual de PERSONAL solo SQL/local. EPT-65 permanece «En curso» hasta integrar esta evidencia documental y refrescar Jira.** Las secciones 1 a 21 conservan el estado histórico del candidato local (verificado sobre `6dec72a`), salvo la reconfirmación de retención en la sección 15. La sección 22 registra el primer postflight, anterior al recorrido; la sección 23 contiene el estado actualizado.
 
 *Texto histórico previo al merge:* candidato local COMPLETO y verificado (`ready_for_review`), no publicado ni desplegable en ese momento. El contrato aprobado está implementado y probado en las tres fronteras (base, servidor y navegador) sobre un stack local descartable.
 
@@ -14,7 +14,7 @@
 6. **E2E completa final** verde sobre el código final (sección 12).
 7. **Retención: decisión explícita de Lucas registrada** (sección 15): responsable = **administrador principal** (por cargo, sin nombre propio); fin de ciclo **2026-12-18**; primera purga **2027-03-19**. No es cumplimiento legal y las fechas no están verificadas contra el calendario escolar oficial.
 
-**Abierto (antes de publicar o desplegar):**
+**Pendientes históricos del candidato local (no describen el estado actual; ver sección 23):**
 
 1. **Retención: confirmar contra la realidad de la institución.** Falta el **nombre** de quien ejerce el cargo de administrador principal y que tenga acceso de propietario a la base; y confirmar el fin de ciclo y la primera purga contra el calendario escolar oficial. Si cambian, se actualiza el runbook (sección 15).
 2. **Estrategia de PR: sin decidir** (sección 19).
@@ -27,7 +27,7 @@
 | Commits | Ver la lista completa y verificada en la sección 12.1 (el informe inicial decía «9»; eran 11 y hoy son más, todos convencionales y sin atribución de IA) |
 | Código verificado | `6dec72a` (HEAD de código y pruebas de esta ronda); la E2E completa y los demás controles se asocian a ese SHA en la sección 12. Los commits de documentación posteriores no cambian código |
 | Jira | EPT-65 «Por hacer», asignada a Lucas Gimenez, hija de EPT-7, sin subtareas (consultado en vivo al comienzo de la tarea). EPT-64 «Listo». No se modificó ninguna issue |
-| Producción | Estado previo al merge (histórico): sin cambios y no verificable desde aquel entorno. **Actualizado el 01/10/2026: ver la sección 22** (código desplegado y las dos migraciones aplicadas y verificadas; el recorrido funcional productivo sigue pendiente) |
+| Producción | Estado previo al merge (histórico): sin cambios y no verificable desde aquel entorno. **Actualizado el 01/10/2026: ver las secciones 22 y 23** (código y esquema desplegados; recorrido de Dirección para comedor corroborado) |
 | Migraciones | `20261001012522_ept_65_registro_accesos_qr.sql` (original, **sin modificar**, bytes idénticos a los de `ce04d48`) y `20261001165229_ept_65_correcciones_registro_accesos.sql` (correctiva: `kid` atado, carrera anulación↔purga y límite 150/5 min con bloqueo de 2 min). La última anterior es `20260929224534` |
 | Entorno de prueba | Supabase local aislado (`project_id = ept65`, puertos 574xx, contenedor `supabase_db_ept65`), Next 16.3.3, `qr` 0.7.2 |
 
@@ -346,12 +346,12 @@ Fallos preexistentes comprobados contra `origin/main`: **solo el lint** (14 erro
 
 Política aprobada como decisión de producto, **no como afirmación legal**: eventos identificables hasta el fin del ciclo lectivo + 90 días y luego anonimización; denegaciones 90 días y luego eliminación; contadores 24 horas. v1 se ejecuta a mano; **no se habilitó `pg_cron`** y habilitarlo requiere una aprobación nueva.
 
-**Decisiones registradas de Lucas (01/10/2026), tal como las dio** (una a la vez; ninguna es cumplimiento legal):
+**Decisiones registradas de Lucas (01/10/2026), tal como las dio** (una a la vez; ninguna es cumplimiento legal). A las 15:35:30 (UTC-03:00), ante la pregunta específica sobre ambas fechas, respondió «si, termina todo y pasalo a listo en jira»: acepta `2026-12-18` y `2027-03-19` como calendario operativo de esta entrega académica, reemplazable cuando exista calendario oficial. Esta confirmación resuelve el gate de calendario para el cierre, **no autoriza ejecutar la purga**.
 
 | Dato | Decisión | Estado |
 |---|---|---|
-| Responsable de ejecutar y custodiar la purga | Lucas lo precisó el 01/10/2026: **«admin principal nomás»**. Se registra **por cargo único: administrador principal del sistema**, **sin nombre propio** (primero había dicho «el admin principal o el director») | Definido por cargo; **falta el nombre de la persona** |
-| Fin del ciclo lectivo | Lucas pidió primero una **fecha ficticia** y se fijó `2026-12-18`; el 01/10/2026, consultado por la fecha oficial, respondió «si esa está bien» | **Aceptada por Lucas como la fecha a usar; origen NO verificado contra el calendario escolar oficial** |
+| Responsable de ejecutar y custodiar la purga | Lucas lo precisó el 01/10/2026: **«admin principal nomás»**. Se registra **por cargo único: administrador principal del sistema**, **sin nombre propio** (primero había dicho «el admin principal o el director») | Definido por cargo; no se publica un nombre propio. Antes de la purga real se debe identificar al ejecutor autorizado con acceso de propietario a la base |
+| Fin del ciclo lectivo | Lucas pidió primero una **fecha ficticia** y se fijó `2026-12-18`; el 01/10/2026, consultado por la fecha oficial, respondió «si esa está bien» | **Reconfirmada como calendario operativo académico; NO verificada contra el calendario escolar oficial** |
 | Primera purga | Lucas, el 01/10/2026: **«si usa esa fecha»**, es decir `2027-03-19`, el mínimo que permite la regla de la función (corre solo si `fin de ciclo + 90 días < hoy`; `2026-12-18 + 90 = 2027-03-18`) | **Fijada por Lucas: 2027-03-19.** Depende de que el fin de ciclo sea el correcto: si cambia, cambia esta fecha |
 
 Antes de ejecutar la primera purga real hay que **confirmar el fin de ciclo contra el calendario escolar oficial** y elegir la fecha de ejecución. Que Lucas haya aceptado `2026-12-18` **no demuestra cumplimiento legal** ni que coincida con el calendario de la institución.
@@ -525,7 +525,7 @@ Revisión de **solo lectura** del diff `origin/main..cbe5989` por un revisor ind
 
 ## 22. Despliegue y postflight de producción — 01/10/2026
 
-**Veredicto: base migrada y verificada (estructura, privilegios, límites y datos previos), código desplegado y fallo cerrado sin sesión comprobado. El recorrido funcional productivo —registro válido, duplicado y anulación— y la matriz de roles con sesión NO se ejecutaron: no hay credencial ACTIVA en producción, no existe ningún perfil PERSONAL y no se dispuso de una sesión autorizada.** Las pruebas locales de las secciones 4 a 12 no sustituyen ese recorrido. Todas las cifras de esta sección son agregados o consultas de catálogo; no se leyó ningún nombre, QR, payload, clave ni identificador de alumno.
+**Veredicto histórico del primer postflight (anterior al recorrido): base migrada y verificada (estructura, privilegios, límites y datos previos), código desplegado y fallo cerrado sin sesión comprobado. En esa operación no se ejecutaron el recorrido funcional productivo ni la matriz de roles con sesión.** El recorrido posterior de Dirección, la credencial emitida y revocada y la aceptación residual de PERSONAL se documentan en la sección 23. Las pruebas locales de las secciones 4 a 12 no sustituyen ese recorrido. Todas las cifras de esta sección son agregados o consultas de catálogo; no se leyó ningún nombre, QR, payload, clave ni identificador de alumno.
 
 ### 22.1 Integración y despliegue
 
@@ -603,7 +603,7 @@ No hay un hallazgo nuevo de seguridad de nivel `WARN` o `ERROR` atribuible a EPT
 
 **Observación:** las respuestas 405 y 204 llevan `Cache-Control: public, max-age=0, must-revalidate` y no `no-store`, a diferencia de lo que afirma la sección 9 («toda respuesta lleva `no-store`»). No contienen datos; es un encabezado por defecto de Next para esos casos, de gravedad baja, y no se corrigió en esta operación. EPT-64 registró el mismo comportamiento para su ruta de verificación.
 
-### 22.7 Lo que no se ejecutó y por qué
+### 22.7 Lo que no se ejecutó en el primer postflight y por qué (histórico)
 
 | Pendiente | Motivo y estado |
 |---|---|
@@ -622,4 +622,61 @@ No hay un hallazgo nuevo de seguridad de nivel `WARN` o `ERROR` atribuible a EPT
 
 - Revertir el PR no revierte PostgreSQL. No se borró ni se borrará auditoría. Para apagar el registro sin perder datos, una migración nueva debe retirar `EXECUTE` a `service_role` de las tres operaciones privilegiadas y de sus pares de `app_private` (sección 17); no se preparó ni aplicó porque no hubo causa.
 - El respaldo de la sección 22.3 es lógico y no tiene una restauración demostrada; el servicio administrado no ofrecía copias.
-- La compuerta funcional (sección 22.7) queda abierta hasta que Lucas autorice un plan de prueba mínimo o acepte expresamente el límite de la prueba productiva.
+- En el primer postflight la compuerta funcional (sección 22.7) quedó abierta. El recorrido autorizado y la aceptación posterior de cobertura residual se registran en la sección 23; sigue pendiente integrar esa evidencia para cerrar Jira.
+
+## 23. Recorrido productivo autorizado y decisiones de cierre — 01/10/2026
+
+**Resultado:** recorrido de Dirección para comedor completado por Lucas y corroborado por consultas SQL agregadas del agente. Termina con **0 credenciales ACTIVAS, 5 REVOCADAS, 1 REGISTRADO anulado, 1 DENEGADO por `YA_REGISTRADO`, 1 anulación y 0 accesos vigentes o duplicados válidos**. No se borró auditoría ni se ejecutó una purga. EPT-65 sigue «En curso» hasta la integración documental y la comprobación final de Jira.
+
+Todas las horas siguientes corresponden al **01/10/2026, `America/Argentina/Buenos_Aires` (UTC-03:00)**. Solo se conservaron cantidades y estados: no se pidió, capturó ni publicó QR, cookie, token, identidad de alumno o valor de variable. Lucas operó su propia sesión; el agente no operó la interfaz ni observó su sesión.
+
+### 23.1 Línea base revalidada antes del recorrido
+
+| Comprobación | Hora | Prueba y resultado |
+|---|---|---|
+| Git e integración | 15:05:47 | `git fetch origin --prune`: `origin/main` = `b138b246b41054afb25d467ab86c6ad51be8f049`. PR [#31](https://github.com/gimenezl/MetodologiaTPI/pull/31) MERGED a las 15:03:54, 107 adiciones/3 eliminaciones solo en esta evidencia y checks SUCCESS; PR [#30](https://github.com/gimenezl/MetodologiaTPI/pull/30) MERGED en `ea239bd4b3963201d2f4499d62b76da3f4ae552d`, ancestro de main |
+| Vercel Production | 15:07:41 | API autenticada: `dpl_2TPemkf9Ka1wUYeuiKqn8KbpGEnD`, `READY`, destino `production`, creado a las 15:03:57, `meta.githubCommitSha` = `b138b246b41054afb25d467ab86c6ad51be8f049`; alias [metodologia-tpi.vercel.app](https://metodologia-tpi.vercel.app). No se usa Preview como evidencia productiva |
+| Proyecto y ledger | 15:08:08 | `supabase migration list --linked` y contraste con el repositorio: proyecto `ycvrpmrogvjnntnoosbh`, 27 archivos/27 versiones remotas, 0 diferencias; todas aplicadas una vez, incluidas `20261001012522` y `20261001165229`. **No se ejecutó `db push` en este recorrido** |
+| HTTP sin sesión | 15:09:03–15:09:08 | `/` 200 con `private, no-cache, no-store`; páginas de acceso/auditoría 307 a login; POST de registro y anulación (UUID sintético inexistente, cuerpo `{}`) 401 con `no-store`; GET/PUT/DELETE de registro y GET de anulación 405, OPTIONS 204, `Allow: POST, OPTIONS`. Sin cookies ni pruebas destructivas |
+| Elegibilidad y estado inicial | 15:10:01.501911 | 1 alumno elegible para comedor (alumno ACTIVO, perfil HABILITADO, inscripción ACTIVA y servicio activo), 0 perfiles PERSONAL, 0 credenciales ACTIVAS y 4 REVOCADAS; ningún acceso, anulación, contador o depuración. Consulta exclusivamente agregada, sin identidad |
+
+Las respuestas 405/204 conservaron `Cache-Control: public, max-age=0, must-revalidate` sin datos. Continúa como observación menor de la sección 22.6; no se amplió el alcance con cambios especulativos de código.
+
+### 23.2 Antes y después de cada fase
+
+Una consulta de solo lectura por fase, con `npx --no-install supabase db query --linked --project-ref ycvrpmrogvjnntnoosbh --output json` y SQL de CTE/agregados; **seis ejecuciones, todas exit 0**, incluida la línea base. La identidad del proyecto enlazado se validó antes de consultar. No se muestran filas identificatorias ni payloads.
+
+| Fase / hora SQL | ACTIVAS / REVOCADAS | Eventos totales | REGISTRADO vigente / anulado | DENEGADO `YA_REGISTRADO` | Anulaciones | Duplicados válidos | Contadores `SOLICITUD` / total | Depuraciones |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Antes / 15:10:01.501911 | 0 / 4 | 0 | 0 / 0 | 0 | 0 | 0 | 0 / 0 | 0 |
+| Emisión / 15:18:13.290727 | 1 / 4 | 0 | 0 / 0 | 0 | 0 | 0 | 0 / 0 | 0 |
+| Primer escaneo / 15:22:11.011671 | 1 / 4 | 1 | 1 / 0 | 0 | 0 | 0 | 1 / 1 | 0 |
+| Segundo escaneo / 15:27:46.555496 | 1 / 4 | 2 | 1 / 0 | 1 | 0 | 0 | 2 / 2 | 0 |
+| Anulación / 15:30:46.068780 | 1 / 4 | 2 | 0 / 1 | 1 | 1 | 0 | 2 / 2 | 0 |
+| Revocación / 15:33:29.106677 | 0 / 5 | 2 | 0 / 1 | 1 | 1 | 0 | 2 / 2 | 0 |
+
+Los dos eventos corresponden a COMEDOR. El REGISTRADO tiene motivo nulo; el DENEGADO tiene motivo `YA_REGISTRADO`. La elegibilidad de comedor permaneció en 1 y PERSONAL en 0 en las seis consultas. Los contadores son filas observadas, no una medición del umbral de bloqueo en producción.
+
+**Semántica del duplicado:** Lucas usó un nuevo escaneo («Escanear siguiente»), no «Reintentar». La migración correctiva audita ese nuevo intento como DENEGADO por `YA_REGISTRADO`, sin otro acceso válido. El reintento con el mismo `intento_id` es idempotente y no genera otra fila (pruebas SQL/locales existentes). Los dos eventos observados son compatibles con el contrato, **no un defecto ni un duplicado válido**.
+
+### 23.3 Matriz criterio → prueba → resultado y atribución
+
+| Criterio | Prueba / autor y entorno | Resultado y límite |
+|---|---|---|
+| Emitir para el sujeto autorizado | Lucas confirmó la emisión en su sesión de Dirección; agente corroboró agregados productivos | ACTIVAS 0→1, sin accesos. No se observó el QR ni la pantalla por parte del agente |
+| Registrar comedor permitido | Lucas confirmó el mensaje «Acceso registrado»; SQL agregado productivo del agente | Exactamente 1 REGISTRADO COMEDOR vigente y 0 duplicados válidos |
+| Rechazar segundo acceso válido | Lucas confirmó «registrado hoy» ante la pregunta sobre «Ya registrado hoy»; SQL agregado productivo | 1 DENEGADO `YA_REGISTRADO`, sin segundo REGISTRADO vigente |
+| Anular conservando la historia | Lucas confirmó «si se queda» ante la pregunta sobre anulación y conservación; SQL agregado productivo | 1 anulación, REGISTRADO vigente 1→0/anulado 0→1; ambos eventos conservados. No se afirma el texto exacto del motivo introducido |
+| Revocar al terminar | Lucas confirmó «si listo» ante la pregunta sobre revocación; SQL agregado productivo | ACTIVAS 1→0 y REVOCADAS 4→5; auditoría conservada |
+| Autorización de Dirección | Recorrido manual productivo de Lucas y comprobaciones SQL/locales existentes de las secciones 4–12 | Registro, auditoría y anulación acreditados en ese recorrido; no se repitió toda la matriz negativa autenticada en producción |
+| PERSONAL y roles no autorizados | Pruebas SQL/locales existentes de privilegios, API y RLS; 0 perfiles PERSONAL productivos | **PERSONAL no probado en producción.** No se creó cuenta. Lucas aceptó explícitamente cerrar con PERSONAL solo SQL/local y Dirección corroborada en producción |
+| Transporte y concurrencia | Pruebas SQL/locales existentes de las secciones 4–12 | No se ejecutó un recorrido de transporte ni una prueba de concurrencia productiva en esta sesión |
+| Variables y firma | Recorrido satisfactorio de Dirección | Evidencia indirecta del funcionamiento de la configuración necesaria; **no** verifica nombres ni valores en el panel Vercel. El 403 previo de la sección 22.7 permanece como limitación |
+| Retención | Respuesta explícita de Lucas a las 15:35:30 sobre ambas fechas; sección 15 | Calendario operativo académico confirmado: fin de ciclo `2026-12-18`, primera purga `2027-03-19`; reemplazable por calendario oficial. No acredita cumplimiento legal ni autoriza purga |
+
+### 23.4 Decisiones, riesgos y gate de cierre
+
+- **Decisiones humanas resueltas:** Lucas confirmó las fechas de retención y, después, respondió «si» a «¿Aceptás cerrar EPT-65 con PERSONAL probado solo mediante SQL/local y Dirección corroborada en producción?». La cobertura residual quedó aceptada sin convertirla en una prueba productiva. Responsable de retención conservado por cargo: **administrador principal del sistema**, sin nombre propio.
+- **No probado / riesgo residual:** PERSONAL y transporte productivos, matriz negativa autenticada completa en producción, nombres/valores de variables del panel Vercel, restauración aislada del respaldo y purga real. El respaldo previo sigue cifrado fuera del repositorio, sin recuperación demostrada; PITR constaba deshabilitado en el informe anterior, no se revalidó aquí. Las pruebas y revisión existentes no presentan un defecto alto pendiente de EPT-65; eso no garantiza ausencia de defectos.
+- **Reversión:** revertir esta documentación no deshace los eventos del recorrido, ni PostgreSQL, ni la revocación. Se conserva el REGISTRADO anulado y su DENEGADO auditado. No se autoriza borrar filas, aplicar una migración inversa o ejecutar depuración; cualquier apagado funcional requiere la migración compensatoria nueva de la sección 17 y autorización independiente.
+- **Entrega pendiente:** #31 ya está MERGED, por lo que no se reutiliza su rama para este cierre. Esta actualización requiere una nueva entrega documental, comprobación de diff solo documental y checks, seguida del merge realizado o confirmado por Lucas. Solo después de comprobar la integración, refrescar main y Jira y mantener satisfechos los gates corresponde pasar **únicamente EPT-65** de «En curso» a «Listo» y publicar el comentario final. Este documento no afirma una transición ya ejecutada.
