@@ -67,6 +67,8 @@ const RUTAS_DE_BANCO = [
   '/pruebas-ui/accesos',
   // EPT-66: banco de la pantalla de cupos con las funciones de inscripciones legadas.
   '/pruebas-ui/cupos',
+  // EPT-66 D: banco de la pantalla de asistencias del personal y de alumno y padre.
+  '/pruebas-ui/asistencias',
 ]
 const RUTA_LEGITIMA = '/login'
 

@@ -18,6 +18,24 @@ INSERT INTO public.padres_hijos (padre_id, hijo_id)
 VALUES ('f58b0000-0000-4000-8000-000000000004',
         'f58b0000-0000-4000-8000-000000000003');
 
+-- EPT-66 D: el DOCENTE solo recibe de la consulta mínima a los alumnos con vínculo vigente.
+-- El estudiante se matricula en un curso donde el docente dicta una materia (RPC reales).
+INSERT INTO public.cursos (id, nivel_id, denominacion, division, activo)
+VALUES ('f58b0000-0000-4000-8000-0000000000c1',
+        (SELECT id FROM public.niveles WHERE nombre = 'PRIMARIO'), 'Curso EPT58 B', 'A', TRUE);
+INSERT INTO public.matriculas (alumno_id, curso_id)
+VALUES ('f58b0000-0000-4000-8000-000000000003', 'f58b0000-0000-4000-8000-0000000000c1');
+UPDATE public.alumnos SET estado = 'ACTIVO' WHERE perfil_id = 'f58b0000-0000-4000-8000-000000000003';
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims', '{"sub":"f58b0000-0000-4000-8000-000000000001"}', true);
+SELECT public.crear_materia('Materia EPT58 B privacidad');
+SELECT public.asignar_materia_curso(
+    (SELECT id FROM public.materias WHERE nombre = 'Materia EPT58 B privacidad'),
+    'f58b0000-0000-4000-8000-0000000000c1', 'f58b0000-0000-4000-8000-000000000002');
+RESET ROLE;
+
 -- El catálogo no debe conservar la lectura amplia ni alterar INSERT/UPDATE.
 DO $$
 BEGIN
@@ -117,7 +135,8 @@ BEGIN
 END $$;
 RESET ROLE;
 
--- La RPC expone el mismo conjunto mínimo pese al cierre de la lectura directa.
+-- La RPC expone un conjunto mínimo pese al cierre de la lectura directa. EPT-66 D: Dirección
+-- recibe a todos los estudiantes; el DOCENTE, solo a los que tienen un vínculo vigente con él.
 DO $$
 DECLARE
     v_director UUID[];
@@ -139,10 +158,31 @@ BEGIN
     SELECT pg_catalog.array_agg(p.id ORDER BY p.id) INTO v_esperado
     FROM public.perfiles p JOIN public.roles r ON r.id = p.rol_id
     WHERE r.nombre = 'ESTUDIANTE';
-    IF v_director IS DISTINCT FROM v_esperado OR v_docente IS DISTINCT FROM v_esperado THEN
-        RAISE EXCEPTION 'FALLO B-04: RPC mínima cambió el conjunto de estudiantes.';
+    IF v_director IS DISTINCT FROM v_esperado THEN
+        RAISE EXCEPTION 'FALLO B-04: la consulta mínima cambió el conjunto de Dirección.';
     END IF;
-    RAISE NOTICE 'OK B-04: consulta mínima conserva el conjunto para Dirección y DOCENTE';
+    IF v_docente IS DISTINCT FROM ARRAY['f58b0000-0000-4000-8000-000000000003'::uuid] THEN
+        RAISE EXCEPTION 'FALLO B-04: el DOCENTE debía recibir solo a su alumno vinculado y recibió %.', v_docente;
+    END IF;
+    RAISE NOTICE 'OK B-04: consulta mínima: Dirección todos; DOCENTE solo su alumno vinculado';
+END $$;
+
+-- Revocado el vínculo (asignación inactiva), el DOCENTE ya no recibe a nadie.
+UPDATE public.materias_cursos SET activo = FALSE
+WHERE curso_id = 'f58b0000-0000-4000-8000-0000000000c1';
+DO $$
+DECLARE
+    v_docente UUID[];
+BEGIN
+    PERFORM set_config('request.jwt.claims', '{"sub":"f58b0000-0000-4000-8000-000000000002"}', true);
+    SET LOCAL ROLE authenticated;
+    SELECT pg_catalog.array_agg(id ORDER BY id) INTO v_docente
+    FROM public.listar_estudiantes_para_gestion();
+    RESET ROLE;
+    IF v_docente IS NOT NULL THEN
+        RAISE EXCEPTION 'FALLO B-05: sin vínculo vigente el DOCENTE recibió %.', v_docente;
+    END IF;
+    RAISE NOTICE 'OK B-05: revocado el vínculo, la consulta mínima del DOCENTE queda vacía';
 END $$;
 
 ROLLBACK;

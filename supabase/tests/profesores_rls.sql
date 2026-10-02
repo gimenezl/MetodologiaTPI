@@ -45,6 +45,15 @@ VALUES
     ('f5800000-0000-4000-8000-0000000000c2',
      (SELECT id FROM public.niveles WHERE nombre = 'PRIMARIO'), 'Curso EPT58', 'B', TRUE);
 
+-- EPT-66 D: Emilia queda matriculada en el curso c1, donde el DOCENTE A dicta
+-- «Materia EPT58 A» (más abajo): ese es el vínculo vigente que le permite a A
+-- recibirla en la consulta mínima de estudiantes.
+INSERT INTO public.matriculas (alumno_id, curso_id)
+VALUES ('f5800000-0000-4000-8000-000000000005', 'f5800000-0000-4000-8000-0000000000c1');
+UPDATE public.alumnos SET estado = 'ACTIVO' WHERE perfil_id = 'f5800000-0000-4000-8000-000000000005';
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
+
 -- Grupos con profesor: el trigger de 014 exige rol DOCENTE y el de EPT-58,
 -- ficha ACTIVO.
 INSERT INTO public.grupos_deportivos (id, deporte_id, nivel_id, nombre, cupo, profesor_id)
@@ -675,12 +684,19 @@ BEGIN
 END $$;
 RESET ROLE;
 
--- El conjunto completo se compara como propietario, que ve todos los perfiles.
+-- EPT-66 D: el conjunto ya no es «todos los estudiantes» para el DOCENTE. Dirección
+-- conserva a todos; un DOCENTE recibe solo a quienes tienen un vínculo vigente con él
+-- (matrícula vigente en un curso donde dicta una materia activa, o inscripción
+-- deportiva ACTIVA en un grupo activo que dicta). El oráculo se calcula como
+-- propietario con la regla escrita de nuevo, sin llamar a la función bajo prueba.
 DO $$
 DECLARE
-    v_rpc      UUID[];
-    v_docente  UUID[];
-    v_esperado UUID[];
+    v_rpc       UUID[];
+    v_docente_a UUID[];
+    v_docente_b UUID[];
+    v_docente_c UUID[];
+    v_todos     UUID[];
+    v_vinc_a    UUID[];
 BEGIN
     PERFORM set_config('request.jwt.claims', '{"sub":"f5800000-0000-4000-8000-000000000001"}', true);
     SET LOCAL ROLE authenticated;
@@ -690,18 +706,58 @@ BEGIN
 
     PERFORM set_config('request.jwt.claims', '{"sub":"f5800000-0000-4000-8000-000000000002"}', true);
     SET LOCAL ROLE authenticated;
-    SELECT pg_catalog.array_agg(e.id ORDER BY e.id) INTO v_docente
+    SELECT pg_catalog.array_agg(e.id ORDER BY e.id) INTO v_docente_a
     FROM public.listar_estudiantes_para_gestion() e;
     RESET ROLE;
 
-    SELECT pg_catalog.array_agg(p.id ORDER BY p.id) INTO v_esperado
+    PERFORM set_config('request.jwt.claims', '{"sub":"f5800000-0000-4000-8000-000000000003"}', true);
+    SET LOCAL ROLE authenticated;
+    SELECT pg_catalog.array_agg(e.id ORDER BY e.id) INTO v_docente_b
+    FROM public.listar_estudiantes_para_gestion() e;
+    RESET ROLE;
+
+    PERFORM set_config('request.jwt.claims', '{"sub":"f5800000-0000-4000-8000-000000000004"}', true);
+    SET LOCAL ROLE authenticated;
+    SELECT pg_catalog.array_agg(e.id ORDER BY e.id) INTO v_docente_c
+    FROM public.listar_estudiantes_para_gestion() e;
+    RESET ROLE;
+
+    SELECT pg_catalog.array_agg(p.id ORDER BY p.id) INTO v_todos
     FROM public.perfiles p JOIN public.roles r ON r.id = p.rol_id
     WHERE r.nombre = 'ESTUDIANTE';
 
-    IF v_rpc IS DISTINCT FROM v_esperado OR v_docente IS DISTINCT FROM v_esperado THEN
-        RAISE EXCEPTION 'FALLO CA-17: la consulta mínima no conserva el conjunto de estudiantes.';
+    -- Oráculo del DOCENTE A (f58…02): sus vínculos académicos y deportivos vigentes.
+    SELECT pg_catalog.array_agg(x.alumno_id ORDER BY x.alumno_id) INTO v_vinc_a
+    FROM (
+        SELECT m.alumno_id
+        FROM public.matriculas m
+        JOIN public.materias_cursos mc ON mc.curso_id = m.curso_id AND mc.activo
+             AND mc.profesor_id = 'f5800000-0000-4000-8000-000000000002'
+        JOIN public.actividades a ON a.id = mc.materia_id AND a.tipo = 'CURRICULAR' AND a.activo
+        WHERE m.fecha_cierre IS NULL
+        UNION
+        SELECT i.alumno_id
+        FROM public.inscripciones_deportivas i
+        JOIN public.grupos_deportivos g ON g.id = i.grupo_id AND g.activo
+             AND g.profesor_id = 'f5800000-0000-4000-8000-000000000002'
+        WHERE i.estado = 'ACTIVA'
+    ) x;
+
+    IF v_rpc IS DISTINCT FROM v_todos THEN
+        RAISE EXCEPTION 'FALLO CA-17: Dirección ya no recibe a todos los estudiantes.';
     END IF;
-    RAISE NOTICE 'OK CA-17: mismo conjunto de estudiantes que la lectura previa, sin filtrar por curso';
+    RAISE NOTICE 'OK CA-17: Dirección conserva el conjunto completo de estudiantes';
+
+    IF v_docente_a IS DISTINCT FROM v_vinc_a
+       OR v_docente_a IS DISTINCT FROM ARRAY['f5800000-0000-4000-8000-000000000005'::uuid] THEN
+        RAISE EXCEPTION 'FALLO CA-17: el DOCENTE A debía recibir solo a Emilia (vínculo vigente) y recibió %.', v_docente_a;
+    END IF;
+    RAISE NOTICE 'OK CA-17: el DOCENTE recibe solo a sus alumnos vinculados (EPT-66 D), no a todos';
+
+    IF v_docente_b IS NOT NULL OR v_docente_c IS DISTINCT FROM ARRAY['f5800000-0000-4000-8000-000000000005'::uuid] THEN
+        RAISE EXCEPTION 'FALLO CA-17: B (sin vínculos) debía recibir una lista vacía y C (Materia B en c1) a Emilia; B=%, C=%.', v_docente_b, v_docente_c;
+    END IF;
+    RAISE NOTICE 'OK CA-17: un DOCENTE sin vínculos recibe una lista vacía; otro con una materia en el mismo curso, al mismo alumno';
 END $$;
 
 

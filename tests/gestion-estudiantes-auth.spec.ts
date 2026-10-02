@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
+import { comoDirector, sqlAlumnosVinculados } from './_asistencias-vinculos'
 
 /**
  * Regresión de Asistencias y Cupos para el personal (EPT-58).
@@ -11,6 +12,12 @@ import { execFileSync } from 'node:child_process'
  * operaciones: registrar y cambiar una asistencia, inscribir, ver inscriptos y
  * dar de baja. EPT-66: en Cupos el DOCENTE ya no inscribe ni lista inscriptos; esas operaciones
  * quedan solo para Dirección.
+ *
+ * EPT-66 D: en Asistencias el DOCENTE ya no recibe a TODOS los estudiantes sino solo a los que
+ * tienen un vínculo vigente con él. Para esta regresión el docente de prueba recibe una materia
+ * en el curso del alumno de prueba (con la RPC real de la Dirección); la lista que debe ver se
+ * calcula con un oráculo SQL del contrato y, además, tiene que ser estrictamente menor que la de
+ * Dirección. El vínculo se retira al terminar cada caso.
  */
 
 test.skip(
@@ -21,6 +28,8 @@ test.skip(
 const CONTENEDOR = process.env.EPT_SUPABASE_DB_CONTAINER ?? 'supabase_db_educar-para-transformar'
 const ALUMNO = { dni: '99900002', etiqueta: 'Estudiante, Beto', legajo: 'LEG-PRUEBA-0002' }
 const TALLER = 'Taller E2E EPT58 Gestión'
+const MATERIA_VINCULO = 'E2E EPT66D Gestión'
+const DNI_DOCENTE = '99900004'
 /** Una fecha lejana por actor: la asistencia es única por alumno y día. */
 const FECHA = { 'chromium-directora': '2031-03-10', 'chromium-docente': '2031-03-11' } as const
 
@@ -50,12 +59,33 @@ function limpiar(fecha: string) {
     DELETE FROM public.inscripciones WHERE actividad_id IN (SELECT id FROM public.actividades WHERE nombre = '${TALLER}');
     ALTER TABLE public.inscripciones ENABLE TRIGGER USER;
     DELETE FROM public.actividades WHERE nombre = '${TALLER}';
+    DELETE FROM public.materias_cursos
+      WHERE materia_id IN (SELECT id FROM public.actividades WHERE nombre = '${MATERIA_VINCULO}');
+    DELETE FROM public.actividades WHERE nombre = '${MATERIA_VINCULO}';
     COMMIT;
   `)
 }
 
-/** Etiquetas esperadas, armadas desde la base con el formato de cada pantalla. */
-function etiquetasEsperadas(formato: 'asistencias' | 'cupos') {
+/** Vincula al DOCENTE de prueba con el alumno de prueba: dicta una materia en su curso vigente. */
+function vincularDocente() {
+  const docente = sql(`SELECT id FROM public.perfiles WHERE dni = '${DNI_DOCENTE}'`)
+  const curso = sql(`
+    SELECT m.curso_id FROM public.matriculas m JOIN public.perfiles p ON p.id = m.alumno_id
+    WHERE p.dni = '${ALUMNO.dni}' AND m.fecha_cierre IS NULL`)
+  comoDirector(`
+    SELECT (public.crear_materia('${MATERIA_VINCULO}')).id;
+    SELECT (public.asignar_materia_curso(
+      (SELECT id FROM public.materias WHERE nombre = '${MATERIA_VINCULO}'), '${curso}', '${docente}')).id;
+  `)
+}
+
+/**
+ * Etiquetas esperadas, armadas desde la base con el formato de cada pantalla. Con `soloDocente`
+ * se limitan a los alumnos con vínculo vigente con el docente de prueba (EPT-66 D).
+ */
+function etiquetasEsperadas(formato: 'asistencias' | 'cupos', soloDocente = false) {
+  const docente = sql(`SELECT id FROM public.perfiles WHERE dni = '${DNI_DOCENTE}'`)
+  const alcance = soloDocente ? `AND p.id IN (${sqlAlumnosVinculados(docente)})` : ''
   const legajo =
     formato === 'asistencias'
       ? `coalesce(' (' || p.legajo_nro || ')', '')`
@@ -63,7 +93,7 @@ function etiquetasEsperadas(formato: 'asistencias' | 'cupos') {
   const filas = sql(`
     SELECT p.apellido || ', ' || p.nombre || ${legajo}
     FROM public.perfiles p JOIN public.roles r ON r.id = p.rol_id
-    WHERE r.nombre = 'ESTUDIANTE'
+    WHERE r.nombre = 'ESTUDIANTE' ${alcance}
   `)
   return filas.split('\n').filter(Boolean).sort()
 }
@@ -83,6 +113,7 @@ for (const actor of ['DIRECTOR', 'DOCENTE'] as const) {
     test.beforeEach(() => {
       limpiar(fechaDelProyecto())
       sql(`INSERT INTO public.actividades (nombre, tipo, cupo_maximo, activo) VALUES ('${TALLER}', 'TALLER', 5, TRUE);`)
+      if (actor === 'DOCENTE') vincularDocente()
     })
 
     test.afterEach(() => {
@@ -94,7 +125,13 @@ for (const actor of ['DIRECTOR', 'DOCENTE'] as const) {
       await page.goto('/dashboard/asistencias')
       await page.getByLabel('Filtrar por fecha').fill(fecha)
 
-      expect(await opcionesDe(page, 'Alumno')).toEqual(etiquetasEsperadas('asistencias'))
+      const esperadas = etiquetasEsperadas('asistencias', actor === 'DOCENTE')
+      expect(await opcionesDe(page, 'Alumno')).toEqual(esperadas)
+      if (actor === 'DOCENTE') {
+        // El DOCENTE ya no recibe a todos los estudiantes: solo a los de su vínculo vigente.
+        expect(esperadas).toContain(`${ALUMNO.etiqueta} (${ALUMNO.legajo})`)
+        expect(esperadas.length).toBeLessThan(etiquetasEsperadas('asistencias').length)
+      }
 
       await page.getByLabel('Alumno', { exact: true }).selectOption({ label: `${ALUMNO.etiqueta} (${ALUMNO.legajo})` })
       await page.getByLabel('Estado', { exact: true }).selectOption('PRESENTE')

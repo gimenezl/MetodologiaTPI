@@ -2,16 +2,20 @@ import { traducirErrorDeLectura } from '@/lib/errores'
 import { createClient } from '@/services/supabase'
 
 /**
- * Consulta mínima de estudiantes para Asistencias y Cupos (EPT-58).
+ * Consulta mínima de estudiantes para la gestión (EPT-58, acotada en EPT-66 D).
  *
- * Reemplaza la lectura directa de `perfiles` que hacían esas pantallas para la
- * dirección y los docentes. Devuelve exactamente el mismo conjunto —todos los
- * perfiles ESTUDIANTE— pero solo cuatro datos: identificador, nombre, apellido
- * y legajo. Sin DNI, domicilio, teléfono ni fecha de nacimiento.
+ * Reemplaza la lectura directa de `perfiles` que hacían las pantallas de la
+ * dirección y los docentes. Devuelve solo cuatro datos: identificador, nombre,
+ * apellido y legajo. Sin DNI, domicilio, teléfono ni fecha de nacimiento.
  *
- * Es la única forma en que un docente sigue viendo los nombres cuando la
- * migración B le quite la lectura global de perfiles. No filtra por curso: ese
- * recorte requiere un contrato aparte.
+ * El conjunto depende del rol, y lo decide PostgreSQL: Dirección recibe a todos
+ * los estudiantes; un DOCENTE, únicamente a quienes tienen un vínculo vigente
+ * con él (matrícula vigente en un curso donde dicta una materia activa, o
+ * inscripción deportiva activa en un grupo activo que dicta). Es la misma regla
+ * que acota la lectura y el registro de asistencias.
+ *
+ * Asistencias del personal usa `/api/asistencias`; esta función sigue siendo la
+ * consulta del listado para las pantallas que lo necesitan (Cupos, de Dirección).
  */
 
 export type EstudianteDeGestion = {
