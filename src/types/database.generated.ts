@@ -3062,6 +3062,17 @@ export type Database = {
           sellado_en: string
         }[]
       }
+      registrar_asistencia: {
+        Args: { p_estado: string; p_estudiante_id: string; p_fecha: string }
+        Returns: {
+          docente_id: string
+          estado: string
+          estudiante_id: string
+          fecha: string
+          id: string
+          resultado: string
+        }[]
+      }
       registrar_escaneo_invalido: {
         Args: { p_actor_user_id: string }
         Returns: {

@@ -620,6 +620,9 @@ BEGIN
     PERFORM pg_temp.rpc('public.listar_profesores', 'n', 'public.listar_profesores()');
     PERFORM pg_temp.rpc('public.matricular_hijo', 'x', pg_catalog.format('public.matricular_hijo(%L, %L)', EST2, C1));
     PERFORM pg_temp.rpc('public.reactivar_alumno', 'x', pg_catalog.format('public.reactivar_alumno(%L, %L)', EST2, C1));
+    -- EPT-66 D: registro de asistencias por vínculo vigente (el docente de la batería dicta en el
+    -- curso del estudiante, así que su alta es válida; un bloqueado recibe 42501; cada intento se revierte).
+    PERFORM pg_temp.rpc('public.registrar_asistencia', 'x', pg_catalog.format('public.registrar_asistencia(%L, CURRENT_DATE - 2, %L)', EST, 'PRESENTE'));
     PERFORM pg_temp.rpc('public.renombrar_deporte', 'x', pg_catalog.format('public.renombrar_deporte(%L, %L)', 'e0000000-0000-4000-8000-000000000103', 'Atletismo batería EPT61'));
     PERFORM pg_temp.rpc('public.renombrar_materia', 'x', pg_catalog.format('public.renombrar_materia(%s, %L)', MAT, 'Materia EPT59 renombrada'));
     PERFORM pg_temp.rpc('public.renombrar_nivel', 'x', pg_catalog.format('public.renombrar_nivel(%s, %L)', NIV, 'NIVEL EPT59 RENOMBRADO'));

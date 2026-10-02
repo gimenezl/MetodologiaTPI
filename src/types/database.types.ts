@@ -8,6 +8,15 @@
  *
  * Reconciliación verificada entre este archivo y el esquema real (EPT-57):
  *
+ * - EPT-66 D (asistencias docentes por vínculo vigente) agrega la función pública
+ *   `registrar_asistencia(p_estudiante_id, p_fecha, p_estado)`: alta o corrección
+ *   del estado de la asistencia de un alumno y un día. No recibe ninguna identidad
+ *   de quien registra: el registrante (`asistencias.docente_id`) lo deriva la base
+ *   de la sesión. Devuelve la fila resultante y `resultado` (CREADA, ACTUALIZADA
+ *   o SIN_CAMBIOS). `asistencias` conserva sus columnas, pero `authenticated` solo
+ *   puede actualizar `estado` y un DOCENTE solo ve y escribe las de sus alumnos
+ *   vinculados. `listar_estudiantes_para_gestion` mantiene su firma.
+ *
  * - EPT-66 (inscripciones legadas a talleres y actividades, decisión D1=A)
  *   agrega `inscripciones.fecha_baja` y las funciones públicas
  *   `inscribir_actividad_legada`, `dar_baja_inscripcion_legada`,
@@ -867,6 +876,18 @@ export type Database = {
       asignar_materia_curso: {
         Args: { p_curso_id: string; p_materia_id: number; p_profesor_id?: string | null }
         Returns: Database['public']['Tables']['materias_cursos']['Row']
+      }
+      registrar_asistencia: {
+        Args: { p_estudiante_id: string; p_fecha: string; p_estado: 'PRESENTE' | 'AUSENTE' | 'JUSTIFICADO' }
+        Returns: {
+          id: string
+          estudiante_id: string
+          fecha: string
+          estado: 'PRESENTE' | 'AUSENTE' | 'JUSTIFICADO'
+          // `null` solo si el perfil que registró se eliminó (ON DELETE SET NULL).
+          docente_id: string | null
+          resultado: 'CREADA' | 'ACTUALIZADA' | 'SIN_CAMBIOS'
+        }[]
       }
       calcular_porcentaje_asistencia: {
         Args: { p_estudiante_id: string }
