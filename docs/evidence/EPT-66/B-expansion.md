@@ -1,8 +1,9 @@
 # EPT-66 — Unidad B: expansión de las inscripciones legadas
 
-> **Estado: lista para revisión; NO aplicada en producción.** La aplicación en producción
-> exige el merge de Lucas, un checkout de despliegue con **solo esta migración pendiente**,
-> preflight, respaldo y una autorización puntual (ver §7).
+> **Estado: integrada en `main` (#34) y aplicada en producción el 02/10/2026 entre las 02:57:13 y
+> las 02:57:17 ART** (una sola vez, con autorización puntual, desde un checkout con solo esta migración
+> pendiente, tras preflight, respaldo y restauración aislada; ver `docs/evidence/EPT-66.md` §10). Lo que
+> sigue describe el estado previo a la aplicación.
 
 ## 1. Qué es
 
