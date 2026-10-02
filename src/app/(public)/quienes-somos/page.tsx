@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { GraduationCap, Heart, Target, Users, BookOpen, Star, Shield, ArrowRight } from '@phosphor-icons/react/dist/ssr'
-import Link from 'next/link'
-import { Button } from '@/components/ui/Button'
+import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 
 export const metadata: Metadata = {
   title: 'Quiénes Somos',
@@ -177,11 +176,9 @@ export default function QuienesSomosPage() {
                 Nuestro equipo directivo
               </h2>
             </div>
-            <Link href="/empleo">
-              <Button variant="outline">
+            <EnlaceBoton href="/empleo" variant="outline">
                 Sumarte al equipo <ArrowRight size={16} />
-              </Button>
-            </Link>
+              </EnlaceBoton>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {equipo.map((persona) => (
@@ -216,12 +213,8 @@ export default function QuienesSomosPage() {
             Las inscripciones para el ciclo 2027 están abiertas. Completá el formulario y nuestro equipo te contactará.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
-            <Link href="/inscripcion">
-              <Button variant="primary" size="lg">Iniciar inscripción <ArrowRight size={18} /></Button>
-            </Link>
-            <Link href="/contacto">
-              <Button variant="outline" size="lg">Consultar</Button>
-            </Link>
+            <EnlaceBoton href="/inscripcion" variant="primary" size="lg">Iniciar inscripción <ArrowRight size={18} /></EnlaceBoton>
+            <EnlaceBoton href="/contacto" variant="outline" size="lg">Consultar</EnlaceBoton>
           </div>
         </div>
       </section>

@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect } from 'react'
-import Link from 'next/link'
 import { House, ArrowClockwise, WarningCircle } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/Button'
+import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 
 export default function Error({
   error,
@@ -46,12 +46,10 @@ export default function Error({
             <ArrowClockwise size={18} weight="bold" />
             Reintentar
           </Button>
-          <Link href="/">
-            <Button size="lg" variant="ghost" className="text-neutral-700 border border-neutral-300 hover:bg-neutral-100">
+          <EnlaceBoton href="/" size="lg" variant="ghost" className="text-neutral-700 border border-neutral-300 hover:bg-neutral-100">
               <House size={18} weight="fill" />
               Volver al inicio
-            </Button>
-          </Link>
+            </EnlaceBoton>
         </div>
       </div>
     </main>

@@ -1,10 +1,9 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { Lock, WarningCircle } from '@phosphor-icons/react/dist/ssr'
 import { requerirDirector } from '@/services/autorizacion'
 import { listarCursos, listarNivelesActivos } from '@/services/cursos.service'
-import { Button } from '@/components/ui/Button'
 import { GestionCursos } from './_components/GestionCursos'
+import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 
 export const metadata: Metadata = {
   title: 'Cursos | Panel',
@@ -30,9 +29,7 @@ export default async function CursosPage() {
         </div>
         <h1 className="text-xl font-extrabold text-neutral-900 tracking-tight">Acceso restringido</h1>
         <p className="text-neutral-500 text-sm mt-2">{autorizacion.mensaje}</p>
-        <Link href="/dashboard" className="inline-block mt-6">
-          <Button>Volver al panel</Button>
-        </Link>
+        <EnlaceBoton href="/dashboard" className="mt-6">Volver al panel</EnlaceBoton>
       </div>
     )
   }

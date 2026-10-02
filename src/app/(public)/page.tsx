@@ -2,10 +2,10 @@ export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
 import { ArrowRight, GraduationCap, Users, Trophy, BookOpen, Heart, Star } from '@phosphor-icons/react/dist/ssr'
-import { Button } from '@/components/ui/Button'
 import type { Metadata } from 'next'
 import { obtenerOpiniones } from '@/services/noticias.service'
 import { TestimoniosClient } from './TestimoniosClient'
+import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 
 export const metadata: Metadata = {
   title: 'Inicio | Centro Educativo Educar para Transformar',
@@ -137,21 +137,13 @@ export default async function HomePage() {
             </p>
 
             <div className="mt-10 flex flex-wrap gap-4">
-              <Link href="/inscripcion">
-                <Button size="lg" variant="accent" className="shadow-lg shadow-accent-500/25">
+              <EnlaceBoton href="/inscripcion" size="lg" variant="accent" className="shadow-lg shadow-accent-500/25">
                   Iniciar pre-inscripción
                   <ArrowRight size={18} />
-                </Button>
-              </Link>
-              <Link href="/quienes-somos">
-                <Button
-                  size="lg"
-                  variant="ghost"
-                  className="text-neutral-700 border border-neutral-300 hover:bg-neutral-100"
-                >
+                </EnlaceBoton>
+              <EnlaceBoton href="/quienes-somos" size="lg" variant="ghost" className="text-neutral-700 border border-neutral-300 hover:bg-neutral-100">
                   Conocer más
-                </Button>
-              </Link>
+                </EnlaceBoton>
             </div>
           </div>
         </div>
@@ -265,12 +257,10 @@ export default async function HomePage() {
                 Fomentamos el pensamiento crítico, la solidaridad y la responsabilidad cívica
                 desde los primeros años de escolaridad.
               </p>
-              <Link href="/quienes-somos" className="inline-block mt-8">
-                <Button variant="accent" className="shadow-lg shadow-accent-500/30">
+              <EnlaceBoton href="/quienes-somos" variant="accent" className="mt-8 shadow-lg shadow-accent-500/30">
                   Conocer nuestra visión
                   <ArrowRight size={16} />
-                </Button>
-              </Link>
+                </EnlaceBoton>
             </div>
 
             <div className="space-y-4">
@@ -333,17 +323,16 @@ export default async function HomePage() {
             Nuestro equipo te contactará para confirmar la vacante.
           </p>
           <div className="mt-10 flex flex-wrap gap-4 justify-center">
-            <Link href="/inscripcion">
-              <button className="btn inline-flex items-center gap-2.5 h-12 px-7 text-base font-bold bg-white text-brand-700 rounded-xl hover:bg-neutral-50 shadow-xl shadow-black/20 transition-all">
-                Comenzar pre-inscripción
-                <ArrowRight size={18} />
-              </button>
+            <Link
+              href="/inscripcion"
+              className="btn inline-flex items-center gap-2.5 h-12 px-7 text-base font-bold bg-white text-brand-700 rounded-xl hover:bg-neutral-50 shadow-xl shadow-black/20 transition-all"
+            >
+              Comenzar pre-inscripción
+              <ArrowRight size={18} />
             </Link>
-            <Link href="/contacto">
-              <Button size="lg" variant="ghost" className="text-white border-2 border-white/40 hover:bg-white/15 hover:border-white/70">
+            <EnlaceBoton href="/contacto" size="lg" variant="ghost" className="text-white border-2 border-white/40 hover:bg-white/15 hover:border-white/70">
                 Consultar vacantes
-              </Button>
-            </Link>
+              </EnlaceBoton>
           </div>
         </div>
       </section>

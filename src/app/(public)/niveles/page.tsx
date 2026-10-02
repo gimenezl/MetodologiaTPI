@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { Clock, BookOpen, Trophy, ArrowRight, CheckCircle, GraduationCap } from '@phosphor-icons/react/dist/ssr'
-import { Button } from '@/components/ui/Button'
+import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 
 export const metadata: Metadata = {
   title: 'Niveles Educativos',
@@ -140,12 +139,10 @@ export default function NivelesPage() {
                     ))}
                   </ul>
 
-                  <Link href="/inscripcion">
-                    <Button variant="primary">
+                  <EnlaceBoton href="/inscripcion" variant="primary">
                       Inscribirme en {nivel.titulo}
                       <ArrowRight size={16} />
-                    </Button>
-                  </Link>
+                    </EnlaceBoton>
                 </div>
               </div>
             </div>
@@ -206,9 +203,7 @@ export default function NivelesPage() {
           <p className="text-neutral-600 mb-8">
             Completá el formulario en línea y elegí el nivel. Te contactaremos dentro de las 48 horas.
           </p>
-          <Link href="/inscripcion">
-            <Button size="lg" variant="primary">Formulario de inscripción <ArrowRight size={18} /></Button>
-          </Link>
+          <EnlaceBoton href="/inscripcion" size="lg" variant="primary">Formulario de inscripción <ArrowRight size={18} /></EnlaceBoton>
         </div>
       </section>
     </>
