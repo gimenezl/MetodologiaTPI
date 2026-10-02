@@ -150,7 +150,7 @@ compensatorias (ver `B-expansion.md` §8, `C-aplicacion-contraccion.md` §8 y `D
 | Datos ficticios, alta pública de Auth, recorridos reales de transporte, purgas | EPT-68 |
 | Pruebas funcionales por rol y E2E completas contra producción | EPT-67 |
 | Cuentas y datos ficticios de EPT-66 siguen en producción (4 cuentas `example.invalid`, 1 taller de cupo 1 con 6 inscripciones dadas de baja y 1 asistencia de prueba); se conservan sus historiales, sin DELETE físico | EPT-68 (purga) |
-| Una corrección de asistencia no deja huella de quién la hizo (`D-asistencias.md` §5) | Lucas (decisión abierta) |
+| Una corrección de asistencia no deja huella de quién la hizo (`D-asistencias.md` §5) | Aceptado el 02/10/2026; trazabilidad como mejora recomendada (migración futura) |
 | Hallazgos heredados: `npm audit` 7 (1 crítica, 4 altas, 1 moderada, 1 baja); advisors de seguridad 3 INFO + 2 WARN y de rendimiento 10 INFO + 5 WARN; aviso de Next GHSA-vcvr-r3jv-pc5j (afecta 16.3.3, parche 16.3.6; no se observó la ruta afectada en las fuentes). No se corrigieron para no ampliar el alcance | Backlog |
 
 ## 10. Ejecución en producción (02/10/2026)
