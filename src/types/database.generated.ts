@@ -731,6 +731,7 @@ export type Database = {
           actividad_id: number | null
           estado: string | null
           estudiante_id: string | null
+          fecha_baja: string | null
           fecha_inscripcion: string | null
           id: string
         }
@@ -738,6 +739,7 @@ export type Database = {
           actividad_id?: number | null
           estado?: string | null
           estudiante_id?: string | null
+          fecha_baja?: string | null
           fecha_inscripcion?: string | null
           id?: string
         }
@@ -745,6 +747,7 @@ export type Database = {
           actividad_id?: number | null
           estado?: string | null
           estudiante_id?: string | null
+          fecha_baja?: string | null
           fecha_inscripcion?: string | null
           id?: string
         }
@@ -2497,6 +2500,13 @@ export type Database = {
           tiene_horario: boolean
         }[]
       }
+      consultar_cupos_actividades_legadas: {
+        Args: never
+        Returns: {
+          actividad_id: number
+          inscriptos: number
+        }[]
+      }
       consultar_detalle_hijo: { Args: { p_hijo_id: string }; Returns: Json }
       consultar_ficha_profesor: {
         Args: { p_profesor_id?: string }
@@ -2664,6 +2674,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      dar_baja_inscripcion_legada: {
+        Args: { p_inscripcion_id: string }
+        Returns: string
+      }
       dar_de_baja_horario_grupo_deportivo: {
         Args: { p_franja_id: string; p_grupo_id: string }
         Returns: {
@@ -2788,6 +2802,10 @@ export type Database = {
         }[]
       }
       inactivar_alumno: { Args: { p_alumno_id: string }; Returns: string }
+      inscribir_actividad_legada: {
+        Args: { p_actividad_id: number; p_estudiante_id: string }
+        Returns: string
+      }
       inscribir_alumno_en_grupo_deportivo: {
         Args: { p_alumno_id: string; p_grupo_id: string }
         Returns: {
@@ -2954,6 +2972,28 @@ export type Database = {
           hora_inicio: string
           relacion_id: string
           tipo: string
+        }[]
+      }
+      listar_inscripciones_actividades_legadas: {
+        Args: { p_estudiante_id: string; p_incluir_bajas?: boolean }
+        Returns: {
+          actividad_id: number
+          actividad_nombre: string
+          actividad_tipo: string
+          cupo_maximo: number
+          estado: string
+          estudiante_id: string
+          fecha_baja: string
+          fecha_inscripcion: string
+          id: string
+        }[]
+      }
+      listar_inscriptos_actividad_legada: {
+        Args: { p_actividad_id: number }
+        Returns: {
+          estudiante_id: string
+          fecha_inscripcion: string
+          inscripcion_id: string
         }[]
       }
       listar_profesores: {
