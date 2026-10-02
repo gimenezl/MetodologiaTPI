@@ -1,116 +1,107 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from '@/services/supabase'
+import {
+  inscripcionDesdeFila,
+  mensajeDeAlta,
+  mensajeDeBaja,
+  mensajeDeLectura,
+  ocupacionPorActividad,
+  type FilaCupoActividad,
+  type FilaInscripcionLegada,
+  type InscripcionLegada,
+} from '@/lib/inscripciones-legadas'
+
+/**
+ * Talleres y actividades legadas (EPT-66, decisión D1=A).
+ *
+ * Todas las operaciones sobre inscripciones atraviesan funciones de PostgreSQL
+ * que revalidan la identidad y el rol (alumno propio, padre de un hijo
+ * vinculado y Dirección). La aplicación ya no escribe ni lee `inscripciones`
+ * directamente, y no existe ninguna operación de borrado: una baja es lógica y
+ * conserva la fila como historia; la reinscripción crea una fila nueva.
+ */
+
+type ActividadFila = {
+  id: number
+  nombre: string
+  tipo: string | null
+  cupo_maximo: number
+  nivel_id: number | null
+  nivel: { nombre: string } | null
+}
 
 export async function obtenerActividadesConCupos() {
   const supabase = createClient()
-  const { data: actividades, error } = await supabase
-    .from('actividades')
-    .select(`*, nivel:niveles(nombre)`)
-    .order('nombre') as any
+  const [actividades, cupos] = await Promise.all([
+    supabase.from('actividades').select(`*, nivel:niveles(nombre)`).order('nombre'),
+    supabase.rpc('consultar_cupos_actividades_legadas'),
+  ])
 
-  if (error) throw new Error(error.message)
+  if (actividades.error) throw new Error(actividades.error.message)
+  if (cupos.error) throw new Error(mensajeDeLectura(cupos.error))
 
-  const actividadesConConteo = await Promise.all(
-    (actividades ?? []).map(async (act: any) => {
-      const { count } = await supabase
-        .from('inscripciones')
-        .select('*', { count: 'exact', head: true })
-        .eq('actividad_id', act.id)
-        .eq('estado', 'ACTIVO') as any
+  const ocupacion = ocupacionPorActividad(cupos.data as FilaCupoActividad[] | null)
 
-      return {
-        ...act,
-        inscriptos: count ?? 0,
-        cupo_disponible: act.cupo_maximo - (count ?? 0),
-        porcentaje_ocupacion: Math.round(((count ?? 0) / act.cupo_maximo) * 100),
-      }
-    })
-  )
-  return actividadesConConteo
-}
-
-// Traduce errores crudos de Postgres a mensajes claros para el usuario
-function traducirErrorInscripcion(error: { message?: string; code?: string }): string {
-  const msg = error?.message ?? ''
-  // EPT-11: la vía legada ya no acepta escrituras sobre actividades DEPORTE.
-  if (error?.code === 'P5582') {
-    return 'Las inscripciones deportivas se hacen por grupo en la sección Deportes.'
-  }
-  if (error?.code === '23505' || msg.includes('inscripciones_estudiante_id_actividad_id_key')) {
-    return 'Este alumno ya está inscripto en esta actividad.'
-  }
-  if (msg.toLowerCase().includes('cupo')) {
-    return 'El cupo para esta actividad está completo.'
-  }
-  return 'No se pudo inscribir al alumno. Intentá nuevamente.'
-}
-
-// Las bajas conservan su mensaje anterior salvo el rechazo deportivo de EPT-11.
-function mensajeDeBaja(error: { message?: string; code?: string }): string {
-  if (error?.code === 'P5582') {
-    return 'Las inscripciones deportivas anteriores son históricas y no se pueden modificar.'
-  }
-  return error?.message ?? 'No se pudo dar de baja.'
+  return ((actividades.data ?? []) as ActividadFila[]).map((actividad) => {
+    const inscriptos = ocupacion.get(actividad.id) ?? 0
+    return {
+      ...actividad,
+      inscriptos,
+      cupo_disponible: actividad.cupo_maximo - inscriptos,
+      porcentaje_ocupacion: Math.round((inscriptos / actividad.cupo_maximo) * 100),
+    }
+  })
 }
 
 export async function inscribirAlumno(estudianteId: string, actividadId: number) {
   const supabase = createClient()
-
-  // ¿Ya existe una inscripción (activa o dada de baja) de este alumno en esta actividad?
-  const { data: existente } = await (supabase
-    .from('inscripciones')
-    .select('id, estado')
-    .eq('estudiante_id', estudianteId)
-    .eq('actividad_id', actividadId)
-    .maybeSingle() as any)
-
-  if (existente?.estado === 'ACTIVO') {
-    throw new Error('Este alumno ya está inscripto en esta actividad.')
-  }
-
-  // Si había una baja previa la quitamos para poder reinscribir y que el trigger revalide el cupo
-  if (existente) {
-    await (supabase.from('inscripciones').delete().eq('id', existente.id) as any)
-  }
-
-  const { error } = await (supabase
-    .from('inscripciones')
-    .insert({ estudiante_id: estudianteId, actividad_id: actividadId, estado: 'ACTIVO' } as any) as any)
-  if (error) {
-    throw new Error(traducirErrorInscripcion(error))
-  }
+  const { error } = await supabase.rpc('inscribir_actividad_legada', {
+    p_estudiante_id: estudianteId,
+    p_actividad_id: actividadId,
+  })
+  if (error) throw new Error(mensajeDeAlta(error))
   return true
 }
 
-// Elimina físicamente la inscripción cuando el alumno o su tutor deciden desinscribirlo.
-export async function eliminarInscripcionDeAlumnoEnActividad(estudianteId: string, actividadId: number) {
+/** Inscripciones ACTIVAS de un alumno (propio, hijo vinculado o, para Dirección, cualquiera). */
+export async function obtenerInscripcionesDeAlumno(estudianteId: string): Promise<InscripcionLegada[]> {
   const supabase = createClient()
-  const { error } = await (supabase
-    .from('inscripciones')
-    .delete()
-    .eq('estudiante_id', estudianteId)
-    .eq('actividad_id', actividadId) as any)
-  if (error) throw new Error(mensajeDeBaja(error))
-  return true
+  const { data, error } = await supabase.rpc('listar_inscripciones_actividades_legadas', {
+    p_estudiante_id: estudianteId,
+    p_incluir_bajas: false,
+  })
+  if (error) throw new Error(mensajeDeLectura(error))
+  return ((data ?? []) as FilaInscripcionLegada[]).map(inscripcionDesdeFila)
 }
 
+/** Baja LÓGICA por identificador: la fila se conserva con estado BAJA. */
 export async function darBajaInscripcion(inscripcionId: string) {
   const supabase = createClient()
-  const { error } = await (supabase as any)
-    .from('inscripciones')
-    .update({ estado: 'BAJA' })
-    .eq('id', inscripcionId)
+  const { error } = await supabase.rpc('dar_baja_inscripcion_legada', {
+    p_inscripcion_id: inscripcionId,
+  })
   if (error) throw new Error(mensajeDeBaja(error))
   return true
 }
 
-export async function obtenerInscripcionesDeAlumno(estudianteId: string) {
+/** Baja lógica de la inscripción activa de un alumno en una actividad. */
+export async function darBajaInscripcionDeAlumnoEnActividad(estudianteId: string, actividadId: number) {
+  const activas = await obtenerInscripcionesDeAlumno(estudianteId)
+  const activa = activas.find((inscripcion) => inscripcion.actividad_id === actividadId)
+  if (!activa) {
+    throw new Error('No encontramos una inscripción activa de este alumno en la actividad.')
+  }
+  return darBajaInscripcion(activa.id)
+}
+
+/** Inscriptos ACTIVOS de una actividad. Solo Dirección; el resto recibe el rechazo de la base. */
+export async function listarInscriptosDeActividad(actividadId: number) {
   const supabase = createClient()
-  const { data, error } = await (supabase
-    .from('inscripciones')
-    .select(`*, actividad:actividades(nombre, tipo, cupo_maximo)`)
-    .eq('estudiante_id', estudianteId)
-    .eq('estado', 'ACTIVO') as any)
-  if (error) throw new Error(error.message)
-  return data
+  const { data, error } = await supabase.rpc('listar_inscriptos_actividad_legada', {
+    p_actividad_id: actividadId,
+  })
+  if (error) throw new Error(mensajeDeLectura(error))
+  return ((data ?? []) as { inscripcion_id: string; estudiante_id: string }[]).map((fila) => ({
+    id: fila.inscripcion_id,
+    estudiante_id: fila.estudiante_id,
+  }))
 }

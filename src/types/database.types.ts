@@ -8,6 +8,18 @@
  *
  * Reconciliación verificada entre este archivo y el esquema real (EPT-57):
  *
+ * - EPT-66 (inscripciones legadas a talleres y actividades, decisión D1=A)
+ *   agrega `inscripciones.fecha_baja` y las funciones públicas
+ *   `inscribir_actividad_legada`, `dar_baja_inscripcion_legada`,
+ *   `listar_inscripciones_actividades_legadas`,
+ *   `listar_inscriptos_actividad_legada` y `consultar_cupos_actividades_legadas`.
+ *   La aplicación ya no escribe ni lee `inscripciones` de forma directa (la
+ *   contracción retira las políticas de escritura y acota la lectura); toda
+ *   alta, baja lógica y reinscripción pasa por esas funciones. En las tablas
+ *   que devuelven, los argumentos y columnas que el generador tipa como no
+ *   nulos (p. ej. `fecha_baja`, que es `NULL` en las inscripciones activas) se
+ *   declaran con su nulabilidad real en `src/lib/inscripciones-legadas.ts`.
+ *
  * - EPT-64 (credencial digital QR) agrega la tabla `credenciales_qr`, el tipo
  *   enumerado `estado_credencial_qr` y las funciones públicas
  *   `emitir_credencial_qr`, `reponer_credencial_qr`, `revocar_credencial_qr`,
@@ -476,6 +488,7 @@ export type Database = {
           actividad_id: number | null
           fecha_inscripcion: string
           estado: string
+          fecha_baja: string | null
         }
         Insert: {
           id?: string
@@ -483,6 +496,7 @@ export type Database = {
           actividad_id?: number | null
           fecha_inscripcion?: string
           estado?: string
+          fecha_baja?: string | null
         }
         Update: {
           id?: string
@@ -490,6 +504,7 @@ export type Database = {
           actividad_id?: number | null
           fecha_inscripcion?: string
           estado?: string
+          fecha_baja?: string | null
         }
       }
       asistencias: {
@@ -913,6 +928,36 @@ export type Database = {
       consultar_detalle_hijo: {
         Args: { p_hijo_id: string }
         Returns: Json
+      }
+      inscribir_actividad_legada: {
+        Args: { p_estudiante_id: string; p_actividad_id: number }
+        Returns: string
+      }
+      dar_baja_inscripcion_legada: {
+        Args: { p_inscripcion_id: string }
+        Returns: string
+      }
+      listar_inscripciones_actividades_legadas: {
+        Args: { p_estudiante_id: string; p_incluir_bajas?: boolean }
+        Returns: {
+          id: string
+          estudiante_id: string
+          actividad_id: number
+          estado: string
+          fecha_inscripcion: string
+          fecha_baja: string | null
+          actividad_nombre: string
+          actividad_tipo: string | null
+          cupo_maximo: number
+        }[]
+      }
+      listar_inscriptos_actividad_legada: {
+        Args: { p_actividad_id: number }
+        Returns: { inscripcion_id: string; estudiante_id: string; fecha_inscripcion: string }[]
+      }
+      consultar_cupos_actividades_legadas: {
+        Args: Record<string, never>
+        Returns: { actividad_id: number; inscriptos: number }[]
       }
       inscribir_en_servicio: {
         Args: { p_servicio_id: string }

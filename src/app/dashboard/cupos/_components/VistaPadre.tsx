@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { UserPlus } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import {
-  eliminarInscripcionDeAlumnoEnActividad,
+  darBajaInscripcionDeAlumnoEnActividad,
   inscribirAlumno,
   obtenerInscripcionesDeAlumno,
 } from '@/services/actividades.service'
@@ -89,7 +89,7 @@ export function VistaPadre({
     if (!hijoSeleccionado) return
     setProcesandoActividad(actividadId)
     try {
-      await eliminarInscripcionDeAlumnoEnActividad(hijoSeleccionado, actividadId)
+      await darBajaInscripcionDeAlumnoEnActividad(hijoSeleccionado, actividadId)
       toast.success('Hijo dado de baja de la actividad')
       await Promise.all([recargarActividades(), cargarActividadesDelHijo()])
     } catch (error) {
