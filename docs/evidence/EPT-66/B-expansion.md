@@ -48,6 +48,9 @@ inactiva · `P6607` baja repetida. Se reutilizan `P5505` (sin identidad), `P5582
 
 ## 4. Pruebas
 
+Las suites que limpian datos usan `ALTER TABLE … DISABLE TRIGGER USER` dentro de la transacción (lo
+puede hacer el propietario de la tabla) y no `session_replication_role`, que exige superusuario.
+
 Entorno: **PostgreSQL 16.14 vanilla en un contenedor Linux con una emulación mínima de Supabase**
 (roles `anon`/`authenticated`/`service_role`/`supabase_auth_admin`, esquema `auth` con
 `auth.uid()`, `extensions`, ledger de migraciones). **No es el stack local oficial** (Docker y la
@@ -59,7 +62,7 @@ cadena de 27 migraciones aplica completa sobre la emulación.
 | Cadena de 27 migraciones sobre la emulación | OK |
 | 27 migraciones + expansión | OK (28 archivos) |
 | `inscripciones_legadas_expansion_rls.sql` (nueva) | **78 OK, 0 fallos** — alta, duplicado, baja lógica, reinscripción como fila nueva, padre/hijo vinculado/hijo ajeno, alumno ajeno, Dirección, DOCENTE, PERSONAL, sin perfil, bloqueados, anónimo, cupo, deporte, lecturas acotadas, cupo en caminos directos, compatibilidad con la app anterior |
-| Suites SQL existentes (23) con la expansión aplicada | **PASS las 23**, idénticas a la línea base (incluye `usuarios_permisos_rls.sql`, con los 5 RPC nuevos agregados a su batería, y `profesores_rls.sql`) |
+| Suites SQL existentes (23) con la expansión aplicada | **PASS las 23**, idénticas a la línea base (incluye `usuarios_permisos_rls.sql`, con los 5 RPC nuevos agregados a su batería, y `profesores_rls.sql`). Con la suite nueva y el preflight, **25/25 PASS** sobre una base recién creada |
 | Concurrencia existente (13 suites, dos conexiones reales) | **PASS las 13**, tanto en la línea base como con la expansión |
 | `inscripciones_legadas_concurrencia.mjs` (nueva, 2–3 conexiones `psql` reales) | **PASS**: última plaza (alumno vs alumno, orden inverso, padre vs alumno), alta vs reactivación directa en ambos órdenes, mismo alumno dos veces (23505), baja sin confirmar que no libera la plaza, filas BAJA conservadas |
 | Defecto reproducido antes del cierre | En la línea base, dos altas simultáneas con cupo 1 dejaron **2** inscripciones ACTIVO |
@@ -95,9 +98,10 @@ Ver §1. El SHA del commit publicado figura en el PR; la migración no cambia de
 2. Checkout de despliegue desde `main` con **solo** esta migración pendiente
    (`supabase migration list` debe mostrar 27 aplicadas y 1 pendiente). **Prohibido** un
    `db push` desde un checkout que contenga también la migración de contracción.
-3. Preflight en producción por agregados (conteos de `inscripciones`, `actividades`,
-   `asistencias`, `perfiles`, `padres_hijos`; ledger = 27 hasta 20261001165229; las tres filas
-   legadas), sin volcar identidades.
+3. Preflight en producción por agregados con `supabase/tests/preflight_ept66.sql` (solo lectura;
+   ledger = 27 hasta 20261001165229; conteos de `inscripciones` por estado, duplicados activos = 0,
+   relaciones íntegras, políticas, triggers y privilegios; las tres filas legadas), sin volcar
+   identidades.
 4. Respaldo verificado (si falla, detenerse).
 5. **Autorización puntual de Lucas** y recién entonces `supabase db push`.
 6. Postflight: ledger = 28; mismos conteos; índice y columna presentes; EXECUTE de las
