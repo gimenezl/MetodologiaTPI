@@ -1,7 +1,6 @@
-import Link from 'next/link'
 import { House, ArrowLeft } from '@phosphor-icons/react/dist/ssr'
-import { Button } from '@/components/ui/Button'
 import type { Metadata } from 'next'
+import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 
 export const metadata: Metadata = {
   title: 'Página no encontrada',
@@ -52,18 +51,14 @@ export default function NotFound() {
         </p>
 
         <div className="mt-8 flex flex-wrap gap-3 justify-center">
-          <Link href="/">
-            <Button size="lg" variant="accent" className="shadow-lg shadow-accent-500/25">
+          <EnlaceBoton href="/" size="lg" variant="accent" className="shadow-lg shadow-accent-500/25">
               <House size={18} weight="fill" />
               Volver al inicio
-            </Button>
-          </Link>
-          <Link href="/contacto">
-            <Button size="lg" variant="ghost" className="text-neutral-700 border border-neutral-300 hover:bg-neutral-100">
+            </EnlaceBoton>
+          <EnlaceBoton href="/contacto" size="lg" variant="ghost" className="text-neutral-700 border border-neutral-300 hover:bg-neutral-100">
               <ArrowLeft size={16} />
               Contactar al centro
-            </Button>
-          </Link>
+            </EnlaceBoton>
         </div>
       </div>
     </main>

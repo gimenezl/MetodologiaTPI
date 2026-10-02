@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import { List, X, UserCircle } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/Button'
+import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 
 const navLinks = [
   { href: '/quienes-somos', label: 'Quiénes Somos' },
@@ -87,25 +87,19 @@ export function Navbar() {
 
         {/* CTA */}
         <div className="hidden lg:flex items-center gap-3">
-          <Link href="/inscripcion">
-            <Button size="sm" variant="accent">
-              Inscribirse
-            </Button>
-          </Link>
+          <EnlaceBoton href="/inscripcion" size="sm" variant="accent">
+            Inscribirse
+          </EnlaceBoton>
           {!isLoading && (
             user ? (
-              <Link href="/dashboard">
-                <Button size="sm" variant="outline">
-                  <UserCircle size={16} weight="fill" />
-                  Dashboard
-                </Button>
-              </Link>
+              <EnlaceBoton href="/dashboard" size="sm" variant="outline">
+                <UserCircle size={16} weight="fill" />
+                Dashboard
+              </EnlaceBoton>
             ) : (
-              <Link href="/login">
-                <Button size="sm" variant="ghost">
-                  Ingresar
-                </Button>
-              </Link>
+              <EnlaceBoton href="/login" size="sm" variant="ghost">
+                Ingresar
+              </EnlaceBoton>
             )
           )}
         </div>
@@ -141,15 +135,13 @@ export function Navbar() {
               </Link>
             ))}
             <div className="pt-3 pb-1 flex flex-col gap-2 border-t border-neutral-200 mt-3">
-              <Link href="/inscripcion" onClick={() => setIsOpen(false)}>
-                <Button variant="accent" fullWidth>Inscribirse</Button>
-              </Link>
+              <EnlaceBoton href="/inscripcion" variant="accent" fullWidth onClick={() => setIsOpen(false)}>
+                Inscribirse
+              </EnlaceBoton>
               {!isLoading && (
-                <Link href={user ? '/dashboard' : '/login'} onClick={() => setIsOpen(false)}>
-                  <Button variant="outline" fullWidth>
-                    {user ? 'Dashboard' : 'Ingresar'}
-                  </Button>
-                </Link>
+                <EnlaceBoton href={user ? '/dashboard' : '/login'} variant="outline" fullWidth onClick={() => setIsOpen(false)}>
+                  {user ? 'Dashboard' : 'Ingresar'}
+                </EnlaceBoton>
               )}
             </div>
           </div>

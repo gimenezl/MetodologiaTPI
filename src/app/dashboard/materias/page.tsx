@@ -1,7 +1,5 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { Lock, WarningCircle } from '@phosphor-icons/react/dist/ssr'
-import { Button } from '@/components/ui/Button'
 import { requerirDirector } from '@/services/autorizacion'
 import {
   listarAsignaciones,
@@ -10,6 +8,7 @@ import {
   listarProfesoresAsignables,
 } from '@/services/materias.service'
 import { GestionMaterias } from './_components/GestionMaterias'
+import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 
 export const metadata: Metadata = {
   title: 'Materias | Panel',
@@ -33,9 +32,7 @@ export default async function MateriasPage() {
           Acceso restringido
         </h1>
         <p className="text-neutral-500 text-sm mt-2">{autorizacion.mensaje}</p>
-        <Link href="/dashboard" className="inline-block mt-6">
-          <Button>Volver al panel</Button>
-        </Link>
+        <EnlaceBoton href="/dashboard" className="mt-6">Volver al panel</EnlaceBoton>
       </div>
     )
   }
@@ -94,11 +91,9 @@ function PanelErrorLectura({ mensaje }: { mensaje: string }) {
             No pudimos cargar las materias
           </p>
           <p className="text-sm text-red-700 mt-1">{mensaje}</p>
-          <Link href="/dashboard/materias" className="inline-block mt-4">
-            <Button size="sm" variant="outline">
+          <EnlaceBoton href="/dashboard/materias" size="sm" variant="outline" className="mt-4">
               Reintentar
-            </Button>
-          </Link>
+            </EnlaceBoton>
         </div>
       </div>
     </div>
