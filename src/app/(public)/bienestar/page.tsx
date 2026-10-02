@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { Heart, Brain, ForkKnife, Trophy, Stethoscope, Users, ArrowRight, CheckCircle } from '@phosphor-icons/react/dist/ssr'
-import { Button } from '@/components/ui/Button'
 import { obtenerMenuSemana } from '@/services/noticias.service'
+import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
 
 export const metadata: Metadata = {
   title: 'Bienestar Estudiantil',
@@ -195,12 +194,8 @@ export default async function BienestarPage() {
             Nuestro equipo de bienestar está disponible para responder dudas antes de la inscripción.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
-            <Link href="/contacto">
-              <Button size="lg" variant="accent">Consultar <ArrowRight size={18} /></Button>
-            </Link>
-            <Link href="/inscripcion">
-              <Button size="lg" variant="ghost" className="text-white border border-white/30 hover:bg-white/10">Inscribirme</Button>
-            </Link>
+            <EnlaceBoton href="/contacto" size="lg" variant="accent">Consultar <ArrowRight size={18} /></EnlaceBoton>
+            <EnlaceBoton href="/inscripcion" size="lg" variant="ghost" className="text-white border border-white/30 hover:bg-white/10">Inscribirme</EnlaceBoton>
           </div>
         </div>
       </section>

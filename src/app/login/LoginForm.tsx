@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/services/supabase'
+import { destinoPanelSeguro } from '@/lib/redireccion-login'
 import { loginSchema, LoginFormData } from '@/lib/validations'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
@@ -12,7 +13,7 @@ import { Button } from '@/components/ui/Button'
 export function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirect = searchParams.get('redirect') ?? '/dashboard'
+  const redirect = destinoPanelSeguro(searchParams.get('redirect'))
 
   const {
     register,

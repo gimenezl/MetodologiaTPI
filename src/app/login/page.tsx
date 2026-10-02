@@ -44,7 +44,7 @@ export default function LoginPage() {
         <div className="relative space-y-6">
           <blockquote className="border-l-2 border-accent-400 pl-6">
             <p className="text-white text-xl font-medium leading-relaxed">
-              "La educación es el arma más poderosa que puedes usar para cambiar el mundo."
+              &quot;La educación es el arma más poderosa que puedes usar para cambiar el mundo.&quot;
             </p>
             <footer className="text-white/60 text-sm mt-3">— Nelson Mandela</footer>
           </blockquote>
@@ -64,7 +64,7 @@ export default function LoginPage() {
       </div>
 
       {/* Right panel — form */}
-      <div className="flex items-center justify-center px-6 py-12 bg-white">
+      <main id="main-content" className="flex items-center justify-center px-6 py-12 bg-white">
         <div className="w-full max-w-sm">
           <div className="lg:hidden flex items-center gap-2.5 mb-8">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -90,7 +90,7 @@ export default function LoginPage() {
             </Link>
           </p>
         </div>
-      </div>
+      </main>
     </div>
   )
 }

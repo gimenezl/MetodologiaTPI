@@ -1,0 +1,41 @@
+# EPT-66 — reproducibilidad entre sistemas.
+#
+# Todo el índice ya está en LF. Estas reglas evitan que `core.autocrlf=true`
+# (Windows) convierta a CRLF los archivos de texto al sacarlos y rompa las
+# comparaciones byte a byte (por ejemplo `supabase/tests/tipos-generados.mjs`
+# contra `src/types/database.generated.ts`). No se renormaliza nada: ningún
+# archivo existente cambia de contenido.
+
+# Texto con LF forzado
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.cjs   text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf
+*.md    text eol=lf
+*.sql   text eol=lf
+*.toml  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.csv   text eol=lf
+*.svg   text eol=lf
+*.txt   text eol=lf
+.gitignore     text eol=lf
+.gitattributes text eol=lf
+
+# Los scripts de PowerShell conservan el fin de línea del sistema que los ejecuta
+*.ps1 text
+
+# Binarios: nunca se convierten ni se comparan como texto
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.webp  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.docx  binary
+*.woff  binary
+*.woff2 binary

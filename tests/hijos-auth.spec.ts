@@ -7,7 +7,12 @@ const HIJO_APTO = { nombre: 'Lara', apellido: 'Vinculada' }
 const ESTUDIANTE_AJENO = { nombre: 'Celeste', apellido: 'Ajena' }
 const CAPTURAS = path.join('docs', 'evidence', 'EPT-13')
 
+// Las capturas de EPT-13 son evidencia versionada: una corrida ordinaria no las
+// reescribe. Se regeneran de forma explícita con `EPT_CAPTURAS=1`.
+const CAPTURAR = process.env.EPT_CAPTURAS === '1'
+
 async function captura(page: import('@playwright/test').Page, nombre: string) {
+  if (!CAPTURAR) return
   fs.mkdirSync(CAPTURAS, { recursive: true })
   await page.screenshot({ path: path.join(CAPTURAS, `${nombre}.png`), fullPage: true })
 }

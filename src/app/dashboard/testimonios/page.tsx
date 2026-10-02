@@ -24,22 +24,18 @@ export default function TestimoniosPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [approvingId, setApprovingId] = useState<number | null>(null)
 
-  const cargar = async () => {
-    setLoading(true)
-    try {
-      const data = await obtenerOpiniones()
-      setOpiniones((data ?? []) as Opinion[])
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Error al cargar testimonios'
-      toast.error(message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  // `loading` parte en `true`; la carga inicial no lo reactiva desde el efecto.
   useEffect(() => {
     if (rol && rol !== 'DIRECTOR') return
-    cargar()
+    let vigente = true
+    obtenerOpiniones()
+      .then((data) => { if (vigente) setOpiniones((data ?? []) as Opinion[]) })
+      .catch((error) => {
+        if (!vigente) return
+        toast.error(error instanceof Error ? error.message : 'Error al cargar testimonios')
+      })
+      .finally(() => { if (vigente) setLoading(false) })
+    return () => { vigente = false }
   }, [rol])
 
   const aprobar = async (id: number) => {
