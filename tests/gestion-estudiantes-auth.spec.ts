@@ -9,7 +9,8 @@ import { execFileSync } from 'node:child_process'
  * pruebas exigen, con sesiones reales, el mismo conjunto de alumnos que la base
  * tiene con rol ESTUDIANTE, con el mismo nombre, apellido y legajo, y las mismas
  * operaciones: registrar y cambiar una asistencia, inscribir, ver inscriptos y
- * dar de baja. Corren igual con la migración A y con la política futura de B.
+ * dar de baja. EPT-66: en Cupos el DOCENTE ya no inscribe ni lista inscriptos; esas operaciones
+ * quedan solo para Dirección.
  */
 
 test.skip(
@@ -42,7 +43,12 @@ function limpiar(fecha: string) {
     BEGIN;
     DELETE FROM public.asistencias
       WHERE fecha = '${fecha}' AND estudiante_id = (SELECT id FROM public.perfiles WHERE dni = '${ALUMNO.dni}');
+    -- EPT-66: inscripciones no admite DELETE ni siquiera del propietario (trigger P6608).
+    -- Esta limpieza del stack descartable deshabilita los triggers de usuario dentro de
+    -- la transacción; ninguna operación de la aplicación borra filas.
+    ALTER TABLE public.inscripciones DISABLE TRIGGER USER;
     DELETE FROM public.inscripciones WHERE actividad_id IN (SELECT id FROM public.actividades WHERE nombre = '${TALLER}');
+    ALTER TABLE public.inscripciones ENABLE TRIGGER USER;
     DELETE FROM public.actividades WHERE nombre = '${TALLER}';
     COMMIT;
   `)
@@ -115,6 +121,15 @@ for (const actor of ['DIRECTOR', 'DOCENTE'] as const) {
 
     test('Cupos: mismo conjunto de alumnos, inscribe, lista inscriptos y da de baja', async ({ page }) => {
       await page.goto('/dashboard/cupos')
+      if (actor === 'DOCENTE') {
+        // EPT-66: el DOCENTE ya no inscribe, no da de baja ni lista inscriptos (queda cerrado hasta
+        // definir los alumnos a su cargo); consulta la disponibilidad y ve el aviso.
+        await expect(page.getByText('La inscripción de alumnos a los talleres la realiza Dirección.')).toBeVisible()
+        await expect(page.getByRole('heading', { name: TALLER, exact: true })).toBeVisible()
+        await expect(page.getByLabel('Seleccioná el alumno', { exact: true })).toHaveCount(0)
+        await expect(page.getByRole('button', { name: /Ver inscriptos/ })).toHaveCount(0)
+        return
+      }
       expect(await opcionesDe(page, 'Seleccioná el alumno')).toEqual(etiquetasEsperadas('cupos'))
 
       await page
