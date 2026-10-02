@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   expect,
@@ -796,6 +797,28 @@ for (const actor of [
   })
 }
 
+/**
+ * EPT-66: `inscripciones` no admite DELETE ni siquiera del propietario (trigger P6608) y
+ * `service_role` solo lee. Esta limpieza del stack descartable deshabilita los triggers de
+ * usuario dentro de una transacción local; ninguna operación de la aplicación borra filas.
+ */
+function limpiarInscripcionLegada(alumno: string, actividad: number) {
+  const contenedor = process.env.EPT_SUPABASE_DB_CONTAINER ?? 'supabase_db_educar-para-transformar'
+  execFileSync(
+    'docker',
+    ['exec', '-i', contenedor, 'psql', '-X', '-q', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'],
+    {
+      input: `BEGIN;
+        ALTER TABLE public.inscripciones DISABLE TRIGGER USER;
+        DELETE FROM public.inscripciones WHERE estudiante_id = '${alumno}' AND actividad_id = ${Number(actividad)};
+        ALTER TABLE public.inscripciones ENABLE TRIGGER USER;
+        COMMIT;`,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }
+  )
+}
+
 // ================================================================
 // PostgreSQL detrás de la Data API: escritura directa y vía legada
 // ================================================================
@@ -834,19 +857,20 @@ test.describe('DOCENTE autenticado — Data API y vía legada', () => {
     const deporte = await cliente
       .from('inscripciones')
       .insert({ estudiante_id: alumno, actividad_id: futbolLegado.id, estado: 'ACTIVO' })
-    expect(deporte.error?.code).toBe('P5582')
+    // EPT-66 (contracción): ninguna escritura directa sobre `inscripciones`, ni de deportes ni de talleres.
+    expect(deporte.error?.code).toBe('42501')
 
-    await clienteAdmin().from('inscripciones').delete().eq('estudiante_id', alumno).eq('actividad_id', danza.id)
     const taller = await cliente
       .from('inscripciones')
       .insert({ estudiante_id: alumno, actividad_id: danza.id, estado: 'ACTIVO' })
-      .select('id')
-      .single()
-    expect(taller.error).toBeNull()
-    const baja = await cliente.from('inscripciones').update({ estado: 'BAJA' }).eq('id', taller.data.id)
-    expect(baja.error).toBeNull()
-    const borrado = await cliente.from('inscripciones').delete().eq('id', taller.data.id)
-    expect(borrado.error).toBeNull()
+    expect(taller.error?.code).toBe('42501')
+    const baja = await cliente.from('inscripciones').update({ estado: 'BAJA' }).eq('actividad_id', danza.id)
+    expect(baja.error?.code).toBe('42501')
+    const borrado = await cliente.from('inscripciones').delete().eq('actividad_id', danza.id)
+    expect(borrado.error?.code).toBe('42501')
+    // El docente tampoco inscribe por la función de la expansión: no es alumno ni Dirección.
+    const porFuncion = await cliente.rpc('inscribir_actividad_legada', { p_estudiante_id: alumno, p_actividad_id: danza.id })
+    expect(porFuncion.error?.code).toBe('42501')
   })
 })
 
@@ -858,7 +882,7 @@ test.describe('ESTUDIANTE autenticado — actividades legadas', () => {
     const alumno = await perfilPorDni(ESTUDIANTE.dni)
     const { data: danza } = await clienteAdmin()
       .from('actividades').select('id').eq('tipo', 'TALLER').eq('nombre', 'Danza').limit(1).single()
-    await clienteAdmin().from('inscripciones').delete().eq('estudiante_id', alumno).eq('actividad_id', danza.id)
+    limpiarInscripcionLegada(alumno, danza.id)
 
     await page.goto('/dashboard/cupos')
     await expect(page.getByRole('heading', { name: 'Actividades y talleres' })).toBeVisible()

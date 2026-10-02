@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { Pulse, UserPlus } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import {
-  eliminarInscripcionDeAlumnoEnActividad,
+  darBajaInscripcionDeAlumnoEnActividad,
   inscribirAlumno,
   obtenerInscripcionesDeAlumno,
 } from '@/services/actividades.service'
@@ -61,7 +61,7 @@ export function VistaEstudiante({
     if (!perfilId) return
     setProcesandoActividad(actividadId)
     try {
-      await eliminarInscripcionDeAlumnoEnActividad(perfilId, actividadId)
+      await darBajaInscripcionDeAlumnoEnActividad(perfilId, actividadId)
       toast.success('Te diste de baja de la actividad')
       await Promise.all([recargarActividades(), cargarMisActividades()])
     } catch (error) {

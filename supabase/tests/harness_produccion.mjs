@@ -65,6 +65,8 @@ const RUTAS_DE_BANCO = [
   '/pruebas-ui/mis-asignaciones',
   // EPT-65: banco del escáner y de la auditoría de accesos con QR.
   '/pruebas-ui/accesos',
+  // EPT-66: banco de la pantalla de cupos con las funciones de inscripciones legadas.
+  '/pruebas-ui/cupos',
 ]
 const RUTA_LEGITIMA = '/login'
 

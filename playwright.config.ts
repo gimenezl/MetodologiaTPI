@@ -56,7 +56,7 @@ for (const clave of [
 const conBaseLocal = process.env.EPT_SUPABASE_LOCAL === '1'
 
 const PRUEBAS_AUTENTICADAS =
-  /(?:cursos|niveles|alumnos|usuarios|usuarios-permisos|materias|comedor|deportes|transporte|inscripciones-administracion|inscripciones-administracion-e2e|inscripciones-administracion-paginacion|horarios|horarios-academicos|hijos|profesores|gestion-estudiantes|reportes|reportes-rendimiento|credenciales-qr|accesos-qr)-auth\.spec\.ts/
+  /(?:cursos|niveles|alumnos|usuarios|usuarios-permisos|materias|comedor|deportes|transporte|inscripciones-administracion|inscripciones-administracion-e2e|inscripciones-administracion-paginacion|horarios|horarios-academicos|hijos|profesores|gestion-estudiantes|cupos-legadas|reportes|reportes-rendimiento|credenciales-qr|accesos-qr)-auth\.spec\.ts/
 const PRUEBAS_SETUP = /auth\.setup\.ts/
 
 // `niveles-responsive` existe únicamente para los perfiles móviles.
