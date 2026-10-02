@@ -1025,31 +1025,54 @@ BEGIN
     END IF;
     RAISE NOTICE 'OK F1: la inscripción deportiva legada sigue visible';
 
-    -- F2. El alumno no crea DEPORTE por la vía legada.
+    -- F2. El alumno no crea DEPORTE por la vía legada. Desde EPT-66 la escritura
+    -- directa sobre `inscripciones` está además cerrada por privilegios (42501):
+    -- se acepta cualquiera de los dos rechazos, porque esta suite corre tanto con
+    -- la expansión sola (donde responde el trigger de EPT-11, P5582) como con la
+    -- contracción (donde responde primero el privilegio). La función legada
+    -- responde siempre P5582.
     BEGIN
         INSERT INTO public.inscripciones (estudiante_id, actividad_id, estado)
         VALUES ('a1000000-0000-4000-8000-000000000002', v_deporte, 'ACTIVO');
         RAISE EXCEPTION 'FALLO F2: el alumno creó una inscripción DEPORTE legada';
+    EXCEPTION WHEN SQLSTATE 'P5582' OR SQLSTATE '42501' THEN NULL;
+    END;
+    BEGIN
+        PERFORM public.inscribir_actividad_legada('a1000000-0000-4000-8000-000000000002', v_deporte);
+        RAISE EXCEPTION 'FALLO F2: la función legada creó una inscripción DEPORTE';
     EXCEPTION WHEN SQLSTATE 'P5582' THEN NULL;
     END;
+
     -- F3. Ni borra su histórico DEPORTE.
     BEGIN
         DELETE FROM public.inscripciones WHERE id = 'a1000000-0000-4000-8000-0000000000e1';
         RAISE EXCEPTION 'FALLO F3: el alumno borró su histórico DEPORTE';
+    EXCEPTION WHEN SQLSTATE 'P5582' OR SQLSTATE '42501' THEN NULL;
+    END;
+    BEGIN
+        PERFORM public.dar_baja_inscripcion_legada('a1000000-0000-4000-8000-0000000000e1');
+        RAISE EXCEPTION 'FALLO F3: el alumno dio de baja su histórico DEPORTE';
     EXCEPTION WHEN SQLSTATE 'P5582' THEN NULL;
     END;
-    RAISE NOTICE 'OK F2-F3: el alumno no crea ni borra inscripciones DEPORTE legadas (P5582)';
+    RAISE NOTICE 'OK F2-F3: el alumno no crea, borra ni da de baja inscripciones DEPORTE legadas (P5582 o permiso denegado)';
 
-    -- F4. TALLER sigue operativo para el alumno: alta y baja propias.
-    INSERT INTO public.inscripciones (estudiante_id, actividad_id, estado)
-    VALUES ('a1000000-0000-4000-8000-000000000002', v_taller, 'ACTIVO');
-    DELETE FROM public.inscripciones
-    WHERE estudiante_id = 'a1000000-0000-4000-8000-000000000002' AND actividad_id = v_taller;
+    -- F4. TALLER sigue operativo para el alumno por las funciones legadas (EPT-66):
+    -- alta y baja LÓGICA propias; la fila se conserva como BAJA.
+    PERFORM public.inscribir_actividad_legada('a1000000-0000-4000-8000-000000000002', v_taller);
+    PERFORM public.dar_baja_inscripcion_legada((
+        SELECT id FROM public.inscripciones
+        WHERE estudiante_id = 'a1000000-0000-4000-8000-000000000002' AND actividad_id = v_taller AND estado = 'ACTIVO'));
     IF EXISTS (SELECT 1 FROM public.inscripciones
-               WHERE estudiante_id = 'a1000000-0000-4000-8000-000000000002' AND actividad_id = v_taller) THEN
+               WHERE estudiante_id = 'a1000000-0000-4000-8000-000000000002' AND actividad_id = v_taller
+                 AND estado = 'ACTIVO') THEN
         RAISE EXCEPTION 'FALLO F4: la baja del taller no se aplicó';
     END IF;
-    RAISE NOTICE 'OK F4: el alumno sigue inscribiéndose y dándose de baja en un TALLER';
+    IF NOT EXISTS (SELECT 1 FROM public.inscripciones
+                   WHERE estudiante_id = 'a1000000-0000-4000-8000-000000000002' AND actividad_id = v_taller
+                     AND estado = 'BAJA') THEN
+        RAISE EXCEPTION 'FALLO F4: la baja del taller no conservó la fila como historia';
+    END IF;
+    RAISE NOTICE 'OK F4: el alumno sigue inscribiéndose y dándose de baja (lógica) en un TALLER';
 END $$;
 
 -- F5. El PADRE conserva TALLER para su hijo, pero no DEPORTE.
@@ -1060,54 +1083,44 @@ DECLARE
     v_deporte INTEGER := (SELECT id FROM public.actividades WHERE tipo = 'DEPORTE' AND nombre = 'Vóley' ORDER BY id LIMIT 1);
     v_taller  INTEGER := (SELECT id FROM public.actividades WHERE tipo = 'TALLER' AND nombre = 'Ajedrez' ORDER BY id LIMIT 1);
 BEGIN
-    INSERT INTO public.inscripciones (estudiante_id, actividad_id, estado)
-    VALUES ('a1000000-0000-4000-8000-000000000002', v_taller, 'ACTIVO');
+    PERFORM public.inscribir_actividad_legada('a1000000-0000-4000-8000-000000000002', v_taller);
     BEGIN
-        INSERT INTO public.inscripciones (estudiante_id, actividad_id, estado)
-        VALUES ('a1000000-0000-4000-8000-000000000002', v_deporte, 'ACTIVO');
+        PERFORM public.inscribir_actividad_legada('a1000000-0000-4000-8000-000000000002', v_deporte);
         RAISE EXCEPTION 'FALLO F5: el PADRE inscribió a su hijo en DEPORTE legado';
     EXCEPTION WHEN SQLSTATE 'P5582' THEN NULL;
     END;
-    DELETE FROM public.inscripciones
-    WHERE estudiante_id = 'a1000000-0000-4000-8000-000000000002' AND actividad_id = v_taller;
+    PERFORM public.dar_baja_inscripcion_legada((
+        SELECT id FROM public.inscripciones
+        WHERE estudiante_id = 'a1000000-0000-4000-8000-000000000002' AND actividad_id = v_taller AND estado = 'ACTIVO'));
     RAISE NOTICE 'OK F5: el PADRE sigue gestionando TALLER de su hijo y no recibe poder deportivo (P5582)';
 END $$;
 
--- F6. El staff conserva TALLER y no toca DEPORTE.
+-- F6. DOCENTE: sin escritura de inscripciones legadas (EPT-66, no existe contrato
+-- de «alumno a cargo») y, en cualquier caso, ninguna sobre DEPORTE.
 SELECT set_config('request.jwt.claims', '{"sub":"a1000000-0000-4000-8000-000000000007"}', true);
 
 DO $$
 DECLARE
     v_deporte INTEGER := (SELECT id FROM public.actividades WHERE tipo = 'DEPORTE' AND nombre = 'Atletismo' ORDER BY id LIMIT 1);
     v_taller  INTEGER := (SELECT id FROM public.actividades WHERE tipo = 'TALLER' AND nombre = 'Danza' ORDER BY id LIMIT 1);
-    v_id      UUID;
 BEGIN
-    INSERT INTO public.inscripciones (estudiante_id, actividad_id, estado)
-    VALUES ('a1000000-0000-4000-8000-000000000003', v_taller, 'ACTIVO')
-    RETURNING id INTO v_id;
-    UPDATE public.inscripciones SET estado = 'BAJA' WHERE id = v_id;
-    IF (SELECT estado FROM public.inscripciones WHERE id = v_id) <> 'BAJA' THEN
-        RAISE EXCEPTION 'FALLO F6: el DOCENTE no pudo dar de baja un TALLER';
-    END IF;
-    -- Cambiar un TALLER a una actividad DEPORTE también se rechaza.
     BEGIN
-        UPDATE public.inscripciones SET actividad_id = v_deporte WHERE id = v_id;
-        RAISE EXCEPTION 'FALLO F6: un TALLER se convirtió en DEPORTE legado';
-    EXCEPTION WHEN SQLSTATE 'P5582' THEN NULL;
+        PERFORM public.inscribir_actividad_legada('a1000000-0000-4000-8000-000000000003', v_taller);
+        RAISE EXCEPTION 'FALLO F6: el DOCENTE inscribió a un alumno en un TALLER';
+    EXCEPTION WHEN SQLSTATE '42501' THEN NULL;
     END;
     BEGIN
         INSERT INTO public.inscripciones (estudiante_id, actividad_id, estado)
         VALUES ('a1000000-0000-4000-8000-000000000003', v_deporte, 'ACTIVO');
         RAISE EXCEPTION 'FALLO F6: el DOCENTE creó DEPORTE legado';
-    EXCEPTION WHEN SQLSTATE 'P5582' THEN NULL;
+    EXCEPTION WHEN SQLSTATE 'P5582' OR SQLSTATE '42501' THEN NULL;
     END;
     BEGIN
         UPDATE public.inscripciones SET estado = 'BAJA' WHERE id = 'a1000000-0000-4000-8000-0000000000e1';
         RAISE EXCEPTION 'FALLO F6: el DOCENTE modificó el histórico DEPORTE';
-    EXCEPTION WHEN SQLSTATE 'P5582' THEN NULL;
+    EXCEPTION WHEN SQLSTATE 'P5582' OR SQLSTATE '42501' THEN NULL;
     END;
-    DELETE FROM public.inscripciones WHERE id = v_id;
-    RAISE NOTICE 'OK F6: DOCENTE conserva alta, baja y borrado de TALLER; DEPORTE legado rechazado (P5582)';
+    RAISE NOTICE 'OK F6: DOCENTE no inscribe en TALLER por la función legada y no toca DEPORTE legado (P5582 o permiso denegado)';
 END $$;
 
 -- F7. Ni el propietario reescribe el histórico DEPORTE.
@@ -1160,15 +1173,17 @@ BEGIN
     END IF;
     RAISE NOTICE 'OK G1: actividades conserva filas, políticas y el UPDATE de cupo de 011';
 
+    -- Sin contar la RESTRICTIVE de bloqueo (EPT-59). Ocho políticas permisivas
+    -- hasta la expansión de EPT-66; tres (solo lectura acotada) tras la contracción.
     IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'inscripciones'
-        AND permissive = 'PERMISSIVE') <> 8 THEN  -- EPT-59: sin contar la RESTRICTIVE de bloqueo
+        AND permissive = 'PERMISSIVE') NOT IN (8, 3) THEN
         RAISE EXCEPTION 'FALLO G2: cambiaron las políticas de inscripciones';
     END IF;
     IF has_table_privilege('anon', 'public.inscripciones', 'INSERT')
        OR has_table_privilege('authenticated', 'public.inscripciones', 'TRUNCATE') THEN
         RAISE EXCEPTION 'FALLO G2: se ampliaron los privilegios de inscripciones';
     END IF;
-    RAISE NOTICE 'OK G2: inscripciones conserva sus ocho políticas de 011; el bloqueo deportivo es un trigger, no un cambio de ACL';
+    RAISE NOTICE 'OK G2: inscripciones conserva sus ocho políticas de 011 (o las tres de lectura de EPT-66); el bloqueo deportivo es un trigger, no un cambio de ACL';
 
     IF has_table_privilege('authenticated', 'public.alumnos', 'UPDATE')
        OR has_table_privilege('authenticated', 'public.matriculas', 'INSERT')

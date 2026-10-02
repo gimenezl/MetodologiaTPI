@@ -208,11 +208,17 @@ BEGIN
     RAISE EXCEPTION 'Un perfil no PADRE inscribió al hijo por vínculo histórico';
   EXCEPTION WHEN SQLSTATE '42501' THEN NULL;
   END;
-  WITH eliminadas AS (
-    DELETE FROM public.inscripciones
-    WHERE estudiante_id = 'eeeeeeee-1300-4000-8000-000000000003'
-    RETURNING id
-  ) SELECT count(*) INTO v_eliminadas FROM eliminadas;
+  -- Desde EPT-66 la contracción cierra el DELETE por privilegios (42501); con la
+  -- expansión sola lo filtra la RLS (0 filas). Ninguno de los dos borra nada.
+  BEGIN
+    WITH eliminadas AS (
+      DELETE FROM public.inscripciones
+      WHERE estudiante_id = 'eeeeeeee-1300-4000-8000-000000000003'
+      RETURNING id
+    ) SELECT count(*) INTO v_eliminadas FROM eliminadas;
+  EXCEPTION WHEN SQLSTATE '42501' THEN
+    v_eliminadas := 0;
+  END;
   IF v_eliminadas <> 0 THEN
     RAISE EXCEPTION 'Un perfil no PADRE eliminó una inscripción por vínculo histórico';
   END IF;

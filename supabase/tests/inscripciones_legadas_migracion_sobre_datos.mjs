@@ -100,6 +100,20 @@ try {
   for (const archivo of migraciones) {
     const sql = readFileSync(archivo, 'utf8')
     await sesion.ejecutar(`BEGIN;\n${sql}\nCOMMIT;`, `aplicar_${archivo.split('/').pop()}`)
+    // Como la CLI de Supabase: tras ejecutar la migración se registra en el ledger
+    // (la contracción comprueba que la expansión figure ahí).
+    const [, version, nombre] = /^(\d+)_(.+)\.sql$/u.exec(archivo.split('/').pop()) ?? []
+    if (version) {
+      await sesion.ejecutar(
+        `DO $registro$ BEGIN
+           IF pg_catalog.to_regclass('supabase_migrations.schema_migrations') IS NOT NULL THEN
+             INSERT INTO supabase_migrations.schema_migrations (version, name)
+             VALUES ('${version}', '${nombre}') ON CONFLICT (version) DO NOTHING;
+           END IF;
+         END $registro$;`,
+        `registrar_${version}`
+      )
+    }
     const despues = await sesion.escalar(`(${huella})`, 'huella_despues')
     const relacionesDespues = await sesion.escalar(`(${relaciones})`, 'relaciones_despues')
     const sobrevivientes = await sesion.escalar(`(${sembradas})`, 'sembradas_despues')

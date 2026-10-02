@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CaretDown, CaretUp, Check, PencilSimple, Pulse, Trash, UserPlus, Warning, X } from '@phosphor-icons/react'
 import { toast } from 'sonner'
-import { darBajaInscripcion, inscribirAlumno } from '@/services/actividades.service'
+import { darBajaInscripcion, inscribirAlumno, listarInscriptosDeActividad } from '@/services/actividades.service'
 import {
   ESTUDIANTE_NO_DISPONIBLE,
   indexarEstudiantes,
@@ -41,7 +41,13 @@ export function VistaGestionCupos({
   const [nuevoCupo, setNuevoCupo] = useState('')
   const [guardandoCupo, setGuardandoCupo] = useState(false)
 
-  const puedeGestionar = rol === 'DIRECTOR' || rol === 'DOCENTE'
+  // EPT-66: las altas, las bajas y la lista de inscriptos de un taller son de
+  // Dirección. No existe un contrato que defina qué alumnos están a cargo de un
+  // DOCENTE, así que su acceso a inscripciones de alumnos queda cerrado hasta que
+  // se decida. La edición del cupo máximo de la actividad no depende de ningún
+  // alumno y se conserva para ambos roles.
+  const puedeGestionar = rol === 'DIRECTOR'
+  const puedeEditarCupo = rol === 'DIRECTOR' || rol === 'DOCENTE'
 
   // Mismo conjunto de perfiles ESTUDIANTE que antes, con cuatro datos (EPT-58).
   // También resuelve los nombres de los inscriptos.
@@ -72,16 +78,10 @@ export function VistaGestionCupos({
 
     setCargandoInscriptosId(actividadId)
     try {
-      const supabase = createClient()
-      const { data, error } = await (supabase
-        .from('inscripciones')
-        .select('id, estudiante_id')
-        .eq('actividad_id', actividadId)
-        .eq('estado', 'ACTIVO') as any)
-      if (error) throw new Error(error.message)
+      const data = await listarInscriptosDeActividad(actividadId)
       setInscripcionesPorActividad((anteriores) => ({ ...anteriores, [actividadId]: data ?? [] }))
-    } catch {
-      toast.error('Error al cargar inscriptos')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al cargar inscriptos')
     } finally {
       setCargandoInscriptosId(null)
     }
@@ -173,6 +173,12 @@ export function VistaGestionCupos({
         <Button variant="secondary" onClick={recargarActividades} size="sm">Actualizar</Button>
       </div>
 
+      {rol === 'DOCENTE' && (
+        <p className="text-sm text-neutral-600 bg-neutral-50 border border-neutral-200 rounded-2xl px-4 py-3">
+          La inscripción de alumnos a los talleres la realiza Dirección. Acá podés consultar la disponibilidad de cada actividad.
+        </p>
+      )}
+
       {puedeGestionar && (
         <div className="bg-brand-50 border border-brand-200 rounded-2xl p-5">
           <p className="text-xs font-bold text-brand-700 uppercase tracking-widest mb-3">Inscribir alumno a actividad</p>
@@ -259,6 +265,7 @@ export function VistaGestionCupos({
                 const inscriptos = inscripcionesPorActividad[actividad.id] ?? []
                 const legado = esDeporteLegado(actividad)
                 const gestionable = puedeGestionar && !legado
+                const cupoEditable = puedeEditarCupo && !legado
 
                 return (
                   <div
@@ -283,7 +290,7 @@ export function VistaGestionCupos({
 
                         <div className="flex items-center gap-2 shrink-0">
                           {legado && <Badge variant="default">Histórico</Badge>}
-                          {gestionable && editandoCupoId === actividad.id ? (
+                          {cupoEditable && editandoCupoId === actividad.id ? (
                             <div className="flex items-center gap-1.5">
                               <input
                                 type="number"
@@ -314,7 +321,7 @@ export function VistaGestionCupos({
                               </button>
                             </div>
                           ) : (
-                            gestionable && (
+                            cupoEditable && (
                               <button
                                 onClick={() => {
                                   setEditandoCupoId(actividad.id)
@@ -369,16 +376,18 @@ export function VistaGestionCupos({
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => alternarInscriptos(actividad.id)}
-                        className="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-brand-600 transition-colors mt-3"
-                      >
-                        {expandida ? <CaretUp size={12} /> : <CaretDown size={12} />}
-                        {expandida ? 'Ocultar' : 'Ver'} inscriptos ({actividad.inscriptos})
-                      </button>
+                      {puedeGestionar && (
+                        <button
+                          onClick={() => alternarInscriptos(actividad.id)}
+                          className="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-brand-600 transition-colors mt-3"
+                        >
+                          {expandida ? <CaretUp size={12} /> : <CaretDown size={12} />}
+                          {expandida ? 'Ocultar' : 'Ver'} inscriptos ({actividad.inscriptos})
+                        </button>
+                      )}
                     </div>
 
-                    {expandida && (
+                    {puedeGestionar && expandida && (
                       <div className="border-t border-neutral-100 bg-neutral-50 px-5 py-4">
                         {cargandoInscriptosId === actividad.id ? (
                           <div className="space-y-2">

@@ -829,7 +829,13 @@ BEGIN
                            AND pg_temp.res('habilitado', 'DIRECTOR', 'perfiles', 'INSERT') = 'n=1'
                            AND pg_temp.res('habilitado', 'DIRECTOR', 'padres_hijos', 'INSERT') = 'n=1'
                            AND pg_temp.res('habilitado', 'DOCENTE', 'asistencias', 'INSERT') = 'n=1'
-                           AND pg_temp.res('habilitado', 'ESTUDIANTE', 'inscripciones', 'INSERT') = 'n=1'
+                           -- EPT-66: con la contracción aplicada el alumno ya no inserta directo (42501)
+                           -- y su alta pasa por la función legada; con la expansión sola sigue siendo n=1.
+                           AND pg_temp.res('habilitado', 'ESTUDIANTE', 'inscripciones', 'INSERT') =
+                               CASE WHEN EXISTS (SELECT 1 FROM pg_catalog.pg_policies
+                                                 WHERE schemaname = 'public' AND tablename = 'inscripciones'
+                                                   AND policyname = 'Dirección consulta las inscripciones')
+                                    THEN 'E:42501' ELSE 'n=1' END
                            AND pg_temp.res('bloqueado', 'DIRECTOR', 'cursos', 'INSERT') = 'E:42501'
                            AND pg_temp.res('bloqueado', 'DIRECTOR', 'perfiles', 'INSERT') = 'E:42501'
                            AND pg_temp.res('bloqueado', 'DOCENTE', 'asistencias', 'INSERT') = 'E:42501'
