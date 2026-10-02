@@ -1,11 +1,11 @@
 # EPT-66 — Unidad C: aplicación + contracción de las inscripciones legadas
 
-> **Estado: PR hacia `main`; verificada en el stack local oficial; sin aplicar en producción.**
-> La aplicación nueva llama a funciones de la expansión: **no se mergea** hasta que la expansión
-> (migración 28) esté aplicada y verificada en producción. La contracción (migración 29) exige
-> además la aplicación nueva ya desplegada y una **autorización puntual de Lucas** (ver §7).
-> El PR muestra solo esta unidad: las unidades A y B ya están en `main` (#33 y #34); #35 se
-> fusionó hacia la rama `codex/ept-66-expansion` y **nunca llegó a `main`**.
+> **Estado: integrada en `main` (#36, más la corrección #37) y con la migración 29 aplicada en
+> producción el 02/10/2026 a las 15:33 ART** (ver `docs/evidence/EPT-66.md` §10). Las unidades A y B
+> ya estaban en `main` (#33 y #34); #35 se fusionó hacia la rama `codex/ept-66-expansion` y **nunca
+> llegó a `main`**: C llegó mediante la #36. La #37 corrige un defecto de refresco de Cupos hallado en
+> la prueba autenticada de esta unidad (§10 del documento maestro). Lo que sigue en este archivo
+> describe el estado previo al despliegue; los datos de producción están en el documento maestro.
 
 ## 1. Qué es
 
@@ -142,11 +142,12 @@ aplicada, las suites **SQL** de esta rama aceptan ambos estados; las autenticada
 
 ## 5. No probado (límites)
 
-* **Producción** (Supabase `ycvrpmrogvjnntnoosbh` y Vercel): no se consultó ni se modificó nada; la
-  sesión de desarrollo no tiene credenciales ni salida de red hacia el proyecto productivo. El ledger
-  remoto, el preflight, el respaldo, la aplicación de la 28 y de la 29 y los recorridos autorizados
-  **no se ejecutaron**.
-* WebKit (perfil `iphone-13-webkit`): no está instalado en el entorno.
+* **Producción** (Supabase `ycvrpmrogvjnntnoosbh` y Vercel): al escribirse esta unidad no se había
+  consultado ni modificado nada. Después se ejecutaron la 28 y la 29 con su respaldo, preflight y
+  autorización puntual; ver `docs/evidence/EPT-66.md` §10. Esta sección conserva el límite original de
+  las pruebas de la unidad: se hicieron en el stack local.
+* WebKit (perfil `iphone-13-webkit`): no estaba instalado cuando se escribió esta unidad; la E2E
+  completa posterior lo ejecuta con 5 omisiones por límites del navegador de pruebas.
 * La paleta del PDF (RNF1) queda para revisión humana.
 
 ## 6. Decisión de Lucas sobre asistencias (resuelta)
@@ -154,11 +155,12 @@ aplicada, las suites **SQL** de esta rama aceptan ambos estados; las autenticada
 Lucas aprobó la regla del «alumno a cargo»: un DOCENTE está a cargo de un alumno únicamente si el
 alumno tiene matrícula vigente en un curso con una materia asignada y activa a ese docente, o una
 inscripción activa en un grupo deportivo activo que ese docente dicta; el docente no puede atribuir
-un registro a otro docente. Se implementa en una unidad **separada** (D, migración 30), que se
-publica **después** de estabilizar esta. Hasta entonces las asistencias siguen abiertas a cualquier
-DOCENTE. Ver `docs/evidence/EPT-66.md` §7 y `D-asistencias.md`.
+un registro a otro docente. Se implementó en una unidad **separada** (D, migración 30), publicada
+**después** de estabilizar esta y aplicada en producción el 02/10/2026 a las 19:13 ART. Entre la 29 y
+la 30 las asistencias estuvieron abiertas a cualquier DOCENTE. Ver `docs/evidence/EPT-66.md` §7 y
+`D-asistencias.md`.
 
-## 7. Plan de despliegue (no ejecutado)
+## 7. Plan de despliegue (ejecutado; resultado en el documento maestro §10)
 
 1. Merge de A y de B por Lucas. Aplicar B en producción con su propio gate (ver B §7). Ledger = 28.
 2. Merge de **esta** unidad por Lucas **solo después** de (1). Vercel Production despliega la
@@ -186,7 +188,7 @@ aplicación anterior sin poder escribir. Los datos nunca se tocan en esta unidad
 
 | Riesgo | Dueño |
 |---|---|
-| Asistencias de menores abiertas a cualquier DOCENTE hasta aplicar la unidad D | EPT-66 (unidad D) |
+| ~~Asistencias de menores abiertas a cualquier DOCENTE hasta aplicar la unidad D~~ → cerrado por la migración 30 (02/10/2026 19:13 ART) | Resuelto (unidad D) |
 | Pruebas por rol y E2E completas contra producción, incluidos los recorridos de esta unidad | EPT-67 |
 | Datos ficticios, alta pública de Auth, transporte real, purgas | EPT-68 |
 | ~~`database.generated.ts` por delta~~ → regenerado y verificado byte a byte con la CLI oficial | Resuelto |
