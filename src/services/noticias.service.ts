@@ -36,38 +36,6 @@ export async function obtenerNoticiaPorId(id: number) {
   return data
 }
 
-export async function crearNoticia(noticia: { titulo: string; contenido: string; imagen_url?: string | null }) {
-  const supabase = createClient()
-  const { data, error } = await (supabase
-    .from('noticias')
-    .insert(noticia as any)
-    .select()
-    .single() as any)
-  if (error) throw new Error(error.message)
-  return data
-}
-
-export async function actualizarNoticia(id: number, updates: Record<string, unknown>) {
-  const supabase = createClient()
-  const { data, error } = await (supabase
-    .from('noticias')
-    .update(updates as any)
-    .eq('id', id)
-    .select()
-    .single() as any)
-  if (error) throw new Error(error.message)
-  return data
-}
-
-export async function eliminarNoticia(id: number) {
-  const supabase = createClient()
-  const { error } = await (supabase
-    .from('noticias')
-    .delete()
-    .eq('id', id) as any)
-  if (error) throw new Error(error.message)
-}
-
 export async function obtenerGaleria(categoria?: string) {
   const supabase = createClient()
   let query: any = supabase.from('galeria').select('*').order('id', { ascending: false })
