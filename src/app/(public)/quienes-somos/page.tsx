@@ -98,7 +98,7 @@ export default function QuienesSomosPage() {
               <div className="absolute inset-0 bg-gradient-to-t from-brand-900/60 to-transparent" />
               <div className="absolute bottom-6 left-6 right-6">
                 <blockquote className="text-white text-xl font-semibold leading-snug">
-                  "La educación es el arma más poderosa para cambiar el mundo."
+                  &quot;La educación es el arma más poderosa para cambiar el mundo.&quot;
                 </blockquote>
                 <p className="text-white/60 text-sm mt-2">— Nelson Mandela</p>
               </div>

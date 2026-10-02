@@ -48,7 +48,7 @@ export default function InscripcionPage() {
   ]
 
   const handleNext = async () => {
-    const valid = await trigger(stepFields[step] as any)
+    const valid = await trigger(stepFields[step])
     if (valid) setStep((s) => s + 1)
   }
 
@@ -65,7 +65,7 @@ export default function InscripcionPage() {
 
   const onSubmit = async (data: InscripcionFormData) => {
     try {
-      await crearSolicitudInscripcion(data as any)
+      await crearSolicitudInscripcion({ ...data })
       setSubmitted(true)
     } catch (err) {
       toast.error('Hubo un error al enviar la solicitud. Intentá de nuevo.')

@@ -68,6 +68,10 @@ export default function GlobalError({
             >
               Reintentar
             </button>
+            {/* global-error reemplaza el layout raíz y se activa tras un fallo fatal: se usa una
+                navegación de documento completo a propósito para reconstruir la aplicación
+                desde cero; `next/link` dependería del router que acaba de fallar. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a
               href="/"
               style={{

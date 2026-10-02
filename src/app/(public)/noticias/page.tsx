@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import type { Noticia } from '@/types/database.types'
 import { obtenerNoticiasPaginadas } from '@/services/noticias.service'
 import { NoticiasClient } from './NoticiasClient'
 
@@ -13,7 +14,7 @@ export default async function NoticiasPage({ searchParams }: { searchParams?: Pr
   const pageSize = 9
   const resolvedParams = await searchParams
   const currentPage = Math.max(1, Number(resolvedParams?.page ?? '1') || 1)
-  let noticias: any[] = []
+  let noticias: Noticia[] = []
   let totalPages = 1
   try {
     const { data, count } = await obtenerNoticiasPaginadas(currentPage, pageSize)

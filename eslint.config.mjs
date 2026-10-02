@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Bundle minificado de tercero versionado dentro de la skill `impeccable`:
+    // no es código propio y no se edita a mano. El resto de .agents/ sigue
+    // sujeto a lint.
+    ".agents/skills/impeccable/scripts/modern-screenshot.umd.js",
   ]),
 ]);
 

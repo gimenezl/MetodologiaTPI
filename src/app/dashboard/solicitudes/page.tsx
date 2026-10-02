@@ -23,6 +23,11 @@ const estadoConfig = {
   ACEPTADO: { variant: 'success' as const, label: 'Aceptado', next: null, nextLabel: null },
 }
 
+function actividadesDe(solicitud: Solicitud): string[] {
+  const valor = solicitud.datos_aspirante.actividades_interes
+  return Array.isArray(valor) ? valor.filter((a): a is string => typeof a === 'string') : []
+}
+
 export default function SolicitudesPage() {
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([])
   const [loading, setLoading] = useState(true)
@@ -30,16 +35,14 @@ export default function SolicitudesPage() {
   const [filtro, setFiltro] = useState<string>('TODOS')
   const [updatingId, setUpdatingId] = useState<string | null>(null)
 
-  useEffect(() => { cargar() }, [])
-
-  const cargar = async () => {
-    setLoading(true)
-    try {
-      const data = await obtenerSolicitudes()
-      setSolicitudes(data as Solicitud[])
-    } catch { toast.error('Error al cargar solicitudes') }
-    finally { setLoading(false) }
-  }
+  useEffect(() => {
+    let vigente = true
+    obtenerSolicitudes()
+      .then((data) => { if (vigente) setSolicitudes(data as Solicitud[]) })
+      .catch(() => { if (vigente) toast.error('Error al cargar solicitudes') })
+      .finally(() => { if (vigente) setLoading(false) })
+    return () => { vigente = false }
+  }, [])
 
   const avanzarEstado = async (sol: Solicitud) => {
     const config = estadoConfig[sol.estado]
@@ -186,13 +189,13 @@ export default function SolicitudesPage() {
                   </div>
                 ))
               }
-              {(selected.datos_aspirante as any).actividades_interes?.length > 0 && (
+              {actividadesDe(selected).length > 0 && (
                 <div className="text-sm">
                   <p className="text-neutral-400 text-xs uppercase tracking-wider font-semibold mb-2">
                     Actividades de interés
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {((selected.datos_aspirante as any).actividades_interes as string[]).map((a) => (
+                    {actividadesDe(selected).map((a) => (
                       <span key={a} className="px-2 py-0.5 bg-brand-50 text-brand-700 rounded-full text-xs font-semibold">
                         {a}
                       </span>

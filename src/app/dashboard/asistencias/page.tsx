@@ -59,8 +59,9 @@ export default function AsistenciasPage() {
   const [registrando, setRegistrando] = useState(false)
   const [historialCompleto, setHistorialCompleto] = useState<AsistenciaRow[]>([])
 
-  const cargarAsistencias = useCallback(async () => {
-    setLoading(true)
+  // La carga inicial y los cambios de fecha no activan el indicador desde el
+  // efecto: parte en `true` y `cambiarFecha` lo reactiva antes de cambiar el filtro.
+  const traerAsistencias = useCallback(async () => {
     try {
       const data = await obtenerAsistenciasDeGestion(fechaFiltro)
       setAsistencias((data ?? []) as AsistenciaRow[])
@@ -72,6 +73,17 @@ export default function AsistenciasPage() {
   }, [fechaFiltro])
 
   // El historial completo (RLS filtra automáticamente: el alumno ve lo suyo, el padre el de sus hijos)
+  const cargarAsistencias = useCallback(async () => {
+    setLoading(true)
+    await traerAsistencias()
+  }, [traerAsistencias])
+
+  const cambiarFecha = (fecha: string) => {
+    if (fecha === fechaFiltro) return
+    setLoading(true)
+    setFechaFiltro(fecha)
+  }
+
   const cargarHistorial = useCallback(async () => {
     try {
       const data = isStaff ? await obtenerAsistenciasDeGestion() : await obtenerTodasAsistencias()
@@ -82,11 +94,24 @@ export default function AsistenciasPage() {
   }, [isStaff])
 
   useEffect(() => {
-    if (isStaff) cargarAsistencias()
-    else setLoading(false)
-  }, [isStaff, cargarAsistencias])
+    if (!isStaff) return
+    let vigente = true
+    obtenerAsistenciasDeGestion(fechaFiltro)
+      .then((data) => { if (vigente) setAsistencias((data ?? []) as AsistenciaRow[]) })
+      .catch(() => { if (vigente) toast.error('Error al cargar asistencias') })
+      .finally(() => { if (vigente) setLoading(false) })
+    return () => { vigente = false }
+  }, [isStaff, fechaFiltro])
 
-  useEffect(() => { cargarHistorial() }, [cargarHistorial])
+  const cargando = isStaff && loading
+
+  useEffect(() => {
+    let vigente = true
+    ;(isStaff ? obtenerAsistenciasDeGestion() : obtenerTodasAsistencias())
+      .then((data) => { if (vigente) setHistorialCompleto((data ?? []) as AsistenciaRow[]) })
+      .catch(() => { if (vigente) setHistorialCompleto([]) })
+    return () => { vigente = false }
+  }, [isStaff])
 
   const refrescarTodo = useCallback(async () => {
     await cargarAsistencias()
@@ -218,7 +243,7 @@ export default function AsistenciasPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
-                {loading ? (
+                {cargando ? (
                   Array.from({ length: 4 }).map((_, i) => (
                     <tr key={i}>
                       {esPadre && <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>}
@@ -277,16 +302,16 @@ export default function AsistenciasPage() {
           <button
             onClick={() => {
               const d = new Date(fechaFiltro + 'T12:00:00'); d.setDate(d.getDate() - 1)
-              setFechaFiltro(format(d, 'yyyy-MM-dd'))
+              cambiarFecha(format(d, 'yyyy-MM-dd'))
             }}
             className="w-9 h-9 rounded-lg border border-neutral-200 bg-white flex items-center justify-center text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900 transition-colors text-base font-bold"
             aria-label="Día anterior"
           >‹</button>
-          <Input type="date" value={fechaFiltro} onChange={(e) => setFechaFiltro(e.target.value)} aria-label="Filtrar por fecha" className="w-auto" />
+          <Input type="date" value={fechaFiltro} onChange={(e) => cambiarFecha(e.target.value)} aria-label="Filtrar por fecha" className="w-auto" />
           <button
             onClick={() => {
               const d = new Date(fechaFiltro + 'T12:00:00'); d.setDate(d.getDate() + 1)
-              setFechaFiltro(format(d, 'yyyy-MM-dd'))
+              cambiarFecha(format(d, 'yyyy-MM-dd'))
             }}
             className="w-9 h-9 rounded-lg border border-neutral-200 bg-white flex items-center justify-center text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900 transition-colors text-base font-bold"
             aria-label="Día siguiente"
@@ -367,7 +392,7 @@ export default function AsistenciasPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
-              {loading
+              {cargando
                 ? Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i}>
                       <td className="px-5 py-3"><Skeleton className="h-4 w-36" /></td>

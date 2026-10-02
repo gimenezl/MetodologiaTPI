@@ -44,7 +44,7 @@ export default function LoginPage() {
         <div className="relative space-y-6">
           <blockquote className="border-l-2 border-accent-400 pl-6">
             <p className="text-white text-xl font-medium leading-relaxed">
-              "La educación es el arma más poderosa que puedes usar para cambiar el mundo."
+              &quot;La educación es el arma más poderosa que puedes usar para cambiar el mundo.&quot;
             </p>
             <footer className="text-white/60 text-sm mt-3">— Nelson Mandela</footer>
           </blockquote>
