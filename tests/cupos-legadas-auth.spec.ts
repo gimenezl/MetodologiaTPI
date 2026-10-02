@@ -107,6 +107,41 @@ test.describe('ESTUDIANTE AJENO autenticado — cupos con la base real', () => {
 })
 
 test.describe('DIRECTOR autenticado — cupos con la base real', () => {
+  test('refresca la lista abierta tras alta, baja y reinscripción sin ocultarla', async ({ page }) => {
+    const nombre = 'Taller refresco EPT-66'
+    psql(`
+      INSERT INTO public.actividades (nombre, tipo, cupo_maximo, activo)
+      SELECT '${nombre}', 'TALLER', 1, TRUE
+      WHERE NOT EXISTS (SELECT 1 FROM public.actividades WHERE nombre = '${nombre}');
+    `)
+    const alumnoId = psql(`SELECT id FROM public.perfiles WHERE dni = '${DNI_ALUMNO}';`)
+    await page.goto('/dashboard/cupos')
+    const taller = page.locator('div.rounded-2xl').filter({ has: page.getByRole('heading', { name: nombre }) }).first()
+    await expect(taller.getByText('0 / 1 inscriptos')).toBeVisible()
+    await taller.getByRole('button', { name: 'Ver inscriptos (0)' }).click()
+    await expect(taller.getByText('No hay alumnos inscriptos')).toBeVisible()
+    await page.getByLabel('Seleccioná el alumno').selectOption(alumnoId)
+
+    for (let ciclo = 0; ciclo < 2; ciclo++) {
+      await taller.getByRole('button', { name: 'Inscribir', exact: true }).click()
+      await expect(taller.getByText('1 / 1 inscriptos')).toBeVisible()
+      await expect(taller.getByRole('button', { name: 'Ocultar inscriptos (1)' })).toBeVisible()
+      await expect(taller.getByText('Estudiante, Beto', { exact: true })).toBeVisible()
+      await expect(taller.getByText('No hay alumnos inscriptos')).toHaveCount(0)
+      await taller.getByRole('button', { name: 'Dar de baja', exact: true }).click()
+      await expect(taller.getByText('0 / 1 inscriptos')).toBeVisible()
+      await expect(taller.getByRole('button', { name: 'Ocultar inscriptos (0)' })).toBeVisible()
+      await expect(taller.getByText('No hay alumnos inscriptos')).toBeVisible()
+      await expect(taller.getByRole('button', { name: 'Dar de baja', exact: true })).toHaveCount(0)
+    }
+
+    expect(psql(`
+      SELECT count(*) FROM public.inscripciones i
+      JOIN public.actividades a ON a.id = i.actividad_id
+      WHERE a.nombre = '${nombre}' AND i.estudiante_id = '${alumnoId}' AND i.estado = 'BAJA';
+    `)).toBe('2')
+  })
+
   test('ve los inscriptos del taller', async ({ page }) => {
     sembrarTaller()
     await page.goto('/dashboard/cupos')

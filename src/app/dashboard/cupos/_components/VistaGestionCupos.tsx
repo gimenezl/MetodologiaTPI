@@ -115,11 +115,21 @@ export function VistaGestionCupos({
     try {
       await inscribirAlumno(estudianteSeleccionado, actividadId)
       toast.success('Alumno inscripto')
-      setInscripcionesPorActividad((anteriores) => {
-        const actualizadas = { ...anteriores }
-        delete actualizadas[actividadId]
-        return actualizadas
-      })
+      if (actividadExpandidaId === actividadId) {
+        // La lista ya está abierta: si solo se invalidara, quedaría vacía hasta cerrarla y reabrirla.
+        try {
+          const data = await listarInscriptosDeActividad(actividadId)
+          setInscripcionesPorActividad((anteriores) => ({ ...anteriores, [actividadId]: data ?? [] }))
+        } catch {
+          toast.error('Alumno inscripto, pero no se pudo actualizar la lista')
+        }
+      } else {
+        setInscripcionesPorActividad((anteriores) => {
+          const actualizadas = { ...anteriores }
+          delete actualizadas[actividadId]
+          return actualizadas
+        })
+      }
       await recargarActividades()
     } catch (error) {
       const mensaje = error instanceof Error ? error.message : 'No se pudo inscribir'
