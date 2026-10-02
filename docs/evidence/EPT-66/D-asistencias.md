@@ -63,7 +63,10 @@ el cliente no puede enviar `docente_id`.
 * **Corrección sin huella:** cualquier docente vinculado (o Dirección) puede corregir el estado de una
   asistencia ya cargada, y no queda registro de quién corrigió; el registrante original no se
   reemplaza. La alternativa más restrictiva rompe el caso de dos docentes del mismo curso y no está en el
-  contrato aprobado. **Pregunta abierta para Lucas.**
+  contrato aprobado. **Decisión (02/10/2026, Lucas delegó el criterio):** se mantiene el comportamiento
+  aprobado y se acepta el riesgo, porque restringir la corrección rompería un caso normal y agregar
+  trazabilidad (`corregido_por` y fecha) exige una migración nueva con su respaldo y autorización en
+  producción. Queda como **mejora recomendada** para una iteración posterior, no como defecto abierto.
 * **Deadlock residual (`40P01`)** con una operación futura o no revisada; el servidor responde 409
   «volvé a intentarlo».
 * `service_role` conserva sus privilegios por defecto sobre `asistencias` (heredado de la migración
