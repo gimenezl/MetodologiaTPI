@@ -63,8 +63,9 @@ const sesion = new SesionPsql('M', 'EPT66')
 try {
   await sesion.ejecutar(
     `BEGIN;
-     SET LOCAL session_replication_role = replica;
+     ALTER TABLE public.inscripciones DISABLE TRIGGER USER;
      DELETE FROM public.inscripciones WHERE id IN (${FILAS.map(([id]) => `'${id}'`).join(', ')});
+     ALTER TABLE public.inscripciones ENABLE TRIGGER USER;
      DELETE FROM public.alumnos WHERE perfil_id IN ('${ALUMNO_1}', '${ALUMNO_2}', '${ALUMNO_3}');
      DELETE FROM public.perfiles WHERE id IN ('${ALUMNO_1}', '${ALUMNO_2}', '${ALUMNO_3}');
      DELETE FROM public.actividades WHERE id IN (${ACTIVIDAD_1}, ${ACTIVIDAD_2});
@@ -116,14 +117,20 @@ try {
 
   await sesion.ejecutar(
     `BEGIN;
-     SET LOCAL session_replication_role = replica;
+     ALTER TABLE public.inscripciones DISABLE TRIGGER USER;
      DELETE FROM public.inscripciones WHERE id IN (${FILAS.map(([id]) => `'${id}'`).join(', ')});
+     ALTER TABLE public.inscripciones ENABLE TRIGGER USER;
      DELETE FROM public.alumnos WHERE perfil_id IN ('${ALUMNO_1}', '${ALUMNO_2}', '${ALUMNO_3}');
      DELETE FROM public.perfiles WHERE id IN ('${ALUMNO_1}', '${ALUMNO_2}', '${ALUMNO_3}');
      DELETE FROM public.actividades WHERE id IN (${ACTIVIDAD_1}, ${ACTIVIDAD_2});
      COMMIT;`,
     'limpiar'
   )
+  const apagados = await sesion.escalar(
+    `(SELECT pg_catalog.count(*) FROM pg_catalog.pg_trigger
+      WHERE tgrelid = 'public.inscripciones'::pg_catalog.regclass AND NOT tgisinternal AND tgenabled <> 'O')`,
+    'triggers_apagados')
+  if (apagados !== '0') throw new Error(`Quedaron ${apagados} trigger(s) de inscripciones deshabilitados`)
   console.log('OK: las filas legadas sobreviven a la migración sin pérdida de conteo, contenido ni relaciones')
 } catch (error) {
   console.error(`FALLO: ${error.message}`)

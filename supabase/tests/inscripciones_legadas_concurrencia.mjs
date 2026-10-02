@@ -106,8 +106,9 @@ async function activas(observador, actividad, etiqueta) {
 async function limpiarEntreCasos(observador) {
   await observador.ejecutar(
     `BEGIN;
-     SET LOCAL session_replication_role = replica;
+     ALTER TABLE public.inscripciones DISABLE TRIGGER USER;
      DELETE FROM public.inscripciones WHERE actividad_id IN (${ACTIVIDADES.join(', ')});
+     ALTER TABLE public.inscripciones ENABLE TRIGGER USER;
      COMMIT;`,
     'limpiar_inscripciones'
   )
@@ -144,8 +145,9 @@ try {
   // ------------------------------------------------------------------
   await observador.ejecutar(
     `BEGIN;
-     SET LOCAL session_replication_role = replica;
+     ALTER TABLE public.inscripciones DISABLE TRIGGER USER;
      DELETE FROM public.inscripciones WHERE actividad_id IN (${ACTIVIDADES.join(', ')});
+     ALTER TABLE public.inscripciones ENABLE TRIGGER USER;
      DELETE FROM public.padres_hijos WHERE padre_id = '${PADRE}';
      DELETE FROM public.alumnos WHERE perfil_id IN ('${ALUMNO_A}', '${ALUMNO_B}', '${ALUMNO_C}');
      DELETE FROM public.perfiles WHERE id IN (${PERFILES.map((id) => `'${id}'`).join(', ')});
@@ -277,7 +279,6 @@ try {
   await limpiarEntreCasos(observador)
   await observador.ejecutar(
     `BEGIN;
-     SET LOCAL session_replication_role = replica;
      DELETE FROM public.padres_hijos WHERE padre_id = '${PADRE}';
      DELETE FROM public.alumnos WHERE perfil_id IN ('${ALUMNO_A}', '${ALUMNO_B}', '${ALUMNO_C}');
      DELETE FROM public.perfiles WHERE id IN (${PERFILES.map((id) => `'${id}'`).join(', ')});
@@ -285,6 +286,12 @@ try {
      COMMIT;`,
     'limpiar_fixture'
   )
+  // La limpieza deshabilita triggers dentro de transacciones: nunca debe quedar ninguno apagado.
+  const apagados = await observador.escalar(
+    `(SELECT pg_catalog.count(*) FROM pg_catalog.pg_trigger
+      WHERE tgrelid = 'public.inscripciones'::pg_catalog.regclass AND NOT tgisinternal AND tgenabled <> 'O')`,
+    'triggers_apagados')
+  exigir(apagados === '0', `Quedaron ${apagados} trigger(s) de inscripciones deshabilitados`)
   console.log('OK: concurrencia de inscripciones legadas (EPT-66) sin hallazgos')
 } catch (error) {
   console.error(`FALLO: ${error.message}`)

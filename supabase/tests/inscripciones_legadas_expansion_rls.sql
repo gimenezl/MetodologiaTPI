@@ -432,11 +432,12 @@ SELECT ept66_t.afirmar('9d la restricción de coherencia impide fecha_baja en un
 SELECT ept66_t.afirmar('10a alta directa sobre un DEPORTE sigue rechazada (P5582)',
     ept66_t.como(ept66_t.dir(), 'authenticated',
         pg_catalog.format($q$INSERT INTO public.inscripciones (estudiante_id, actividad_id) VALUES (%L, 96603)$q$, ept66_t.propio())), 'P5582');
--- Fila histórica deportiva (creada antes de EPT-11): se siembra sin disparar triggers.
-SET LOCAL session_replication_role = replica;
+-- Fila histórica deportiva (creada antes de EPT-11): se siembra con los triggers de usuario
+-- deshabilitados (lo puede hacer el propietario de la tabla; no exige superusuario).
+ALTER TABLE public.inscripciones DISABLE TRIGGER USER;
 INSERT INTO public.inscripciones (id, estudiante_id, actividad_id, estado)
 VALUES ('b6600000-0000-4000-8000-000000000003', ept66_t.ajeno(), 96603, 'ACTIVO');
-SET LOCAL session_replication_role = origin;
+ALTER TABLE public.inscripciones ENABLE TRIGGER USER;
 SELECT ept66_t.afirmar('10b la baja de una inscripción deportiva histórica sigue rechazada (P5582)',
     ept66_t.como(ept66_t.dir(), 'authenticated',
         $q$SELECT public.dar_baja_inscripcion_legada('b6600000-0000-4000-8000-000000000003')$q$), 'P5582');
