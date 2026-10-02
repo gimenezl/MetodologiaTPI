@@ -603,6 +603,12 @@ BEGIN
     PERFORM pg_temp.rpc('public.es_director_actual', 'v', 'public.es_director_actual()');
     PERFORM pg_temp.rpc('public.establecer_recorrido_transporte', 'x', pg_catalog.format('public.establecer_recorrido_transporte(%L)', t));
     PERFORM pg_temp.rpc('public.inactivar_alumno', 'x', pg_catalog.format('public.inactivar_alumno(%L)', EST));
+    -- EPT-66: inscripciones legadas (alumno propio, hijo vinculado y Dirección; el resto recibe 42501).
+    PERFORM pg_temp.rpc('public.inscribir_actividad_legada', 'x', pg_catalog.format('public.inscribir_actividad_legada(%L, %s)', EST, (SELECT id FROM public.actividades WHERE tipo = 'TALLER' AND activo ORDER BY id DESC LIMIT 1)));
+    PERFORM pg_temp.rpc('public.dar_baja_inscripcion_legada', 'x', 'public.dar_baja_inscripcion_legada(''00000000-0000-4000-8000-000000000066'')');
+    PERFORM pg_temp.rpc('public.listar_inscripciones_actividades_legadas', 'n', pg_catalog.format('public.listar_inscripciones_actividades_legadas(%L)', EST));
+    PERFORM pg_temp.rpc('public.listar_inscriptos_actividad_legada', 'n', pg_catalog.format('public.listar_inscriptos_actividad_legada(%s)', (SELECT id FROM public.actividades WHERE tipo = 'TALLER' ORDER BY id DESC LIMIT 1)));
+    PERFORM pg_temp.rpc('public.consultar_cupos_actividades_legadas', 'n', 'public.consultar_cupos_actividades_legadas()');
     PERFORM pg_temp.rpc('public.inscribir_alumno_en_grupo_deportivo', 'x', pg_catalog.format('public.inscribir_alumno_en_grupo_deportivo(%L, %L)', EST, GR));
     PERFORM pg_temp.rpc('public.inscribir_en_grupo_deportivo', 'x', pg_catalog.format('public.inscribir_en_grupo_deportivo(%L)', GR));
     PERFORM pg_temp.rpc('public.inscribir_en_servicio', 'x', pg_catalog.format('public.inscribir_en_servicio(%L)', s));

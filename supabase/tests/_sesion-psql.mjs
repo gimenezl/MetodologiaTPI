@@ -15,6 +15,19 @@ import { spawn } from 'node:child_process'
 
 const CONTENEDOR =
   process.env.EPT_SUPABASE_DB_CONTAINER ?? 'supabase_db_educar-para-transformar'
+
+/**
+ * Transporte alternativo (EPT-66). Sin esta variable las sesiones entran por
+ * `docker exec` al contenedor del stack local de Supabase, como siempre. Con
+ * `EPT_PSQL_CONEXION` cada sesión es igualmente un proceso `psql` propio, pero
+ * conectado de forma directa a una base descartable que no vive en Docker:
+ *
+ *     EPT_PSQL_CONEXION="-h 127.0.0.1 -p 54399 -U postgres -d ept_prueba"
+ *
+ * No cambia la semántica de la prueba: siguen siendo conexiones PostgreSQL
+ * independientes que compiten por los mismos bloqueos.
+ */
+const CONEXION_DIRECTA = process.env.EPT_PSQL_CONEXION?.trim().split(/\s+/u)
 const ESPERA_MAXIMA_MS = 30_000
 
 let secuencia = 0
@@ -37,26 +50,28 @@ export class SesionPsql {
     this.salida = ''
     this.error = ''
     this.esperas = new Map()
-    this.proceso = spawn(
-      'docker',
-      [
-        'exec',
-        '-i',
-        CONTENEDOR,
-        'psql',
-        '-X',
-        '-q',
-        '-A',
-        '-t',
-        '-U',
-        'postgres',
-        '-d',
-        'postgres',
-        '-v',
-        'ON_ERROR_STOP=1',
-      ],
-      { stdio: ['pipe', 'pipe', 'pipe'] }
-    )
+    const [orden, argumentos] = CONEXION_DIRECTA
+      ? ['psql', ['-X', '-q', '-A', '-t', ...CONEXION_DIRECTA, '-v', 'ON_ERROR_STOP=1']]
+      : [
+          'docker',
+          [
+            'exec',
+            '-i',
+            CONTENEDOR,
+            'psql',
+            '-X',
+            '-q',
+            '-A',
+            '-t',
+            '-U',
+            'postgres',
+            '-d',
+            'postgres',
+            '-v',
+            'ON_ERROR_STOP=1',
+          ],
+        ]
+    this.proceso = spawn(orden, argumentos, { stdio: ['pipe', 'pipe', 'pipe'] })
 
     this.proceso.stdout.setEncoding('utf8')
     this.proceso.stderr.setEncoding('utf8')
