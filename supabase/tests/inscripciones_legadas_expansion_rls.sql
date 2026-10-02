@@ -18,6 +18,17 @@
 
 \set ON_ERROR_STOP on
 
+-- Esta suite describe la VENTANA de expansión (la aplicación anterior todavía
+-- escribe sobre la tabla). Con la contracción aplicada deja de ser aplicable y se
+-- omite de forma explícita; ver inscripciones_legadas_contraccion_rls.sql.
+SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_policies
+               WHERE schemaname = 'public' AND tablename = 'inscripciones'
+                 AND policyname = 'Dirección consulta las inscripciones') AS contraida \gset
+\if :contraida
+    \echo 'OMITIDA: la contracción de EPT-66 ya está aplicada; corresponde inscripciones_legadas_contraccion_rls.sql'
+    \quit
+\endif
+
 BEGIN;
 
 -- ================================================================

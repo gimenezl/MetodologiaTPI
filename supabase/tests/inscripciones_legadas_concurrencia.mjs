@@ -175,6 +175,14 @@ try {
     'preparar_fixture'
   )
 
+  // Con la contracción aplicada, una fila BAJA es inmutable: el cambio de estado a
+  // ACTIVO deja de existir y el caso 3 pasa a comprobar que se rechaza.
+  const contraida = (await observador.escalar(
+    `(SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_policies
+       WHERE schemaname = 'public' AND tablename = 'inscripciones'
+         AND policyname = 'Dirección consulta las inscripciones'))`,
+    'contraccion_aplicada')) === 'true'
+
   // ------------------------------------------------------------------
   // 1. Última plaza: alumno A vs alumno B.
   // ------------------------------------------------------------------
@@ -208,29 +216,41 @@ try {
      VALUES ('${filaBaja}', '${ALUMNO_C}', ${ACT_ESTADO}, 'BAJA', pg_catalog.now());`,
     'sembrar_baja_historica'
   )
-  // A reactiva (sin confirmar) y B intenta el alta por función de la misma plaza.
-  r = await carrera({
-    A, B, observador, pids, actividad: ACT_ESTADO, etiqueta: 'c3',
-    comoA: 'RESET ROLE;', operacionA: reactivacionTolerante(filaBaja),
-    comoB: comoUsuario(ALUMNO_B), operacionB: altaTolerante(ALUMNO_B, ACT_ESTADO),
-  })
-  exigir(r.resultadoA === 'REACTIVADA' && r.resultadoB === 'CUPO' && r.ocupadas === '1',
-    `CONCURRENCIA 3: A=${r.resultadoA} B=${r.resultadoB} ocupadas=${r.ocupadas}; se esperaba REACTIVADA/CUPO/1`)
-  const conservada = await observador.escalar(
-    `(SELECT count(*) FROM public.inscripciones WHERE actividad_id = ${ACT_ESTADO})`, 'filas_c3')
-  exigir(conservada === '1', `CONCURRENCIA 3: se esperaba 1 fila y hay ${conservada}`)
-  // Y al revés: B (alta por función) confirma primero y la reactivación directa pierde.
-  await observador.ejecutar(
-    `UPDATE public.inscripciones SET estado = 'BAJA', fecha_baja = pg_catalog.now() WHERE id = '${filaBaja}';`,
-    'devolver_a_baja')
-  r = await carrera({
-    A, B, observador, pids, actividad: ACT_ESTADO, etiqueta: 'c3b',
-    comoA: comoUsuario(ALUMNO_B), operacionA: altaTolerante(ALUMNO_B, ACT_ESTADO),
-    comoB: 'RESET ROLE;', operacionB: reactivacionTolerante(filaBaja),
-  })
-  exigir(r.resultadoA === 'ALTA' && r.resultadoB === 'CUPO' && r.ocupadas === '1',
-    `CONCURRENCIA 3b: A=${r.resultadoA} B=${r.resultadoB} ocupadas=${r.ocupadas}; se esperaba ALTA/CUPO/1`)
-  console.log('OK CONCURRENCIA 3: el alta por función y la reactivación directa de una BAJA se ordenan: solo una ocupa la plaza, en ambos órdenes')
+  if (contraida) {
+    // Con la contracción no hay camino de cambio de estado hacia ACTIVO: la fila
+    // BAJA es historia. La carrera deja de existir porque el estado es terminal.
+    await A.ejecutar(`RESET ROLE; ${reactivacionTolerante(filaBaja)}`, 'c3_reactivacion')
+    const resultado = await resultadoDe(A, 'c3_resultado')
+    exigir(resultado === 'ERROR_P6609',
+      `CONCURRENCIA 3: con la contracción la reactivación debía rechazarse (P6609) y fue ${resultado}`)
+    exigir((await activas(observador, ACT_ESTADO, 'c3_activas')) === '0',
+      'CONCURRENCIA 3: la reactivación rechazada dejó una inscripción activa')
+    console.log('OK CONCURRENCIA 3: con la contracción la fila BAJA es terminal; reactivarla se rechaza (P6609) y no ocupa plaza')
+  } else {
+    // A reactiva (sin confirmar) y B intenta el alta por función de la misma plaza.
+    r = await carrera({
+      A, B, observador, pids, actividad: ACT_ESTADO, etiqueta: 'c3',
+      comoA: 'RESET ROLE;', operacionA: reactivacionTolerante(filaBaja),
+      comoB: comoUsuario(ALUMNO_B), operacionB: altaTolerante(ALUMNO_B, ACT_ESTADO),
+    })
+    exigir(r.resultadoA === 'REACTIVADA' && r.resultadoB === 'CUPO' && r.ocupadas === '1',
+      `CONCURRENCIA 3: A=${r.resultadoA} B=${r.resultadoB} ocupadas=${r.ocupadas}; se esperaba REACTIVADA/CUPO/1`)
+    const conservada = await observador.escalar(
+      `(SELECT count(*) FROM public.inscripciones WHERE actividad_id = ${ACT_ESTADO})`, 'filas_c3')
+    exigir(conservada === '1', `CONCURRENCIA 3: se esperaba 1 fila y hay ${conservada}`)
+    // Y al revés: B (alta por función) confirma primero y la reactivación directa pierde.
+    await observador.ejecutar(
+      `UPDATE public.inscripciones SET estado = 'BAJA', fecha_baja = pg_catalog.now() WHERE id = '${filaBaja}';`,
+      'devolver_a_baja')
+    r = await carrera({
+      A, B, observador, pids, actividad: ACT_ESTADO, etiqueta: 'c3b',
+      comoA: comoUsuario(ALUMNO_B), operacionA: altaTolerante(ALUMNO_B, ACT_ESTADO),
+      comoB: 'RESET ROLE;', operacionB: reactivacionTolerante(filaBaja),
+    })
+    exigir(r.resultadoA === 'ALTA' && r.resultadoB === 'CUPO' && r.ocupadas === '1',
+      `CONCURRENCIA 3b: A=${r.resultadoA} B=${r.resultadoB} ocupadas=${r.ocupadas}; se esperaba ALTA/CUPO/1`)
+    console.log('OK CONCURRENCIA 3: el alta por función y la reactivación directa de una BAJA se ordenan: solo una ocupa la plaza, en ambos órdenes')
+  }
 
   // ------------------------------------------------------------------
   // 4. Mismo alumno y misma actividad: alumno A vs su padre (misma persona inscripta).
