@@ -112,7 +112,6 @@ async function registrante(al, fecha, etiqueta) {
   )
 }
 
-const ids = {}
 
 /** Pasa por la RPC real de la Dirección y devuelve el identificador creado. */
 async function comoDirector(sql, etiqueta) {
