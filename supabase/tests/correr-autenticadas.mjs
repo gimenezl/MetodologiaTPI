@@ -85,6 +85,25 @@ if (!ANFITRIONES_LOCALES.has(new URL(mailpit).hostname)) {
 }
 
 /**
+ * Puerto SMTP del Mailpit del stack. El valor por defecto (54325) es el del stack
+ * compartido; con un stack AISLADO (`EPT_SUPABASE_WORKDIR`) ese puerto pertenece
+ * a otro stack y los códigos del vínculo de cuentas se enviarían al buzón
+ * equivocado o a ninguno. Por eso, con un stack aislado el puerto se exige de
+ * forma explícita (`EPT_TEST_SMTP_PORT`, el `smtp_port` de su `config.toml`) y,
+ * si falta, la corrida se detiene con un mensaje claro en lugar de adivinar.
+ */
+const puertoSmtp = process.env.EPT_TEST_SMTP_PORT ?? (DIRECTORIO_SUPABASE ? undefined : '54325')
+if (!puertoSmtp || !/^\d{1,5}$/u.test(puertoSmtp) || Number(puertoSmtp) < 1 || Number(puertoSmtp) > 65535) {
+  console.error(
+    'FALLO  falta EPT_TEST_SMTP_PORT (o no es un puerto válido). Con un stack aislado ' +
+      '(EPT_SUPABASE_WORKDIR=' + (DIRECTORIO_SUPABASE ?? '') + ') el puerto SMTP de Mailpit no puede ' +
+      'asumirse: indicá el `smtp_port` de su supabase/config.toml, por ejemplo ' +
+      'EPT_TEST_SMTP_PORT=55325.'
+  )
+  process.exit(1)
+}
+
+/**
  * La aplicación habla con la API, pero muchas suites preparan y limpian datos con
  * `docker exec … psql` sobre un CONTENEDOR. Si la API es la del stack aislado y el
  * contenedor es el del compartido (o al revés), la siembra y los `DELETE` caen en
@@ -164,7 +183,7 @@ const resultado = spawnSync('npx', ['playwright', 'test', ...process.argv.slice(
     QR_CREDENCIAL_CLAVES: clavesQr,
     EPT_VINCULO_CUENTAS: 'habilitado',
     EPT_SMTP_HOST: '127.0.0.1',
-    EPT_SMTP_PORT: process.env.EPT_TEST_SMTP_PORT ?? '54325',
+    EPT_SMTP_PORT: puertoSmtp,
     EPT_SMTP_SECURE: 'false',
     EPT_SMTP_REMITENTE: 'no-responder@ept.local',
     EPT_MAILPIT_URL: mailpit,
