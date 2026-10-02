@@ -1,9 +1,11 @@
 # EPT-66 — Unidad C: aplicación + contracción de las inscripciones legadas
 
-> **Estado: preparada, NO publicada para merge.** Esta unidad **no se mergea** hasta que la
-> expansión (unidad B) esté aplicada y verificada en producción. Con la expansión sin
-> aplicar, la aplicación nueva llama a funciones que no existen. La contracción exige además
-> la aplicación nueva ya desplegada y una autorización puntual de Lucas (ver §7).
+> **Estado: PR hacia `main`; verificada en el stack local oficial; sin aplicar en producción.**
+> La aplicación nueva llama a funciones de la expansión: **no se mergea** hasta que la expansión
+> (migración 28) esté aplicada y verificada en producción. La contracción (migración 29) exige
+> además la aplicación nueva ya desplegada y una **autorización puntual de Lucas** (ver §7).
+> El PR muestra solo esta unidad: las unidades A y B ya están en `main` (#33 y #34); #35 se
+> fusionó hacia la rama `codex/ept-66-expansion` y **nunca llegó a `main`**.
 
 ## 1. Qué es
 
@@ -80,6 +82,50 @@ La suite de EPT-59 (`usuarios_permisos_rls.sql`) y las de EPT-11 (`deportes_rls.
 (`inscripcion_hijos_rls.sql`) se ajustaron para aceptar los dos estados (expansión o contracción);
 ver sus comentarios.
 
+### 4b. Verificación en el stack local OFICIAL de Supabase (CLI 2.117.0, PostgreSQL 17.6)
+
+Secuencia idéntica a la de producción: `db reset` desde `main` (ledger = 28) y luego
+`supabase db push` desde esta rama, con **solo** la 29 pendiente (`--dry-run` previo).
+
+| Prueba | Resultado |
+|---|---|
+| `supabase migration list` antes/después | 28 aplicadas y 29 pendiente → 29 aplicadas |
+| Las 26 suites SQL de esta rama | **26 de 26 PASS** (la de la expansión se omite de forma explícita) |
+| Las 14 suites de concurrencia | **14 de 14 PASS** (incluida `inscripciones_legadas_concurrencia.mjs`) |
+| Migración sobre las 3 filas legadas (2 ACTIVO + 1 BAJA), expansión sola y expansión + contracción | PASS en ambos: mismo conteo, misma huella y 3/3 relaciones íntegras |
+| `tipos-generados.mjs` | OK, byte a byte, determinista |
+| `supabase db lint --level warning` | sin errores de esquema |
+| `db advisors --type security` | solo 2 avisos preexistentes de INSERT público (formularios; EPT-68) |
+| `db advisors --type performance` | 5 avisos de rendimiento no bloqueantes (políticas permisivas múltiples de lectura —entre ellas las 3 de `inscripciones`, por diseño— y un `auth_rls_initplan` preexistente en `perfiles`) |
+| `tsc --noEmit`, `npm run lint`, `npm run build` | exit 0 / 0 errores (29 avisos preexistentes) / exit 0 |
+| `tests/cupos-legadas-auth.spec.ts` (nueva, **sin interceptar**: navegador → PostgREST → RLS → funciones) | 5 pasaron: el alumno se inscribe, se da de baja y se reinscribe (la baja es lógica y la reinscripción crea una fila nueva); el navegador no escribe nunca la tabla; con el cupo lleno el alumno ajeno queda en «Sin cupo»; Dirección ve los inscriptos; DOCENTE ve el aviso y no inscribe ni lista |
+| Playwright autenticado completo (`setup` + `chromium-*`) contra `next start` con el ledger en 29 | **1.ª corrida: 531 pasaron, 22 omitidas, 7 fallos** → 4 causas, ninguna defecto de la base ni de la aplicación (ver nota); tras corregir las pruebas y repetir los archivos afectados (`gestion-estudiantes-auth`, `deportes-auth`, `accesos-qr-auth`, `cupos-legadas-auth`): **todas pasan** (25 + el resto) |
+| Playwright base (`chromium` + `pixel-5-chromium`, servidor de desarrollo) | **883 pasaron, 1 omitida (preexistente, solo móvil), 1 *flaky*** (`alumnos-contraste`, pasó en el reintento) |
+
+Nota: `next start` es un build de producción, donde los bancos visuales `/pruebas-ui/*` **no existen
+por diseño**; las pruebas que dependen de ellos se ejecutan en los proyectos base (servidor de
+desarrollo). La suite autenticada de `main` en el ledger 28 dio 546 pasaron / 8 omitidas / 1 fallo,
+y ese único fallo (`alumnos-auth › el banco visual sirve datos sinteticos…`) es exactamente esa
+causa: **pasa al ejecutarse contra el servidor de desarrollo**.
+
+Causas de la 1.ª corrida autenticada (7 fallos), todas corregidas **en las pruebas**:
+
+1. `gestion-estudiantes-auth` (3): borraban `inscripciones` con `DELETE` como propietario; desde la
+   contracción el trigger P6608 lo impide para todos. La limpieza del stack descartable ahora
+   deshabilita los triggers de usuario dentro de la transacción. Además, en Cupos el DOCENTE **ya no
+   inscribe ni lista inscriptos** (contrato de esta unidad): la prueba verifica el aviso y que no hay
+   formulario ni botones.
+2. `deportes-auth › la Data API rechaza escrituras directas…` (1): esperaba `P5582` y `service_role`
+   con DELETE; con la contracción toda escritura directa recibe `42501`. Se actualizó al contrato nuevo
+   y se agregó que el DOCENTE tampoco inscribe por la función.
+3. `accesos-qr-auth` (2): error del arnés de esta corrida, no de la aplicación: el servidor y el
+   ejecutor usaban claves QR efímeras distintas (`NO_RECONOCIDO`). Con la misma clave pasan.
+4. `alumnos-auth › el banco visual…` (1): el banco no existe en un build de producción (por diseño);
+   pasa contra el servidor de desarrollo.
+
+Estas pruebas autenticadas están escritas para el estado FINAL (ledger = 29). Con solo la expansión
+aplicada, las suites **SQL** de esta rama aceptan ambos estados; las autenticadas de Playwright no.
+
 ### Matriz de roles (SQL, contracción)
 
 | Actor | Lee `inscripciones` | Escribe directo | Alta/baja por función | Cupos agregados |
@@ -96,21 +142,21 @@ ver sus comentarios.
 
 ## 5. No probado (límites)
 
-* **Aplicación contra PostgREST y Supabase reales**: no hay stack local oficial, Docker ni acceso a
-  producción en esta sesión. Las pruebas de navegador usan las vistas reales con las peticiones
-  interceptadas; no prueban la base (eso lo hacen las suites SQL).
-* **Suites autenticadas de Playwright** (`*-auth.spec.ts`) y el perfil WebKit (iPhone 13): no
-  ejecutadas.
-* `supabase db reset`, `db lint`, asesores de seguridad y rendimiento, `tipos-generados.mjs`: no
-  ejecutados (ver B §5).
-* **Producción**: nada se consultó ni se modificó.
+* **Producción** (Supabase `ycvrpmrogvjnntnoosbh` y Vercel): no se consultó ni se modificó nada; la
+  sesión de desarrollo no tiene credenciales ni salida de red hacia el proyecto productivo. El ledger
+  remoto, el preflight, el respaldo, la aplicación de la 28 y de la 29 y los recorridos autorizados
+  **no se ejecutaron**.
+* WebKit (perfil `iphone-13-webkit`): no está instalado en el entorno.
+* La paleta del PDF (RNF1) queda para revisión humana.
 
-## 6. Decisión pendiente de Lucas (bloquea solo esa parte)
+## 6. Decisión de Lucas sobre asistencias (resuelta)
 
-DOCENTE hoy lee y escribe asistencias de cualquier menor, y antes de esta unidad también
-inscribía a cualquier alumno. No existe un contrato que defina «alumno a cargo» (EPT-9 §18.2).
-Hasta que se decida: DOCENTE no inscribe ni lee inscripciones (queda cerrado, no abierto), y las
-asistencias **siguen abiertas**. Ver `docs/evidence/EPT-66.md` §7.
+Lucas aprobó la regla del «alumno a cargo»: un DOCENTE está a cargo de un alumno únicamente si el
+alumno tiene matrícula vigente en un curso con una materia asignada y activa a ese docente, o una
+inscripción activa en un grupo deportivo activo que ese docente dicta; el docente no puede atribuir
+un registro a otro docente. Se implementa en una unidad **separada** (D, migración 30), que se
+publica **después** de estabilizar esta. Hasta entonces las asistencias siguen abiertas a cualquier
+DOCENTE. Ver `docs/evidence/EPT-66.md` §7 y `D-asistencias.md`.
 
 ## 7. Plan de despliegue (no ejecutado)
 
@@ -140,7 +186,7 @@ aplicación anterior sin poder escribir. Los datos nunca se tocan en esta unidad
 
 | Riesgo | Dueño |
 |---|---|
-| Asistencias de menores abiertas a cualquier DOCENTE; definición de «alumno a cargo» | Lucas (decisión) → EPT-66 |
+| Asistencias de menores abiertas a cualquier DOCENTE hasta aplicar la unidad D | EPT-66 (unidad D) |
 | Pruebas por rol y E2E completas contra producción, incluidos los recorridos de esta unidad | EPT-67 |
 | Datos ficticios, alta pública de Auth, transporte real, purgas | EPT-68 |
-| `database.generated.ts` actualizado por delta y no regenerado con la CLI oficial | Quien tenga el stack local |
+| ~~`database.generated.ts` por delta~~ → regenerado y verificado byte a byte con la CLI oficial | Resuelto |
