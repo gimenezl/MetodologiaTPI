@@ -1,9 +1,16 @@
 # EPT-66 — Integrar los módulos y normalizar las migraciones
 
-> **Estado: EN CURSO.** Este documento se actualiza con cada unidad de entrega.
-> Unidad A (PR técnico, sin migraciones) lista para revisión. Unidades B
-> (expansión) y C (aplicación + contracción) **pendientes**. EPT-66 no se pasa a
-> Listo hasta que ambas migraciones estén aplicadas y comprobadas en producción.
+> **Estado: EN CURSO.** Documento maestro; el detalle de cada unidad está en su archivo.
+>
+> | Unidad | Contenido | Evidencia | Estado |
+> |---|---|---|---|
+> | A | Correcciones técnicas sin migraciones (este documento, §2–§5) | este archivo | PR publicado, a la espera de revisión y merge de Lucas |
+> | B | Migración de **expansión** + pruebas SQL, de concurrencia y de migración sobre datos | `EPT-66/B-expansion.md` | PR publicado, **sin aplicar en producción** |
+> | C | Aplicación nueva + migración de **contracción** | `EPT-66/C-aplicacion-contraccion.md` | **Preparada como borrador; no se mergea hasta que B esté aplicada y verificada** |
+>
+> EPT-66 **no** pasa a Listo hasta que ambas migraciones estén aplicadas y comprobadas en
+> producción, los recorridos autorizados pasen y no quede un defecto crítico de privacidad
+> (hoy queda uno abierto: §7).
 
 ## 1. Línea base
 
@@ -85,7 +92,15 @@ desborde» solo corre en los perfiles móviles y se omite en escritorio.
 | Arnés SMTP | simulación con `npx` falso: falla con mensaje claro sin puerto o con puerto inválido | OK (simulado) | Local |
 | RNF2 375×812 y 1280×800 | `responsive-regresion.spec.ts` (44 casos) | OK | Local |
 | RNF1 paleta exacta del PDF | PDF de la Parte 2 no disponible | **No verificable** | Revisión humana pendiente |
-| Privilegios, cupo, baja lógica, lectura global, asistencias | unidades B y C | **Pendiente** | — |
+| Cupo serializado sin sobrecupo (2 conexiones reales) | B: `inscripciones_legadas_concurrencia.mjs`; defecto reproducido en la línea base (2 ACTIVO con cupo 1) | OK (emulación PostgreSQL 16) | Local, no stack oficial |
+| Baja lógica, sin DELETE físico ni directo, BAJA inmutable, reinscripción como fila nueva | B/C: `inscripciones_legadas_expansion_rls.sql` (78) y `…_contraccion_rls.sql` (64) | OK (emulación) | Local, no stack oficial |
+| Cierre de la lectura global de pares alumno–actividad (propio, hijo vinculado, hijo ajeno, alumno ajeno, Dirección, DOCENTE, PERSONAL, bloqueado, anónimo) | C: suite de contracción + 4 vistas en navegador con peticiones interceptadas | OK (SQL); navegador solo contra peticiones simuladas | Local |
+| Las 3 filas legadas sobreviven a ambas migraciones | `inscripciones_legadas_migracion_sobre_datos.mjs` (expansión sola y expansión + contracción) | OK con 3 filas **sintéticas** equivalentes; **producción no consultada** | Local |
+| Privilegios heredados de galería, menú y noticias; privilegios por defecto; `search_path` y EXECUTE de `calcular_porcentaje_asistencia` y `verificar_cupo_actividad` | B/C: suites SQL | OK (emulación) | Local |
+| Migraciones 27 → 28 → 29 en producción | — | **No ejecutado** (requiere merge de Lucas y autorización puntual) | No probado |
+| Recorridos productivos tras cada gate (Vercel, cuentas autorizadas) | — | **No ejecutado** | No probado |
+| Asistencias de menores: «alumno a cargo» del DOCENTE | — | **Abierto** (decisión de Lucas) | Pendiente |
+| Matriz transversal de seguridad | — | **No se declara completa** mientras siga el punto anterior | Pendiente |
 
 ## 6. Límites de esta ejecución (no ocultar)
 
@@ -109,15 +124,26 @@ con `rol_actual() IN ('DIRECTOR','DOCENTE')` y **sin vínculo con el alumno**: c
 DOCENTE lee y escribe las asistencias de cualquier menor. No existe un contrato que
 defina «alumno a cargo»: `docs/evidence/EPT-9.md` §18.2 lo registra como «Sin contrato
 reproducible», Jira no lo define y el PDF no estaba disponible. Por eso **no se corrige
-dentro de esta unidad**: requiere una decisión de Lucas (ver la pregunta en el PR y en
+dentro de estas unidades**: requiere una decisión de Lucas (ver la pregunta en los PR y en
 Jira). Mientras siga abierto, la matriz transversal de seguridad **no** se declara
 completa.
 
+La misma decisión alcanza a la **escritura de DOCENTE sobre inscripciones legadas**: las
+unidades B y C la dejan **cerrada** (DOCENTE y PERSONAL reciben 42501), no abierta, hasta que
+se defina qué alumnos están a su cargo.
+
+**Pregunta puntual para Lucas.** ¿Un DOCENTE está «a cargo» de un alumno cuando (A) el alumno
+tiene una matrícula vigente en un curso donde el docente tiene una asignación de materia activa
+(`materias_cursos.profesor_id`, `activo`) o cursa un grupo deportivo activo que el docente dicta
+(`grupos_deportivos.profesor_id`, `activo`) —se leería y escribiría asistencias solo de esos
+alumnos—, o (B) otra regla (indicar cuál)? La opción A reutiliza el modelo que EPT-58 ya define
+(«asignación activa») y no agrega tablas.
+
 ## 8. Reversión
 
-Esta unidad no toca PostgreSQL: revertir sus commits en Git es suficiente y no afecta la
-base. (Para las unidades B y C, revertir Git **no** revierte PostgreSQL: se usarán
-migraciones compensatorias.)
+La unidad A no toca PostgreSQL: revertir sus commits en Git es suficiente y no afecta la base.
+Para las unidades B y C, revertir Git **no** revierte PostgreSQL: se usan migraciones
+compensatorias (ver `B-expansion.md` §8 y `C-aplicacion-contraccion.md` §8).
 
 ## 9. Riesgos derivados
 
