@@ -20,7 +20,7 @@ Sitio: https://grupo12-utn.atlassian.net (proyecto EPT, tablero Kanban del Grupo
 | EPT-4 | Servicios escolares | Listo | 2 | 2 | 02/10/2026 |
 | EPT-5 | Actividades deportivas | Listo | 4 | 4 | 02/10/2026 |
 | EPT-6 | Portal de padres | Listo | 1 | 1 | 02/10/2026 |
-| EPT-7 | Reportes, credencial QR, integración y entrega | Por hacer | 6 | 4 | — |
+| EPT-7 | Reportes, credencial QR, integración y entrega | Listo | 6 | 6 | 02/10/2026 |
 
 Las hijas directas son historias y tareas; las subtareas cuelgan de cada historia (sección 2).
 
@@ -125,7 +125,7 @@ Estado: **Listo**. Creada el 30/08/2026; resuelta el 02/10/2026.
 
 ### EPT-7 — Reportes, credencial QR, integración y entrega
 
-Estado: **Por hacer**. Creada el 30/08/2026; resuelta el —.
+Estado: **Listo**. Creada el 30/08/2026; resuelta el 02/10/2026.
 
 | Clave | Tipo | Resumen | Estado | Creada | Resuelta |
 | --- | --- | --- | --- | --- | --- |
@@ -133,21 +133,20 @@ Estado: **Por hacer**. Creada el 30/08/2026; resuelta el —.
 | EPT-64 | Tarea | RF20 – Emitir la credencial digital QR | Listo | 30/08/2026 | 30/09/2026 |
 | EPT-65 | Tarea | RF21 – Registrar accesos con QR | Listo | 30/08/2026 | 01/10/2026 |
 | EPT-66 | Tarea | Integrar los módulos y normalizar las migraciones | Listo | 30/08/2026 | 02/10/2026 |
-| EPT-67 | Tarea | Ejecutar las pruebas funcionales, por rol y E2E | Por hacer | 30/08/2026 | — |
-| EPT-68 | Tarea | Desplegar, documentar y presentar | Por hacer | 30/08/2026 | — |
+| EPT-67 | Tarea | Ejecutar las pruebas funcionales, por rol y E2E | Listo | 30/08/2026 | 02/10/2026 |
+| EPT-68 | Tarea | Desplegar, documentar y presentar | Listo | 30/08/2026 | 02/10/2026 |
 
 ## 3. Estado de la entrega final
 
 | Ticket | Estado en Jira | Comentario |
 | --- | --- | --- |
 | EPT-66 Integrar los módulos y normalizar las migraciones | Listo (02/10/2026) | Evidencia en `docs/evidence/EPT-66.md` |
-| EPT-67 Ejecutar las pruebas funcionales, por rol y E2E | Por hacer | Evidencia preparada en `docs/evidence/EPT-67.md`; el cierre del ticket lo actualiza la coordinación |
-| EPT-68 Desplegar, documentar y presentar | Por hacer | Evidencia en `docs/evidence/EPT-68.md`; falta la presentación |
-| EPT-7 Reportes, credencial QR, integración y entrega | Por hacer | Se cierra cuando EPT-67 y EPT-68 pasen a Listo |
+| EPT-67 Ejecutar las pruebas funcionales, por rol y E2E | Listo (02/10/2026) | Evidencia en `docs/evidence/EPT-67.md` |
+| EPT-68 Desplegar, documentar y presentar | Listo (02/10/2026) | Evidencia en `docs/evidence/EPT-68.md`; cerrado con las brechas de datos iniciales como pendientes del colegio |
+| EPT-7 Reportes, credencial QR, integración y entrega | Listo (02/10/2026) | Todas sus tareas en Listo |
 
-La entrega final está prevista para el 22/10/2026. Esta bitácora refleja el tablero al momento de la
-consulta: el cambio de estado de EPT-67, EPT-68 y EPT-7 se registra en Jira y se reflejará en una
-actualización posterior de este archivo.
+La entrega final está prevista para el 22/10/2026. Con el cierre del 02/10/2026 el tablero no tiene
+issues abiertos.
 
 ## 4. Observaciones sobre el tablero
 

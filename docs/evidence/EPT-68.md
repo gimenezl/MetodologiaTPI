@@ -1,9 +1,12 @@
 # EPT-68 — Desplegar, documentar y presentar
 
-> **Estado: versión candidata desplegada y manual y bitácora entregados; presentación pendiente.**
-> El inventario de datos iniciales se obtuvo con consultas de **solo lectura** a producción
-> (02/10/2026). No se cargó, modificó ni eliminó ningún dato. Las brechas de la sección 2 son
-> **hallazgos para decisión**, no correcciones hechas. Entrega final: 22/10/2026.
+> **Estado: cerrado en Jira el 02/10/2026 por decisión de Lucas, con las brechas de datos iniciales
+> abiertas como pendientes del colegio.** Versión candidata desplegada; manual, bitácora y
+> presentación entregados. El inventario de datos iniciales se obtuvo con consultas de **solo
+> lectura** a producción. No se cargó, modificó ni eliminó ningún dato, y **no se cargaron datos
+> ficticios**: las brechas de la sección 2 siguen abiertas y dependen de información real del
+> colegio (horarios deportivos, cursos de Inicial y Secundario, cuentas de Personal, recorridos).
+> Entrega final: 22/10/2026.
 
 ## 1. Despliegue de la versión candidata
 
@@ -96,11 +99,11 @@ originales en `docs/evidence/EPT-67.md` §4.1).
 
 | Entregable | Archivo o enlace | Estado |
 | --- | --- | --- |
-| Datos iniciales | Sección 2 de este documento | Inventariado, con brechas abiertas (sección 2.4) |
-| Versión candidata desplegada | Sección 1 de este documento | Desplegada (`main` en `52423fa`, migraciones 30 de 30) |
+| Datos iniciales | Sección 2 de este documento | Inventariado; **no cargados**, brechas abiertas (sección 2.4) por decisión de Lucas |
+| Versión candidata desplegada | Sección 1 de este documento | Desplegada (código verificado en `52423fa`; `main` posterior solo agrega documentación; migraciones 30 de 30) |
 | Manual de usuario | `docs/manual-usuario.md` | Entregado: por rol, credencial QR, escaneo y preguntas frecuentes |
 | Bitácora del tablero | `docs/bitacora-tablero.md` | Entregada con los datos de Jira del 02/10/2026 |
-| Presentación | **Pendiente**; enlace a completar por la coordinación: (a definir) | La arma la coordinación aparte |
+| Presentación | Deck de 10 diapositivas como artefacto privado de Claude (no versionado en el repositorio); se comparte desde su menú Share | Entregada |
 | Evidencia de pruebas | `docs/evidence/EPT-67.md` | Entregada |
 
 ## 4. Datos ficticios de prueba que siguen en producción
