@@ -284,9 +284,11 @@ BEGIN
     PERFORM pg_temp.afirmar(
         (SELECT pg_catalog.count(*) FROM pg_catalog.pg_constraint k
          WHERE k.conrelid = 'public.comprobantes_pago'::REGCLASS AND k.contype = 'p') = 1
-        AND (SELECT k.confdeltype FROM pg_catalog.pg_constraint k
+        AND (SELECT pg_catalog.count(*) FROM pg_catalog.pg_constraint k
+             WHERE k.conrelid = 'public.comprobantes_pago'::REGCLASS AND k.contype = 'f') >= 1
+        AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint k
              WHERE k.conrelid = 'public.comprobantes_pago'::REGCLASS AND k.contype = 'f'
-             ORDER BY k.conname LIMIT 1) = 'r',
+               AND k.confdeltype <> 'r'),
         'A3: clave primaria y claves foráneas con ON DELETE RESTRICT');
     PERFORM pg_temp.afirmar(
         EXISTS (SELECT 1 FROM pg_catalog.pg_indexes i
@@ -629,6 +631,16 @@ BEGIN
     PERFORM pg_temp.negativa(pg_catalog.format($s$
         DELETE FROM public.pagos WHERE id = %L$s$, pg_temp.u(1001)),
         '23503', 'E4: un pago con comprobantes no se borra (ON DELETE RESTRICT)');
+    -- Un pago cuya ÚNICA dependencia es un comprobante (sin imputaciones ni recibo):
+    -- aísla la FK de comprobantes_pago de las FK RESTRICT de EPT-100.
+    INSERT INTO public.pagos (id, padre_id, alumno_id, total_calculado)
+    VALUES (pg_temp.u(1005), pg_temp.u(5), pg_temp.u(2), 1.00);
+    INSERT INTO public.comprobantes_pago (id, pago_id, subido_por, ruta_archivo, tipo_mime, tamano_bytes)
+    VALUES (pg_temp.u(1305), pg_temp.u(1005), pg_temp.u(5),
+            pg_temp.u(1005)::TEXT || '/' || pg_temp.u(1305)::TEXT || '.pdf', 'application/pdf', 10);
+    PERFORM pg_temp.negativa(pg_catalog.format($s$
+        DELETE FROM public.pagos WHERE id = %L$s$, pg_temp.u(1005)),
+        '23503', 'E4: un pago cuya única dependencia es un comprobante tampoco se borra (aísla la FK de comprobantes_pago)');
     PERFORM pg_temp.negativa(pg_catalog.format($s$
         UPDATE public.pagos SET padre_id = %L WHERE id = %L$s$, pg_temp.u(6), pg_temp.u(1001)),
         '23503', 'E4: no se puede cambiar el padre del pago bajo los comprobantes del anterior');

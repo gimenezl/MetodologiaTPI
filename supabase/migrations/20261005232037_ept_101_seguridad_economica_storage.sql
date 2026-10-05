@@ -85,8 +85,19 @@
 --   exigen la política de SELECT de abajo. Es una capacidad temporal: una URL ya
 --   emitida sigue sirviendo hasta que vence aunque la cuenta se bloquee o el
 --   vínculo cambie después; Storage nativo no ofrece revocación instantánea. El
---   bloqueo impide NUEVAS lecturas y NUEVAS firmas. TTL recomendado: 60 segundos;
---   máximo admitido por el contrato: 300 segundos. No se agrega un proxy.
+--   bloqueo impide NUEVAS lecturas y NUEVAS firmas. TTL recomendado: 60 segundos.
+--   LÍMITE VERIFICADO: Storage NO impone un TTL máximo; quien firma con sus
+--   credenciales puede pedir `expiresIn` de un año y el servicio lo acepta
+--   (probado en `economico_storage.mjs`). El tope de 60 s es una disciplina de
+--   los clientes y de las RPC futuras, no una garantía del servicio. Lo que sí
+--   queda acotado: solo puede firmar quien HOY puede leer el archivo (cargador o
+--   DIRECTOR vigentes), así que la capacidad larga reexpone un archivo que esa
+--   persona ya podía descargar. Reducir ese riesgo exigiría un proxy o firmar solo
+--   del lado del servidor, que esta unidad no aprueba (decisión para EPT-109).
+--   Los pagos y sus campos (padre_id, verificado_por, numero_operacion,
+--   motivo_rechazo) se leen completos en el historial del hijo, también por el
+--   estudiante propio; `resumen_comprobantes_pago` informa a quien ve el pago
+--   cuántos archivos tiene y cuándo se cargó el último, sin ruta ni archivo.
 --
 -- ANTI-RECURSIÓN
 --   Los helpers son SECURITY DEFINER con search_path vacío y leen `perfiles`,
@@ -197,13 +208,14 @@ CREATE TABLE public.comprobantes_pago (
         CHECK (tamano_bytes > 0 AND tamano_bytes <= 5242880),
     -- Ata la ruta al pago, al id del comprobante y al tipo: sin traversal, sin
     -- carpetas ajenas y sin nombres libres.
-    CONSTRAINT comprobantes_pago_ruta_coherente CHECK (
+    -- `IS TRUE` evita que un tipo fuera del CASE (resultado NULL) pase el CHECK.
+    CONSTRAINT comprobantes_pago_ruta_coherente CHECK ((
         ruta_archivo = pago_id::TEXT || '/' || id::TEXT || '.' ||
             CASE tipo_mime
                 WHEN 'image/jpeg' THEN 'jpg'
                 WHEN 'image/png' THEN 'png'
                 WHEN 'application/pdf' THEN 'pdf'
-            END),
+            END) IS TRUE),
     -- `infinity` es un TIMESTAMPTZ válido y `DEFAULT NOW()` no lo impide.
     CONSTRAINT comprobantes_pago_creado_en_finito CHECK (pg_catalog.isfinite(creado_en))
 );
@@ -343,8 +355,8 @@ COMMENT ON FUNCTION public.resumen_comprobantes_pago(UUID) IS
 -- ================================================================
 -- 6. BUCKET PRIVADO Y POLÍTICAS DE STORAGE
 -- ================================================================
--- El bucket restringe MIME y tamaño en el servicio (no solo en SQL). Re-ejecutar
--- la migración sobre un bucket existente restablece estos valores.
+-- El bucket restringe MIME y tamaño en el servicio (no solo en SQL). Si el bucket
+-- ya existiera (creado a mano), el ON CONFLICT restablece estos valores.
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES ('comprobantes-pago', 'comprobantes-pago', FALSE, 5242880,
         ARRAY['image/jpeg', 'image/png', 'application/pdf'])
@@ -380,8 +392,9 @@ CREATE POLICY "Comprobantes de pago: lectura por cargador y Dirección"
 -- ================================================================
 -- 7. AUTOVERIFICACIÓN
 -- ================================================================
--- Si una migración futura o un default de plataforma abriera más de lo aprobado,
--- esta migración falla en lugar de dejarlo abierto en silencio.
+-- Si un default de plataforma abriera más de lo aprobado al aplicar esta
+-- migración, ésta falla en lugar de dejarlo abierto en silencio. No vigila
+-- migraciones futuras: eso lo hacen las suites de `supabase/tests`.
 DO $$
 DECLARE
     v_tabla TEXT;

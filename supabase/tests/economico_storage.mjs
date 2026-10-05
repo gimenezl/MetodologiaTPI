@@ -196,7 +196,14 @@ function limpiarEconomia() {
   `)
 }
 
+/** Bucket auxiliar de la prueba «otro bucket»: se retira al sembrar y al terminar, falle lo que falle. */
+async function limpiarOtroBucket() {
+  await http('DELETE', `${STORAGE}/object/ept101-otro`, { ...SERVIDOR, json: { prefixes: ['prueba.png'] } })
+  await http('DELETE', `${STORAGE}/bucket/ept101-otro`, SERVIDOR)
+}
+
 async function limpiarObjetos() {
+  await limpiarOtroBucket()
   // Todo lo que haya bajo las carpetas de los tres pagos del fixture (también lo que
   // un intento de escritura de cliente hubiera dejado, si una política se aflojara).
   const rutas = [...Object.keys(EXT).map(ruta), RUTA_HUERFANA]
@@ -301,14 +308,20 @@ async function sembrar() {
 }
 
 async function limpiarTodo() {
-  try {
-    limpiarEconomia()
-    await limpiarObjetos()
-    limpiarFixture({ prefijoDni: PREFIJO_DNI, prefijoCorreo: PREFIJO_CORREO, dominio: DOMINIO, curso: CURSO })
-    sql(`DELETE FROM auth.users WHERE email = '${correo('sinperfil')}';`)
-  } catch (e) {
-    console.error(`FALLO  la limpieza no terminó: ${e.message}`)
-    conteo.fallos += 1
+  // Cada paso por separado: que uno falle no deja sin limpiar a los demás.
+  const pasos = [
+    ['objetos', () => limpiarObjetos()],
+    ['economía', () => limpiarEconomia()],
+    ['fixture', () => limpiarFixture({ prefijoDni: PREFIJO_DNI, prefijoCorreo: PREFIJO_CORREO, dominio: DOMINIO, curso: CURSO })],
+    ['cuenta sin perfil', () => sql(`DELETE FROM auth.users WHERE email = '${correo('sinperfil')}';`)],
+  ]
+  for (const [nombre, paso] of pasos) {
+    try {
+      await paso()
+    } catch (e) {
+      console.error(`FALLO  la limpieza de ${nombre} no terminó: ${e.message}`)
+      conteo.fallos += 1
+    }
   }
 }
 
@@ -609,6 +622,14 @@ async function main() {
   afirmar(f60.estado === 200 && url60 !== null, 'el cargador obtiene una URL firmada con TTL de 60 s bajo sus credenciales')
   const dl = url60 ? await soloUrl(url60) : { estado: 0, buffer: Buffer.alloc(0) }
   afirmar(dl.estado === 200 && dl.buffer.equals(JPG), 'la URL firmada descarga el archivo sin ninguna cabecera de autorización')
+  // LÍMITE VERIFICADO: Storage no impone un TTL máximo. El tope (60 s recomendado) es disciplina
+  // del cliente y de las RPC futuras; lo que queda acotado es QUIÉN puede firmar (solo quien hoy
+  // puede leer el archivo).
+  const fAnual = await firmar(actores.padreA.token, ruta('c1'), 31_536_000)
+  afirmar(fAnual.estado === 200 && urlFirmada(fAnual) !== null,
+    'LÍMITE DOCUMENTADO: Storage acepta una firma de un año; el tope de TTL no lo impone el servicio')
+  const fAnualAjena = await firmar(actores.copadre.token, ruta('c1'), 31_536_000)
+  afirmar(urlFirmada(fAnualAjena) === null, 'aun con un TTL enorme, quien no puede leer el archivo no obtiene firma')
   const f2 = await firmar(actores.padreA.token, ruta('c1'), 2)
   const url2 = urlFirmada(f2)
   const ahora = url2 ? await soloUrl(url2) : { estado: 0 }
