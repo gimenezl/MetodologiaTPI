@@ -297,6 +297,44 @@ export type Database = {
           },
         ]
       }
+      comprobantes_pago: {
+        Row: {
+          creado_en: string
+          id: string
+          pago_id: string
+          ruta_archivo: string
+          subido_por: string
+          tamano_bytes: number
+          tipo_mime: string
+        }
+        Insert: {
+          creado_en?: string
+          id?: string
+          pago_id: string
+          ruta_archivo: string
+          subido_por: string
+          tamano_bytes: number
+          tipo_mime: string
+        }
+        Update: {
+          creado_en?: string
+          id?: string
+          pago_id?: string
+          ruta_archivo?: string
+          subido_por?: string
+          tamano_bytes?: number
+          tipo_mime?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comprobantes_pago_pago_padre_fk"
+            columns: ["pago_id", "subido_por"]
+            isOneToOne: false
+            referencedRelation: "pagos"
+            referencedColumns: ["id", "padre_id"]
+          },
+        ]
+      }
       confirmaciones_inscripcion: {
         Row: {
           confirmada_en: string
@@ -3811,6 +3849,14 @@ export type Database = {
           operacion_id: string
           perfil_id: string
           vence_en: string
+        }[]
+      }
+      resumen_comprobantes_pago: {
+        Args: { p_pago_id: string }
+        Returns: {
+          cantidad_archivos: number
+          pago_id: string
+          ultima_carga_en: string
         }[]
       }
       revocar_credencial_qr: {
