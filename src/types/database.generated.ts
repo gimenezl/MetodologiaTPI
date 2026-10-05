@@ -560,6 +560,104 @@ export type Database = {
         }
         Relationships: []
       }
+      envios_correo: {
+        Row: {
+          enviado_en: string | null
+          estado: Database["public"]["Enums"]["estado_envio_correo"]
+          fecha_programada: string
+          id: string
+          intentos: number
+          padre_id: string
+          tipo: Database["public"]["Enums"]["tipo_envio_correo"]
+          ultimo_error: string | null
+        }
+        Insert: {
+          enviado_en?: string | null
+          estado?: Database["public"]["Enums"]["estado_envio_correo"]
+          fecha_programada: string
+          id?: string
+          intentos?: number
+          padre_id: string
+          tipo: Database["public"]["Enums"]["tipo_envio_correo"]
+          ultimo_error?: string | null
+        }
+        Update: {
+          enviado_en?: string | null
+          estado?: Database["public"]["Enums"]["estado_envio_correo"]
+          fecha_programada?: string
+          id?: string
+          intentos?: number
+          padre_id?: string
+          tipo?: Database["public"]["Enums"]["tipo_envio_correo"]
+          ultimo_error?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "envios_correo_padre_id_fkey"
+            columns: ["padre_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      facturas: {
+        Row: {
+          alumno_id: string
+          generada_en: string
+          id: string
+          periodo: string
+          total: number
+          vencimiento: string
+        }
+        Insert: {
+          alumno_id: string
+          generada_en?: string
+          id?: string
+          periodo: string
+          total: number
+          vencimiento: string
+        }
+        Update: {
+          alumno_id?: string
+          generada_en?: string
+          id?: string
+          periodo?: string
+          total?: number
+          vencimiento?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facturas_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos"
+            referencedColumns: ["perfil_id"]
+          },
+          {
+            foreignKeyName: "facturas_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos_academicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feriados: {
+        Row: {
+          descripcion: string
+          fecha: string
+        }
+        Insert: {
+          descripcion: string
+          fecha: string
+        }
+        Update: {
+          descripcion?: string
+          fecha?: string
+        }
+        Relationships: []
+      }
       galeria: {
         Row: {
           categoria: string | null
@@ -726,6 +824,45 @@ export type Database = {
         }
         Relationships: []
       }
+      imputaciones_pago: {
+        Row: {
+          activa: boolean
+          alumno_id: string
+          importe: number
+          item_factura_id: string
+          pago_id: string
+        }
+        Insert: {
+          activa?: boolean
+          alumno_id: string
+          importe: number
+          item_factura_id: string
+          pago_id: string
+        }
+        Update: {
+          activa?: boolean
+          alumno_id?: string
+          importe?: number
+          item_factura_id?: string
+          pago_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "imputaciones_pago_item_alumno_fk"
+            columns: ["item_factura_id", "alumno_id"]
+            isOneToOne: false
+            referencedRelation: "items_factura"
+            referencedColumns: ["id", "alumno_id"]
+          },
+          {
+            foreignKeyName: "imputaciones_pago_pago_alumno_fk"
+            columns: ["pago_id", "alumno_id"]
+            isOneToOne: false
+            referencedRelation: "pagos"
+            referencedColumns: ["id", "alumno_id"]
+          },
+        ]
+      }
       inscripciones: {
         Row: {
           actividad_id: number | null
@@ -887,6 +1024,130 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "servicios_escolares"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      items_factura: {
+        Row: {
+          alumno_id: string
+          estado_pago: Database["public"]["Enums"]["estado_pago_item"]
+          factura_id: string
+          id: string
+          importe: number
+          inscripcion_deportiva_id: string | null
+          inscripcion_servicio_id: string | null
+          matricula_id: string | null
+          tarifa_id: string
+          tipo: Database["public"]["Enums"]["concepto_economico"]
+        }
+        Insert: {
+          alumno_id: string
+          estado_pago?: Database["public"]["Enums"]["estado_pago_item"]
+          factura_id: string
+          id?: string
+          importe: number
+          inscripcion_deportiva_id?: string | null
+          inscripcion_servicio_id?: string | null
+          matricula_id?: string | null
+          tarifa_id: string
+          tipo: Database["public"]["Enums"]["concepto_economico"]
+        }
+        Update: {
+          alumno_id?: string
+          estado_pago?: Database["public"]["Enums"]["estado_pago_item"]
+          factura_id?: string
+          id?: string
+          importe?: number
+          inscripcion_deportiva_id?: string | null
+          inscripcion_servicio_id?: string | null
+          matricula_id?: string | null
+          tarifa_id?: string
+          tipo?: Database["public"]["Enums"]["concepto_economico"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "items_factura_factura_alumno_fk"
+            columns: ["factura_id", "alumno_id"]
+            isOneToOne: false
+            referencedRelation: "facturas"
+            referencedColumns: ["id", "alumno_id"]
+          },
+          {
+            foreignKeyName: "items_factura_inscripcion_deportiva_id_fkey"
+            columns: ["inscripcion_deportiva_id"]
+            isOneToOne: false
+            referencedRelation: "inscripciones_deportivas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "items_factura_inscripcion_deportiva_id_fkey"
+            columns: ["inscripcion_deportiva_id"]
+            isOneToOne: false
+            referencedRelation: "inscripciones_deportivas_administracion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "items_factura_inscripcion_deportiva_id_fkey"
+            columns: ["inscripcion_deportiva_id"]
+            isOneToOne: false
+            referencedRelation: "inscripciones_deportivas_detalle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "items_factura_inscripcion_servicio_id_fkey"
+            columns: ["inscripcion_servicio_id"]
+            isOneToOne: false
+            referencedRelation: "inscripciones_servicios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "items_factura_inscripcion_servicio_id_fkey"
+            columns: ["inscripcion_servicio_id"]
+            isOneToOne: false
+            referencedRelation: "inscripciones_servicios_administracion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "items_factura_inscripcion_servicio_id_fkey"
+            columns: ["inscripcion_servicio_id"]
+            isOneToOne: false
+            referencedRelation: "inscripciones_servicios_detalle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "items_factura_matricula_id_fkey"
+            columns: ["matricula_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos_academicos"
+            referencedColumns: ["matricula_id"]
+          },
+          {
+            foreignKeyName: "items_factura_matricula_id_fkey"
+            columns: ["matricula_id"]
+            isOneToOne: false
+            referencedRelation: "matriculas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "items_factura_matricula_id_fkey"
+            columns: ["matricula_id"]
+            isOneToOne: false
+            referencedRelation: "matriculas_administracion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "items_factura_matricula_id_fkey"
+            columns: ["matricula_id"]
+            isOneToOne: false
+            referencedRelation: "matriculas_historial"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "items_factura_tarifa_tipo_fk"
+            columns: ["tarifa_id", "tipo"]
+            isOneToOne: false
+            referencedRelation: "tarifas"
+            referencedColumns: ["id", "concepto"]
           },
         ]
       }
@@ -1268,6 +1529,80 @@ export type Database = {
           },
         ]
       }
+      pagos: {
+        Row: {
+          alumno_id: string
+          creado_en: string
+          estado: Database["public"]["Enums"]["estado_pago"]
+          fecha_transferencia: string | null
+          id: string
+          importe_informado: number | null
+          motivo_rechazo: string | null
+          numero_operacion: string | null
+          padre_id: string
+          total_calculado: number
+          verificado_en: string | null
+          verificado_por: string | null
+        }
+        Insert: {
+          alumno_id: string
+          creado_en?: string
+          estado?: Database["public"]["Enums"]["estado_pago"]
+          fecha_transferencia?: string | null
+          id?: string
+          importe_informado?: number | null
+          motivo_rechazo?: string | null
+          numero_operacion?: string | null
+          padre_id: string
+          total_calculado: number
+          verificado_en?: string | null
+          verificado_por?: string | null
+        }
+        Update: {
+          alumno_id?: string
+          creado_en?: string
+          estado?: Database["public"]["Enums"]["estado_pago"]
+          fecha_transferencia?: string | null
+          id?: string
+          importe_informado?: number | null
+          motivo_rechazo?: string | null
+          numero_operacion?: string | null
+          padre_id?: string
+          total_calculado?: number
+          verificado_en?: string | null
+          verificado_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pagos_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos"
+            referencedColumns: ["perfil_id"]
+          },
+          {
+            foreignKeyName: "pagos_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos_academicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagos_padre_id_fkey"
+            columns: ["padre_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagos_verificado_por_fkey"
+            columns: ["verificado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       paradas_recorrido: {
         Row: {
           fecha_creacion: string
@@ -1524,6 +1859,38 @@ export type Database = {
           },
         ]
       }
+      recibos: {
+        Row: {
+          archivo_path: string | null
+          emitido_en: string
+          id: string
+          numero: number
+          pago_id: string
+        }
+        Insert: {
+          archivo_path?: string | null
+          emitido_en?: string
+          id?: string
+          numero: number
+          pago_id: string
+        }
+        Update: {
+          archivo_path?: string | null
+          emitido_en?: string
+          id?: string
+          numero?: number
+          pago_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recibos_pago_id_fkey"
+            columns: ["pago_id"]
+            isOneToOne: true
+            referencedRelation: "pagos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       roles: {
         Row: {
           id: number
@@ -1589,6 +1956,92 @@ export type Database = {
           id?: string
         }
         Relationships: []
+      }
+      tarifas: {
+        Row: {
+          concepto: Database["public"]["Enums"]["concepto_economico"]
+          creada_en: string
+          deporte_id: string | null
+          desde: string
+          hasta: string | null
+          id: string
+          importe: number
+          nivel_id: number | null
+          servicio_id: string | null
+        }
+        Insert: {
+          concepto: Database["public"]["Enums"]["concepto_economico"]
+          creada_en?: string
+          deporte_id?: string | null
+          desde: string
+          hasta?: string | null
+          id?: string
+          importe: number
+          nivel_id?: number | null
+          servicio_id?: string | null
+        }
+        Update: {
+          concepto?: Database["public"]["Enums"]["concepto_economico"]
+          creada_en?: string
+          deporte_id?: string | null
+          desde?: string
+          hasta?: string | null
+          id?: string
+          importe?: number
+          nivel_id?: number | null
+          servicio_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tarifas_deporte_id_fkey"
+            columns: ["deporte_id"]
+            isOneToOne: false
+            referencedRelation: "deportes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tarifas_nivel_id_fkey"
+            columns: ["nivel_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos_academicos"
+            referencedColumns: ["nivel_id"]
+          },
+          {
+            foreignKeyName: "tarifas_nivel_id_fkey"
+            columns: ["nivel_id"]
+            isOneToOne: false
+            referencedRelation: "matriculas_administracion"
+            referencedColumns: ["nivel_id"]
+          },
+          {
+            foreignKeyName: "tarifas_nivel_id_fkey"
+            columns: ["nivel_id"]
+            isOneToOne: false
+            referencedRelation: "matriculas_historial"
+            referencedColumns: ["nivel_id"]
+          },
+          {
+            foreignKeyName: "tarifas_nivel_id_fkey"
+            columns: ["nivel_id"]
+            isOneToOne: false
+            referencedRelation: "niveles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tarifas_servicio_id_fkey"
+            columns: ["servicio_id"]
+            isOneToOne: false
+            referencedRelation: "recorridos_transporte"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tarifas_servicio_id_fkey"
+            columns: ["servicio_id"]
+            isOneToOne: false
+            referencedRelation: "servicios_escolares"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -3395,12 +3848,16 @@ export type Database = {
       }
     }
     Enums: {
+      concepto_economico: "CUOTA" | "DEPORTE" | "TRANSPORTE" | "COMEDOR"
       dominio_inscripcion: "MATRICULA" | "DEPORTE" | "SERVICIO"
       estado_acceso: "HABILITADO" | "BLOQUEADO"
       estado_alumno: "ACTIVO" | "INACTIVO"
       estado_credencial_qr: "ACTIVA" | "REVOCADA"
+      estado_envio_correo: "PENDIENTE" | "ENVIADO" | "FALLIDO" | "INCIERTO"
       estado_inscripcion_deportiva: "ACTIVA" | "CANCELADA"
       estado_inscripcion_servicio: "ACTIVA" | "CANCELADA"
+      estado_pago: "PENDIENTE_VERIFICACION" | "APROBADO" | "RECHAZADO"
+      estado_pago_item: "PENDIENTE" | "EN_VERIFICACION" | "PAGADO"
       estado_profesor: "ACTIVO" | "INACTIVO"
       motivo_cierre_matricula: "CAMBIO_DE_CURSO" | "INACTIVACION"
       motivo_denegacion_acceso:
@@ -3413,6 +3870,7 @@ export type Database = {
         | "RECORRIDO_DISTINTO"
       resultado_acceso_servicio: "REGISTRADO" | "DENEGADO"
       sentido_acceso_transporte: "IDA" | "VUELTA"
+      tipo_envio_correo: "RECORDATORIO_MENSUAL" | "AVISO_DEUDA"
       tipo_servicio_escolar: "COMEDOR" | "TRANSPORTE"
     }
     CompositeTypes: {
@@ -3544,12 +4002,16 @@ export const Constants = {
   },
   public: {
     Enums: {
+      concepto_economico: ["CUOTA", "DEPORTE", "TRANSPORTE", "COMEDOR"],
       dominio_inscripcion: ["MATRICULA", "DEPORTE", "SERVICIO"],
       estado_acceso: ["HABILITADO", "BLOQUEADO"],
       estado_alumno: ["ACTIVO", "INACTIVO"],
       estado_credencial_qr: ["ACTIVA", "REVOCADA"],
+      estado_envio_correo: ["PENDIENTE", "ENVIADO", "FALLIDO", "INCIERTO"],
       estado_inscripcion_deportiva: ["ACTIVA", "CANCELADA"],
       estado_inscripcion_servicio: ["ACTIVA", "CANCELADA"],
+      estado_pago: ["PENDIENTE_VERIFICACION", "APROBADO", "RECHAZADO"],
+      estado_pago_item: ["PENDIENTE", "EN_VERIFICACION", "PAGADO"],
       estado_profesor: ["ACTIVO", "INACTIVO"],
       motivo_cierre_matricula: ["CAMBIO_DE_CURSO", "INACTIVACION"],
       motivo_denegacion_acceso: [
@@ -3563,6 +4025,7 @@ export const Constants = {
       ],
       resultado_acceso_servicio: ["REGISTRADO", "DENEGADO"],
       sentido_acceso_transporte: ["IDA", "VUELTA"],
+      tipo_envio_correo: ["RECORDATORIO_MENSUAL", "AVISO_DEUDA"],
       tipo_servicio_escolar: ["COMEDOR", "TRANSPORTE"],
     },
   },
