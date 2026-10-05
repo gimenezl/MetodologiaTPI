@@ -55,10 +55,13 @@ CREATE TABLE public.facturas (
     -- Pareja (id, alumno_id) que referencian items_factura y, en la parte 3,
     -- imputaciones_pago: pago e ítem no pueden mezclar alumnos.
     CONSTRAINT facturas_id_alumno_unico UNIQUE (id, alumno_id),
+    -- Fechas finitas: `date_part('day', 'infinity')` es NULL y un CHECK con
+    -- resultado NULL se da por cumplido, así que la comprobación de «día 1» por sí
+    -- sola dejaba pasar `infinity` y `-infinity`.
     CONSTRAINT facturas_periodo_primer_dia
-        CHECK (pg_catalog.date_part('day', periodo) = 1),
+        CHECK (pg_catalog.isfinite(periodo) AND pg_catalog.date_part('day', periodo) = 1),
     CONSTRAINT facturas_vencimiento_dia_diez
-        CHECK (vencimiento = periodo + 9),
+        CHECK (pg_catalog.isfinite(vencimiento) AND vencimiento = periodo + 9),
     CONSTRAINT facturas_total_valido
         CHECK (total <> 'NaN'::NUMERIC AND total >= 0)
 );

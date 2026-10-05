@@ -665,6 +665,33 @@ BEGIN
         VALUES ('DEPORTE', pg_temp.u(205), 0, '2026-12-31', '2026-12-31')$s$,
         'C3: importe cero y vigencia de un solo día [D, D] aceptados');
 
+    -- C3b. Fechas finitas: `infinity` es un DATE válido para PostgreSQL pero no una
+    -- vigencia; la ausencia de fin se expresa con `hasta` NULL.
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.tarifas (concepto, deporte_id, importe, desde)
+        VALUES ('DEPORTE', pg_temp.u(205), 1, 'infinity')$s$,
+        '23514', 'C3b: vigencia desde = infinity');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.tarifas (concepto, deporte_id, importe, desde)
+        VALUES ('DEPORTE', pg_temp.u(205), 1, '-infinity')$s$,
+        '23514', 'C3b: vigencia desde = -infinity');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.tarifas (concepto, deporte_id, importe, desde, hasta)
+        VALUES ('DEPORTE', pg_temp.u(205), 1, '2045-01-01', 'infinity')$s$,
+        '23514', 'C3b: vigencia hasta = infinity (el fin ausente es NULL)');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.tarifas (concepto, deporte_id, importe, desde, hasta)
+        VALUES ('DEPORTE', pg_temp.u(205), 1, '2045-01-01', '-infinity')$s$,
+        '23514', 'C3b: vigencia hasta = -infinity');
+    PERFORM pg_temp.negativa($s$
+        UPDATE public.tarifas SET hasta = 'infinity' WHERE id = pg_temp.u(407)$s$,
+        '23514', 'C3b: UPDATE de la vigencia hacia infinity');
+    PERFORM pg_temp.positiva(pg_catalog.format($s$
+        INSERT INTO public.tarifas (concepto, nivel_id, importe, desde, hasta)
+        VALUES ('CUOTA', %s, 1, '2060-01-01', '2060-12-31'),
+               ('CUOTA', %s, 1, '2061-01-01', NULL)$s$, v_nivel_vig, v_nivel_vig),
+        'C3b: fechas finitas válidas y fin ausente expresado con NULL');
+
     -- C4. Vigencias: rango cerrado [desde, hasta], hasta NULL = sin fin.
     PERFORM pg_temp.negativa($s$
         INSERT INTO public.tarifas (concepto, deporte_id, importe, desde, hasta)
@@ -784,6 +811,38 @@ BEGIN
         INSERT INTO public.facturas (alumno_id, periodo, vencimiento, total)
         VALUES (pg_temp.u(5), '2027-03-01', '2027-03-10', 0)$s$,
         '23503', 'D4: el titular debe ser un alumno (un padre no lo es)');
+    -- D2b. Fechas finitas: `date_part('day', 'infinity')` es NULL y un CHECK con
+    -- resultado NULL se da por cumplido; sin `isfinite` pasaban `infinity` y
+    -- `-infinity` como período y como vencimiento.
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.facturas (alumno_id, periodo, vencimiento, total)
+        VALUES (pg_temp.u(2), 'infinity', 'infinity', 0)$s$,
+        '23514', 'D2b: período y vencimiento = infinity');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.facturas (alumno_id, periodo, vencimiento, total)
+        VALUES (pg_temp.u(2), '-infinity', '-infinity', 0)$s$,
+        '23514', 'D2b: período y vencimiento = -infinity');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.facturas (alumno_id, periodo, vencimiento, total)
+        VALUES (pg_temp.u(2), 'infinity', '2027-03-10', 0)$s$,
+        '23514', 'D2b: período = infinity con vencimiento finito');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.facturas (alumno_id, periodo, vencimiento, total)
+        VALUES (pg_temp.u(2), '2027-03-01', 'infinity', 0)$s$,
+        '23514', 'D2b: período finito con vencimiento = infinity');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.facturas (alumno_id, periodo, vencimiento, total)
+        VALUES (pg_temp.u(2), '2027-03-01', '-infinity', 0)$s$,
+        '23514', 'D2b: período finito con vencimiento = -infinity');
+    PERFORM pg_temp.negativa($s$
+        UPDATE public.facturas SET periodo = 'infinity' WHERE id = pg_temp.u(803)$s$,
+        '23514', 'D2b: UPDATE del período a infinity');
+    PERFORM pg_temp.positiva($s$
+        INSERT INTO public.facturas (alumno_id, periodo, vencimiento, total)
+        VALUES (pg_temp.u(3), '2028-02-01', '2028-02-10', 0),
+               (pg_temp.u(3), '2028-12-01', '2028-12-10', 0)$s$,
+        'D2b: fechas finitas válidas (febrero y diciembre) siguen aceptadas');
+
     PERFORM pg_temp.negativa($s$
         UPDATE public.facturas SET periodo = '2026-11-02' WHERE id = pg_temp.u(801)$s$,
         '23514', 'D5: UPDATE del período a un día que no es el primero');
@@ -1054,6 +1113,23 @@ BEGIN
         VALUES (pg_temp.u(5), pg_temp.u(5), 1)$s$,
         '23503', 'F2: el hijo debe ser un alumno');
 
+    -- F2b. La fecha de transferencia, si se informa, es finita.
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.pagos (padre_id, alumno_id, total_calculado, fecha_transferencia)
+        VALUES (pg_temp.u(5), pg_temp.u(2), 1, 'infinity')$s$,
+        '23514', 'F2b: fecha de transferencia = infinity');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.pagos (padre_id, alumno_id, total_calculado, fecha_transferencia)
+        VALUES (pg_temp.u(5), pg_temp.u(2), 1, '-infinity')$s$,
+        '23514', 'F2b: fecha de transferencia = -infinity');
+    PERFORM pg_temp.negativa($s$
+        UPDATE public.pagos SET fecha_transferencia = 'infinity' WHERE id = pg_temp.u(1001)$s$,
+        '23514', 'F2b: UPDATE de la fecha de transferencia a infinity');
+    PERFORM pg_temp.positiva($s$
+        INSERT INTO public.pagos (padre_id, alumno_id, total_calculado, fecha_transferencia)
+        VALUES (pg_temp.u(5), pg_temp.u(3), 1, '2026-11-30')$s$,
+        'F2b: fecha de transferencia finita válida');
+
     -- F3. La decisión de Dirección deja un rastro coherente con el estado.
     PERFORM pg_temp.negativa($s$
         INSERT INTO public.pagos (padre_id, alumno_id, total_calculado, estado)
@@ -1308,6 +1384,16 @@ BEGIN
         (SELECT pg_catalog.count(*) FROM public.feriados WHERE fecha <> '2026-12-25') = 0,
         'H2: la migración no cargó ningún calendario real');
 
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.feriados (fecha, descripcion) VALUES ('infinity', 'Infinito')$s$,
+        '23514', 'H2b: feriado con fecha infinity');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.feriados (fecha, descripcion) VALUES ('-infinity', 'Menos infinito')$s$,
+        '23514', 'H2b: feriado con fecha -infinity');
+    PERFORM pg_temp.positiva($s$
+        INSERT INTO public.feriados (fecha, descripcion) VALUES ('2027-05-25', 'Revolución de Mayo')$s$,
+        'H2b: feriado con fecha finita válida');
+
     -- H3. Envíos de correo.
     PERFORM pg_temp.positiva($s$
         INSERT INTO public.envios_correo (padre_id, tipo, fecha_programada)
@@ -1327,6 +1413,14 @@ BEGIN
                (pg_temp.u(5), 'RECORDATORIO_MENSUAL', '2026-12-05'),
                (pg_temp.u(6), 'RECORDATORIO_MENSUAL', '2026-11-05')$s$,
         'H3: otro tipo, otra fecha u otro padre conviven');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.envios_correo (padre_id, tipo, fecha_programada)
+        VALUES (pg_temp.u(6), 'AVISO_DEUDA', 'infinity')$s$,
+        '23514', 'H3: fecha programada = infinity');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.envios_correo (padre_id, tipo, fecha_programada)
+        VALUES (pg_temp.u(6), 'AVISO_DEUDA', '-infinity')$s$,
+        '23514', 'H3: fecha programada = -infinity');
     PERFORM pg_temp.negativa($s$
         INSERT INTO public.envios_correo (padre_id, tipo, fecha_programada, estado)
         VALUES (pg_temp.u(6), 'AVISO_DEUDA', '2026-11-05', 'ENVIADO')$s$,

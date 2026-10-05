@@ -70,6 +70,8 @@ CREATE TABLE public.pagos (
     CONSTRAINT pagos_importe_informado_valido
         CHECK (importe_informado IS NULL
                OR (importe_informado <> 'NaN'::NUMERIC AND importe_informado >= 0)),
+    CONSTRAINT pagos_fecha_transferencia_finita
+        CHECK (fecha_transferencia IS NULL OR pg_catalog.isfinite(fecha_transferencia)),
     CONSTRAINT pagos_numero_operacion_no_vacio
         CHECK (numero_operacion IS NULL OR pg_catalog.btrim(numero_operacion, E' \t\r\n') <> ''),
     -- La decisión de Dirección deja rastro completo y coherente con el estado.
@@ -201,6 +203,8 @@ CREATE TABLE public.envios_correo (
     -- cubre la FK hacia perfiles.
     CONSTRAINT envios_correo_unico_por_padre_tipo_fecha
         UNIQUE (padre_id, tipo, fecha_programada),
+    CONSTRAINT envios_correo_fecha_finita
+        CHECK (pg_catalog.isfinite(fecha_programada)),
     CONSTRAINT envios_correo_intentos_validos CHECK (intentos >= 0),
     -- Solo un envío confirmado tiene instante de envío. INCIERTO no lo tiene: no
     -- se sabe si salió, y por eso no se reintenta (EPT-85).

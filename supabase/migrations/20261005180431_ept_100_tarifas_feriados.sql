@@ -109,8 +109,11 @@ CREATE TABLE public.tarifas (
     -- `>= 0` por sí solo acepta NaN, que PostgreSQL ordena por encima de todo.
     CONSTRAINT tarifas_importe_valido
         CHECK (importe <> 'NaN'::NUMERIC AND importe >= 0),
+    -- `infinity` es un DATE válido para PostgreSQL: se rechaza explícitamente. La
+    -- ausencia de fin se expresa con `hasta` NULL, no con una fecha infinita.
     CONSTRAINT tarifas_vigencia_valida
-        CHECK (hasta IS NULL OR hasta >= desde),
+        CHECK (pg_catalog.isfinite(desde)
+               AND (hasta IS NULL OR (pg_catalog.isfinite(hasta) AND hasta >= desde))),
     -- Sin solapamiento por referencia, con la convención cerrada [desde, hasta].
     -- Tres exclusiones parciales: cada una cubre una referencia y su índice GiST
     -- sirve además a la FK correspondiente, de modo que no hace falta duplicarlo.
@@ -192,6 +195,9 @@ CREATE TRIGGER verificar_tarifa_servicio_antes_de_escribir
 CREATE TABLE public.feriados (
     fecha DATE PRIMARY KEY,
     descripcion TEXT NOT NULL,
+    -- `infinity` y `-infinity` son DATE válidos para PostgreSQL pero no un feriado.
+    CONSTRAINT feriados_fecha_finita
+        CHECK (pg_catalog.isfinite(fecha)),
     CONSTRAINT feriados_descripcion_valida
         CHECK (pg_catalog.btrim(descripcion, E' \t\r\n') <> '')
 );
