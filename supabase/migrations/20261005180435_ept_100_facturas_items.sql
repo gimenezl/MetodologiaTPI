@@ -30,6 +30,11 @@
 --   tarifa, que puede cambiar su importe o su vigencia después. La tarifa aplicable
 --   es la vigente el primer día del mes del período, aunque la factura se genere
 --   el mes anterior (EPT-83); esa selección y su verificación son de EPT-104.
+--   «Se conserva» significa que los cambios ACADÉMICOS posteriores no lo alteran. Esta
+--   unidad NO impide reescribir el histórico económico: nada aquí protege contra un
+--   UPDATE de `importe`, `total` o `estado_pago` por parte del propietario o de
+--   `service_role` (los roles de aplicación no tienen ningún grant). Esa inmutabilidad
+--   y sus transiciones son de EPT-101/104.
 --   Las comprobaciones de abajo se hacen AL ESCRIBIR el ítem. No exigen que el
 --   curso, la inscripción o el servicio de origen conserven después el mismo
 --   nivel, deporte o tipo: los cambios académicos posteriores (un curso que cambia
@@ -39,7 +44,10 @@
 --   Comportamiento técnico conservado, sin ser un flujo de corrección: el trigger
 --   también se dispara en UPDATE de alumno_id, tipo, tarifa_id o del origen y
 --   vuelve a contrastar contra los datos VIGENTES (puede dar P6803 tras un cambio
---   académico). No se dispara por `importe` ni por `estado_pago`. Esta unidad NO
+--   académico). Se dispara cuando el UPDATE NOMBRA alguna de esas columnas, aunque no
+--   cambie su valor: un UPDATE de fila completa sobre un ítem de una factura vieja cuyo
+--   curso cambió de nivel puede dar P6803. Las escrituras futuras deben actualizar solo
+--   las columnas que cambian. No se dispara por `importe` ni por `estado_pago`. Esta unidad NO
 --   autoriza editar ni refacturar facturas emitidas ni define un flujo de
 --   corrección histórica: eso, si hace falta, es una unidad posterior con su
 --   propia decisión.
@@ -190,8 +198,9 @@ CREATE INDEX idx_items_factura_inscripcion_servicio
 --   TRANSPORTE → servicio de la tarifa = servicio de la inscripción
 --   COMEDOR    → ídem; la tarifa ya es del tipo de servicio correcto (parte 1)
 -- Lee la tarifa y la matrícula o inscripción de origen con FOR SHARE, de modo que
--- la comprobación vea un estado confirmado y estable mientras se escribe el ítem:
--- un cambio concurrente de la tarifa o del origen espera a esta transacción. Es
+-- la comprobación vea la tarifa y la fila de origen confirmadas y estables mientras
+-- se escribe el ítem: un cambio concurrente de ellas espera a esta transacción. El
+-- curso del que se deriva el nivel de una cuota NO se bloquea. Es
 -- una garantía AL ESCRIBIR, no una invariante permanente: no bloquea `cursos` ni
 -- la edición de nada académico, y un cambio posterior (por ejemplo del nivel de un
 -- curso) es legítimo y NO invalida el ítem, que conserva su tarifa, su importe y su
