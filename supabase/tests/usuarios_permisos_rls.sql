@@ -587,6 +587,10 @@ BEGIN
     -- autenticado y por eso no figuran en esta batería. Cada intento se revierte.
     PERFORM pg_temp.rpc('public.anular_acceso_servicio', 'x', pg_catalog.format('public.anular_acceso_servicio(%L, %L)', CRED, 'Prueba de batería'));
     PERFORM pg_temp.rpc('public.listar_accesos_servicios', 'n', 'public.listar_accesos_servicios(NULL, NULL, NULL, 10, 0)');
+    -- EPT-101: registro saneado del comprobante de un pago. La batería no tiene pagos: el pago
+    -- consultado no existe y toda cuenta (incluso la bloqueada) recibe cero filas; el alcance por
+    -- actor sobre pagos reales lo prueban `economico_rls.sql` y `economico_storage.mjs`.
+    PERFORM pg_temp.rpc('public.resumen_comprobantes_pago', 'n', pg_catalog.format('public.resumen_comprobantes_pago(%L)', pg_temp.u('01')));
     PERFORM pg_temp.rpc('public.configurar_horario_materia', 'x', pg_catalog.format('public.configurar_horario_materia(%L, 2::smallint, %L, %L, NULL)', ASIG, '09:00', '10:00'));
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria', 'n', 'public.consultar_compatibilidad_horaria()');
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria_alumno', 'n', pg_catalog.format('public.consultar_compatibilidad_horaria_alumno(%L)', EST));

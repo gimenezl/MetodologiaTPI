@@ -262,10 +262,13 @@ BEGIN
         PERFORM pg_temp.afirmar(pg_catalog.to_regclass('public.' || v_tabla) IS NOT NULL,
             'A1: existe public.' || v_tabla);
     END LOOP;
+    -- EPT-101 creó `comprobantes_pago` (aprobada el 05/10/2026; su estructura y su
+    -- seguridad las prueba `economico_rls.sql`). `envios_correo_facturas` sigue
+    -- pendiente de decisión y no se crea.
     PERFORM pg_temp.afirmar(
-        pg_catalog.to_regclass('public.comprobantes_pago') IS NULL
+        pg_catalog.to_regclass('public.comprobantes_pago') IS NOT NULL
         AND pg_catalog.to_regclass('public.envios_correo_facturas') IS NULL,
-        'A1: no se crearon comprobantes_pago ni envios_correo_facturas (pendientes de aprobación)');
+        'A1: existe comprobantes_pago (EPT-101) y no se creó envios_correo_facturas (pendiente de decisión)');
 
     -- A2. Ninguna columna monetaria usa FLOAT/REAL/MONEY, y toda columna de
     -- importe es NUMERIC(12,2).
@@ -495,37 +498,47 @@ DECLARE
     v_funcion TEXT;
     v_n INTEGER;
     v_estado TEXT;
+    v_esperado TEXT;
 BEGIN
     FOREACH v_tabla IN ARRAY v_tablas LOOP
-        -- B1. RLS habilitada y sin ninguna política (EPT-101 agrega el acceso).
+        -- B1. RLS habilitada. EPT-100 las dejó sin política permisiva (acceso
+        -- cerrado); EPT-101 abre únicamente lectura (SELECT) para authenticated y
+        -- conserva la RESTRICTIVE de bloqueo de EPT-59. Aquí se verifica que la
+        -- apertura no pasó de SELECT; la matriz por actor es de `economico_rls.sql`.
         PERFORM pg_temp.afirmar(
             (SELECT c.relrowsecurity FROM pg_catalog.pg_class c
              WHERE c.oid = pg_catalog.to_regclass('public.' || v_tabla)),
             'B1: RLS habilitada en ' || v_tabla);
         SELECT pg_catalog.count(*) INTO v_n FROM pg_catalog.pg_policies p
-        WHERE p.schemaname = 'public' AND p.tablename = v_tabla AND p.permissive = 'PERMISSIVE';
-        PERFORM pg_temp.afirmar(v_n = 0, 'B1: ' || v_tabla || ' no tiene políticas permisivas');
-        -- La única política es la RESTRICTIVE de bloqueo que EPT-59 exige a toda
-        -- tabla nueva: no concede nada, solo restringe.
+        WHERE p.schemaname = 'public' AND p.tablename = v_tabla
+          AND p.permissive = 'PERMISSIVE'
+          AND (p.cmd <> 'SELECT' OR p.roles <> ARRAY['authenticated']::NAME[]);
+        PERFORM pg_temp.afirmar(v_n = 0,
+            'B1: ' || v_tabla || ' no tiene políticas permisivas que no sean SELECT para authenticated');
+        -- La política RESTRICTIVE de bloqueo que EPT-59 exige a toda tabla nueva
+        -- sigue presente, única en su clase.
         SELECT pg_catalog.count(*) INTO v_n FROM pg_catalog.pg_policies p
-        WHERE p.schemaname = 'public' AND p.tablename = v_tabla;
+        WHERE p.schemaname = 'public' AND p.tablename = v_tabla AND p.permissive = 'RESTRICTIVE';
         PERFORM pg_temp.afirmar(v_n = 1 AND EXISTS (
             SELECT 1 FROM pg_catalog.pg_policies p
             WHERE p.schemaname = 'public' AND p.tablename = v_tabla
               AND p.permissive = 'RESTRICTIVE' AND p.cmd = 'ALL'
               AND p.policyname = 'Bloqueo de acceso sin datos protegidos'
               AND p.roles = ARRAY['authenticated']::NAME[]),
-            'B1: ' || v_tabla || ' solo tiene la política RESTRICTIVE de bloqueo (EPT-59)');
+            'B1: ' || v_tabla || ' conserva su única política RESTRICTIVE de bloqueo (EPT-59)');
 
         -- B2. Privilegio efectivo (incluye herencia de roles y PUBLIC) y por columna.
+        -- anon: nada. authenticated: nada de escritura; SELECT lo concede EPT-101.
         FOREACH v_rol IN ARRAY ARRAY['anon', 'authenticated'] LOOP
             FOREACH v_privilegio IN ARRAY ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE',
                                                 'TRUNCATE', 'REFERENCES', 'TRIGGER'] LOOP
+                CONTINUE WHEN v_rol = 'authenticated' AND v_privilegio = 'SELECT';
                 PERFORM pg_temp.afirmar(
                     NOT pg_catalog.has_table_privilege(v_rol, 'public.' || v_tabla, v_privilegio),
                     'B2: ' || v_rol || ' sin ' || v_privilegio || ' sobre ' || v_tabla);
             END LOOP;
             FOREACH v_privilegio IN ARRAY ARRAY['SELECT', 'INSERT', 'UPDATE', 'REFERENCES'] LOOP
+                CONTINUE WHEN v_rol = 'authenticated' AND v_privilegio = 'SELECT';
                 PERFORM pg_temp.afirmar(
                     NOT pg_catalog.has_any_column_privilege(v_rol, 'public.' || v_tabla, v_privilegio),
                     'B2: ' || v_rol || ' sin ' || v_privilegio || ' por columna en ' || v_tabla);
@@ -592,16 +605,21 @@ BEGIN
                 EXCEPTION WHEN OTHERS THEN
                     GET STACKED DIAGNOSTICS v_estado = RETURNED_SQLSTATE;
                 END;
-                IF v_estado IS DISTINCT FROM '42501' THEN
+                -- Con EPT-101 `authenticated` puede LEER (la matriz por fila es de
+                -- `economico_rls.sql`); todo lo demás y todo `anon` siguen en 42501.
+                v_esperado := CASE WHEN v_rol = 'authenticated' AND v_privilegio = 'SELECT'
+                                   THEN NULL ELSE '42501' END;
+                IF v_estado IS DISTINCT FROM v_esperado THEN
                     RESET ROLE;
-                    RAISE EXCEPTION 'FALLO B6: % con % sobre % devolvió % en vez de 42501',
+                    RAISE EXCEPTION 'FALLO B6: % con % sobre % devolvió % en vez de lo esperado',
                         v_rol, v_privilegio, v_tabla, COALESCE(v_estado, 'éxito');
                 END IF;
             END LOOP;
         END LOOP;
         RESET ROLE;
         PERFORM pg_temp.afirmar(TRUE,
-            'B6: ' || v_rol || ' (con JWT de director) recibe 42501 en SELECT/INSERT/UPDATE/DELETE/TRUNCATE de las ocho tablas');
+            'B6: ' || v_rol || ' (con JWT de director) recibe 42501 en INSERT/UPDATE/DELETE/TRUNCATE de las ocho tablas'
+            || CASE WHEN v_rol = 'authenticated' THEN ' y puede SELECT (EPT-101)' ELSE ' y también en SELECT' END);
     END LOOP;
     PERFORM pg_catalog.set_config('request.jwt.claims', '', TRUE);
 END;
