@@ -72,6 +72,12 @@ CREATE TABLE public.pagos (
                OR (importe_informado <> 'NaN'::NUMERIC AND importe_informado >= 0)),
     CONSTRAINT pagos_fecha_transferencia_finita
         CHECK (fecha_transferencia IS NULL OR pg_catalog.isfinite(fecha_transferencia)),
+    -- `infinity` y `-infinity` son valores válidos de TIMESTAMPTZ. `DEFAULT NOW()` no los
+    -- impide: el valor puede escribirse explícitamente. Los NULL legítimos se conservan.
+    CONSTRAINT pagos_creado_en_finito
+        CHECK (pg_catalog.isfinite(creado_en)),
+    CONSTRAINT pagos_verificado_en_finito
+        CHECK (verificado_en IS NULL OR pg_catalog.isfinite(verificado_en)),
     CONSTRAINT pagos_numero_operacion_no_vacio
         CHECK (numero_operacion IS NULL OR pg_catalog.btrim(numero_operacion, E' \t\r\n') <> ''),
     -- La decisión de Dirección deja rastro completo y coherente con el estado.
@@ -177,6 +183,8 @@ CREATE TABLE public.recibos (
     CONSTRAINT recibos_pago_unico UNIQUE (pago_id),
     CONSTRAINT recibos_numero_unico UNIQUE (numero),
     CONSTRAINT recibos_numero_positivo CHECK (numero > 0),
+    -- `infinity` es un TIMESTAMPTZ válido y `DEFAULT NOW()` no lo impide.
+    CONSTRAINT recibos_emitido_en_finito CHECK (pg_catalog.isfinite(emitido_en)),
     CONSTRAINT recibos_archivo_path_no_vacio
         CHECK (archivo_path IS NULL OR pg_catalog.btrim(archivo_path, E' \t\r\n') <> '')
 );
@@ -205,6 +213,9 @@ CREATE TABLE public.envios_correo (
         UNIQUE (padre_id, tipo, fecha_programada),
     CONSTRAINT envios_correo_fecha_finita
         CHECK (pg_catalog.isfinite(fecha_programada)),
+    -- Lo escribe quien envía: `infinity` no es un instante de envío. NULL se conserva.
+    CONSTRAINT envios_correo_enviado_en_finito
+        CHECK (enviado_en IS NULL OR pg_catalog.isfinite(enviado_en)),
     CONSTRAINT envios_correo_intentos_validos CHECK (intentos >= 0),
     -- Solo un envío confirmado tiene instante de envío. INCIERTO no lo tiene: no
     -- se sabe si salió, y por eso no se reintenta (EPT-85).

@@ -24,7 +24,16 @@
 --   F. pagos: nulabilidad por etapa, verificación, operación única;
 --   G. imputaciones: mismo hijo, una activa por ítem;
 --   H. recibos, feriados y envíos de correo;
---   I. límites conocidos: coerción de escala de NUMERIC(12,2).
+--   I. límites conocidos: coerción de escala de NUMERIC(12,2);
+--   J. coherencia al facturar: un cambio académico posterior (nivel de un curso,
+--      por el camino autorizado del DIRECTOR) es legítimo y el ítem conserva
+--      alumno, tarifa e importe. Contrato de un ítem aislado; la consistencia de
+--      un lote mensual de facturación es de EPT-104.
+--
+-- Fechas finitas: las 7 columnas DATE y las 6 TIMESTAMPTZ de las ocho tablas
+-- rechazan `infinity` y `-infinity` (secciones C3b/C3c, D2b/D2c, F2b/F4b, H1b,
+-- H2b, H3/H3b y el control de catálogo A12). `DEFAULT NOW()` no sustituye la
+-- restricción.
 --
 -- NO verifica (corresponde a EPT-101 y siguientes): CRUD por actor, archivos,
 -- aprobación, reserva/liberación, numeración, totales ni vistas de saldo.
@@ -446,6 +455,25 @@ BEGIN
     WHERE d.refobjid = ANY (ARRAY(SELECT pg_catalog.to_regclass('public.' || t) FROM pg_catalog.unnest(v_esperadas) AS t))
       AND d.deptype IN ('a', 'i');
     PERFORM pg_temp.afirmar(v_n = 0, 'A11: ninguna secuencia ni identidad asociada a las ocho tablas');
+
+    -- A12. Toda columna temporal (DATE y TIMESTAMPTZ) de las ocho tablas tiene una
+    -- restricción CHECK con isfinite. `DEFAULT NOW()` no sustituye la restricción.
+    SELECT pg_catalog.count(*) INTO v_n
+    FROM information_schema.columns c
+    WHERE c.table_schema = 'public' AND c.table_name = ANY (v_esperadas)
+      AND c.data_type IN ('date', 'timestamp with time zone');
+    PERFORM pg_temp.afirmar(v_n = 13, 'A12: 13 columnas temporales (7 DATE + 6 TIMESTAMPTZ) (got ' || v_n || ')');
+    SELECT pg_catalog.count(*) INTO v_n
+    FROM information_schema.columns c
+    WHERE c.table_schema = 'public' AND c.table_name = ANY (v_esperadas)
+      AND c.data_type IN ('date', 'timestamp with time zone')
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_catalog.pg_constraint k
+        WHERE k.conrelid = pg_catalog.to_regclass('public.' || c.table_name)
+          AND k.contype = 'c'
+          AND pg_catalog.pg_get_constraintdef(k.oid) LIKE '%isfinite(' || c.column_name || ')%');
+    PERFORM pg_temp.afirmar(v_n = 0,
+        'A12: toda columna temporal tiene un CHECK con isfinite (sin restricción: ' || v_n || ')');
 END;
 $$;
 
@@ -692,6 +720,30 @@ BEGIN
                ('CUOTA', %s, 1, '2061-01-01', NULL)$s$, v_nivel_vig, v_nivel_vig),
         'C3b: fechas finitas válidas y fin ausente expresado con NULL');
 
+    -- C3c. TIMESTAMPTZ finito: `creada_en` tiene DEFAULT NOW(), pero un valor explícito
+    -- `infinity` o `-infinity` es válido para PostgreSQL y el DEFAULT no lo impide.
+    PERFORM pg_temp.negativa(pg_catalog.format($s$
+        INSERT INTO public.tarifas (concepto, nivel_id, importe, desde, hasta, creada_en)
+        VALUES ('CUOTA', %s, 1, '2059-01-01', '2059-12-31', 'infinity')$s$, v_nivel_vig),
+        '23514', 'C3c: creada_en = infinity (INSERT)');
+    PERFORM pg_temp.negativa(pg_catalog.format($s$
+        INSERT INTO public.tarifas (concepto, nivel_id, importe, desde, hasta, creada_en)
+        VALUES ('CUOTA', %s, 1, '2059-01-01', '2059-12-31', '-infinity')$s$, v_nivel_vig),
+        '23514', 'C3c: creada_en = -infinity (INSERT)');
+    PERFORM pg_temp.negativa($s$
+        UPDATE public.tarifas SET creada_en = 'infinity' WHERE id = pg_temp.u(407)$s$,
+        '23514', 'C3c: creada_en = infinity (UPDATE)');
+    PERFORM pg_temp.negativa($s$
+        UPDATE public.tarifas SET creada_en = '-infinity' WHERE id = pg_temp.u(407)$s$,
+        '23514', 'C3c: creada_en = -infinity (UPDATE)');
+    PERFORM pg_temp.positiva(pg_catalog.format($s$
+        INSERT INTO public.tarifas (concepto, nivel_id, importe, desde, hasta, creada_en)
+        VALUES ('CUOTA', %s, 1, '2059-01-01', '2059-12-31', '2026-01-15 12:00:00+00')$s$, v_nivel_vig),
+        'C3c: creada_en con un instante válido (INSERT)');
+    PERFORM pg_temp.positiva($s$
+        UPDATE public.tarifas SET creada_en = '2026-01-02 00:00:00+00' WHERE id = pg_temp.u(407)$s$,
+        'C3c: creada_en con un instante válido (UPDATE)');
+
     -- C4. Vigencias: rango cerrado [desde, hasta], hasta NULL = sin fin.
     PERFORM pg_temp.negativa($s$
         INSERT INTO public.tarifas (concepto, deporte_id, importe, desde, hasta)
@@ -842,6 +894,29 @@ BEGIN
         VALUES (pg_temp.u(3), '2028-02-01', '2028-02-10', 0),
                (pg_temp.u(3), '2028-12-01', '2028-12-10', 0)$s$,
         'D2b: fechas finitas válidas (febrero y diciembre) siguen aceptadas');
+
+    -- D2c. `generada_en` finito: DEFAULT NOW() no impide un valor explícito infinito.
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.facturas (alumno_id, periodo, vencimiento, total, generada_en)
+        VALUES (pg_temp.u(3), '2029-03-01', '2029-03-10', 0, 'infinity')$s$,
+        '23514', 'D2c: generada_en = infinity (INSERT)');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.facturas (alumno_id, periodo, vencimiento, total, generada_en)
+        VALUES (pg_temp.u(3), '2029-03-01', '2029-03-10', 0, '-infinity')$s$,
+        '23514', 'D2c: generada_en = -infinity (INSERT)');
+    PERFORM pg_temp.negativa($s$
+        UPDATE public.facturas SET generada_en = 'infinity' WHERE id = pg_temp.u(803)$s$,
+        '23514', 'D2c: generada_en = infinity (UPDATE)');
+    PERFORM pg_temp.negativa($s$
+        UPDATE public.facturas SET generada_en = '-infinity' WHERE id = pg_temp.u(803)$s$,
+        '23514', 'D2c: generada_en = -infinity (UPDATE)');
+    PERFORM pg_temp.positiva($s$
+        INSERT INTO public.facturas (alumno_id, periodo, vencimiento, total, generada_en)
+        VALUES (pg_temp.u(3), '2029-03-01', '2029-03-10', 0, '2029-02-20 09:00:00-03')$s$,
+        'D2c: generada_en con un instante válido (INSERT)');
+    PERFORM pg_temp.positiva($s$
+        UPDATE public.facturas SET generada_en = '2026-11-25 09:00:00-03' WHERE id = pg_temp.u(803)$s$,
+        'D2c: generada_en con un instante válido (UPDATE)');
 
     PERFORM pg_temp.negativa($s$
         UPDATE public.facturas SET periodo = '2026-11-02' WHERE id = pg_temp.u(801)$s$,
@@ -1213,6 +1288,53 @@ BEGIN
          WHERE id = pg_temp.u(1001) AND estado = 'RECHAZADO' AND numero_operacion = 'OP-100') = 1,
         'F4: el pago rechazado sigue en el historial con su número');
 
+    -- F4b. `creado_en` y `verificado_en` finitos. Se prueban con el pago 1001, ya
+    -- RECHAZADO (verificador y fecha informados), para que el único CHECK que falle
+    -- sea el de isfinite y no el de coherencia con el estado.
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.pagos (padre_id, alumno_id, total_calculado, creado_en)
+        VALUES (pg_temp.u(5), pg_temp.u(2), 1, 'infinity')$s$,
+        '23514', 'F4b: creado_en = infinity (INSERT)');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.pagos (padre_id, alumno_id, total_calculado, creado_en)
+        VALUES (pg_temp.u(5), pg_temp.u(2), 1, '-infinity')$s$,
+        '23514', 'F4b: creado_en = -infinity (INSERT)');
+    PERFORM pg_temp.negativa($s$
+        UPDATE public.pagos SET creado_en = 'infinity' WHERE id = pg_temp.u(1001)$s$,
+        '23514', 'F4b: creado_en = infinity (UPDATE)');
+    PERFORM pg_temp.negativa($s$
+        UPDATE public.pagos SET creado_en = '-infinity' WHERE id = pg_temp.u(1001)$s$,
+        '23514', 'F4b: creado_en = -infinity (UPDATE)');
+    PERFORM pg_temp.positiva($s$
+        UPDATE public.pagos SET creado_en = '2026-11-02 10:00:00+00' WHERE id = pg_temp.u(1001)$s$,
+        'F4b: creado_en con un instante válido (UPDATE)');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.pagos (padre_id, alumno_id, total_calculado, estado, verificado_por,
+                                  verificado_en, motivo_rechazo)
+        VALUES (pg_temp.u(5), pg_temp.u(2), 1, 'RECHAZADO', pg_temp.u(1), 'infinity', 'motivo')$s$,
+        '23514', 'F4b: verificado_en = infinity (INSERT)');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.pagos (padre_id, alumno_id, total_calculado, estado, verificado_por,
+                                  verificado_en, motivo_rechazo)
+        VALUES (pg_temp.u(5), pg_temp.u(2), 1, 'RECHAZADO', pg_temp.u(1), '-infinity', 'motivo')$s$,
+        '23514', 'F4b: verificado_en = -infinity (INSERT)');
+    PERFORM pg_temp.negativa($s$
+        UPDATE public.pagos SET verificado_en = 'infinity' WHERE id = pg_temp.u(1001)$s$,
+        '23514', 'F4b: verificado_en = infinity (UPDATE)');
+    PERFORM pg_temp.negativa($s$
+        UPDATE public.pagos SET verificado_en = '-infinity' WHERE id = pg_temp.u(1001)$s$,
+        '23514', 'F4b: verificado_en = -infinity (UPDATE)');
+    PERFORM pg_temp.positiva($s$
+        UPDATE public.pagos SET verificado_en = '2026-11-05 10:00:00+00' WHERE id = pg_temp.u(1001)$s$,
+        'F4b: verificado_en con un instante válido (UPDATE)');
+    -- Los NULL legítimos se conservan: un pago pendiente no tiene verificación.
+    PERFORM pg_temp.afirmar(
+        (SELECT verificado_en IS NULL FROM public.pagos WHERE id = pg_temp.u(1005)),
+        'F4b: un pago pendiente conserva verificado_en NULL');
+    PERFORM pg_temp.positiva($s$
+        UPDATE public.pagos SET verificado_en = NULL WHERE id = pg_temp.u(1005)$s$,
+        'F4b: verificado_en NULL sigue aceptado en un pago pendiente');
+
     -- F5. Sin borrado en cascada del historial de pagos.
     PERFORM pg_temp.positiva($s$
         INSERT INTO public.pagos (id, padre_id, alumno_id, total_calculado)
@@ -1367,6 +1489,29 @@ BEGIN
         DELETE FROM public.pagos WHERE id = pg_temp.u(1004)$s$,
         '23503', 'H1: no se borra un pago con recibo');
 
+    -- H1b. `emitido_en` finito (DEFAULT NOW() no impide un valor explícito infinito).
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.recibos (pago_id, numero, emitido_en)
+        VALUES (pg_temp.u(1010), 90, 'infinity')$s$,
+        '23514', 'H1b: emitido_en = infinity (INSERT)');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.recibos (pago_id, numero, emitido_en)
+        VALUES (pg_temp.u(1010), 90, '-infinity')$s$,
+        '23514', 'H1b: emitido_en = -infinity (INSERT)');
+    PERFORM pg_temp.negativa($s$
+        UPDATE public.recibos SET emitido_en = 'infinity' WHERE numero = 1$s$,
+        '23514', 'H1b: emitido_en = infinity (UPDATE)');
+    PERFORM pg_temp.negativa($s$
+        UPDATE public.recibos SET emitido_en = '-infinity' WHERE numero = 1$s$,
+        '23514', 'H1b: emitido_en = -infinity (UPDATE)');
+    PERFORM pg_temp.positiva($s$
+        INSERT INTO public.recibos (pago_id, numero, emitido_en)
+        VALUES (pg_temp.u(1010), 90, '2026-11-06 10:00:00+00')$s$,
+        'H1b: emitido_en con un instante válido (INSERT)');
+    PERFORM pg_temp.positiva($s$
+        UPDATE public.recibos SET emitido_en = '2026-11-07 10:00:00+00' WHERE numero = 90$s$,
+        'H1b: emitido_en con un instante válido (UPDATE)');
+
     -- H2. Feriados.
     PERFORM pg_temp.positiva($s$
         INSERT INTO public.feriados (fecha, descripcion) VALUES ('2026-12-25', 'Navidad')$s$,
@@ -1421,6 +1566,32 @@ BEGIN
         INSERT INTO public.envios_correo (padre_id, tipo, fecha_programada)
         VALUES (pg_temp.u(6), 'AVISO_DEUDA', '-infinity')$s$,
         '23514', 'H3: fecha programada = -infinity');
+    -- H3b. `enviado_en` finito. Con estado ENVIADO el instante es obligatorio, así que el
+    -- único CHECK que falla con infinity es el de isfinite. Los NULL legítimos se conservan.
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.envios_correo (padre_id, tipo, fecha_programada, estado, enviado_en)
+        VALUES (pg_temp.u(6), 'AVISO_DEUDA', '2026-12-20', 'ENVIADO', 'infinity')$s$,
+        '23514', 'H3b: enviado_en = infinity (INSERT)');
+    PERFORM pg_temp.negativa($s$
+        INSERT INTO public.envios_correo (padre_id, tipo, fecha_programada, estado, enviado_en)
+        VALUES (pg_temp.u(6), 'AVISO_DEUDA', '2026-12-20', 'ENVIADO', '-infinity')$s$,
+        '23514', 'H3b: enviado_en = -infinity (INSERT)');
+    PERFORM pg_temp.negativa($s$
+        UPDATE public.envios_correo SET estado = 'ENVIADO', enviado_en = 'infinity'
+        WHERE padre_id = pg_temp.u(5) AND tipo = 'AVISO_DEUDA'$s$,
+        '23514', 'H3b: enviado_en = infinity (UPDATE)');
+    PERFORM pg_temp.negativa($s$
+        UPDATE public.envios_correo SET estado = 'ENVIADO', enviado_en = '-infinity'
+        WHERE padre_id = pg_temp.u(5) AND tipo = 'AVISO_DEUDA'$s$,
+        '23514', 'H3b: enviado_en = -infinity (UPDATE)');
+    PERFORM pg_temp.positiva($s$
+        UPDATE public.envios_correo SET estado = 'ENVIADO', enviado_en = '2026-11-05 08:00:00-03'
+        WHERE padre_id = pg_temp.u(5) AND tipo = 'AVISO_DEUDA'$s$,
+        'H3b: enviado_en con un instante válido (UPDATE)');
+    PERFORM pg_temp.positiva($s$
+        INSERT INTO public.envios_correo (padre_id, tipo, fecha_programada)
+        VALUES (pg_temp.u(6), 'AVISO_DEUDA', '2026-12-21')$s$,
+        'H3b: un envío pendiente conserva enviado_en NULL');
     PERFORM pg_temp.negativa($s$
         INSERT INTO public.envios_correo (padre_id, tipo, fecha_programada, estado)
         VALUES (pg_temp.u(6), 'AVISO_DEUDA', '2026-11-05', 'ENVIADO')$s$,
@@ -1492,6 +1663,70 @@ BEGIN
         INSERT INTO public.tarifas (concepto, nivel_id, importe, desde, hasta)
         VALUES ('CUOTA', %s, 9999999999.99, '2040-04-01', '2040-04-30')$s$, v_nivel_vig),
         'I1: el máximo representable 9999999999.99 se acepta');
+END;
+$$;
+
+-- ================================================================
+-- J. COHERENCIA AL FACTURAR: LOS CAMBIOS ACADÉMICOS POSTERIORES SON LEGÍTIMOS
+-- ================================================================
+-- Contrato de un ítem AISLADO (no de un lote mensual: eso es de EPT-104). La
+-- factura es un hecho histórico: conserva alumno, tarifa e importe aunque después
+-- cambie el nivel del curso por el camino autorizado real.
+DO $$
+DECLARE
+    v_inicial INTEGER := (SELECT id FROM public.niveles WHERE nombre = 'INICIAL');
+    v_filas BIGINT;
+BEGIN
+    PERFORM pg_temp.afirmar(
+        (SELECT i.importe = 50000.00 AND i.alumno_id = pg_temp.u(2) AND i.tarifa_id = pg_temp.u(401)
+         FROM public.items_factura i WHERE i.id = pg_temp.u(901)),
+        'J1: punto de partida: el ítem 901 factura la cuota de nivel PRIMARIO por 50000.00');
+
+    -- El DIRECTOR cambia el nivel del curso (UPDATE cursos SET nivel_id), con rol
+    -- authenticated y JWT, tal como lo hace la pantalla de cursos.
+    PERFORM pg_catalog.set_config('request.jwt.claims',
+        pg_catalog.json_build_object('sub', pg_temp.u(1), 'role', 'authenticated')::TEXT, TRUE);
+    SET LOCAL ROLE authenticated;
+    UPDATE public.cursos SET nivel_id = v_inicial WHERE id = pg_temp.u(101);
+    GET DIAGNOSTICS v_filas = ROW_COUNT;
+    RESET ROLE;
+    PERFORM pg_catalog.set_config('request.jwt.claims', '', TRUE);
+    PERFORM pg_temp.afirmar(v_filas = 1,
+        'J1: el cambio de nivel de un curso con matrícula YA FACTURADA se permite por el camino autorizado');
+
+    PERFORM pg_temp.afirmar(
+        (SELECT c.nivel_id = v_inicial FROM public.cursos c WHERE c.id = pg_temp.u(101)),
+        'J1: el curso quedó en el nivel nuevo');
+    PERFORM pg_temp.afirmar(
+        (SELECT i.importe = 50000.00 AND i.alumno_id = pg_temp.u(2) AND i.tarifa_id = pg_temp.u(401)
+                AND i.tipo = 'CUOTA' AND i.estado_pago = 'PENDIENTE'
+                AND t.nivel_id = (SELECT id FROM public.niveles WHERE nombre = 'PRIMARIO')
+         FROM public.items_factura i JOIN public.tarifas t ON t.id = i.tarifa_id
+         WHERE i.id = pg_temp.u(901)),
+        'J1: el ítem conserva alumno, tarifa, importe y el nivel facturado (por la tarifa), distinto del curso vivo');
+
+    -- Las transiciones de pago no se ven afectadas por el cambio académico: el
+    -- trigger de integridad no se dispara por estado_pago ni por importe.
+    PERFORM pg_temp.positiva($s$
+        UPDATE public.items_factura SET estado_pago = 'EN_VERIFICACION' WHERE id = pg_temp.u(901)$s$,
+        'J2: el estado de pago del ítem sigue pudiendo cambiar tras el cambio de nivel');
+
+    -- El importe histórico es el almacenado en el ítem, no el precio actual de la tarifa.
+    PERFORM pg_temp.positiva($s$
+        UPDATE public.tarifas SET importe = 55555.00 WHERE id = pg_temp.u(401)$s$,
+        'J3: el importe de una tarifa ya facturada puede corregirse (solo su referencia es inmutable)');
+    PERFORM pg_temp.afirmar(
+        (SELECT i.importe = 50000.00 AND t.importe = 55555.00
+         FROM public.items_factura i JOIN public.tarifas t ON t.id = i.tarifa_id
+         WHERE i.id = pg_temp.u(901)),
+        'J3: el ítem conserva su importe histórico 50000.00 aunque la tarifa valga ahora 55555.00');
+
+    -- Comportamiento técnico CONSERVADO (decisión 4(a)): el trigger también se dispara
+    -- en UPDATE del origen o de la tarifa y contrasta contra los datos vigentes. NO es
+    -- un flujo de corrección ni autoriza editar o refacturar facturas emitidas.
+    PERFORM pg_temp.negativa($s$
+        UPDATE public.items_factura SET tarifa_id = pg_temp.u(401) WHERE id = pg_temp.u(901)$s$,
+        'P6803', 'J4: se conserva la validación del trigger en UPDATE de tarifa_id (no autoriza refacturar)');
 END;
 $$;
 

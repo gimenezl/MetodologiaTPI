@@ -19,6 +19,12 @@ import { esperarBloqueo, SesionPsql } from './_sesion-psql.mjs'
  *      ítem con ella: el trigger toma FOR SHARE y la guarda espera y luego ve el
  *      ítem (P6804). Sin ese bloqueo el cambio se colaría y dejaría el ítem
  *      incoherente con su tarifa.
+ *   6. Coherencia al facturar: el DIRECTOR cambia el nivel de un curso por el
+ *      camino autorizado MIENTRAS otra transacción crea un ítem de cuota de ese
+ *      curso. El cambio académico NO espera ni se bloquea (el trigger no toma
+ *      ningún bloqueo sobre `cursos`) y el ítem confirmado conserva su tarifa, su
+ *      importe y su alumno. Es el contrato de UN ítem aislado: la consistencia de
+ *      un lote mensual de facturación es de EPT-104 y esta prueba no la demuestra.
  *
  * Corre contra la base local descartable e identificada; para el stack aislado
  * de la unidad: `EPT_SUPABASE_DB_CONTAINER=supabase_db_ept100`. Crea sus propios
@@ -37,6 +43,7 @@ const TARIFA_A = ID(41) // CUOTA del nivel 1, vigente en 2050
 const TARIFA_B = ID(42) // CUOTA del nivel 1, vigente desde 2051
 const FACTURA_1 = ID(51)
 const FACTURA_2 = ID(52)
+const FACTURA_3 = ID(53)
 const ITEM_1 = ID(61)
 const PAGO_1 = ID(71)
 const PAGO_2 = ID(72)
@@ -246,6 +253,61 @@ async function probarTarifaContraItem(a, b, pids) {
   console.log('OK CONCURRENCIA 5: la tarifa espera al ítem que la usa y luego se rechaza el cambio (P6804)')
 }
 
+/** 6. Cambio académico concurrente con la creación de un ítem: no espera ni bloquea. */
+async function probarCambioAcademicoSinBloqueo(a, b) {
+  await a.ejecutar(
+    `INSERT INTO public.facturas (id, alumno_id, periodo, vencimiento, total)
+     VALUES ('${FACTURA_3}', '${ALUMNO}', '2053-01-01', '2053-01-10', 100);`,
+    'factura_3'
+  )
+  await a.ejecutar(
+    `BEGIN;
+     INSERT INTO public.items_factura (factura_id, alumno_id, tipo, tarifa_id, matricula_id, importe)
+     VALUES ('${FACTURA_3}', '${ALUMNO}', 'CUOTA', '${TARIFA_B}', '${MATRICULA}', 100);`,
+    'item_a_pendiente_cambio_academico'
+  )
+  const abierta = await a.escalar(
+    'pg_catalog.pg_current_xact_id_if_assigned() IS NOT NULL',
+    'transaccion_a_abierta'
+  )
+  if (abierta !== 'true') throw new Error('La transacción del ítem no quedó abierta')
+
+  // B (DIRECTOR, rol authenticated + JWT) cambia el nivel del curso. Debe terminar
+  // SIN esperar a A: si el trigger bloqueara `cursos`, esta llamada agotaría el
+  // límite de tiempo del arnés y la prueba fallaría.
+  await b.ejecutar(
+    `SET ROLE authenticated;
+     SELECT set_config('request.jwt.claims', '{"sub":"${DIRECTOR}","role":"authenticated"}', false);
+     UPDATE public.cursos
+        SET nivel_id = (SELECT id FROM public.niveles WHERE nombre = '${MARCA_NIVEL_2}')
+      WHERE id = '${CURSO}';
+     RESET ROLE;`,
+    'cambio_nivel_sin_espera'
+  )
+  const sigueAbierta = await a.escalar(
+    'pg_catalog.pg_current_xact_id_if_assigned() IS NOT NULL',
+    'transaccion_a_sigue_abierta'
+  )
+  if (sigueAbierta !== 'true') throw new Error('A no seguía abierta cuando B terminó')
+  await a.ejecutar('COMMIT;', 'confirmar_item_cambio_academico')
+
+  const estado = await a.escalar(
+    `(SELECT i.importe = 100 AND i.alumno_id = '${ALUMNO}' AND i.tarifa_id = '${TARIFA_B}'
+             AND t.nivel_id = (SELECT id FROM public.niveles WHERE nombre = '${MARCA_NIVEL_1}')
+             AND c.nivel_id = (SELECT id FROM public.niveles WHERE nombre = '${MARCA_NIVEL_2}')
+      FROM public.items_factura i
+      JOIN public.tarifas t ON t.id = i.tarifa_id
+      JOIN public.matriculas m ON m.id = i.matricula_id
+      JOIN public.cursos c ON c.id = m.curso_id
+      WHERE i.factura_id = '${FACTURA_3}')`,
+    'estado_final_cambio_academico'
+  )
+  if (estado !== 'true') {
+    throw new Error('El ítem no conservó su tarifa, su importe y su alumno, o el curso no cambió de nivel')
+  }
+  console.log('OK CONCURRENCIA 6: el cambio académico concurrente no espera ni bloquea, y el ítem confirmado conserva tarifa, importe y alumno (contrato de un ítem; el lote es de EPT-104)')
+}
+
 const sesionA = new SesionPsql('A', 'EPT100')
 const sesionB = new SesionPsql('B', 'EPT100')
 
@@ -309,6 +371,7 @@ try {
   await probarImputacionActivaUnica(sesionA, sesionB, pids)
   await probarFacturaUnica(sesionA, sesionB, pids)
   await probarTarifaContraItem(sesionA, sesionB, pids)
+  await probarCambioAcademicoSinBloqueo(sesionA, sesionB)
 
   await sesionA.ejecutar(`BEGIN; ${LIMPIEZA} COMMIT;`, 'limpiar_fixture')
   const restos = await sesionA.escalar(
@@ -318,7 +381,7 @@ try {
   )
   if (restos !== '0') throw new Error(`La limpieza dejó ${restos} fila(s) de prueba`)
 
-  console.log('OK CONCURRENCIA: las cinco carreras económicas quedan demostradas y la base queda limpia')
+  console.log('OK CONCURRENCIA: las seis pruebas de concurrencia quedan demostradas y la base queda limpia')
 } finally {
   await Promise.allSettled([
     sesionA.ejecutar('ROLLBACK;', 'rollback'),

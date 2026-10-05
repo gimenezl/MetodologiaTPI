@@ -17,12 +17,40 @@
 --   exigiría agregar UNIQUE (id, alumno_id) a matriculas, inscripciones_deportivas
 --   e inscripciones_servicios: tablas compartidas que esta unidad no posee. Se
 --   documenta como alternativa para una unidad con autorización sobre ellas; hasta
---   entonces la igualdad la verifica un trigger que lee el origen con FOR SHARE.
+--   entonces la igualdad la verifica, AL ESCRIBIR el ítem, un trigger que lee el
+--   origen con FOR SHARE.
+--
+-- SEMÁNTICA HISTÓRICA: COHERENCIA AL FACTURAR
+--   Una factura emitida es un hecho histórico y su contexto se conserva así:
+--     · el alumno, en la factura y en el ítem;
+--     · lo que se cobró: `tarifa_id` (concepto y referencia —nivel, deporte o
+--       servicio—, inmutables una vez facturada la tarifa, P6804);
+--     · el origen de cada ítem, por clave foránea.
+--   El `importe` histórico es el ALMACENADO EN EL ÍTEM, no el precio actual de la
+--   tarifa, que puede cambiar su importe o su vigencia después. La tarifa aplicable
+--   es la vigente el primer día del mes del período, aunque la factura se genere
+--   el mes anterior (EPT-83); esa selección y su verificación son de EPT-104.
+--   Las comprobaciones de abajo se hacen AL ESCRIBIR el ítem. No exigen que el
+--   curso, la inscripción o el servicio de origen conserven después el mismo
+--   nivel, deporte o tipo: los cambios académicos posteriores (un curso que cambia
+--   de nivel, una matrícula que se cierra) son legítimos y no invalidan ni
+--   reescriben la factura. Por eso NO se toma ningún bloqueo sobre `cursos` ni se
+--   impide su edición.
+--   Comportamiento técnico conservado, sin ser un flujo de corrección: el trigger
+--   también se dispara en UPDATE de alumno_id, tipo, tarifa_id o del origen y
+--   vuelve a contrastar contra los datos VIGENTES (puede dar P6803 tras un cambio
+--   académico). No se dispara por `importe` ni por `estado_pago`. Esta unidad NO
+--   autoriza editar ni refacturar facturas emitidas ni define un flujo de
+--   corrección histórica: eso, si hace falta, es una unidad posterior con su
+--   propia decisión.
 --
 -- LO QUE ESTAS TABLAS NO HACEN (unidades posteriores)
 --   · No verifican que `total` sea la suma de los ítems ni que `importe` sea el
 --     valor de la tarifa vigente el primer día del período: el cálculo es de
 --     EPT-104.
+--   · No demuestran la consistencia de un lote mensual de facturación: las
+--     pruebas de esta unidad cubren ítems aislados y dos transacciones sobre
+--     una misma fila; el lote completo corresponde a EPT-104.
 --   · No exigen que la inscripción de origen siga activa: una factura pasada
 --     conserva su historial aunque la inscripción se haya cancelado después.
 --   · No gobiernan las transiciones de `estado_pago` de los ítems.
@@ -63,7 +91,11 @@ CREATE TABLE public.facturas (
     CONSTRAINT facturas_vencimiento_dia_diez
         CHECK (pg_catalog.isfinite(vencimiento) AND vencimiento = periodo + 9),
     CONSTRAINT facturas_total_valido
-        CHECK (total <> 'NaN'::NUMERIC AND total >= 0)
+        CHECK (total <> 'NaN'::NUMERIC AND total >= 0),
+    -- `infinity` y `-infinity` son valores válidos de TIMESTAMPTZ. `DEFAULT NOW()` no los
+    -- impide: el valor puede escribirse explícitamente. Los NULL legítimos se conservan.
+    CONSTRAINT facturas_generada_en_finita
+        CHECK (pg_catalog.isfinite(generada_en))
 );
 
 COMMENT ON TABLE public.facturas IS
@@ -129,7 +161,7 @@ CREATE TABLE public.items_factura (
 );
 
 COMMENT ON TABLE public.items_factura IS
-    'Ítem de una factura: un único origen (matrícula, inscripción deportiva o inscripción a servicio) y la tarifa aplicada. Las inscripciones se referencian, no se copian. El importe es el valor de la tarifa copiado al generar, sin prorrateo; esta tabla no recalcula ni verifica esa igualdad (EPT-104).';
+    'Ítem de una factura: un único origen (matrícula, inscripción deportiva o inscripción a servicio) y la tarifa aplicada. Las inscripciones se referencian, no se copian. El importe es el valor de la tarifa vigente el primer día del mes del período, copiado al generar y sin prorrateo: el importe histórico es el almacenado aquí, no el precio actual de la tarifa. La coherencia con el origen se comprueba al escribir el ítem (coherencia al facturar); los cambios académicos posteriores no la invalidan. Esta tabla no recalcula ni verifica la tarifa vigente ni la consistencia de un lote (EPT-104).';
 COMMENT ON COLUMN public.items_factura.estado_pago IS
     'PENDIENTE, EN_VERIFICACION o PAGADO. Un ítem se paga siempre completo. Las transiciones las gobernará la lógica de pagos (EPT-101 y siguientes), no esta tabla.';
 
@@ -157,10 +189,15 @@ CREATE INDEX idx_items_factura_inscripcion_servicio
 --   DEPORTE    → deporte de la tarifa = deporte de la inscripción
 --   TRANSPORTE → servicio de la tarifa = servicio de la inscripción
 --   COMEDOR    → ídem; la tarifa ya es del tipo de servicio correcto (parte 1)
--- Toma FOR SHARE sobre la tarifa y sobre el origen: un cambio concurrente de
--- cualquiera de ellos espera a esta transacción y no puede dejar un ítem
--- incoherente. El trigger es SECURITY DEFINER para leer las tablas de origen
--- con independencia del rol que escriba (hoy ninguno lo hace directamente).
+-- Lee la tarifa y la matrícula o inscripción de origen con FOR SHARE, de modo que
+-- la comprobación vea un estado confirmado y estable mientras se escribe el ítem:
+-- un cambio concurrente de la tarifa o del origen espera a esta transacción. Es
+-- una garantía AL ESCRIBIR, no una invariante permanente: no bloquea `cursos` ni
+-- la edición de nada académico, y un cambio posterior (por ejemplo del nivel de un
+-- curso) es legítimo y NO invalida el ítem, que conserva su tarifa, su importe y su
+-- alumno. Tampoco prueba la consistencia de un lote mensual (EPT-104). El trigger
+-- es SECURITY DEFINER para leer las tablas de origen con independencia del rol
+-- que escriba (hoy ninguno lo hace directamente).
 CREATE OR REPLACE FUNCTION app_private.verificar_item_factura()
 RETURNS TRIGGER
 LANGUAGE plpgsql

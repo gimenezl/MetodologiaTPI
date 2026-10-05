@@ -109,6 +109,10 @@ CREATE TABLE public.tarifas (
     -- `>= 0` por sí solo acepta NaN, que PostgreSQL ordena por encima de todo.
     CONSTRAINT tarifas_importe_valido
         CHECK (importe <> 'NaN'::NUMERIC AND importe >= 0),
+    -- `infinity` y `-infinity` son valores válidos de TIMESTAMPTZ. `DEFAULT NOW()` no los
+    -- impide: el valor puede escribirse explícitamente. Los NULL legítimos se conservan.
+    CONSTRAINT tarifas_creada_en_finita
+        CHECK (pg_catalog.isfinite(creada_en)),
     -- `infinity` es un DATE válido para PostgreSQL: se rechaza explícitamente. La
     -- ausencia de fin se expresa con `hasta` NULL, no con una fecha infinita.
     CONSTRAINT tarifas_vigencia_valida
