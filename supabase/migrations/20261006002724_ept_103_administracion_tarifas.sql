@@ -274,7 +274,8 @@ CREATE OR REPLACE FUNCTION app_private.referencia_tarifa_valida(
 )
 RETURNS public.concepto_economico
 LANGUAGE plpgsql
-IMMUTABLE
+-- STABLE y no IMMUTABLE: el cast a un tipo enumerado lee el catálogo (`db lint` lo señala).
+STABLE
 SET search_path = ''
 AS $$
 BEGIN
