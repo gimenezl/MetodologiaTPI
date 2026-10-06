@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle, PencilSimple } from '@phosphor-icons/react'
 import { Badge } from '@/components/ui/Badge'
@@ -45,6 +45,12 @@ export function GestionTarifas({ grupos, hoy }: { grupos: GrupoTarifas[]; hoy: s
   const [refrescando, iniciarRefresco] = useTransition()
   const [dialogo, setDialogo] = useState<DialogoAbierto | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
+  const franjaAviso = useRef<HTMLDivElement>(null)
+
+  // El aviso queda arriba de la página: si se guardó al pie, se lo trae a la vista.
+  useEffect(() => {
+    if (aviso) franjaAviso.current?.scrollIntoView({ block: 'nearest' })
+  }, [aviso])
 
   function abrir(abierto: DialogoAbierto) {
     setAviso(null)
@@ -80,6 +86,7 @@ export function GestionTarifas({ grupos, hoy }: { grupos: GrupoTarifas[]; hoy: s
       </header>
 
       <div
+        ref={franjaAviso}
         role="status"
         aria-live="polite"
         className={

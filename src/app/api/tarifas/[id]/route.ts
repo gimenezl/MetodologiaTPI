@@ -4,7 +4,7 @@ import { actualizarTarifaSchema, primerErrorTarifas, tarifaIdSchema } from '@/li
 import { metodoNoPermitido, opcionesPermitidas } from '@/lib/metodos-http'
 import { requerirDirector } from '@/services/autorizacion'
 import { actualizarTarifa } from '@/services/tarifas.service'
-import { leerCuerpo, MENSAJE_NO_AUTORIZADO, responderError } from '../_comun'
+import { leerCuerpo, MENSAJE_NO_AUTORIZADO, rechazarSiNoEsConfiable, responderError } from '../_comun'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +30,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!idParsed.success) {
     return NextResponse.json({ error: 'Identificador de tarifa inválido' }, { status: 400 })
   }
+
+  const rechazo = rechazarSiNoEsConfiable(request)
+  if (rechazo) return rechazo
 
   const cuerpo = await leerCuerpo(request)
   if (cuerpo === undefined) {

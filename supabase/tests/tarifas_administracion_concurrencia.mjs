@@ -27,6 +27,9 @@ import { esperarBloqueo, SesionPsql } from './_sesion-psql.mjs'
  *      ENTERA: la anterior conserva su fin.
  *   6. Una edición de precio concurrente con la factura de un ítem que usa esa
  *      tarifa: espera, procede, y el ítem conserva lo facturado.
+ *   7. Una escritura que espera el bloqueo de la referencia y, mientras tanto,
+ *      pierde el acceso (cuenta bloqueada): al despertar vuelve a comprobar el rol
+ *      y se rechaza (42501), sin escribir nada.
  *
  * Corre contra la base local descartable e identificada; para el stack aislado
  * de la unidad: `EPT_SUPABASE_DB_CONTAINER=supabase_db_ept103`. Crea sus propios
@@ -325,6 +328,33 @@ async function probarEdicionContraFactura(b, c, pids) {
   console.log('OK CONCURRENCIA 6: la edición espera al ítem recién facturado y procede; el ítem conserva lo facturado (200.00) y la tarifa dice 250.00')
 }
 
+/** 7. El rol se vuelve a comprobar al despertar del bloqueo: perderlo mientras se espera corta la escritura. */
+async function probarAccesoRevocadoMientrasEspera(a, b, c, pids) {
+  await a.ejecutar(
+    `BEGIN; ${crear('DEPORTE', 'NULL', `'${DEPORTE_1}'::UUID`, '10', '2065-01-01', '2065-01-31')}`,
+    'alta_a_retiene_el_bloqueo'
+  )
+  await exigir(a, 'alta A que retiene el bloqueo de la referencia', 'OK')
+  const altaB = b.ejecutar(
+    crear('DEPORTE', 'NULL', `'${DEPORTE_1}'::UUID`, '20', '2065-03-01', '2065-03-31'),
+    'alta_b_espera_el_bloqueo'
+  )
+  await esperarBloqueo(a, pids.a, pids.b)
+  // Mientras B espera, Dirección bloquea la cuenta (autocommit).
+  await c.ejecutar(`UPDATE public.perfiles SET estado_acceso = 'BLOQUEADO' WHERE id = '${DIRECTOR}';`, 'bloquear_cuenta')
+  await a.ejecutar('COMMIT;', 'confirmar_alta_a_retenida')
+  await altaB
+  await exigir(b, 'alta B que ya había pasado la guarda de rol antes de esperar', '42501')
+  await c.ejecutar(`UPDATE public.perfiles SET estado_acceso = 'HABILITADO' WHERE id = '${DIRECTOR}';`, 'restituir_cuenta')
+  await exigirValor(
+    c,
+    'sin_fila_de_b',
+    `(SELECT pg_catalog.count(*) FROM public.tarifas WHERE deporte_id = '${DEPORTE_1}' AND desde = '2065-03-01')`,
+    '0'
+  )
+  console.log('OK CONCURRENCIA 7: una cuenta bloqueada mientras espera el bloqueo no escribe: el rol se vuelve a comprobar al despertar (42501)')
+}
+
 const sesionA = new SesionPsql('A', 'EPT103')
 const sesionB = new SesionPsql('B', 'EPT103')
 const sesionC = new SesionPsql('C', 'EPT103')
@@ -374,6 +404,7 @@ try {
   await probarSucesionesConcurrentes(sesionA, sesionB, sesionC, pids)
   await probarMultirregistroRevierte(sesionB, sesionC, pids)
   await probarEdicionContraFactura(sesionB, sesionC, pids)
+  await probarAccesoRevocadoMientrasEspera(sesionA, sesionB, sesionC, pids)
 
   await sesionC.ejecutar(`BEGIN; ${LIMPIEZA} COMMIT;`, 'limpiar_fixture')
   const restos = await sesionC.escalar(
@@ -385,7 +416,7 @@ try {
   )
   if (restos !== '0') throw new Error(`La limpieza dejó ${restos} fila(s) de prueba`)
 
-  console.log('OK CONCURRENCIA: las seis pruebas de concurrencia quedan demostradas y la base queda limpia')
+  console.log('OK CONCURRENCIA: las siete pruebas de concurrencia quedan demostradas y la base queda limpia')
 } finally {
   await Promise.allSettled([
     sesionA.ejecutar('ROLLBACK;', 'rollback'),

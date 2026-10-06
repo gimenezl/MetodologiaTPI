@@ -76,6 +76,13 @@
 --   (EPT-100) solo toma FOR SHARE sobre la fila de la tarifa, así que no forma
 --   ciclo con estas operaciones.
 --
+-- ROLES PRIVILEGIADOS
+--   Los privilegios por defecto de la plataforma dejan a `service_role` (y al
+--   propietario) con escritura directa sobre `public.tarifas`: es un hecho de
+--   plataforma, no una regresión, y ese rol omite RLS por diseño. La aplicación no
+--   lo usa para tarifas. Las verificaciones de esta migración y sus pruebas cubren
+--   `anon` y `authenticated`, que son los roles de cliente.
+--
 -- HISTÓRICO ECONÓMICO
 --   Estas operaciones escriben únicamente `public.tarifas` y solo las columnas
 --   `importe`, `desde` y `hasta` (más el alta). No tocan `items_factura`,
@@ -91,7 +98,7 @@
 --   P6812  importe con más de dos decimales (no se redondea)
 --   P6813  importe fuera de capacidad (más de 10 dígitos enteros)
 --   P6820  falta la fecha de inicio
---   P6821  fecha no finita (infinity / -infinity)
+--   P6821  fecha no finita (infinity / -infinity) o fuera de los años 1900 a 9999
 --   P6822  la fecha de fin es anterior a la de inicio
 --   P6823  concepto inválido o referencia inconsistente con el concepto
 --   P6824  la referencia (nivel, deporte o servicio) no existe
@@ -257,6 +264,15 @@ BEGIN
             MESSAGE = 'Las fechas de vigencia deben ser fechas reales. Para una tarifa sin fin, dejá «hasta» vacío.';
     END IF;
 
+    -- Mismo rango que acepta la aplicación (años 1900 a 9999): fuera de él la fila no
+    -- se podría mostrar ni editar, y los extremos del tipo DATE desbordan el rango.
+    IF p_desde < DATE '1900-01-01' OR p_desde > DATE '9999-12-31'
+       OR (p_hasta IS NOT NULL AND (p_hasta < DATE '1900-01-01' OR p_hasta > DATE '9999-12-31')) THEN
+        RAISE EXCEPTION USING
+            ERRCODE = 'P6821',
+            MESSAGE = 'Las fechas de vigencia deben estar entre los años 1900 y 9999.';
+    END IF;
+
     IF p_hasta IS NOT NULL AND p_hasta < p_desde THEN
         RAISE EXCEPTION USING
             ERRCODE = 'P6822',
@@ -398,6 +414,14 @@ BEGIN
     PERFORM app_private.bloquear_referencia_tarifa(
         v_concepto, p_nivel_id, p_deporte_id, p_servicio_id);
 
+    -- La espera del bloqueo puede durar: el rol y el bloqueo de cuenta se vuelven a
+    -- comprobar con el estado vigente al despertar, antes de leer o escribir nada.
+    IF NOT app_private.es_director() THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '42501',
+            MESSAGE = 'Solo la dirección puede administrar las tarifas.';
+    END IF;
+
     BEGIN
         INSERT INTO public.tarifas (concepto, nivel_id, deporte_id, servicio_id, importe, desde, hasta)
         VALUES (v_concepto, p_nivel_id, p_deporte_id, p_servicio_id, v_importe, p_desde, p_hasta)
@@ -458,6 +482,14 @@ BEGIN
     PERFORM app_private.bloquear_referencia_tarifa(
         v_concepto, p_nivel_id, p_deporte_id, p_servicio_id);
 
+    -- La espera del bloqueo puede durar: el rol y el bloqueo de cuenta se vuelven a
+    -- comprobar con el estado vigente al despertar, antes de leer o escribir nada.
+    IF NOT app_private.es_director() THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '42501',
+            MESSAGE = 'Solo la dirección puede administrar las tarifas.';
+    END IF;
+
     -- Versión que estaba vigente el día anterior al cambio. Si terminó antes,
     -- hay un hueco ya existente que esta operación no inventa ni rellena.
     SELECT t.* INTO v_anterior
@@ -476,9 +508,10 @@ BEGIN
         -- La anterior sigue en vigor el día del cambio: se acorta a D-1. Si tenía
         -- un fin propio posterior, la nueva debe cubrirlo; si no, quedaría sin
         -- tarifa un tramo que hoy sí tiene.
-        IF v_anterior.hasta IS NOT NULL
-           AND p_hasta IS NOT NULL
-           AND p_hasta < v_anterior.hasta THEN
+        -- Anterior abierta (hasta NULL) y nueva con fin: el tramo posterior quedaría sin
+        -- tarifa para siempre (la exclusión impide que exista otra versión después).
+        IF p_hasta IS NOT NULL
+           AND (v_anterior.hasta IS NULL OR p_hasta < v_anterior.hasta) THEN
             RAISE EXCEPTION USING
                 ERRCODE = 'P6833',
                 MESSAGE = 'El cambio dejaría sin tarifa un tramo que hoy está cubierto. Dejá «hasta» vacío o usá una fecha igual o posterior al fin de la tarifa vigente.';
@@ -560,6 +593,14 @@ BEGIN
 
     PERFORM app_private.bloquear_referencia_tarifa(
         v_tarifa.concepto, v_tarifa.nivel_id, v_tarifa.deporte_id, v_tarifa.servicio_id);
+
+    -- La espera del bloqueo puede durar: el rol y el bloqueo de cuenta se vuelven a
+    -- comprobar con el estado vigente al despertar, antes de leer o escribir nada.
+    IF NOT app_private.es_director() THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '42501',
+            MESSAGE = 'Solo la dirección puede administrar las tarifas.';
+    END IF;
 
     -- Relectura ya bajo el bloqueo y con la fila tomada: es el estado que se compara.
     SELECT t.* INTO v_tarifa FROM public.tarifas t WHERE t.id = p_tarifa_id FOR UPDATE;

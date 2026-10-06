@@ -329,6 +329,12 @@ const hastaSchema = z
   .transform((valor) => (valor === undefined || valor === null || valor.trim() === '' ? null : valor))
   .refine((valor) => valor === null || esFechaIsoReal(valor), MENSAJE_HASTA)
 
+/** Igual que `hastaSchema`, pero obligatorio: editar sin enviar el fin no puede borrarlo en silencio. */
+const hastaRequeridoSchema = z
+  .union([z.string(), z.null()], { message: MENSAJE_HASTA })
+  .transform((valor) => (valor === null || valor.trim() === '' ? null : valor))
+  .refine((valor) => valor === null || esFechaIsoReal(valor), MENSAJE_HASTA)
+
 const referenciaIdSchema = z.string({ message: MENSAJE_REFERENCIA }).min(1, MENSAJE_REFERENCIA)
 
 const MENSAJE_ORDEN = 'La fecha de fin no puede ser anterior a la de inicio.'
@@ -373,7 +379,7 @@ const valoresPreviosSchema = z
   .object({
     importe: importeSchema,
     desde: desdeSchema,
-    hasta: hastaSchema,
+    hasta: hastaRequeridoSchema,
   })
   .strict()
 
@@ -386,7 +392,7 @@ export const actualizarTarifaSchema = z
   .object({
     importe: importeSchema,
     desde: desdeSchema,
-    hasta: hastaSchema,
+    hasta: hastaRequeridoSchema,
     previo: valoresPreviosSchema,
   })
   .strict()

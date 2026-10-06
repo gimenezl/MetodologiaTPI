@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   expect,
   request as crearContexto,
@@ -387,6 +386,55 @@ test.describe.serial('DIRECTOR autenticado — administración de tarifas (API)'
     // Un cambio inválido tampoco deja rastro.
     await esperar(await cambio({ concepto: 'DEPORTE', referencia_id: DEP_A, importe: '200,005', desde: '2098-09-01' }), 400, MENSAJE.decimales)
     expect(versiones(`deporte_id = '${DEP_A}'`)).toBe(antes)
+  })
+
+  test('un cambio con fin sobre una versión abierta se rechaza: dejaría el tramo posterior sin tarifa', async () => {
+    await esperar(await altaDeporte(DEP_B, '100', '2094-01-01'), 201)
+    const antes = versiones(`deporte_id = '${DEP_B}' AND desde >= '2094-01-01' AND desde < '2095-01-01'`)
+    const respuesta = await cambio({ concepto: 'DEPORTE', referencia_id: DEP_B, importe: '200', desde: '2094-06-01', hasta: '2094-12-31' })
+    const cuerpo = await esperar(respuesta, 409)
+    expect(cuerpo.campo).toBe('hasta')
+    expect(versiones(`deporte_id = '${DEP_B}' AND desde >= '2094-01-01' AND desde < '2095-01-01'`)).toBe(antes)
+  })
+
+  test('las fechas fuera de los años 1900 a 9999 se rechazan sin dejar filas', async () => {
+    const antes = contar('TRUE')
+    for (const [desde, hasta] of [['1899-12-31', null], ['0001-01-01', null], ['2096-01-01', '9999-12-31x']] as const) {
+      const respuesta = await altaDeporte(DEP_A, '1', desde, hasta)
+      expect(respuesta.status(), `${desde} ${hasta}`).toBe(400)
+    }
+    expect(contar('TRUE')).toBe(antes)
+  })
+
+  test('una petición de otro origen o que no es JSON se rechaza antes de leer el cuerpo', async () => {
+    const antes = contar('TRUE')
+    const datos = { concepto: 'DEPORTE', referencia_id: DEP_A, importe: '1', desde: '2089-01-01' }
+    await esperar(
+      await directora('/api/tarifas', { method: 'POST', data: datos, headers: { origin: 'https://sitio-ajeno.example' } }),
+      403,
+      'Origen no permitido.'
+    )
+    await esperar(
+      await directora('/api/tarifas', {
+        method: 'POST',
+        data: Buffer.from(JSON.stringify(datos)),
+        headers: { 'content-type': 'text/plain' },
+      }),
+      415,
+      'El contenido debe enviarse como JSON.'
+    )
+    expect(contar('TRUE')).toBe(antes)
+  })
+
+  test('editar sin enviar el fin no lo borra en silencio', async () => {
+    const id = idTarifa(`deporte_id = '${DEP_B}' AND desde = '2094-01-01'`)
+    const antes = versiones(`id = '${id}'`)
+    const cuerpo = await esperar(
+      await edicion(id, { importe: '101', desde: '2094-01-01', previo: { importe: '100.00', desde: '2094-01-01', hasta: null } }),
+      400
+    )
+    expect(cuerpo.campo).toBe('hasta')
+    expect(versiones(`id = '${id}'`)).toBe(antes)
   })
 
   test('la edición exige los valores previos: el conflicto no sobrescribe en silencio', async () => {

@@ -4,7 +4,7 @@ import { cambiarTarifaSchema, primerErrorTarifas } from '@/lib/tarifas'
 import { metodoNoPermitido, opcionesPermitidas } from '@/lib/metodos-http'
 import { requerirDirector } from '@/services/autorizacion'
 import { cambiarTarifa } from '@/services/tarifas.service'
-import { leerCuerpo, MENSAJE_NO_AUTORIZADO, responderError } from '../_comun'
+import { leerCuerpo, MENSAJE_NO_AUTORIZADO, rechazarSiNoEsConfiable, responderError } from '../_comun'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +22,9 @@ export async function POST(request: Request) {
   if (!autorizacion.autorizado) {
     return NextResponse.json({ error: autorizacion.mensaje }, { status: autorizacion.estado })
   }
+
+  const rechazo = rechazarSiNoEsConfiable(request)
+  if (rechazo) return rechazo
 
   const cuerpo = await leerCuerpo(request)
   if (cuerpo === undefined) {

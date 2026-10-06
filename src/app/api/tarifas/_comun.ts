@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { origenPermitido } from '@/lib/accesos-qr/origen'
 import type { ResultadoTarifas } from '@/services/tarifas.service'
 
 /** Mensaje de la denegación por rol: el mismo en la pantalla, la API y la base. */
@@ -24,4 +25,20 @@ export function responderError(
     { error: resultado.mensaje, campo: resultado.campo, codigo: resultado.codigo },
     { status: resultado.estado }
   )
+}
+
+/**
+ * Segunda barrera de las rutas que cambian estado (defensa en profundidad sobre
+ * `SameSite=Lax`): el origen debe ser el de la aplicación y el cuerpo, JSON. Devuelve
+ * la respuesta de rechazo, o `null` si la petición puede seguir.
+ */
+export function rechazarSiNoEsConfiable(request: Request) {
+  if (!origenPermitido(request.headers)) {
+    return NextResponse.json({ error: 'Origen no permitido.' }, { status: 403 })
+  }
+  const tipo = request.headers.get('content-type') ?? ''
+  if (!/^application\/json/iu.test(tipo)) {
+    return NextResponse.json({ error: 'El contenido debe enviarse como JSON.' }, { status: 415 })
+  }
+  return null
 }

@@ -108,7 +108,9 @@ function traducirError(
       return falla(
         409,
         'Esas fechas se superponen con otra versión de la tarifa para la misma referencia. Ajustá el inicio o el fin: cada día debe tener una sola tarifa.',
-        'desde',
+        // Solo el alta puede atribuirlo con certeza al inicio; en un cambio o una edición
+        // la causa puede ser el fin, y el mensaje ya nombra los dos.
+        operacion === 'crear' ? 'desde' : undefined,
         'SUPERPOSICION'
       )
     case 'P6831':

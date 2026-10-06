@@ -311,6 +311,13 @@ test.describe('esquemas de entrada', () => {
     const sinPrevio: Record<string, unknown> = { ...edicion }
     delete sinPrevio.previo
     expect(actualizarTarifaSchema.safeParse(sinPrevio).success).toBe(false)
+    // El fin es obligatorio al editar (puede ser null): omitirlo no lo borra en silencio.
+    const sinHasta: Record<string, unknown> = { ...edicion }
+    delete sinHasta.hasta
+    const faltaHasta = actualizarTarifaSchema.safeParse(sinHasta)
+    expect(faltaHasta.success).toBe(false)
+    if (!faltaHasta.success) expect(primerErrorTarifas(faltaHasta.error).campo).toBe('hasta')
+    expect(actualizarTarifaSchema.safeParse({ ...edicion, previo: { importe: '1.00', desde: '2029-07-01' } }).success).toBe(false)
     expect(actualizarTarifaSchema.safeParse({ ...edicion, concepto: 'CUOTA' }).success).toBe(false)
     expect(actualizarTarifaSchema.safeParse({ ...edicion, referencia_id: NIVEL }).success).toBe(false)
   })

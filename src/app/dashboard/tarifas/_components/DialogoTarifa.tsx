@@ -84,16 +84,21 @@ export function DialogoTarifa({
   const [conflicto, setConflicto] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [reintento, setReintento] = useState(false)
-  const focoPendiente = useRef<CampoFormulario | null>(null)
+  /** Id del elemento que debe recibir el foco cuando termine de renderizarse el cambio de estado. */
+  const focoPendiente = useRef<string | null>(null)
   const enviando = useRef(false)
 
-  // Lleva el foco al primer campo con error, ya renderizado en el paso del formulario.
+  // Lleva el foco al elemento que corresponde tras un cambio de paso o un error, ya renderizado:
+  // sin esto el foco cae en <body> y un lector de pantalla no anuncia el cambio.
   useEffect(() => {
-    if (focoPendiente.current && paso === 'formulario') {
-      document.getElementById(`tarifa-${focoPendiente.current}`)?.focus()
-      focoPendiente.current = null
+    if (focoPendiente.current) {
+      const elemento = document.getElementById(focoPendiente.current)
+      if (elemento) {
+        elemento.focus()
+        focoPendiente.current = null
+      }
     }
-  }, [errores, paso])
+  }, [errores, paso, errorGeneral, conflicto, guardando])
 
   const titulo = `${TITULOS[modo]} · ${referencia.nombre}`
 
@@ -126,15 +131,17 @@ export function DialogoTarifa({
       setErrores(validacion.errores)
       setErrorGeneral(null)
       focoPendiente.current = validacion.errores.importe
-        ? 'importe'
+        ? 'tarifa-importe'
         : validacion.errores.desde
-          ? 'desde'
-          : 'hasta'
+          ? 'tarifa-desde'
+          : 'tarifa-hasta'
       return
     }
     setImporte(importeParaCampo(validacion.importe))
     setErrores({})
     setErrorGeneral(null)
+    setReintento(false)
+    focoPendiente.current = 'tarifa-revision-titulo'
     setPaso('revision')
   }
 
@@ -188,9 +195,11 @@ export function DialogoTarifa({
       if (!(problema instanceof ErrorTarifas)) {
         setErrorGeneral('No pudimos guardar los cambios. Volvé a intentarlo.')
         setReintento(true)
+        focoPendiente.current = 'tarifa-confirmar'
       } else if (problema.codigo === 'CONFLICTO_EDICION' || problema.codigo === 'TARIFA_INEXISTENTE') {
         setConflicto(true)
         setErrorGeneral(problema.message)
+        focoPendiente.current = 'tarifa-recargar'
       } else if (
         problema.campo === 'importe' ||
         problema.campo === 'desde' ||
@@ -198,10 +207,11 @@ export function DialogoTarifa({
       ) {
         setErrores({ [problema.campo]: problema.message })
         setPaso('formulario')
-        focoPendiente.current = problema.campo
+        focoPendiente.current = `tarifa-${problema.campo}`
       } else {
         setErrorGeneral(problema.message)
         setReintento(true)
+        focoPendiente.current = 'tarifa-confirmar'
       }
     } finally {
       enviando.current = false
@@ -298,7 +308,11 @@ export function DialogoTarifa({
 
       {paso === 'revision' && (
         <div className="space-y-4">
-          <p className="text-sm font-semibold text-neutral-800">
+          <p
+            id="tarifa-revision-titulo"
+            tabIndex={-1}
+            className="text-sm font-semibold text-neutral-800 focus:outline-none"
+          >
             Revisá los datos antes de guardar:
           </p>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
@@ -328,7 +342,7 @@ export function DialogoTarifa({
           )}
           <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
             {conflicto ? (
-              <Button type="button" className="min-h-11 sm:min-h-0" onClick={onRecargar}>
+              <Button id="tarifa-recargar" type="button" className="min-h-11 sm:min-h-0" onClick={onRecargar}>
                 Recargar datos
               </Button>
             ) : (
@@ -339,6 +353,7 @@ export function DialogoTarifa({
                   className="min-h-11 sm:min-h-0"
                   disabled={guardando}
                   onClick={() => {
+                    focoPendiente.current = 'tarifa-importe'
                     setPaso('formulario')
                     setErrorGeneral(null)
                     setReintento(false)
@@ -347,6 +362,7 @@ export function DialogoTarifa({
                   Volver a editar
                 </Button>
                 <Button
+                  id="tarifa-confirmar"
                   type="button"
                   className="min-h-11 sm:min-h-0"
                   disabled={guardando}

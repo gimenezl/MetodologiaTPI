@@ -605,6 +605,20 @@ BEGIN
         pg_temp.crear('DEPORTE', NULL, 'e0000000-0000-4000-8000-000000000105', NULL, '1', 'mañana', NULL) = 'E22007',
         'D5: una fecha ilegible: 22007');
 
+    INSERT INTO public.deportes (id, nombre) VALUES (pg_temp.u(2002), 'Deporte D5b EPT-103');
+    -- D5b. Rango de años igual al de la aplicación (1900 a 9999).
+    FOREACH v_r IN ARRAY ARRAY['1899-12-31', '0001-01-01', '4713-11-24 BC'] LOOP
+        PERFORM pg_temp.afirmar(
+            pg_temp.crear('DEPORTE', NULL, pg_temp.u(2002), NULL, '1', v_r, NULL) = 'EP6821',
+            'D5b: desde ' || v_r || ' -> P6821');
+    END LOOP;
+    PERFORM pg_temp.afirmar(
+        pg_temp.crear('DEPORTE', NULL, pg_temp.u(2002), NULL, '1', '2040-01-01', '9999-12-31') LIKE '{%',
+        'D5b: hasta 9999-12-31 es el máximo aceptado');
+    PERFORM pg_temp.afirmar(
+        pg_temp.crear('DEPORTE', NULL, pg_temp.u(2002), NULL, '1', '9999-12-31', '9999-12-31') = 'EP6830',
+        'D5b: y el día 9999-12-31 ya está cubierto por esa versión (sin desborde del rango)');
+
     -- D6. La restricción de exclusión de EPT-100 sigue siendo la garantía de fondo
     -- (escritura del propietario, sin pasar por las operaciones).
     BEGIN
@@ -722,6 +736,21 @@ BEGIN
         'E7: con una anterior de fin propio, la nueva que lo cubre la acorta a D-1');
     PERFORM pg_temp.afirmar(pg_temp.n_nivel(3) = 3,
         'E7: el nivel 3 tiene tres versiones: nada se borró');
+
+    INSERT INTO public.deportes (id, nombre) VALUES (pg_temp.u(2001), 'Deporte E7b EPT-103');
+    -- E7b. Anterior ABIERTA y nueva con fin: el tramo posterior quedaría sin tarifa para siempre.
+    PERFORM pg_temp.afirmar(
+        pg_temp.j(pg_temp.crear('DEPORTE', NULL, pg_temp.u(2001), NULL, '100', '2024-01-01', NULL)) IS NOT NULL,
+        'E7b: preparación: una versión abierta desde 2024-01-01');
+    v_antes := pg_temp.huella('deporte_id = ''' || pg_temp.u(2001) || '''');
+    PERFORM pg_temp.afirmar(
+        pg_temp.cambiar('DEPORTE', NULL, pg_temp.u(2001), NULL, '200', '2024-06-01', '2024-12-31') = 'EP6833',
+        'E7b: cambiar con fin sobre una versión abierta -> P6833 (no deja el tramo posterior sin tarifa)');
+    PERFORM pg_temp.afirmar(pg_temp.huella('deporte_id = ''' || pg_temp.u(2001) || '''') = v_antes,
+        'E7b: sin escrituras parciales');
+    PERFORM pg_temp.afirmar(
+        pg_temp.j(pg_temp.cambiar('DEPORTE', NULL, pg_temp.u(2001), NULL, '200', '2024-06-01', NULL)) IS NOT NULL,
+        'E7b: sin fin, el mismo cambio sí se acepta');
 
     -- E8. Validaciones de entrada: nada persiste.
     v_antes := pg_temp.huella('nivel_id = 2');

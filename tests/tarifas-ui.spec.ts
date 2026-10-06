@@ -219,6 +219,7 @@ test.describe('alta de una tarifa', () => {
     await dialogo.getByRole('button', { name: 'Revisar' }).click()
     await expect(dialogo.getByLabel('Importe (ARS)')).toHaveAccessibleDescription('Ingresá el importe de la tarifa.')
     await expect(dialogo.getByLabel('Vigente desde')).toHaveAccessibleDescription('Ingresá la fecha de inicio.')
+    if (hayTeclado(page)) await expect(dialogo.getByLabel('Importe (ARS)')).toBeFocused()
 
     // Precisión extra: no se redondea, se rechaza.
     await dialogo.getByLabel('Importe (ARS)').fill('10.005')
@@ -254,6 +255,8 @@ test.describe('alta de una tarifa', () => {
     await dialogo.getByLabel('Vigente hasta (opcional)').fill('')
     await dialogo.getByRole('button', { name: 'Revisar' }).click()
     await expect(dialogo.getByText('Revisá los datos antes de guardar:')).toBeVisible()
+    // El cambio de paso se anuncia: el foco va al encabezado de la revisión, no a <body>.
+    if (hayTeclado(page)) await expect(dialogo.getByText('Revisá los datos antes de guardar:')).toBeFocused()
     await expect(dialogo).toContainText('$ 1.500,50')
     await expect(dialogo).toContainText('Desde el 01/08/2030, sin fecha de fin')
     await capturar(page, 'dialogo-revision', { paginaCompleta: false })
@@ -262,6 +265,7 @@ test.describe('alta de una tarifa', () => {
     // «Volver a editar» conserva lo escrito.
     await dialogo.getByRole('button', { name: 'Volver a editar' }).click()
     await expect(dialogo.getByLabel('Importe (ARS)')).toHaveValue('1500,50')
+    if (hayTeclado(page)) await expect(dialogo.getByLabel('Importe (ARS)')).toBeFocused()
     await dialogo.getByRole('button', { name: 'Revisar' }).click()
 
     await dialogo.getByRole('button', { name: 'Confirmar y guardar' }).click()
@@ -355,6 +359,8 @@ test.describe('alta de una tarifa', () => {
     const alerta = dialogo.getByRole('alert')
     await expect(alerta).toContainText('No pudimos comunicarnos con el servidor')
     await expect(alerta).toContainText('revisá el historial de la tarifa antes de reintentar')
+    // Tras el fallo el foco sigue en un control del diálogo, no en <body>.
+    if (hayTeclado(page)) await expect(dialogo.getByRole('button', { name: 'Reintentar guardado' })).toBeFocused()
     await expect(dialogo).toBeVisible()
     await expect(aplicacion(page).getByRole('status').filter({ hasText: 'Guardaste' })).toHaveCount(0)
     await capturar(page, 'falla-de-red', { paginaCompleta: false })
@@ -507,6 +513,7 @@ test.describe('edición de una versión', () => {
 
     await expect(dialogo.getByRole('alert')).toContainText('Otra persona modificó esta tarifa')
     await expect(dialogo.getByRole('button', { name: 'Confirmar y guardar' })).toHaveCount(0)
+    if (hayTeclado(page)) await expect(dialogo.getByRole('button', { name: 'Recargar datos' })).toBeFocused()
     await expect(aplicacion(page).getByRole('status').filter({ hasText: 'Actualizaste' })).toHaveCount(0)
     await exigirPantallaSinDetalleTecnico(page, 'conflicto de edición')
     await capturar(page, 'conflicto-de-edicion', { paginaCompleta: false })
@@ -563,5 +570,105 @@ test.describe('móvil', () => {
     await alturaMinima(dialogo.getByRole('button', { name: 'Revisar' }), 44, 'Revisar')
     await alturaMinima(dialogo.getByRole('button', { name: 'Cancelar' }), 44, 'Cancelar')
     await capturar(page, 'dialogo', { paginaCompleta: false })
+  })
+})
+
+test.describe('guardado al pie de la página y respuestas inesperadas', () => {
+  async function llenarYRevisar(page: Page, boton: Locator) {
+    await boton.scrollIntoViewIfNeeded()
+    await boton.click()
+    const dialogo = page.getByRole('dialog')
+    await dialogo.getByLabel('Importe (ARS)').fill('100')
+    await dialogo.getByLabel('Vigente desde').fill('2030-08-01')
+    await dialogo.getByRole('button', { name: 'Revisar' }).click()
+    return dialogo
+  }
+
+  test('el aviso de éxito queda a la vista aunque se haya guardado al pie de la página', async ({ page }) => {
+    await page.route('**/api/tarifas', async (ruta) => {
+      await ruta.fulfill(
+        json(201, {
+          ok: true,
+          tarifa: { id: 'e1030000-0000-4000-8000-0000000000f5', importe: '100.00', desde: '2030-08-01', hasta: null },
+        })
+      )
+    })
+    await abrir(page)
+    const dialogo = await llenarYRevisar(
+      page,
+      tarjeta(page, 'Comedor ficticio').getByRole('button', { name: 'Nueva tarifa de Comedor ficticio' })
+    )
+    await dialogo.getByRole('button', { name: 'Confirmar y guardar' }).click()
+    const aviso = aplicacion(page).getByRole('status').filter({ hasText: 'Guardaste la tarifa de Comedor ficticio' })
+    await expect(aviso).toBeVisible()
+    await expect(aviso).toBeInViewport()
+  })
+
+  test('un 200 sin la forma esperada se informa como «no sabemos si se guardó»', async ({ page }) => {
+    await page.route('**/api/tarifas', async (ruta) => {
+      await ruta.fulfill(json(200, {}))
+    })
+    await abrir(page)
+    const dialogo = await llenarYRevisar(
+      page,
+      tarjeta(page, 'Deporte ficticio B').getByRole('button', { name: 'Nueva tarifa de Deporte ficticio B' })
+    )
+    await dialogo.getByRole('button', { name: 'Confirmar y guardar' }).click()
+    await expect(dialogo.getByRole('alert')).toContainText('no sabemos si el cambio se guardó')
+    await expect(aplicacion(page).getByRole('status').filter({ hasText: 'Guardaste' })).toHaveCount(0)
+  })
+
+  test('mientras guarda, Escape no cierra el diálogo', async ({ page }) => {
+    test.skip(!hayTeclado(page), 'WebKit táctil no envía Escape como en escritorio.')
+    await page.route('**/api/tarifas', async (ruta) => {
+      await new Promise((resolver) => setTimeout(resolver, 700))
+      await ruta.fulfill(
+        json(201, {
+          ok: true,
+          tarifa: { id: 'e1030000-0000-4000-8000-0000000000f6', importe: '100.00', desde: '2030-08-01', hasta: null },
+        })
+      )
+    })
+    await abrir(page)
+    const dialogo = await llenarYRevisar(
+      page,
+      tarjeta(page, 'Deporte ficticio B').getByRole('button', { name: 'Nueva tarifa de Deporte ficticio B' })
+    )
+    await dialogo.getByRole('button', { name: 'Confirmar y guardar' }).click()
+    await expect(dialogo.getByRole('button', { name: 'Guardando…' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(dialogo).toBeVisible()
+    await expect(dialogo).toHaveCount(0)
+  })
+
+  test('una tarifa que ya no existe pide recargar', async ({ page }) => {
+    await page.route('**/api/tarifas/*', async (ruta) => {
+      await ruta.fulfill(
+        json(404, { error: 'La tarifa ya no existe. Recargá la pantalla.', codigo: 'TARIFA_INEXISTENTE' })
+      )
+    })
+    await abrir(page)
+    const inicial = tarjeta(page, 'INICIAL')
+    await inicial.getByText(/^Historial/).click()
+    await inicial.getByRole('button', { name: /^Editar la tarifa de INICIAL: Desde el 01\/06\/2030/ }).click()
+    const dialogo = page.getByRole('dialog')
+    await dialogo.getByLabel('Importe (ARS)').fill('1')
+    await dialogo.getByRole('button', { name: 'Revisar' }).click()
+    await dialogo.getByRole('button', { name: 'Confirmar y guardar' }).click()
+    await expect(dialogo.getByRole('alert')).toContainText('La tarifa ya no existe')
+    await expect(dialogo.getByRole('button', { name: 'Recargar datos' })).toBeVisible()
+  })
+
+  test('el diálogo, con un error visible, también cumple el contraste AA', async ({ page }) => {
+    await abrir(page)
+    await tarjeta(page, 'Deporte ficticio B').getByRole('button', { name: 'Nueva tarifa de Deporte ficticio B' }).click()
+    const dialogo = page.getByRole('dialog')
+    await dialogo.getByLabel('Importe (ARS)').fill('10.005')
+    await dialogo.getByRole('button', { name: 'Revisar' }).click()
+    await exigirContraste(page, 'diálogo de tarifa con error', {
+      raiz: '[role="dialog"]',
+      esenciales: ['[role="dialog"] h2'],
+      minimoMedidos: 6,
+    })
   })
 })
