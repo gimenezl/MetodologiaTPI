@@ -35,6 +35,16 @@
 --   operación que ya estaba autorizada. No se promete un corte instantáneo que
 --   anule transacciones en curso.
 --
+--   Consecuencia de esa espera, también aceptada: `cambiar_rol_perfil` y
+--   `cambiar_acceso_perfil` (EPT-59) toman el consultivo global 59001 ANTES del
+--   FOR UPDATE del perfil. Una revocación que espera la guarda de una operación de
+--   tarifas retiene 59001 durante la espera, y mientras tanto todo cambio de rol o de
+--   acceso de CUALQUIER persona queda encolado detrás. La duración está acotada por
+--   la de esa operación, que a su vez puede esperar el consultivo de la referencia o
+--   una fila de tarifa. No hay ciclo; EPT-59 no se modifica.
+--   Además, cualquier UPDATE de columnas no clave del perfil de un DIRECTOR (por
+--   ejemplo el nombre) se serializa del mismo modo con sus operaciones de tarifas.
+--
 -- QUÉ PROTEGE EL BLOQUEO
 --   `FOR SHARE` entra en conflicto con el UPDATE ordinario (FOR NO KEY UPDATE) de
 --   los campos que no son clave: `rol_id` y `estado_acceso`, que son los que

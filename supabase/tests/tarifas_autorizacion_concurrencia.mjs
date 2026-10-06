@@ -66,6 +66,7 @@ const tolerante = (parametro, expresion) => `DO $prueba$
       PERFORM pg_catalog.set_config('${parametro}', 'OK:' || COALESCE(v, ''), false);
     EXCEPTION WHEN OTHERS THEN
       PERFORM pg_catalog.set_config('${parametro}', SQLSTATE, false);
+      PERFORM pg_catalog.set_config('${parametro}_msg', SQLERRM, false);
     END;
   END
   $prueba$;`
@@ -173,6 +174,14 @@ async function exigirResultado(sesion, parametro, etiqueta, esperado) {
   const obtenido = await resultadoDe(sesion, parametro, etiqueta)
   const coincide = esperado === 'OK' ? obtenido.startsWith('OK:') : obtenido === esperado
   exigir(coincide, `${etiqueta}: se esperaba ${esperado} y se obtuvo ${obtenido}`)
+  // 42501 también es «permission denied» por GRANT o RLS: el rechazo debe ser el de la guarda.
+  if (esperado === '42501' && parametro === 'ept103.res') {
+    const mensaje = await resultadoDe(sesion, `${parametro}_msg`, `${etiqueta}_mensaje`)
+    exigir(
+      mensaje === 'Solo la dirección puede administrar las tarifas.',
+      `${etiqueta}: el 42501 no es el de la guarda (${mensaje})`
+    )
+  }
 }
 
 const foto = () =>
@@ -268,11 +277,13 @@ async function restaurar() {
 
 async function recuperar() {
   await Promise.allSettled([c.ejecutar('ROLLBACK;', 'recuperar_c')])
-  await Promise.allSettled(pendientes)
-  pendientes = []
+  // Primero se liberan las transacciones que retienen la guarda; recién después se esperan
+  // las llamadas pendientes (esperarlas antes las colgaría hasta el tiempo máximo).
   await Promise.allSettled(
     [a, b, r, o].map((s) => s.ejecutar('ROLLBACK;', 'recuperar'))
   )
+  await Promise.allSettled(pendientes)
+  pendientes = []
   await Promise.allSettled([c.ejecutar('ROLLBACK;', 'recuperar_c2')])
 }
 
@@ -535,6 +546,9 @@ try {
       await caso(`orden 1, revocación confirmada antes · ${op} · ${rev}`, () => revocacionConfirmadaPrimero(op, rev))
       await caso(`orden 1, revocación en vuelo (la operación espera el perfil) · ${op} · ${rev}`, () => revocacionEnVueloPrimero(op, rev))
     }
+  }
+  for (const rev of ['acceso por UPDATE directo', 'rol por UPDATE directo']) {
+    await caso(`orden 1, revocación en vuelo (la operación espera el perfil) · crear · ${rev}`, () => revocacionEnVueloPrimero('crear', rev))
   }
   await caso('orden 1, revocación confirmada antes · crear · rol por UPDATE directo', () => revocacionConfirmadaPrimero('crear', 'rol por UPDATE directo'))
 
