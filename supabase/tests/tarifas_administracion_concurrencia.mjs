@@ -27,9 +27,10 @@ import { esperarBloqueo, SesionPsql } from './_sesion-psql.mjs'
  *      ENTERA: la anterior conserva su fin.
  *   6. Una edición de precio concurrente con la factura de un ítem que usa esa
  *      tarifa: espera, procede, y el ítem conserva lo facturado.
- *   7. Una escritura que espera el bloqueo de la referencia y, mientras tanto,
- *      pierde el acceso (cuenta bloqueada): al despertar vuelve a comprobar el rol
- *      y se rechaza (42501), sin escribir nada.
+ *   7. Autorización transaccional: una cuenta bloqueada ANTES de tomar la guarda se
+ *      rechaza (42501); si la operación tomó primero la guarda (FOR SHARE sobre el perfil)
+ *      y espera el bloqueo de la referencia, el bloqueo de la cuenta espera y la operación
+ *      termina autorizada. La matriz completa está en `tarifas_autorizacion_concurrencia.mjs`.
  *
  * Corre contra la base local descartable e identificada; para el stack aislado
  * de la unidad: `EPT_SUPABASE_DB_CONTAINER=supabase_db_ept103`. Crea sus propios
@@ -328,31 +329,67 @@ async function probarEdicionContraFactura(b, c, pids) {
   console.log('OK CONCURRENCIA 6: la edición espera al ítem recién facturado y procede; el ítem conserva lo facturado (200.00) y la tarifa dice 250.00')
 }
 
-/** 7. El rol se vuelve a comprobar al despertar del bloqueo: perderlo mientras se espera corta la escritura. */
+/**
+ * 7. Autorización transaccional (corrección de EPT-103). La operación toma FOR SHARE sobre el
+ * perfil del actor y lo conserva hasta el fin de su transacción, así que una revocación y una
+ * operación tienen solo dos órdenes seriales. Ver `tarifas_autorizacion_concurrencia.mjs` para
+ * la matriz completa; acá se conserva la carrera histórica en sus dos órdenes.
+ *
+ * Ya NO se espera la revocación antes de liberar la espera de la operación: con la guarda
+ * nueva esa revocación espera a la operación y esperarla sería colgar la prueba.
+ */
 async function probarAccesoRevocadoMientrasEspera(a, b, c, pids) {
+  // 7a. Orden 1: la cuenta se bloquea y la revocación CONFIRMA antes de que B adquiera la guarda.
+  await c.ejecutar(`UPDATE public.perfiles SET estado_acceso = 'BLOQUEADO' WHERE id = '${DIRECTOR}';`, 'bloquear_cuenta')
+  await b.ejecutar(
+    crear('DEPORTE', 'NULL', `'${DEPORTE_1}'::UUID`, '20', '2065-03-01', '2065-03-31'),
+    'alta_b_con_cuenta_bloqueada'
+  )
+  await exigir(b, 'alta B tras confirmarse el bloqueo de la cuenta', '42501')
+  await c.ejecutar(`UPDATE public.perfiles SET estado_acceso = 'HABILITADO' WHERE id = '${DIRECTOR}';`, 'restituir_cuenta')
+  await exigirValor(
+    c,
+    'sin_fila_de_b_7a',
+    `(SELECT pg_catalog.count(*) FROM public.tarifas WHERE deporte_id = '${DEPORTE_1}' AND desde IN ('2065-01-01', '2065-03-01'))`,
+    '0'
+  )
+
+  // 7b. Orden 2: B adquiere la guarda y espera el consultivo; el bloqueo de la cuenta ESPERA a
+  // las transacciones de A y B, y B termina autorizada. El bloqueo confirma después.
   await a.ejecutar(
     `BEGIN; ${crear('DEPORTE', 'NULL', `'${DEPORTE_1}'::UUID`, '10', '2065-01-01', '2065-01-31')}`,
-    'alta_a_retiene_el_bloqueo'
+    'alta_a_retiene_el_bloqueo_7b'
   )
-  await exigir(a, 'alta A que retiene el bloqueo de la referencia', 'OK')
+  await exigir(a, 'alta A que retiene el bloqueo de la referencia (7b)', 'OK')
   const altaB = b.ejecutar(
     crear('DEPORTE', 'NULL', `'${DEPORTE_1}'::UUID`, '20', '2065-03-01', '2065-03-31'),
     'alta_b_espera_el_bloqueo'
   )
   await esperarBloqueo(a, pids.a, pids.b)
-  // Mientras B espera, Dirección bloquea la cuenta (autocommit).
-  await c.ejecutar(`UPDATE public.perfiles SET estado_acceso = 'BLOQUEADO' WHERE id = '${DIRECTOR}';`, 'bloquear_cuenta')
+  // Sin await: la revocación espera a la guarda de A (y de B) hasta que terminen.
+  const bloqueoCuenta = c.ejecutar(
+    `UPDATE public.perfiles SET estado_acceso = 'BLOQUEADO' WHERE id = '${DIRECTOR}';`,
+    'bloquear_cuenta_en_espera'
+  )
+  await esperarBloqueo(a, pids.a, pids.c)
   await a.ejecutar('COMMIT;', 'confirmar_alta_a_retenida')
   await altaB
-  await exigir(b, 'alta B que ya había pasado la guarda de rol antes de esperar', '42501')
-  await c.ejecutar(`UPDATE public.perfiles SET estado_acceso = 'HABILITADO' WHERE id = '${DIRECTOR}';`, 'restituir_cuenta')
+  await exigir(b, 'alta B que ya había tomado la guarda antes de esperar', 'OK')
+  await bloqueoCuenta
   await exigirValor(
     c,
-    'sin_fila_de_b',
+    'fila_de_b_7b',
     `(SELECT pg_catalog.count(*) FROM public.tarifas WHERE deporte_id = '${DEPORTE_1}' AND desde = '2065-03-01')`,
-    '0'
+    '1'
   )
-  console.log('OK CONCURRENCIA 7: una cuenta bloqueada mientras espera el bloqueo no escribe: el rol se vuelve a comprobar al despertar (42501)')
+  await exigirValor(
+    c,
+    'cuenta_bloqueada_tras_las_operaciones',
+    `(SELECT estado_acceso FROM public.perfiles WHERE id = '${DIRECTOR}')`,
+    'BLOQUEADO'
+  )
+  await c.ejecutar(`UPDATE public.perfiles SET estado_acceso = 'HABILITADO' WHERE id = '${DIRECTOR}';`, 'restituir_cuenta_7b')
+  console.log('OK CONCURRENCIA 7: con la cuenta bloqueada antes de la guarda la alta recibe 42501; con la guarda tomada primero el bloqueo espera y la alta termina autorizada')
 }
 
 const sesionA = new SesionPsql('A', 'EPT103')
