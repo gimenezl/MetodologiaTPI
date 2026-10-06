@@ -2610,6 +2610,18 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      actualizar_tarifa: {
+        Args: {
+          p_desde: string
+          p_desde_previo: string
+          p_hasta: string
+          p_hasta_previo: string
+          p_importe: string
+          p_importe_previo: string
+          p_tarifa_id: string
+        }
+        Returns: Json
+      }
       agregar_horario_grupo_deportivo: {
         Args: {
           p_dia_semana: number
@@ -2843,6 +2855,18 @@ export type Database = {
           perfil_id: string
           rol: string
         }[]
+      }
+      cambiar_tarifa: {
+        Args: {
+          p_concepto: string
+          p_deporte_id: string
+          p_desde: string
+          p_hasta: string
+          p_importe: string
+          p_nivel_id: number
+          p_servicio_id: string
+        }
+        Returns: Json
       }
       cancelar_inscripcion_deportiva: {
         Args: { p_inscripcion_id: string }
@@ -3164,6 +3188,18 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      crear_tarifa: {
+        Args: {
+          p_concepto: string
+          p_deporte_id: string
+          p_desde: string
+          p_hasta: string
+          p_importe: string
+          p_nivel_id: number
+          p_servicio_id: string
+        }
+        Returns: Json
       }
       dar_baja_inscripcion_legada: {
         Args: { p_inscripcion_id: string }

@@ -591,6 +591,13 @@ BEGIN
     -- consultado no existe y toda cuenta (incluso la bloqueada) recibe cero filas; el alcance por
     -- actor sobre pagos reales lo prueban `economico_rls.sql` y `economico_storage.mjs`.
     PERFORM pg_temp.rpc('public.resumen_comprobantes_pago', 'n', pg_catalog.format('public.resumen_comprobantes_pago(%L)', pg_temp.u('01')));
+    -- EPT-103: administración de tarifas. Solo Dirección habilitada completa el alta y la sucesión (cada
+    -- intento se revierte); la actualización apunta a una tarifa inexistente, así que la Dirección recibe
+    -- P6832 y el resto 42501. La matriz completa de actores y la edición sobre filas reales están en
+    -- `tarifas_administracion_rls.sql`.
+    PERFORM pg_temp.rpc('public.crear_tarifa', 'x', pg_catalog.format('public.crear_tarifa(''DEPORTE'', NULL, %L, NULL, ''1'', DATE ''2099-01-01'', DATE ''2099-01-01'')', f));
+    PERFORM pg_temp.rpc('public.cambiar_tarifa', 'x', pg_catalog.format('public.cambiar_tarifa(''DEPORTE'', NULL, %L, NULL, ''1'', DATE ''2099-01-01'', NULL)', f));
+    PERFORM pg_temp.rpc('public.actualizar_tarifa', 'x', pg_catalog.format('public.actualizar_tarifa(%L, ''1'', DATE ''2099-01-01'', NULL, ''1'', DATE ''2099-01-01'', NULL)', pg_temp.u('01')));
     PERFORM pg_temp.rpc('public.configurar_horario_materia', 'x', pg_catalog.format('public.configurar_horario_materia(%L, 2::smallint, %L, %L, NULL)', ASIG, '09:00', '10:00'));
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria', 'n', 'public.consultar_compatibilidad_horaria()');
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria_alumno', 'n', pg_catalog.format('public.consultar_compatibilidad_horaria_alumno(%L)', EST));
