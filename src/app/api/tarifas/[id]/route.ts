@@ -1,11 +1,14 @@
 import { revalidatePath } from 'next/cache'
 import { NextResponse } from 'next/server'
 import { actualizarTarifaSchema, primerErrorTarifas, tarifaIdSchema } from '@/lib/tarifas'
+import { metodoNoPermitido, opcionesPermitidas } from '@/lib/metodos-http'
 import { requerirDirector } from '@/services/autorizacion'
 import { actualizarTarifa } from '@/services/tarifas.service'
 import { leerCuerpo, MENSAJE_NO_AUTORIZADO, responderError } from '../_comun'
 
 export const dynamic = 'force-dynamic'
+
+const PERMITIDOS = ['PATCH'] as const
 
 /**
  * Corrección del importe y la vigencia de una versión de tarifa (EPT-103). En
@@ -45,3 +48,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   revalidatePath('/dashboard/tarifas')
   return NextResponse.json({ ok: true, tarifa: resultado.datos })
 }
+
+export const GET = () => metodoNoPermitido(PERMITIDOS)
+export const PUT = () => metodoNoPermitido(PERMITIDOS)
+export const POST = () => metodoNoPermitido(PERMITIDOS)
+export const DELETE = () => metodoNoPermitido(PERMITIDOS)
+export const OPTIONS = () => opcionesPermitidas(PERMITIDOS)

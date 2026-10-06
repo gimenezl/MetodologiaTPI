@@ -1,11 +1,14 @@
 import { revalidatePath } from 'next/cache'
 import { NextResponse } from 'next/server'
 import { cambiarTarifaSchema, primerErrorTarifas } from '@/lib/tarifas'
+import { metodoNoPermitido, opcionesPermitidas } from '@/lib/metodos-http'
 import { requerirDirector } from '@/services/autorizacion'
 import { cambiarTarifa } from '@/services/tarifas.service'
 import { leerCuerpo, MENSAJE_NO_AUTORIZADO, responderError } from '../_comun'
 
 export const dynamic = 'force-dynamic'
+
+const PERMITIDOS = ['POST'] as const
 
 /**
  * Cambio de precio por Dirección (EPT-103): «a partir del día D el importe es X».
@@ -41,3 +44,9 @@ export async function POST(request: Request) {
     nueva: resultado.datos.nueva,
   })
 }
+
+export const GET = () => metodoNoPermitido(PERMITIDOS)
+export const PUT = () => metodoNoPermitido(PERMITIDOS)
+export const PATCH = () => metodoNoPermitido(PERMITIDOS)
+export const DELETE = () => metodoNoPermitido(PERMITIDOS)
+export const OPTIONS = () => opcionesPermitidas(PERMITIDOS)

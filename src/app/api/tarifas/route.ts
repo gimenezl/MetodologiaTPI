@@ -1,11 +1,14 @@
 import { revalidatePath } from 'next/cache'
 import { NextResponse } from 'next/server'
 import { crearTarifaSchema, primerErrorTarifas } from '@/lib/tarifas'
+import { metodoNoPermitido, opcionesPermitidas } from '@/lib/metodos-http'
 import { requerirDirector } from '@/services/autorizacion'
 import { crearTarifa } from '@/services/tarifas.service'
 import { leerCuerpo, MENSAJE_NO_AUTORIZADO, responderError } from './_comun'
 
 export const dynamic = 'force-dynamic'
+
+const PERMITIDOS = ['POST'] as const
 
 /**
  * Alta de una versión de tarifa por Dirección (EPT-103).
@@ -38,3 +41,9 @@ export async function POST(request: Request) {
   revalidatePath('/dashboard/tarifas')
   return NextResponse.json({ ok: true, tarifa: resultado.datos }, { status: 201 })
 }
+
+export const GET = () => metodoNoPermitido(PERMITIDOS)
+export const PUT = () => metodoNoPermitido(PERMITIDOS)
+export const PATCH = () => metodoNoPermitido(PERMITIDOS)
+export const DELETE = () => metodoNoPermitido(PERMITIDOS)
+export const OPTIONS = () => opcionesPermitidas(PERMITIDOS)
