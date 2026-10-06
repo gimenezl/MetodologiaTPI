@@ -37,7 +37,7 @@ export function rechazarSiNoEsConfiable(request: Request) {
     return NextResponse.json({ error: 'Origen no permitido.' }, { status: 403 })
   }
   const tipo = request.headers.get('content-type') ?? ''
-  if (!/^application\/json/iu.test(tipo)) {
+  if (!/^application\/json(?:;|$)/iu.test(tipo)) {
     return NextResponse.json({ error: 'El contenido debe enviarse como JSON.' }, { status: 415 })
   }
   return null

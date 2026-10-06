@@ -38,8 +38,7 @@ test.skip(
 
 const SESION = {
   directora: 'tests/.auth/directora.json',
-  directoraCierre: 'tests/.auth/directora-cierre.json',
-  estudiante: 'tests/.auth/estudiante.json',
+    estudiante: 'tests/.auth/estudiante.json',
   docente: 'tests/.auth/docente.json',
   padre: 'tests/.auth/padre.json',
   personal: 'tests/.auth/personal.json',
@@ -52,8 +51,10 @@ const CONTENEDOR = process.env.EPT_SUPABASE_DB_CONTAINER ?? 'supabase_db_educar-
 
 const DEP_A = 'e1030000-0000-4000-8000-000000000001'
 const DEP_B = 'e1030000-0000-4000-8000-000000000002'
+const DEP_C = 'e1030000-0000-4000-8000-000000000003'
 const NOMBRE_DEP_A = 'E2E Tarifas A'
 const NOMBRE_DEP_B = 'E2E Tarifas B'
+const NOMBRE_DEP_C = 'E2E Tarifas C'
 const NIVEL_E2E = 'E2E TARIFAS NIVEL'
 const CURSO = 'e1030000-0000-4000-8000-000000000011'
 const ALUMNO = 'e1030000-0000-4000-8000-000000000021'
@@ -99,10 +100,10 @@ function limpiar() {
     DELETE FROM public.items_factura WHERE factura_id = '${FACTURA}';
     DELETE FROM public.facturas WHERE alumno_id = '${ALUMNO}';
     DELETE FROM public.tarifas
-      WHERE deporte_id IN ('${DEP_A}', '${DEP_B}')
+      WHERE deporte_id IN ('${DEP_A}', '${DEP_B}', '${DEP_C}')
          OR nivel_id IN (SELECT id FROM public.niveles WHERE nombre = '${NIVEL_E2E}')
          OR desde >= '2090-01-01';
-    DELETE FROM public.deportes WHERE id IN ('${DEP_A}', '${DEP_B}');
+    DELETE FROM public.deportes WHERE id IN ('${DEP_A}', '${DEP_B}', '${DEP_C}');
     DELETE FROM public.matriculas WHERE alumno_id = '${ALUMNO}';
     DELETE FROM public.alumnos WHERE perfil_id = '${ALUMNO}';
     DELETE FROM public.perfiles WHERE id = '${ALUMNO}';
@@ -117,7 +118,7 @@ function preparar() {
   sql(`
     BEGIN;
     INSERT INTO public.deportes (id, nombre)
-    VALUES ('${DEP_A}', '${NOMBRE_DEP_A}'), ('${DEP_B}', '${NOMBRE_DEP_B}');
+    VALUES ('${DEP_A}', '${NOMBRE_DEP_A}'), ('${DEP_B}', '${NOMBRE_DEP_B}'), ('${DEP_C}', '${NOMBRE_DEP_C}');
     INSERT INTO public.niveles (nombre, activo, orden) VALUES ('${NIVEL_E2E}', TRUE, 9301);
     INSERT INTO public.cursos (id, nivel_id, denominacion, division, activo)
     VALUES ('${CURSO}', (SELECT id FROM public.niveles WHERE nombre = '${NIVEL_E2E}'), 'Curso E2E tarifas', 'A', TRUE);
@@ -175,7 +176,11 @@ async function pedirConSesion(
   do {
     if (fs.existsSync(archivoSesion)) {
       const contexto = await crearContexto.newContext({ baseURL: BASE_URL, storageState: archivoSesion })
-      const respuesta = await contexto.fetch(url, opciones)
+      // `fetch` no fija el tipo de contenido como `post`: la ruta exige JSON, igual que el navegador.
+      const respuesta = await contexto.fetch(url, {
+        ...opciones,
+        headers: { 'content-type': 'application/json', ...opciones?.headers },
+      })
       ultimoEstado = respuesta.status()
       if (ultimoEstado !== 401) {
         contextosActivos.push(contexto)
@@ -389,12 +394,12 @@ test.describe.serial('DIRECTOR autenticado — administración de tarifas (API)'
   })
 
   test('un cambio con fin sobre una versión abierta se rechaza: dejaría el tramo posterior sin tarifa', async () => {
-    await esperar(await altaDeporte(DEP_B, '100', '2094-01-01'), 201)
-    const antes = versiones(`deporte_id = '${DEP_B}' AND desde >= '2094-01-01' AND desde < '2095-01-01'`)
-    const respuesta = await cambio({ concepto: 'DEPORTE', referencia_id: DEP_B, importe: '200', desde: '2094-06-01', hasta: '2094-12-31' })
+    await esperar(await altaDeporte(DEP_C, '100', '2094-01-01'), 201)
+    const antes = versiones(`deporte_id = '${DEP_C}' AND desde >= '2094-01-01' AND desde < '2095-01-01'`)
+    const respuesta = await cambio({ concepto: 'DEPORTE', referencia_id: DEP_C, importe: '200', desde: '2094-06-01', hasta: '2094-12-31' })
     const cuerpo = await esperar(respuesta, 409)
     expect(cuerpo.campo).toBe('hasta')
-    expect(versiones(`deporte_id = '${DEP_B}' AND desde >= '2094-01-01' AND desde < '2095-01-01'`)).toBe(antes)
+    expect(versiones(`deporte_id = '${DEP_C}' AND desde >= '2094-01-01' AND desde < '2095-01-01'`)).toBe(antes)
   })
 
   test('las fechas fuera de los años 1900 a 9999 se rechazan sin dejar filas', async () => {
@@ -427,7 +432,7 @@ test.describe.serial('DIRECTOR autenticado — administración de tarifas (API)'
   })
 
   test('editar sin enviar el fin no lo borra en silencio', async () => {
-    const id = idTarifa(`deporte_id = '${DEP_B}' AND desde = '2094-01-01'`)
+    const id = idTarifa(`deporte_id = '${DEP_C}' AND desde = '2094-01-01'`)
     const antes = versiones(`id = '${id}'`)
     const cuerpo = await esperar(
       await edicion(id, { importe: '101', desde: '2094-01-01', previo: { importe: '100.00', desde: '2094-01-01', hasta: null } }),
@@ -850,13 +855,13 @@ for (const actor of [
 // ================================================================
 test.describe('DIRECTOR autenticado — rol vigente en la base', () => {
   test('con la sesión ya emitida, perder el rol DIRECTOR corta la escritura y recuperarlo la restituye', async () => {
-    const perfil = sql("SELECT id FROM public.perfiles WHERE dni = '99900007';")
-    test.skip(perfil === '', 'La identidad de cierre no existe en esta base.')
+    const perfil = sql("SELECT id FROM public.perfiles WHERE dni = '99900001';")
+    test.skip(perfil === '', 'La identidad de Dirección de prueba no existe en esta base.')
     const datos = { concepto: 'DEPORTE', referencia_id: INEXISTENTE, importe: '1', desde: '2089-01-01' }
     try {
       sql(`UPDATE public.perfiles SET rol_id = (SELECT id FROM public.roles WHERE nombre = 'PERSONAL') WHERE id = '${perfil}';`)
       await esperar(
-        await pedirConSesion(SESION.directoraCierre, '/api/tarifas', { method: 'POST', data: datos }),
+        await pedirConSesion(SESION.directora, '/api/tarifas', { method: 'POST', data: datos }),
         403,
         MENSAJE.soloDireccion
       )
@@ -865,7 +870,7 @@ test.describe('DIRECTOR autenticado — rol vigente en la base', () => {
     }
     // Restituido el rol, el mismo JWT llega hasta la base (404: la referencia ficticia no existe).
     await esperar(
-      await pedirConSesion(SESION.directoraCierre, '/api/tarifas', { method: 'POST', data: datos }),
+      await pedirConSesion(SESION.directora, '/api/tarifas', { method: 'POST', data: datos }),
       404
     )
   })
