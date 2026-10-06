@@ -447,6 +447,8 @@ DECLARE
     v_r TEXT;
     v_servicio UUID;
     v_nivel INTEGER;
+    -- Cantidad de niveles al empezar: otras suites pueden dejar niveles propios en una base reutilizada.
+    v_niveles BIGINT := (SELECT pg_catalog.count(*) FROM public.niveles);
 BEGIN
     -- C1. Cada nivel educativo tiene su cuota.
     FOR v_nivel IN SELECT id FROM public.niveles ORDER BY id LOOP
@@ -525,8 +527,8 @@ BEGIN
     -- C7. No se crearon catálogos duplicados ni recorridos nuevos.
     PERFORM pg_temp.afirmar(
         (SELECT pg_catalog.count(*) FROM public.servicios_escolares WHERE tipo = 'TRANSPORTE') = 4
-        AND (SELECT pg_catalog.count(*) FROM public.niveles) = 3,
-        'C7: los catálogos de recorridos y niveles no cambiaron');
+        AND (SELECT pg_catalog.count(*) FROM public.niveles) = v_niveles,
+        'C7: los catálogos de recorridos y niveles no cambiaron (' || v_niveles || ' niveles)');
 END;
 $$;
 

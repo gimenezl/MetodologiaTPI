@@ -659,6 +659,28 @@ test.describe('guardado al pie de la página y respuestas inesperadas', () => {
     await expect(dialogo.getByRole('button', { name: 'Recargar datos' })).toBeVisible()
   })
 
+  test('una superposición sin campo (cambio o edición) no ofrece reintentar lo mismo: lleva a volver a editar', async ({ page }) => {
+    await page.route('**/api/tarifas/cambio', async (ruta) => {
+      await ruta.fulfill(
+        json(409, {
+          error:
+            'Esas fechas se superponen con otra versión de la tarifa para la misma referencia. Ajustá el inicio o el fin: cada día debe tener una sola tarifa.',
+          codigo: 'SUPERPOSICION',
+        })
+      )
+    })
+    await abrir(page)
+    await tarjeta(page, 'INICIAL').getByRole('button', { name: 'Cambiar precio de INICIAL' }).click()
+    const dialogo = page.getByRole('dialog')
+    await dialogo.getByLabel('Nuevo importe (ARS)').fill('1')
+    await dialogo.getByLabel('Rige desde').fill('2030-07-01')
+    await dialogo.getByRole('button', { name: 'Revisar' }).click()
+    await dialogo.getByRole('button', { name: 'Confirmar y guardar' }).click()
+    await expect(dialogo.getByRole('alert')).toContainText('se superponen con otra versión')
+    await expect(dialogo.getByRole('button', { name: 'Reintentar guardado' })).toHaveCount(0)
+    if (hayTeclado(page)) await expect(dialogo.getByRole('button', { name: 'Volver a editar' })).toBeFocused()
+  })
+
   test('el diálogo, con un error visible, también cumple el contraste AA', async ({ page }) => {
     await abrir(page)
     await tarjeta(page, 'Deporte ficticio B').getByRole('button', { name: 'Nueva tarifa de Deporte ficticio B' }).click()

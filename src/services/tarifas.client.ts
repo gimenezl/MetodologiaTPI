@@ -26,6 +26,14 @@ export class ErrorTarifas extends Error {
   }
 }
 
+/** `AbortSignal.timeout` no existe en navegadores anteriores a 2022: se arma a mano si falta. */
+function senalConTiempo(milisegundos: number): AbortSignal {
+  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(milisegundos)
+  const controlador = new AbortController()
+  setTimeout(() => controlador.abort(), milisegundos)
+  return controlador.signal
+}
+
 async function enviar(url: string, method: 'POST' | 'PATCH', cuerpo: unknown) {
   let respuesta: Response
   try {
@@ -34,7 +42,7 @@ async function enviar(url: string, method: 'POST' | 'PATCH', cuerpo: unknown) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(cuerpo),
       // Sin respuesta en este plazo no sabemos si el servidor guardó: se trata como corte de red.
-      signal: AbortSignal.timeout(30_000),
+      signal: senalConTiempo(30_000),
     })
   } catch {
     throw new ErrorTarifas(MENSAJE_SIN_CONEXION, 0, { sinConexion: true })

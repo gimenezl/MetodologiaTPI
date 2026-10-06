@@ -200,6 +200,11 @@ export function DialogoTarifa({
         setConflicto(true)
         setErrorGeneral(problema.message)
         focoPendiente.current = 'tarifa-recargar'
+      } else if (problema.codigo === 'SUPERPOSICION' && !problema.campo) {
+        // En un cambio o una edición la causa puede ser el inicio o el fin: reintentar lo mismo
+        // no sirve, hay que volver a editar las fechas.
+        setErrorGeneral(problema.message)
+        focoPendiente.current = 'tarifa-volver'
       } else if (
         problema.campo === 'importe' ||
         problema.campo === 'desde' ||
@@ -348,6 +353,7 @@ export function DialogoTarifa({
             ) : (
               <>
                 <Button
+                  id="tarifa-volver"
                   type="button"
                   variant="outline"
                   className="min-h-11 sm:min-h-0"
