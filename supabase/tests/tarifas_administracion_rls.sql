@@ -14,7 +14,7 @@
 -- la regla. Los actores se simulan con SET ROLE + JWT, igual que PostgREST; la
 -- identidad sale siempre de `auth.uid()` y del perfil vigente.
 --
---   A. estructura y privilegios exactos de las operaciones y los auxiliares;
+--   A. estructura y privilegios exactos de las operaciones, los auxiliares y la guarda transaccional;
 --   B. contrato monetario: cero, límites, negativos, precisión, formatos;
 --   C. referencias: concepto, nivel, deporte, los cuatro recorridos y el comedor;
 --   D. vigencias: extremos inclusivos, fin abierto, fechas no finitas, adyacencia;
@@ -23,7 +23,8 @@
 --   G. histórico económico: facturas, ítems y pagos no cambian;
 --   H. autoridad: matriz de actores y escritura directa cerrada;
 --   I. sesión: JWT previo al bloqueo o al cambio de rol, metadata falsificada;
---   J. reversión no destructiva de la migración.
+--   J. reversión no destructiva de la migración (solo mecánica: no es una reversión segura de la
+--      autorización transaccional, ver 20261006175926).
 -- La concurrencia con dos conexiones reales está en `tarifas_administracion_concurrencia.mjs`.
 
 \set ON_ERROR_STOP on
@@ -261,6 +262,42 @@ BEGIN
         = ARRAY['proteger_tarifa_facturada_antes_de_actualizar',
                 'verificar_tarifa_servicio_antes_de_escribir']::TEXT[],
         'A8: no hay triggers nuevos sobre tarifas');
+
+    -- A9. Guarda de autorización transaccional (corrección de EPT-103): sin parámetros, DEFINER,
+    -- VOLATILE, search_path vacío, sin EXECUTE para nadie y con FOR SHARE (no la variante de clave).
+    -- La prueba de comportamiento está en `tarifas_autorizacion_concurrencia.mjs`.
+    v_f := 'app_private.exigir_director_tarifas()';
+    PERFORM pg_temp.afirmar(pg_catalog.to_regprocedure(v_f) IS NOT NULL, 'A9: existe ' || v_f);
+    PERFORM pg_temp.afirmar(
+        (SELECT p.prosecdef AND p.provolatile = 'v' AND p.pronargs = 0
+                AND p.proconfig = ARRAY['search_path=""']
+                AND p.prosrc ~ 'FOR SHARE OF p' AND p.prosrc !~* 'KEY SHARE'
+         FROM pg_catalog.pg_proc p WHERE p.oid = pg_catalog.to_regprocedure(v_f)),
+        'A9: la guarda es DEFINER VOLATILE, sin parámetros, con search_path vacío y FOR SHARE sobre el perfil');
+    FOREACH v_rol IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+        PERFORM pg_temp.afirmar(
+            NOT pg_catalog.has_function_privilege(v_rol, v_f, 'EXECUTE'),
+            'A9: ' || v_rol || ' sin EXECUTE sobre la guarda');
+    END LOOP;
+    SELECT pg_catalog.count(*) INTO v_n
+    FROM pg_catalog.pg_proc p,
+         LATERAL pg_catalog.aclexplode(COALESCE(p.proacl, pg_catalog.acldefault('f', p.proowner))) a
+    WHERE p.oid = pg_catalog.to_regprocedure(v_f) AND a.grantee = 0;
+    PERFORM pg_temp.afirmar(v_n = 0, 'A9: PUBLIC sin EXECUTE sobre la guarda');
+    PERFORM pg_temp.afirmar(
+        pg_temp.como(pg_temp.u(1), 'authenticated', 'SELECT app_private.exigir_director_tarifas()::TEXT') = 'E42501',
+        'A9: ni el DIRECTOR ejecuta la guarda directamente (42501)');
+    -- Las tres operaciones privadas invocan la guarda antes que cualquier espera y ya no leen el rol sin bloqueo.
+    PERFORM pg_temp.afirmar(
+        (SELECT pg_catalog.bool_and(p.prosrc ~ 'PERFORM app_private\.exigir_director_tarifas\(\)'
+                                    AND p.prosrc !~* 'es_director'
+                                    AND pg_catalog.strpos(p.prosrc, 'exigir_director_tarifas')
+                                        < pg_catalog.strpos(p.prosrc, 'bloquear_referencia_tarifa'))
+         FROM pg_catalog.pg_proc p
+         JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+         WHERE n.nspname = 'app_private'
+           AND p.proname IN ('crear_tarifa', 'cambiar_tarifa', 'actualizar_tarifa')),
+        'A9: las tres operaciones privadas toman la guarda antes del bloqueo de la referencia y sin es_director()');
 END;
 $$;
 
@@ -1124,13 +1161,15 @@ BEGIN
     DROP FUNCTION app_private.referencia_tarifa_valida(text, integer, uuid, uuid);
     DROP FUNCTION app_private.vigencia_tarifa_valida(date, date);
     DROP FUNCTION app_private.importe_tarifa_valido(text);
+    DROP FUNCTION app_private.exigir_director_tarifas();
 
     SELECT pg_catalog.count(*) INTO v_n
     FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
     WHERE p.proname IN ('crear_tarifa', 'cambiar_tarifa', 'actualizar_tarifa', 'tarifa_a_json',
                         'bloquear_referencia_tarifa', 'referencia_tarifa_valida',
-                        'vigencia_tarifa_valida', 'importe_tarifa_valido');
-    PERFORM pg_temp.afirmar(v_n = 0, 'J1: las once funciones se sueltan y no queda ninguna');
+                        'vigencia_tarifa_valida', 'importe_tarifa_valido',
+                        'exigir_director_tarifas');
+    PERFORM pg_temp.afirmar(v_n = 0, 'J1: las doce funciones se sueltan y no queda ninguna');
     PERFORM pg_temp.afirmar(pg_temp.huella('TRUE') = v_antes, 'J1: ninguna fila de tarifas cambió al revertir');
     PERFORM pg_temp.afirmar(
         (SELECT pg_catalog.count(*) FROM pg_catalog.pg_trigger t
