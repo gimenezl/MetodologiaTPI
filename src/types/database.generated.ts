@@ -1068,6 +1068,7 @@ export type Database = {
       items_factura: {
         Row: {
           alumno_id: string
+          composicion_id: string | null
           estado_pago: Database["public"]["Enums"]["estado_pago_item"]
           factura_id: string
           id: string
@@ -1080,6 +1081,7 @@ export type Database = {
         }
         Insert: {
           alumno_id: string
+          composicion_id?: string | null
           estado_pago?: Database["public"]["Enums"]["estado_pago_item"]
           factura_id: string
           id?: string
@@ -1092,6 +1094,7 @@ export type Database = {
         }
         Update: {
           alumno_id?: string
+          composicion_id?: string | null
           estado_pago?: Database["public"]["Enums"]["estado_pago_item"]
           factura_id?: string
           id?: string
@@ -3314,6 +3317,28 @@ export type Database = {
           estado_acceso: Database["public"]["Enums"]["estado_acceso"]
           user_id: string
         }[]
+      }
+      facturacion_avisos_director: { Args: never; Returns: Json }
+      facturacion_capturar_job: {
+        Args: { p_alumno: string; p_periodo: string }
+        Returns: string
+      }
+      facturacion_emitir_job: {
+        Args: { p_alumno: string; p_periodo: string }
+        Returns: Json
+      }
+      facturacion_estado_job: {
+        Args: { p_alumno: string; p_periodo: string }
+        Returns: Json
+      }
+      facturacion_iniciar_job: {
+        Args: { p_alumno: string; p_periodo: string }
+        Returns: undefined
+      }
+      facturacion_plan_job: { Args: never; Returns: Json }
+      facturacion_reintentar: {
+        Args: { p_alumno: string; p_periodo: string }
+        Returns: Json
       }
       historial_credenciales_qr: {
         Args: { p_alumno_id: string }
