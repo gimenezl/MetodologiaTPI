@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "facturacion:local": "node scripts/facturacion-local.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

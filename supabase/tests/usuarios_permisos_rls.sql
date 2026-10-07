@@ -370,10 +370,12 @@ DECLARE
         'listar_usuarios', 'consultar_usuario', 'listar_historial_usuario',
         'reservar_vinculo_cuenta', 'consultar_vinculo', 'cancelar_vinculo',
         'emitir_desafio_vinculo', 'anular_desafio_vinculo', 'verificar_desafio_vinculo',
-        'datos_para_enlace'
+        'datos_para_enlace', 'facturacion_avisos_director', 'facturacion_reintentar',
+        'facturacion_plan_job', 'facturacion_iniciar_job', 'facturacion_capturar_job', 'facturacion_emitir_job', 'facturacion_estado_job'
     ];
     v_servidor TEXT[] := ARRAY['emitir_desafio_vinculo', 'anular_desafio_vinculo',
-                               'verificar_desafio_vinculo', 'datos_para_enlace'];
+                               'verificar_desafio_vinculo', 'datos_para_enlace',
+                               'facturacion_plan_job', 'facturacion_iniciar_job', 'facturacion_capturar_job', 'facturacion_emitir_job', 'facturacion_estado_job'];
     v_internas TEXT[] := ARRAY['es_director_efectivo', 'contar_directores_efectivos',
                                'vincular_cuenta_de_alta', 'describir_vinculo', 'director_habilitado',
                                'reserva_para_servidor', 'normalizar_motivo_cambio', 'enmascarar_correo',
@@ -591,6 +593,8 @@ BEGIN
     -- consultado no existe y toda cuenta (incluso la bloqueada) recibe cero filas; el alcance por
     -- actor sobre pagos reales lo prueban `economico_rls.sql` y `economico_storage.mjs`.
     PERFORM pg_temp.rpc('public.resumen_comprobantes_pago', 'n', pg_catalog.format('public.resumen_comprobantes_pago(%L)', pg_temp.u('01')));
+    PERFORM pg_temp.rpc('public.facturacion_avisos_director', 'v', 'public.facturacion_avisos_director()');
+    PERFORM pg_temp.rpc('public.facturacion_reintentar', 'v', pg_catalog.format('public.facturacion_reintentar(%L, DATE ''2099-01-01'')', EST));
     -- EPT-103: administración de tarifas. Solo Dirección habilitada completa el alta y la sucesión (cada
     -- intento se revierte); la actualización apunta a una tarifa inexistente, así que la Dirección recibe
     -- P6832 y el resto 42501. La matriz completa de actores y la edición sobre filas reales están en
