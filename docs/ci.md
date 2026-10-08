@@ -22,6 +22,8 @@ Renombres consideran origen y destino; eliminaciones también cuentan. Un cambio
 - La protección de `main` debe exigir el check de GitHub Actions `CI / gate`; no basta un preview de Vercel. La configuración remota es una operación separada.
 
 ## Medición
+Los runs iniciales 37847128039 y 37848873378 detectaron, respectivamente, una invocación SQL con propietario incorrecto y un fixture API anterior al recorte por vínculo de EPT-66 D. Se corrigen el rol del runner y el contexto académico sintético; no se alteran permisos ni se excluyen controles de privacidad.
+
 Registrar duración y SHA del primer run completo y de los rápidos posteriores en la entrega de Unidad 4. Los 31,5 minutos/1936 casos citados en EPT-103 son una medición histórica, no el resultado de este CI. Comparar ejecuciones equivalentes; no presentar menos cobertura como mayor velocidad.
 
 Mobile todavía no tiene paquete ejecutable: no se declara probado. El selector bloquea paquetes mobile/Expo/React Native hasta incorporar sus comandos reales; `full` web no los certifica.

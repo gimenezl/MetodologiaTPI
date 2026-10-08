@@ -52,6 +52,8 @@ function psql(sql) {
 }
 
 const DOMINIO = 'ept58-api.local'
+const CURSO = 'f5840000-0000-4000-8000-000000000001'
+const MATERIA = 'Materia privacidad EPT58 API'
 const ACTORES = {
   director: { rol: 'DIRECTOR', dni: '95840001', legajo: null },
   docenteA: { rol: 'DOCENTE', dni: '95840002', legajo: 'LEG-EPT58-API-A' },
@@ -90,6 +92,8 @@ async function limpiar() {
   const ids = propios.map((u) => `'${u.id}'`).join(',')
   if (ids) {
     psql(`BEGIN;
+      DELETE FROM public.materias_cursos WHERE curso_id = '${CURSO}';
+      DELETE FROM public.matriculas WHERE curso_id = '${CURSO}';
       DELETE FROM public.padres_hijos
         WHERE padre_id IN (SELECT id FROM public.perfiles WHERE user_id IN (${ids}))
            OR hijo_id IN (SELECT id FROM public.perfiles WHERE user_id IN (${ids}));
@@ -101,6 +105,8 @@ async function limpiar() {
       COMMIT;`)
   }
   for (const usuario of propios) await admin(`users/${usuario.id}`, { method: 'DELETE' })
+  psql(`DELETE FROM public.cursos WHERE id = '${CURSO}';
+    DELETE FROM public.actividades WHERE nombre = '${MATERIA}' AND tipo = 'CURRICULAR';`)
 }
 
 async function iniciarSesion(correo) {
@@ -233,12 +239,32 @@ try {
   afirmar(esperado(r, 403, '42501'), `docente pide asignaciones ajenas → 403 42501 (llegó ${describir(r)})`)
   r = await rest(token.docenteA, 'GET', 'profesores?select=perfil_id')
   afirmar(r.estado === 200 && r.datos.length === 1 && r.datos[0].perfil_id === perfiles.docenteA, 'docente lee directamente solo su ficha (200, 1 fila)')
+  // EPT-66 D acota el conjunto a vínculos vigentes, sin cambiar sus cuatro columnas.
+  r = await rest(token.docenteA, 'POST', 'rpc/listar_estudiantes_para_gestion', {})
+  afirmar(r.estado === 200 && Array.isArray(r.datos) && r.datos.length === 0,
+    'docente sin vínculo académico/deportivo recibe un listado vacío (200)')
+  psql(`BEGIN;
+    INSERT INTO public.cursos (id, nivel_id, denominacion, division, activo)
+    VALUES ('${CURSO}', (SELECT id FROM public.niveles WHERE nombre = 'PRIMARIO'), 'Privacidad EPT58 API', 'A', TRUE);
+    INSERT INTO public.matriculas (alumno_id, curso_id) VALUES ('${perfiles.estudiante}', '${CURSO}');
+    UPDATE public.alumnos SET estado = 'ACTIVO' WHERE perfil_id = '${perfiles.estudiante}';
+    INSERT INTO public.actividades (nombre, tipo, activo) VALUES ('${MATERIA}', 'CURRICULAR', TRUE);
+    INSERT INTO public.materias_cursos (materia_id, curso_id, profesor_id)
+    SELECT id, '${CURSO}', '${perfiles.docenteA}' FROM public.actividades WHERE nombre = '${MATERIA}' AND tipo = 'CURRICULAR';
+    COMMIT;`)
   r = await rest(token.docenteA, 'POST', 'rpc/listar_estudiantes_para_gestion', {})
   const fila = Array.isArray(r.datos) ? r.datos.find((e) => e.id === perfiles.estudiante) : null
   afirmar(
-    r.estado === 200 && fila && Object.keys(fila).sort().join(',') === 'apellido,id,legajo_nro,nombre',
+    r.estado === 200 && r.datos.length === 1 && fila && Object.keys(fila).sort().join(',') === 'apellido,id,legajo_nro,nombre',
     'docente recibe la consulta mínima de estudiantes con cuatro columnas (200)'
   )
+  r = await rest(token.docenteB, 'POST', 'rpc/listar_estudiantes_para_gestion', {})
+  afirmar(r.estado === 200 && Array.isArray(r.datos) && r.datos.length === 0,
+    'otro docente sin vínculo no recibe al estudiante vinculado a A (200)')
+  psql(`UPDATE public.materias_cursos SET activo = FALSE WHERE curso_id = '${CURSO}';`)
+  r = await rest(token.docenteA, 'POST', 'rpc/listar_estudiantes_para_gestion', {})
+  afirmar(r.estado === 200 && Array.isArray(r.datos) && r.datos.length === 0,
+    'el mismo JWT docente deja de recibir al estudiante al revocarse el vínculo (200)')
   for (const [ruta, cuerpo] of [
     ['rpc/listar_profesores', {}],
     ['rpc/cambiar_estado_profesor', { p_profesor_id: perfiles.docenteA, p_estado: 'INACTIVO' }],
@@ -265,6 +291,9 @@ try {
   await limpiar()
   const restos = psql(`SELECT pg_catalog.count(*) FROM public.perfiles WHERE dni LIKE '958400%';`)
   afirmar(restos === '0', 'usuarios y perfiles de la prueba eliminados')
+  const contexto = psql(`SELECT (SELECT count(*) FROM public.cursos WHERE id = '${CURSO}')
+    + (SELECT count(*) FROM public.actividades WHERE nombre = '${MATERIA}' AND tipo = 'CURRICULAR');`)
+  afirmar(contexto === '0', 'curso y materia propios eliminados sin dejar contexto académico')
 }
 
 if (fallos > 0) {
