@@ -1,0 +1,96 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 0'
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  fast:
+    name: CI / rápido
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      mode: ${{ steps.impact.outputs.mode }}
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder-pruebas.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-solo-para-pruebas
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - id: impact
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_HEAD_SHA: ${{ github.sha }}
+          CI_EVENT: ${{ github.event_name }}
+        run: node scripts/ci/impact.mjs
+      - run: npm ci
+      - run: node --test scripts/ci/impact.test.mjs
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npx playwright test --config=playwright.pure.config.ts
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --config=playwright.smoke.config.ts
+      - env:
+          CI_MODE: ${{ steps.impact.outputs.mode }}
+          CI_HEAD_SHA: ${{ github.sha }}
+        run: |
+          printf 'Perfil: %s; revisión: %s\n' "$CI_MODE" "$CI_HEAD_SHA" >> "$GITHUB_STEP_SUMMARY"
+  database:
+    name: CI / contratos reales
+    needs: fast
+    if: needs.fast.outputs.mode != 'fast'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CI_MODE: ${{ needs.fast.outputs.mode }}
+      CI_HEAD_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false supabase@2.117.0
+      - run: npx playwright install --with-deps chromium webkit
+      - run: node scripts/ci/database.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: contratos-${{ github.run_id }}
+          path: ci-database-result.json
+          if-no-files-found: error
+          retention-days: 7
+  gate:
+    name: CI / gate
+    if: always()
+    needs: [fast, database]
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          FAST: ${{ needs.fast.result }}
+          DATABASE: ${{ needs.database.result }}
+          MODE: ${{ needs.fast.outputs.mode }}
+        run: |
+          test "$FAST" = success
+          case "$MODE" in
+            fast) test "$DATABASE" = skipped ;;
+            db|full) test "$DATABASE" = success ;;
+            *) exit 1 ;;
+          esac

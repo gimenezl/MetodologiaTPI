@@ -7,3 +7,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Verificación por PR
+
+- Cada PR debe pasar `CI / gate` sobre su SHA final; registrar perfil, comandos, resultados y duración.
+- Usar `scripts/ci/impact.mjs`: documentación/pruebas puras no requieren repetir toda la matriz; cambios compartidos o desconocidos requieren `full`.
+- SQL, auth, importes y Storage necesitan contratos reales y carreras aplicables, no solo mocks. No reducir negativas para acelerar.
+- Reutilizar evidencia solo si bytes, entorno y fixtures siguen iguales. No ejecutar la misma matriz larga en local y CI sin motivo.
+- Mantener secretos, datos y jobs de producción fuera de las pruebas. Mobile requiere gates propios cuando exista su paquete.
