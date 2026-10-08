@@ -45,6 +45,11 @@ export function suiteProfile(file) {
   if (fullScripts.includes(file) || supportFiles.includes(file)) return 'full'
   throw new Error(`Suite no ejecutable en CI general: ${file}; registrar ejecución segura antes de integrar`)
 }
+// Las ACL futuras son de postgres; solo las suites que simulan GoTrue necesitan superusuario.
+export function sqlRole(file) {
+  if (!sqlSuites.includes(file)) throw new Error('Unknown SQL suite')
+  return ['usuarios_permisos_rls.sql', 'usuarios_alta_atomica.sql'].includes(file) ? 'supabase_admin' : 'postgres'
+}
 export function validateRegistry(files) {
   for (const file of files.filter(file => /\.(?:sql|mjs)$/u.test(file))) {
     if (!excludedFiles.includes(file)) suiteProfile(file)

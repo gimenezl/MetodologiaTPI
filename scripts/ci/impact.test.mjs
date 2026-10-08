@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { changedPaths, profile, pureTests, unsupportedPackage } from './impact.mjs'
-import { sqlSuites, dbScripts, fullScripts, supportFiles, excludedFiles, validateRegistry } from './suites.mjs'
+import { sqlSuites, sqlRole, dbScripts, fullScripts, supportFiles, excludedFiles, validateRegistry } from './suites.mjs'
 import { withCleanup } from './cleanup.mjs'
 
 test('Git NUL records preserve both rename paths, deletions and spaces', () => {
@@ -87,4 +87,12 @@ test('cleanup preserves the operation error and still attempts restoration', () 
   assert.equal(restored, true)
   assert.throws(() => withCleanup(() => { throw original }, [() => {}]), error => error === original)
   assert.equal(withCleanup(() => 42, [() => {}]), 42)
+})
+test('SQL uses postgres defaults except the documented GoTrue simulations', () => {
+  assert.equal(sqlRole('inscripciones_legadas_contraccion_rls.sql'), 'postgres')
+  for (const file of ['usuarios_permisos_rls.sql', 'usuarios_alta_atomica.sql']) {
+    assert.equal(sqlRole(file), 'supabase_admin')
+    assert.match(readFileSync(`supabase/tests/${file}`, 'utf8'), /psql -X -U supabase_admin/u)
+  }
+  assert.throws(() => sqlRole('new-suite.sql'))
 })

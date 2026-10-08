@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
-import { sqlSuites, dbScripts, fullScripts, validateRegistry } from './suites.mjs'
+import { sqlSuites, sqlRole, dbScripts, fullScripts, validateRegistry } from './suites.mjs'
 import { withCleanup } from './cleanup.mjs'
 
 // Exclusivo del checkout desechable de GitHub: los arneses antiguos leen su config raíz.
@@ -37,7 +37,7 @@ withCleanup(() => {
   for (const file of sqlSuites) {
     console.log(`SQL: ${file}`)
     run('docker', ['exec', '-i', env.EPT_SUPABASE_DB_CONTAINER, 'psql', '-X', '-U',
-      'supabase_admin', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'],
+      sqlRole(file), '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'],
     { input: readFileSync(path.join('supabase/tests', file)), stdio: ['pipe', 'inherit', 'inherit'] })
     completed++
   }
