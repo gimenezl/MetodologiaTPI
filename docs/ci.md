@@ -38,4 +38,8 @@ Antes de release, ejecutar esta matriz sobre la revisión exacta y comprobar su 
 
 ## Comprobación local económica
 
+Run 37935327938: rápidas y DB verdes; el presupuesto UI interno de seis minutos agotó el wrapper antes del cierre de sus hijos y el cleanup retiró la base mientras seguían pruebas. No fue un defecto de permisos. El presupuesto interno pasa a siete minutos (job de ocho intacto, Playwright cinco); GNU timeout envía TERM al grupo y KILL tras cinco segundos antes del cleanup. La regresión usa un árbol real de procesos sin Docker y mantiene el error original y `timedOut` explícito.
+
+El límite cubre el grupo de procesos, no descendientes que crean otro grupo detached: algunos arneses DB lo hacen. Playwright solicita cierre gradual de sus procesos externos, pero no se garantiza ante un escape detached. Un timeout conserva status y señal crudos, falla el job y mantiene el teardown del runner efímero como límite final; no certifica cierre completo de todos los descendientes.
+
 `node --test scripts/ci/impact.test.mjs`, `npx tsc --noEmit` y lint focal. Se permite listar Playwright sin ejecutar fixtures. La primera ejecución Linux verificará los presupuestos y el comportamiento real; no declarar verde una comprobación todavía no ejecutada.

@@ -3,6 +3,7 @@ import { readFileSync, readdirSync, writeFileSync, existsSync, rmSync } from 'no
 import path from 'node:path'
 import { sqlSuites, sqlRole, dbScripts, validateRegistry } from './suites.mjs'
 import { withCleanup } from './cleanup.mjs'
+import { runBounded } from './bounded.mjs'
 
 // Checkout GitHub desechable; los arneses antiguos leen la config raíz.
 if (process.env.GITHUB_ACTIONS !== 'true' || process.platform !== 'linux'
@@ -18,16 +19,16 @@ validateRegistry(readdirSync('supabase/tests'))
 const env = { ...process.env, EPT_SUPABASE_WORKDIR: process.cwd(),
   EPT_SUPABASE_DB_CONTAINER: 'supabase_db_ept104', EPT_TEST_SMTP_PORT: '54325',
   EPT_PUERTO_APP: '3101', EPT_BASE_URL: 'http://localhost:3101' }
-const deadline = Date.now() + (mode === 'full' ? 25 : mode === 'db' ? 10 : 6) * 60_000
+const deadline = Date.now() + (mode === 'full' ? 25 : mode === 'db' ? 10 : 7) * 60_000
 const results = []
 function run(command, args, options = {}) {
   const started = Date.now(), remaining = deadline - started
   if (remaining <= 0) throw new Error('Presupuesto local agotado: comprobación incompleta')
-  const result = spawnSync(command, args, { env, stdio: 'inherit', timeout: remaining, ...options })
+  const result = runBounded(command, args, remaining, { env, stdio: 'inherit', ...options })
   results.push({ command: command === 'docker' ? 'SQL' : args[0],
-    durationMs: Date.now() - started, status: result.status, timedOut: result.error?.code === 'ETIMEDOUT' })
+    durationMs: Date.now() - started, status: result.status, signal: result.signal, timedOut: result.timedOut })
   writeFileSync('ci-database-result.json', JSON.stringify({ mode, sha: process.env.CI_HEAD_SHA, results }))
-  if (result.error || result.status !== 0) throw new Error(`${command} failed (exit ${result.status})`, { cause: result.error })
+  if (result.error || result.status !== 0) throw new Error(`${command} failed (exit ${result.status}; timedOut=${result.timedOut})`, { cause: result.error })
 }
 const cli = args => run('npx', ['--no-install', 'supabase', ...args])
 const suite = file => run('node', [path.join('supabase/tests', file)])

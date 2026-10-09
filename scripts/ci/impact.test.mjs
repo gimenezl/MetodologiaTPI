@@ -10,6 +10,7 @@ import { families, uiFiles, validateUiRegistry, fullProjects } from './ui.mjs'
 import { withCleanup } from './cleanup.mjs'
 import Reporter from './reporter.mjs'
 import { declaredOmission } from './omissions.mjs'
+import { runBounded } from './bounded.mjs'
 
 test('Git NUL preserves both rename paths, deletions and spaces; unknown origin blocks', () => {
   const paths = changedPaths('R100\0src/auth.ts\0docs/a b.md\0D\0old.sql\0')
@@ -99,6 +100,46 @@ test('cleanup preserves original and cleanup errors, and always attempts restora
   assert.equal(restored, true)
   assert.throws(() => withCleanup(() => { throw original }, [() => {}]), error => error === original)
   assert.equal(withCleanup(() => 42, [() => {}]), 42)
+})
+
+test('timeout terminates a real parent/grandchild group before cleanup, preserving failures', () => {
+  const gitRoot = process.platform === 'win32'
+    ? path.resolve(execFileSync('git', ['--exec-path'], { encoding: 'utf8' }).trim(), '../../..') : ''
+  const programs = process.platform === 'win32' ? { timeout: path.join(gitRoot, 'usr/bin/timeout.exe'), shell: path.join(gitRoot, 'usr/bin/bash.exe') }
+    : { timeout: 'timeout', shell: 'bash' }
+  const options = { encoding: 'utf8', env: { ...process.env,
+    PATH: process.platform === 'win32' ? `${path.join(gitRoot, 'usr/bin')};${process.env.PATH}` : process.env.PATH } }
+  const directory = mkdtempSync(path.join(tmpdir(), 'ept-ci-tree-'))
+  const file = path.join(directory, 'pid')
+  const posix = file.replaceAll('\\', '/').replace(/^([A-Z]):/iu, (_, drive) => `/${drive.toLowerCase()}`)
+  const script = 'trap "" TERM; "$BASH" -c \'trap "" TERM; echo "$BASHPID" > "$1.child"; while :; do sleep 1; done\' child "$1" & echo "$BASHPID" > "$1.parent"; wait'
+  let pids = []
+  try {
+    const normal = runBounded(programs.shell, ['-c', 'exit 23'], 1_000, options, programs)
+    assert.equal(normal.status, 23); assert.equal(normal.timedOut, false)
+    let cleaned = false
+    withCleanup(() => {
+      const result = runBounded(programs.shell, ['-c', script, 'fixture', posix], 1_000, options, programs)
+      pids = ['parent', 'child'].map(suffix => readFileSync(`${file}.${suffix}`, 'utf8').trim())
+      assert.ok(pids.every(pid => /^[1-9]\d*$/u.test(pid)))
+      // MSYS devuelve SIGKILL codificado al Node Windows; el runner Linux exige 124/137.
+      const killed = result.status === null && result.signal === 'SIGKILL'
+      assert.ok((process.platform === 'win32' ? [2304] : [124, 137]).includes(result.status)
+        || (process.platform === 'linux' && killed), `status=${result.status}; signal=${result.signal}; ${result.stderr}`)
+      if (process.platform === 'linux') assert.equal(result.timedOut, true)
+    }, [() => {
+      for (const pid of pids) {
+        const probe = process.platform === 'win32' ? 'kill -0 "$1" 2>/dev/null' : 'ps -p "$1" -o stat= | grep -q "^[^Z]"'
+        const alive = spawnSync(programs.shell, ['-c', probe, 'probe', pid], options)
+        assert.equal(alive.status, 1, 'Proceso propio todavía activo antes del cleanup')
+      }
+      assert.equal(pids.length, 2); cleaned = true
+    }])
+    assert.equal(cleaned, true)
+  } finally {
+    if (pids.length) spawnSync(programs.shell, ['-c', 'kill -KILL "$@" 2>/dev/null || true', 'cleanup', ...pids], options)
+    rmSync(directory, { recursive: true, force: true })
+  }
 })
 test('SQL owner remains correct; synchronous EPT59 SQL has server and child budgets', () => {
   assert.equal(sqlRole('inscripciones_legadas_contraccion_rls.sql'), 'postgres')
