@@ -258,6 +258,15 @@ async function reenviar(peticion, cuerpo) {
     signal: AbortSignal.timeout(30_000),
   })
   const contenido = Buffer.from(await respuesta.arrayBuffer())
+  if (process.env.EPT_DIAGNOSTICO_RECONCILIACION === '1' && !respuesta.ok) {
+    let codigo = 'sin-codigo'
+    try {
+      const datos = JSON.parse(contenido.toString('utf8'))
+      const valor = datos.code ?? datos.error_code
+      if (typeof valor === 'string' && /^[a-zA-Z0-9_]+$/u.test(valor)) codigo = valor
+    } catch { /* No imprimir cuerpos ni mensajes del proveedor. */ }
+    console.log(`DIAGNOSTICO HTTP ${peticion.method} ${respuesta.status} codigo=${codigo}`)
+  }
   return { respuesta, contenido }
 }
 

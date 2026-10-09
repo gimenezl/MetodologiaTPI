@@ -1,0 +1,83 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  fast:
+    name: CI / rápido
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    outputs:
+      db: ${{ steps.impact.outputs.db }}
+      ui: ${{ steps.impact.outputs.ui }}
+      mutations: ${{ steps.impact.outputs.mutations }}
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder-pruebas.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-solo-para-pruebas
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - id: impact
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_HEAD_SHA: ${{ github.sha }}
+        run: node scripts/ci/impact.mjs
+      - run: npm ci
+      - run: node --test scripts/ci/impact.test.mjs
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npx playwright test --config=playwright.pure.config.ts
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --config=playwright.smoke.config.ts
+  database:
+    name: CI / contratos reales
+    needs: fast
+    if: needs.fast.outputs.db == 'true'
+    uses: ./.github/workflows/local-tests.yml
+    with:
+      kind: db
+      mutations: ${{ needs.fast.outputs.mutations == 'true' }}
+  ui:
+    name: CI / interfaz focal
+    needs: fast
+    if: needs.fast.outputs.ui != '[]' && needs.fast.outputs.ui != ''
+    uses: ./.github/workflows/local-tests.yml
+    with:
+      kind: ui
+      selection: ${{ needs.fast.outputs.ui }}
+  gate:
+    name: CI / gate
+    if: always()
+    needs: [fast, database, ui]
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          FAST: ${{ needs.fast.result }}
+          DATABASE: ${{ needs.database.result }}
+          UI: ${{ needs.ui.result }}
+          PLAN_DB: ${{ needs.fast.outputs.db }}
+          PLAN_UI: ${{ needs.fast.outputs.ui }}
+          PLAN_MUTATIONS: ${{ needs.fast.outputs.mutations }}
+        run: |
+          test "$FAST" = success
+          case "$PLAN_MUTATIONS" in true|false) ;; *) exit 1 ;; esac
+          case "$PLAN_DB" in
+            true) test "$DATABASE" = success ;;
+            false) test "$DATABASE" = skipped ;;
+            *) exit 1 ;;
+          esac
+          test -n "$PLAN_UI"
+          if test "$PLAN_UI" = '[]'; then test "$UI" = skipped; else test "$UI" = success; fi

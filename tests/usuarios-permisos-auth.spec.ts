@@ -99,8 +99,9 @@ const BLOQUEADOS = [
 function sql(sentencia: string) {
   return execFileSync(
     'docker',
-    ['exec', '-i', CONTENEDOR, 'psql', '-X', '-q', '-A', '-t', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'],
-    { input: sentencia, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
+    ['exec', '-i', '-e', 'PGOPTIONS=-c statement_timeout=15000 -c lock_timeout=5000',
+      CONTENEDOR, 'psql', '-X', '-q', '-A', '-t', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'],
+    { input: sentencia, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 20_000 }
   ).trim()
 }
 
