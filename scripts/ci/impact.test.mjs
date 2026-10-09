@@ -60,6 +60,9 @@ test('CLI validates SHAs and forces full for schedule/manual/initial push', () =
   } finally { rmSync(directory, { recursive: true, force: true }) }
 })
 test('database runner refuses local execution before changing config', () => {
+  const runner = readFileSync('scripts/ci/database.mjs', 'utf8')
+  assert.match(runner, /playwright \? \{ \.\.\.env, EPT_BASE_URL: `http:\/\/localhost:/u)
+  assert.ok(runner.includes("'--max-failures=1'"))
   const before = readFileSync('supabase/config.toml', 'utf8')
   const result = spawnSync(process.execPath, ['scripts/ci/database.mjs'],
     { env: { ...process.env, GITHUB_ACTIONS: 'false' }, encoding: 'utf8' })

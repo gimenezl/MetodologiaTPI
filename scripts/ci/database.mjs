@@ -26,7 +26,9 @@ const cli = args => run('npx', ['--no-install', 'supabase', ...args])
 let completed = 0
 function suite(file) {
   console.log(`Comprobación real: ${file}`)
-  run('node', [path.join('supabase/tests', file), ...(file === 'correr-autenticadas.mjs' ? ['--reporter=line'] : [])])
+  const playwright = file === 'correr-autenticadas.mjs'
+  run('node', [path.join('supabase/tests', file), ...(playwright ? ['--reporter=line', '--max-failures=1'] : [])],
+    { env: playwright ? { ...env, EPT_BASE_URL: `http://localhost:${env.EPT_PUERTO_APP}` } : env })
   completed++
 }
 withCleanup(() => {
