@@ -68,7 +68,22 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npm install --no-save --package-lock=false supabase@2.117.0
+      - name: Instalar CLI sin resolver las dependencias de la aplicación
+        run: |
+          npm install --prefix "$RUNNER_TEMP/supabase-cli" --no-save --package-lock=false supabase@2.117.0
+          ln -s "$RUNNER_TEMP/supabase-cli/node_modules/supabase" node_modules/supabase
+          ln -s "$RUNNER_TEMP/supabase-cli/node_modules/.bin/supabase" node_modules/.bin/supabase
+          git diff --exit-code -- package.json package-lock.json
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+          for (const name of ['@supabase/auth-js', '@supabase/supabase-js', 'next', '@playwright/test']) {
+            const actual = JSON.parse(readFileSync(`node_modules/${name}/package.json`, 'utf8')).version;
+            const expected = lock.packages[`node_modules/${name}`].version;
+            if (actual !== expected) throw new Error(`${name}: ${actual} != lock ${expected}`);
+            console.log(`${name}: ${actual} (lock verificado)`);
+          }
+          NODE
       - run: npx playwright install --with-deps chromium webkit
       - run: node scripts/ci/database.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
