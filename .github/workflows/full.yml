@@ -1,0 +1,36 @@
+name: Matriz completa
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 0'
+permissions:
+  contents: read
+concurrency:
+  group: full-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  database:
+    uses: ./.github/workflows/local-tests.yml
+    with:
+      kind: db
+      mutations: true
+  ui:
+    strategy:
+      fail-fast: true
+      max-parallel: 4
+      matrix:
+        project: [chromium, pixel-5-chromium, iphone-13-webkit, chromium-directora, chromium-estudiante, chromium-estudiante-inactivo, chromium-estudiante-ajeno, chromium-docente, chromium-padre, chromium-padre-segundo, chromium-personal, chromium-sin-perfil, chromium-director-bloqueado, chromium-docente-bloqueado, chromium-estudiante-bloqueado, chromium-padre-bloqueado, chromium-personal-bloqueado]
+    uses: ./.github/workflows/local-tests.yml
+    with:
+      kind: full
+      project: ${{ matrix.project }}
+  gate:
+    name: Matriz completa / gate
+    if: always()
+    needs: [database, ui]
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DATABASE: ${{ needs.database.result }}
+          UI: ${{ needs.ui.result }}
+        run: test "$DATABASE" = success && test "$UI" = success

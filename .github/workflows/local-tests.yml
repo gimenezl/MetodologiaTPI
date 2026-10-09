@@ -1,0 +1,53 @@
+name: Contratos locales
+on:
+  workflow_call:
+    inputs:
+      kind:
+        required: true
+        type: string
+      selection:
+        default: '["core"]'
+        type: string
+      project:
+        default: ''
+        type: string
+      mutations:
+        default: false
+        type: boolean
+permissions:
+  contents: read
+jobs:
+  local:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.kind == 'full' && 30 || inputs.kind == 'db' && 12 || 8 }}
+    env:
+      CI_MODE: ${{ inputs.kind }}
+      CI_UI: ${{ inputs.selection }}
+      CI_PROJECT: ${{ inputs.project }}
+      CI_MUTATIONS: ${{ inputs.mutations }}
+      CI_HEAD_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: bash scripts/ci/install-cli.sh
+      - if: inputs.kind != 'db'
+        run: npx playwright install --with-deps chromium
+      - if: inputs.project == 'iphone-13-webkit'
+        run: npx playwright install --with-deps webkit
+      - run: node scripts/ci/database.mjs
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: contratos-${{ inputs.kind }}-${{ inputs.project || 'focal' }}-${{ github.run_id }}
+          path: |
+            ci-database-result.json
+            ci-ui-result.json
+          if-no-files-found: error
+          retention-days: 7

@@ -11,7 +11,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## Verificación por PR
 
 - Cada PR debe pasar `CI / gate` sobre su SHA final; registrar perfil, comandos, resultados y duración.
-- Usar `scripts/ci/impact.mjs`: documentación/pruebas puras no requieren repetir toda la matriz; cambios compartidos o desconocidos requieren `full`.
+- Usar `scripts/ci/impact.mjs`: documentación y puras no requieren Docker; cambios compartidos usan contratos DB y core UI. Rutas o pruebas desconocidas bloquean hasta registrar cobertura. La matriz completa queda para manual/semanal/pre-release, nunca por rutina de PR.
 - SQL, auth, importes y Storage necesitan contratos reales y carreras aplicables, no solo mocks. No reducir negativas para acelerar.
 - Reutilizar evidencia solo si bytes, entorno y fixtures siguen iguales. No ejecutar la misma matriz larga en local y CI sin motivo.
 - Mantener secretos, datos y jobs de producción fuera de las pruebas. Mobile requiere gates propios cuando exista su paquete.
