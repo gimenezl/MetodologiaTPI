@@ -1,0 +1,19 @@
+{
+  "tarea": "EPT-96",
+  "baseline": "d21474c4293143ed39cfd47e8ec4121d42ac709a",
+  "descripcion": "Prototipo navegable local en HTML, CSS y JavaScript sin dependencias; Chromium vía Playwright solo para las pruebas",
+  "arranque": "http://127.0.0.1:4196/",
+  "runner": {
+    "node": "22 o superior",
+    "playwright": "playwright del package-lock.json",
+    "limite_total_segundos": 240
+  },
+  "comandos": [
+    "node docs/parte3/EPT-96/servidor/servidor.mjs",
+    "node docs/parte3/EPT-96/servidor/servidor.mjs --puerto 4300",
+    "node docs/parte3/EPT-96/pruebas/prototipo.mjs",
+    "node docs/parte3/EPT-96/pruebas/prototipo.mjs --capturas docs/parte3/EPT-96/evidencia"
+  ],
+  "captura": { "viewport_css": [390, 844], "factor_escala_dispositivo": 1, "locale": "es-AR", "zona_horaria": "America/Argentina/Buenos_Aires" },
+  "fuente_visual": "docs/parte3/EPT-95/fuentes (estilos, tipografías y logo reutilizados sin modificar)"
+}

@@ -17,6 +17,8 @@ jobs:
       db: ${{ steps.impact.outputs.db }}
       ui: ${{ steps.impact.outputs.ui }}
       mutations: ${{ steps.impact.outputs.mutations }}
+      prototipo: ${{ steps.impact.outputs.prototipo }}
+      prototipo_paso: ${{ steps.prototipo.outcome }}
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://placeholder-pruebas.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-solo-para-pruebas
@@ -42,6 +44,12 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test --config=playwright.smoke.config.ts
+      # Prototipo EPT-96: contiene HTML/CSS/JS ejecutable; se recorre en Chromium real, no solo se verifican hashes.
+      - name: Prototipo EPT-96 (navegación real)
+        id: prototipo
+        if: steps.impact.outputs.prototipo == 'true'
+        timeout-minutes: 5
+        run: node docs/parte3/EPT-96/pruebas/prototipo.mjs
   database:
     name: CI / contratos reales
     needs: fast
@@ -71,12 +79,20 @@ jobs:
           PLAN_DB: ${{ needs.fast.outputs.db }}
           PLAN_UI: ${{ needs.fast.outputs.ui }}
           PLAN_MUTATIONS: ${{ needs.fast.outputs.mutations }}
+          PLAN_PROTOTIPO: ${{ needs.fast.outputs.prototipo }}
+          PASO_PROTOTIPO: ${{ needs.fast.outputs.prototipo_paso }}
         run: |
           test "$FAST" = success
           case "$PLAN_MUTATIONS" in true|false) ;; *) exit 1 ;; esac
           case "$PLAN_DB" in
             true) test "$DATABASE" = success ;;
             false) test "$DATABASE" = skipped ;;
+            *) exit 1 ;;
+          esac
+          # El prototipo EPT-96 se recorre en Chromium real cuando el plan lo marca; un paso omitido o ausente no pasa.
+          case "$PLAN_PROTOTIPO" in
+            true) test "$PASO_PROTOTIPO" = success ;;
+            false) test "$PASO_PROTOTIPO" = skipped ;;
             *) exit 1 ;;
           esac
           test -n "$PLAN_UI"
