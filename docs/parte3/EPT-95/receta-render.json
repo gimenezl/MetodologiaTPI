@@ -1,0 +1,24 @@
+{
+  "baseline": "4f4818335ba9b7240c58e04bb17b2e7d87a380cb",
+  "renderizador": "Playwright 1.59.1 + Chromium 147.0.7727.15 (headless)",
+  "node": "v24.19.0",
+  "viewport_css": [390, 844],
+  "factor_escala_dispositivo": 2,
+  "captura": "página completa, PNG sin metadatos de texto, colorScheme light, reducedMotion reduce, locale es-AR",
+  "red": "bloqueada: toda solicitud que no sea file: aborta el render",
+  "comandos": [
+    "node docs/parte3/EPT-95/fuentes/render.mjs html",
+    "node docs/parte3/EPT-95/fuentes/render.mjs verificar",
+    "node docs/parte3/EPT-95/fuentes/render.mjs png",
+    "node docs/parte3/EPT-95/fuentes/render.mjs manifest"
+  ],
+  "variables_entorno": "EPT95_PLAYWRIGHT=<ruta absoluta a node_modules/playwright/index.mjs> cuando playwright no resuelve desde el repositorio",
+  "recursos_locales": [
+    { "archivo": "fuentes/fuentes-tipograficas/outfit-latin-400-normal.woff2", "origen": "@fontsource/outfit 5.2.8 (npm)", "licencia": "SIL OFL 1.1" },
+    { "archivo": "fuentes/fuentes-tipograficas/outfit-latin-500-normal.woff2", "origen": "@fontsource/outfit 5.2.8 (npm)", "licencia": "SIL OFL 1.1" },
+    { "archivo": "fuentes/fuentes-tipograficas/outfit-latin-600-normal.woff2", "origen": "@fontsource/outfit 5.2.8 (npm)", "licencia": "SIL OFL 1.1" },
+    { "archivo": "fuentes/fuentes-tipograficas/outfit-latin-700-normal.woff2", "origen": "@fontsource/outfit 5.2.8 (npm)", "licencia": "SIL OFL 1.1" },
+    { "archivo": "fuentes/fuentes-tipograficas/geist-mono-latin.woff2", "origen": "copia incluida en node_modules/next (Vercel Geist)", "licencia": "SIL OFL 1.1" },
+    { "archivo": "fuentes/imagenes/logo-emblema.png", "origen": "public/logo-emblema.png del repositorio", "licencia": "identidad institucional" }
+  ]
+}

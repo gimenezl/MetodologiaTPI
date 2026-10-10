@@ -1,0 +1,1418 @@
+{
+ "version": 5,
+ "tarea": "EPT-95",
+ "estado": "Diseños estáticos locales (wireframes, mockups y variantes) regenerables desde fuentes; no es una app implementada ni aprobación humana",
+ "baseline": "4f4818335ba9b7240c58e04bb17b2e7d87a380cb",
+ "metodo": "diseno-local",
+ "receta": {
+  "baseline": "4f4818335ba9b7240c58e04bb17b2e7d87a380cb",
+  "renderizador": "Playwright 1.59.1 + Chromium 147.0.7727.15 (headless)",
+  "node": "v24.19.0",
+  "viewport_css": [
+   390,
+   844
+  ],
+  "factor_escala_dispositivo": 2,
+  "captura": "página completa, PNG sin metadatos de texto, colorScheme light, reducedMotion reduce, locale es-AR",
+  "red": "bloqueada: toda solicitud que no sea file: aborta el render",
+  "comandos": [
+   "node docs/parte3/EPT-95/fuentes/render.mjs html",
+   "node docs/parte3/EPT-95/fuentes/render.mjs verificar",
+   "node docs/parte3/EPT-95/fuentes/render.mjs png",
+   "node docs/parte3/EPT-95/fuentes/render.mjs manifest"
+  ],
+  "variables_entorno": "EPT95_PLAYWRIGHT=<ruta absoluta a node_modules/playwright/index.mjs> cuando playwright no resuelve desde el repositorio",
+  "recursos_locales": [
+   {
+    "archivo": "fuentes/fuentes-tipograficas/outfit-latin-400-normal.woff2",
+    "origen": "@fontsource/outfit 5.2.8 (npm)",
+    "licencia": "SIL OFL 1.1"
+   },
+   {
+    "archivo": "fuentes/fuentes-tipograficas/outfit-latin-500-normal.woff2",
+    "origen": "@fontsource/outfit 5.2.8 (npm)",
+    "licencia": "SIL OFL 1.1"
+   },
+   {
+    "archivo": "fuentes/fuentes-tipograficas/outfit-latin-600-normal.woff2",
+    "origen": "@fontsource/outfit 5.2.8 (npm)",
+    "licencia": "SIL OFL 1.1"
+   },
+   {
+    "archivo": "fuentes/fuentes-tipograficas/outfit-latin-700-normal.woff2",
+    "origen": "@fontsource/outfit 5.2.8 (npm)",
+    "licencia": "SIL OFL 1.1"
+   },
+   {
+    "archivo": "fuentes/fuentes-tipograficas/geist-mono-latin.woff2",
+    "origen": "copia incluida en node_modules/next (Vercel Geist)",
+    "licencia": "SIL OFL 1.1"
+   },
+   {
+    "archivo": "fuentes/imagenes/logo-emblema.png",
+    "origen": "public/logo-emblema.png del repositorio",
+    "licencia": "identidad institucional"
+   }
+  ]
+ },
+ "fuentes": {
+  "fuentes/LICENCIAS.md": "d1702fb8f6bfaba9f1e62346d8d9ac6faa1136cd986410dac0b171dcd6b2cbd4",
+  "fuentes/estilos.css": "4cedc7659165a50f22ff8e33fc67834a8ca84d28cd25085d81a1b8bc46a4cf52",
+  "fuentes/fuentes-tipograficas/LICENCIA-Outfit-OFL-1.1.txt": "0e5fcef5d93bfcae273c11c00f0bb453d3b5491860e1ac8b658767b7577c938f",
+  "fuentes/fuentes-tipograficas/geist-mono-latin.woff2": "b7ac144b394cbd81052d6397ec0c33397977b1d7e9bc095e744e652a378c6fb3",
+  "fuentes/fuentes-tipograficas/outfit-latin-400-normal.woff2": "71f028fd2349990b3f8aa643abe767e82e0f596be407ae66f0004ff164121bdb",
+  "fuentes/fuentes-tipograficas/outfit-latin-500-normal.woff2": "fc9bff941def6d924a71632bd8a93190528872eae6414844f3c367ff948d92fd",
+  "fuentes/fuentes-tipograficas/outfit-latin-600-normal.woff2": "8cfe15c2c6de6ef8efff3eedbd52a383ac9ef23d6c23f6cd9f9b838f5f37dc36",
+  "fuentes/fuentes-tipograficas/outfit-latin-700-normal.woff2": "5d5e3734089a74707292ce8a3e186def34cd63e33879f9ac3689a8d8da9d0706",
+  "fuentes/html/M01-login.html": "a6cbc004d02873081ab8d2de12456dbd521d17f3bbe5a4bef72a5dc17620a3f2",
+  "fuentes/html/M02-selector-hijo.html": "4f0078074ec6a7dd3a073675cbba552c3d95e16dd1ec7de2044e8c885f9d6555",
+  "fuentes/html/M03-cuotas.html": "83bd16924c30dbd7f2b475f922aa0386cc9c73adfbe614b0a6ea6da2ab4fdc26",
+  "fuentes/html/M04-factura.html": "59fe68b0b785ec57042387935b7cb8479d0c4e602f4e350da726f942902174ea",
+  "fuentes/html/M05-seleccion-y-pago.html": "98ede32c0d4ec392f1b14a4e3beb56c1c49d81c90ccfe54ece2097d57fb31f30",
+  "fuentes/html/M06-comprobantes.html": "80e3bfecf8a576e5e6b935abadc4e021333ed49a94529c35fe6ed8c3dade9e52",
+  "fuentes/html/M07-periodo.html": "2a02de74ceb7ba9ba04254b31f9378c9972249720d8b4042cf87f28e84fc9b43",
+  "fuentes/html/M08-deuda-item.html": "141a6fa023134aafa308767af634f4751045fa8f84a18114936470ac65cf040c",
+  "fuentes/html/M09-inscripciones.html": "c6bf3998a5d79854595f5e6c56f1e606462bda2e36f0b2bfcededac5bbca3c53",
+  "fuentes/html/V01-login-validacion.html": "f2261bba2f073f1e7637dfd981b61ba6fd4bb428eddac00982272295127479b3",
+  "fuentes/html/V02-login-credenciales-invalidas.html": "fcc450253ec90a4f7d963b86b6f27ecacdc4a517bde041b69e4012ff56955e05",
+  "fuentes/html/V03-login-cuenta-bloqueada.html": "ba64a9ac6d5b78a791bdb2af5dfa6f7a361749f606b9c8818247106fe983f8f6",
+  "fuentes/html/V04-login-sesion-expirada.html": "d58cf61c6af3477269c92cbb9bc35578fcade4ae75a7673036fc047c9d723ba9",
+  "fuentes/html/V05-login-canal-web.html": "f1cfd01d45a16b781a93f5f27b65bca5c6f1893a558743c2ad345c97bd79352d",
+  "fuentes/html/V06-selector-sin-vinculos.html": "34217000c59b02c5af2ae5585a9b8f08d25898070777346298130842fc9f6b29",
+  "fuentes/html/V07-cuotas-estudiante.html": "f0772e5ca10bc473a39c484e510bb6b17aa6a93a48bb1415c66feadea02b045a",
+  "fuentes/html/V08-cuotas-pagadas.html": "354fbe48d52b15fab82c21452ef28a4bdbd344121690c5cd6dbd1260cd62493d",
+  "fuentes/html/V09-cuotas-pendiente.html": "fefd3b93208b98329bc6d211e0b110c3276ab10beebc7a43a7b3f502170ce8f5",
+  "fuentes/html/V10-cuotas-carga.html": "07b478c31c92f205e09760ddbeae6ed9ef22de21a42c5c1a2007f08666c5aaca",
+  "fuentes/html/V11-cuotas-vacio.html": "d968867bb5aa3f282107c2d9eff5791e1c9d2dcff977a1f6ce116f2fbde77333",
+  "fuentes/html/V12-cuotas-error-conexion.html": "69f2e1249318e67dba4f9abd90aa5e095cdb11219f16737773bafdda91428465",
+  "fuentes/html/V13-estados-de-cuota.html": "eeff2cfb305ccfc12b6bf72d6154467a7b273a0700e496d516964075132f7cbd",
+  "fuentes/html/V14-factura-estudiante.html": "aba3fe920ff83771b83a96810f963ad621355e3672242534999dfc1165d239ef",
+  "fuentes/html/V15-seleccion-validacion.html": "ad7868fcb7b84926cc911d4659ad72ba1a2cacd7e1ce4f68f30390a7a8b17f00",
+  "fuentes/html/V16-pago-registrado.html": "0674b852002788e0cc4bec9c4bf2015c054e0fc6621582ee1323a09958d43866",
+  "fuentes/html/V17-comprobante-validacion.html": "5643de69ac0bcb1653612bea8d79a8e3e4e14c485addb89f4a9375c020f84f1c",
+  "fuentes/html/V18-comprobante-confirmacion.html": "fc33d30679daa91fd9a5265852bade00d250135a51f20dbe9008d354daa837f4",
+  "fuentes/html/V19-comprobante-error-incierto.html": "8c875b216ddf3ce1d884473a77c7f46658143d93152808dcda809d0cade5dfd6",
+  "fuentes/html/V20-comprobantes-otro-padre.html": "0b18d4bd643dc9ea73c014c2589456e222dbafe7e02b1bd65707508587417f96",
+  "fuentes/html/V21-comprobantes-estudiante.html": "7ed9819fe9078b01fc04e63b7d3220f9d33ab3870f753bc88945bf0714d4aec0",
+  "fuentes/html/V22-periodo-estudiante.html": "27ace0512a0e8d7d0372b8281027f0c25dbe5af08e707e55f69385575627cac2",
+  "fuentes/html/V23-deuda-estudiante.html": "c508559726d9d77ff8ec8b4e3fb35c6e47786567cfacef6f7dc5d52850d095fb",
+  "fuentes/html/V24-inscripciones-estudiante.html": "75d6c3f541021819a51c94d2940775b8a99f48afeb63706f0a0aa98b9e482f97",
+  "fuentes/html/V25-comprobante-teclado.html": "575b4baeab97d6eb039bb7965aa1c04a6d8b6859dc42d1788afda9fbe3fb5d06",
+  "fuentes/html/V26-cuotas-texto-200.html": "d531defb7ea9e4baf0abdb16c49e8fdef894839b3801102213fecb0e3a36f2f4",
+  "fuentes/html/W01-login.html": "a61db71cfa2db93dd2d21b31d3ab9885bb8bbd7459a5396f64ba639ef062f9f7",
+  "fuentes/html/W02-selector-hijo.html": "c21dd4207a8b67cb7ca6a83f656fc7b13c6ed8e003aba2e3c7abe6fd4e4a9e40",
+  "fuentes/html/W03-cuotas.html": "9a1c8b8b923bee3e75d50cd773111e2535d91582cd0364c26bbac3f058a1f8ec",
+  "fuentes/html/W04-factura.html": "804b94bc9f224d4104e30019edf6affe6b8d5ac0ef614149c54215a974f77e38",
+  "fuentes/html/W05-seleccion-y-pago.html": "8d8abbc32ab44e627392f0eb7ff1552340d1017d6f589b675f837587a328a112",
+  "fuentes/html/W06-comprobantes.html": "01a02d6b0e5832d52bb9d4c09e8ada3d8f08cd8c500d3ff068bec7f8ec5f3f4b",
+  "fuentes/html/W07-periodo.html": "ee2fa9ca22ad426bc220e9f51eaa0cdc8db52ba1f74986577c1cea3a6d791c63",
+  "fuentes/html/W08-deuda-item.html": "e1f75b79889788e93db26feb3593230a01ec517ad70fca0e556c55c399dcf0d5",
+  "fuentes/html/W09-inscripciones.html": "065b10769254df37af45df41c0fe8ab639dbf6361cbc6fac8de4a396ffa96862",
+  "fuentes/imagenes/logo-emblema.png": "072c38dce8bd80153855f39da8f295c2871faf7cb0da69fc1e3f8f103b4f0820",
+  "fuentes/pantallas.mjs": "ab578f46d2cac07340f26c6e1892b76a390915964dd7151e1809bd78da905805",
+  "fuentes/render.mjs": "2d3d6b744e2d19cac4b7ccb58340a4715b32feda3614fcf38bf564779594fd17",
+  "receta-render.json": "06ed5261f0029214e233d64ee39b1f0b2335ccc816976b57cfcc793a31f8cf62"
+ },
+ "datos": {
+  "referencia": "2026-10-09",
+  "hijos": [
+   "Mateo Ejemplo",
+   "Sofía Ejemplo"
+  ],
+  "deuda_mateo": "ARS 82.532,10",
+  "deuda_sofia": "ARS 71.090,95",
+  "seleccion": "ARS 63.606,65"
+ },
+ "pantallas": [
+  {
+   "pantalla": "W01",
+   "tipo": "wireframe",
+   "area": "login",
+   "titulo": "Wireframe · Inicio de sesión",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Normal"
+   ],
+   "requisitos": [
+    "EPT-95/login",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/wireframes/W01-login.png",
+   "pixeles": [
+    780,
+    1770
+   ],
+   "sha256": "585d34c3c63668ca2619d26edcb055701f66f196c39b63821f3bf5ff09832389",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/W01-login.html",
+    "fuente_sha256": "a61db71cfa2db93dd2d21b31d3ab9885bb8bbd7459a5396f64ba639ef062f9f7",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "W02",
+   "tipo": "wireframe",
+   "area": "selector-hijo",
+   "titulo": "Wireframe · Selector de hijo",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Normal"
+   ],
+   "requisitos": [
+    "EPT-95/selector-hijo",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/wireframes/W02-selector-hijo.png",
+   "pixeles": [
+    780,
+    1716
+   ],
+   "sha256": "27d0e053636ad3bb8e28617c07deb65dde153575ebf9b6f6953e6f82d40ebd0d",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/W02-selector-hijo.html",
+    "fuente_sha256": "c21dd4207a8b67cb7ca6a83f656fc7b13c6ed8e003aba2e3c7abe6fd4e4a9e40",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "W03",
+   "tipo": "wireframe",
+   "area": "cuotas",
+   "titulo": "Wireframe · Cuotas pendientes",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Pago parcial",
+    "Vencida"
+   ],
+   "requisitos": [
+    "EPT-95/cuotas",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/wireframes/W03-cuotas.png",
+   "pixeles": [
+    780,
+    2168
+   ],
+   "sha256": "d512d411f2480658e0b88453c1eaab8035199af64584707635d93556ec7a2f57",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/W03-cuotas.html",
+    "fuente_sha256": "9a1c8b8b923bee3e75d50cd773111e2535d91582cd0364c26bbac3f058a1f8ec",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "W04",
+   "tipo": "wireframe",
+   "area": "factura",
+   "titulo": "Wireframe · Detalle de factura",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Vencida",
+    "En verificación"
+   ],
+   "requisitos": [
+    "EPT-95/factura-items",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/wireframes/W04-factura.png",
+   "pixeles": [
+    780,
+    2618
+   ],
+   "sha256": "b0206fd91436f7a4d178a9ee97e4e4ef6ff3084bf8f2ad0b9f2fa8c38003539c",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/W04-factura.html",
+    "fuente_sha256": "804b94bc9f224d4104e30019edf6affe6b8d5ac0ef614149c54215a974f77e38",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "W05",
+   "tipo": "wireframe",
+   "area": "transferencia",
+   "titulo": "Wireframe · Selección y pago por transferencia",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Selección",
+    "En verificación",
+    "Datos bancarios no configurados"
+   ],
+   "requisitos": [
+    "EPT-95/seleccion-transferencia",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/wireframes/W05-seleccion-y-pago.png",
+   "pixeles": [
+    780,
+    3888
+   ],
+   "sha256": "77ad146067bfd870c1ebeb5c9eefc37a20e3f4ca5d24d0101fce961cd196fb1a",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/W05-seleccion-y-pago.html",
+    "fuente_sha256": "8d8abbc32ab44e627392f0eb7ff1552340d1017d6f589b675f837587a328a112",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "W06",
+   "tipo": "wireframe",
+   "area": "comprobantes",
+   "titulo": "Wireframe · Carga de comprobantes",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Carga"
+   ],
+   "requisitos": [
+    "EPT-95/comprobantes",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/wireframes/W06-comprobantes.png",
+   "pixeles": [
+    780,
+    2710
+   ],
+   "sha256": "84a2648e237e989dfcedbfd875ba75639f87ef9e350db88a5cbadbc04f1b72b0",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/W06-comprobantes.html",
+    "fuente_sha256": "01a02d6b0e5832d52bb9d4c09e8ada3d8f08cd8c500d3ff068bec7f8ec5f3f4b",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "W07",
+   "tipo": "wireframe",
+   "area": "periodo",
+   "titulo": "Wireframe · Facturas por período",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Consulta",
+    "Pendiente de verificación"
+   ],
+   "requisitos": [
+    "EPT-95/periodo",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/wireframes/W07-periodo.png",
+   "pixeles": [
+    780,
+    3554
+   ],
+   "sha256": "a99dcd03a6ff96a73846176009d013f2c0e3ac1497789d977244bfcdcc09c449",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/W07-periodo.html",
+    "fuente_sha256": "ee2fa9ca22ad426bc220e9f51eaa0cdc8db52ba1f74986577c1cea3a6d791c63",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "W08",
+   "tipo": "wireframe",
+   "area": "deuda-item",
+   "titulo": "Wireframe · Deuda por ítem",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Consulta",
+    "En verificación"
+   ],
+   "requisitos": [
+    "EPT-95/deuda-item",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/wireframes/W08-deuda-item.png",
+   "pixeles": [
+    780,
+    4880
+   ],
+   "sha256": "340d5d0a2332856cf474647deaedf70df9dfc8bae6ee293021b6e07c14b67b4e",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/W08-deuda-item.html",
+    "fuente_sha256": "e1f75b79889788e93db26feb3593230a01ec517ad70fca0e556c55c399dcf0d5",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "W09",
+   "tipo": "wireframe",
+   "area": "inscripciones",
+   "titulo": "Wireframe · Inscripciones",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Consulta"
+   ],
+   "requisitos": [
+    "EPT-95/inscripciones",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/wireframes/W09-inscripciones.png",
+   "pixeles": [
+    780,
+    1768
+   ],
+   "sha256": "645304ce734e371c913490449c8519ffad6c23e26c6e27f3b479bc2458d7eea7",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/W09-inscripciones.html",
+    "fuente_sha256": "065b10769254df37af45df41c0fe8ab639dbf6361cbc6fac8de4a396ffa96862",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "M01",
+   "tipo": "mockup",
+   "area": "login",
+   "titulo": "Mockup · Inicio de sesión",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Normal"
+   ],
+   "requisitos": [
+    "EPT-95/login",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/mockups/M01-login.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "ea797c4a3f6e918e70d1ac65e6ccb11c4cf644c2c52938cc923efdfa1de669a3",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/M01-login.html",
+    "fuente_sha256": "a6cbc004d02873081ab8d2de12456dbd521d17f3bbe5a4bef72a5dc17620a3f2",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "M02",
+   "tipo": "mockup",
+   "area": "selector-hijo",
+   "titulo": "Mockup · Selector de hijo",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Normal"
+   ],
+   "requisitos": [
+    "EPT-95/selector-hijo",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/mockups/M02-selector-hijo.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "2d397e6288b84c448b22e9a9b330b5ef096ab4a66c7e4d396ef869974fd68eac",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/M02-selector-hijo.html",
+    "fuente_sha256": "4f0078074ec6a7dd3a073675cbba552c3d95e16dd1ec7de2044e8c885f9d6555",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "M03",
+   "tipo": "mockup",
+   "area": "cuotas",
+   "titulo": "Mockup · Cuotas pendientes",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Pago parcial",
+    "Vencida"
+   ],
+   "requisitos": [
+    "EPT-95/cuotas",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/mockups/M03-cuotas.png",
+   "pixeles": [
+    780,
+    1696
+   ],
+   "sha256": "a639bc4b26129f19bf1376145faf2e0116800fa3de803bbf13306410259bb320",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/M03-cuotas.html",
+    "fuente_sha256": "83bd16924c30dbd7f2b475f922aa0386cc9c73adfbe614b0a6ea6da2ab4fdc26",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "M04",
+   "tipo": "mockup",
+   "area": "factura",
+   "titulo": "Mockup · Detalle de factura",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Vencida",
+    "En verificación"
+   ],
+   "requisitos": [
+    "EPT-95/factura-items",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/mockups/M04-factura.png",
+   "pixeles": [
+    780,
+    2284
+   ],
+   "sha256": "bb32e90f7454a6c78e5dcc8be7dac51a739e2f93ec8e63a50cdb8bc24405e380",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/M04-factura.html",
+    "fuente_sha256": "59fe68b0b785ec57042387935b7cb8479d0c4e602f4e350da726f942902174ea",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "M05",
+   "tipo": "mockup",
+   "area": "transferencia",
+   "titulo": "Mockup · Selección y pago por transferencia",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Selección",
+    "En verificación",
+    "Datos bancarios no configurados"
+   ],
+   "requisitos": [
+    "EPT-95/seleccion-transferencia",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/mockups/M05-seleccion-y-pago.png",
+   "pixeles": [
+    780,
+    3452
+   ],
+   "sha256": "4611ad882699f5e1b98b0e9c04baa5d2f5a31d783d192088a9aec15f19691de3",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/M05-seleccion-y-pago.html",
+    "fuente_sha256": "98ede32c0d4ec392f1b14a4e3beb56c1c49d81c90ccfe54ece2097d57fb31f30",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "M06",
+   "tipo": "mockup",
+   "area": "comprobantes",
+   "titulo": "Mockup · Carga de comprobantes",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Carga"
+   ],
+   "requisitos": [
+    "EPT-95/comprobantes",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/mockups/M06-comprobantes.png",
+   "pixeles": [
+    780,
+    2332
+   ],
+   "sha256": "3353f4a18360f62f1622398a13c69d98273baed9df2f67c9986a4fc1103f328d",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/M06-comprobantes.html",
+    "fuente_sha256": "80e3bfecf8a576e5e6b935abadc4e021333ed49a94529c35fe6ed8c3dade9e52",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "M07",
+   "tipo": "mockup",
+   "area": "periodo",
+   "titulo": "Mockup · Facturas por período",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Consulta",
+    "Pendiente de verificación"
+   ],
+   "requisitos": [
+    "EPT-95/periodo",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/mockups/M07-periodo.png",
+   "pixeles": [
+    780,
+    3220
+   ],
+   "sha256": "7c4a3c856afa4f066974778c129024ea4089c2151f385f1ab3f780f882cc0149",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/M07-periodo.html",
+    "fuente_sha256": "2a02de74ceb7ba9ba04254b31f9378c9972249720d8b4042cf87f28e84fc9b43",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "M08",
+   "tipo": "mockup",
+   "area": "deuda-item",
+   "titulo": "Mockup · Deuda por ítem",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Consulta",
+    "En verificación"
+   ],
+   "requisitos": [
+    "EPT-95/deuda-item",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/mockups/M08-deuda-item.png",
+   "pixeles": [
+    780,
+    4550
+   ],
+   "sha256": "9cf18ce5f182f1b4973b10955c069839821b9ad038e0b39b3efcb8defcffe50e",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/M08-deuda-item.html",
+    "fuente_sha256": "141a6fa023134aafa308767af634f4751045fa8f84a18114936470ac65cf040c",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "M09",
+   "tipo": "mockup",
+   "area": "inscripciones",
+   "titulo": "Mockup · Inscripciones",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Consulta"
+   ],
+   "requisitos": [
+    "EPT-95/inscripciones",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/mockups/M09-inscripciones.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "a5a50aae49e9d85b94893873a4d54cae02ef8c20ebe82c23fee89ac4129931eb",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/M09-inscripciones.html",
+    "fuente_sha256": "c6bf3998a5d79854595f5e6c56f1e606462bda2e36f0b2bfcededac5bbca3c53",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V01",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Inicio de sesión · validación de campos",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Validación"
+   ],
+   "requisitos": [
+    "EPT-95/login",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/variantes/V01-login-validacion.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "d3acbd532682e00a39b3c686a04777ceee90762c08b73d632b14f643d05e8d16",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V01-login-validacion.html",
+    "fuente_sha256": "f2261bba2f073f1e7637dfd981b61ba6fd4bb428eddac00982272295127479b3",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V02",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Inicio de sesión · credenciales inválidas",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Error"
+   ],
+   "requisitos": [
+    "EPT-95/login",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/variantes/V02-login-credenciales-invalidas.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "0bc64e7947b44b15f5096ea5d859e43a01b6052076ad4b3774a0b34444b392a1",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V02-login-credenciales-invalidas.html",
+    "fuente_sha256": "fcc450253ec90a4f7d963b86b6f27ecacdc4a517bde041b69e4012ff56955e05",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V03",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Cuenta bloqueada",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Cuenta bloqueada"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/variantes/V03-login-cuenta-bloqueada.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "e841b38ceb31ac72c960b29a4fcdf87691cd4fc63ef849ca10a9e3e8f2214b0c",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V03-login-cuenta-bloqueada.html",
+    "fuente_sha256": "ba64a9ac6d5b78a791bdb2af5dfa6f7a361749f606b9c8818247106fe983f8f6",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V04",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Sesión expirada",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Sesión expirada"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/variantes/V04-login-sesion-expirada.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "f35b5e988d89cea960139661049d0cf4d945e5d4689a64556756af10a25dc084",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V04-login-sesion-expirada.html",
+    "fuente_sha256": "d58cf61c6af3477269c92cbb9bc35578fcade4ae75a7673036fc047c9d723ba9",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V05",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Roles de canal web",
+   "roles": [
+    "DIRECTOR",
+    "DOCENTE",
+    "PERSONAL"
+   ],
+   "estados": [
+    "Canal web"
+   ],
+   "requisitos": [
+    "EPT-95/login",
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/variantes/V05-login-canal-web.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "e720c31d4040c189cefe8d2013db12a855af2753b62d145d853e045d8d1ace74",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V05-login-canal-web.html",
+    "fuente_sha256": "f1cfd01d45a16b781a93f5f27b65bca5c6f1893a558743c2ad345c97bd79352d",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V06",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Selector · sin hijos vinculados",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Sin vínculo",
+    "Vacío"
+   ],
+   "requisitos": [
+    "EPT-95/selector-hijo",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/variantes/V06-selector-sin-vinculos.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "9176d56add0eb0e52a3113077ee0f6cbf3f867199b6cc0d907e9d7a94f3ece2c",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V06-selector-sin-vinculos.html",
+    "fuente_sha256": "34217000c59b02c5af2ae5585a9b8f08d25898070777346298130842fc9f6b29",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V07",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Cuotas · estudiante (información propia)",
+   "roles": [
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Consulta propia",
+    "Pago parcial",
+    "Vencida"
+   ],
+   "requisitos": [
+    "EPT-95/cuotas",
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/variantes/V07-cuotas-estudiante.png",
+   "pixeles": [
+    780,
+    1696
+   ],
+   "sha256": "2262259c5ebe371b8139f8d77ad776f2cbe1ece0800e3b00e6964a14bd031e10",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V07-cuotas-estudiante.html",
+    "fuente_sha256": "f0772e5ca10bc473a39c484e510bb6b17aa6a93a48bb1415c66feadea02b045a",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V08",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Cuotas · pestaña Pagadas",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Pagada"
+   ],
+   "requisitos": [
+    "EPT-95/cuotas",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/variantes/V08-cuotas-pagadas.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "867eeb8a363b4bad76c95ccd2e624dc3d321cd6cc95bbfe5f1c947321aa57bb7",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V08-cuotas-pagadas.html",
+    "fuente_sha256": "354fbe48d52b15fab82c21452ef28a4bdbd344121690c5cd6dbd1260cd62493d",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V09",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Cuotas · hijo con cuota Pendiente",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Pendiente"
+   ],
+   "requisitos": [
+    "EPT-95/cuotas",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/variantes/V09-cuotas-pendiente.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "bf24e6f8d63861c61cb30f51a5471c570850754fd921c7187e7aa3cab32597ec",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V09-cuotas-pendiente.html",
+    "fuente_sha256": "fefd3b93208b98329bc6d211e0b110c3276ab10beebc7a43a7b3f502170ce8f5",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V10",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Cuotas · carga",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Carga"
+   ],
+   "requisitos": [
+    "EPT-95/cuotas"
+   ],
+   "archivo": "disenos/variantes/V10-cuotas-carga.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "81dc81b12bb20b564c7d32feec8b9e687438847c092928be9db802b72edc101d",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V10-cuotas-carga.html",
+    "fuente_sha256": "07b478c31c92f205e09760ddbeae6ed9ef22de21a42c5c1a2007f08666c5aaca",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V11",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Cuotas · estado vacío (pestaña Pagadas)",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Vacío"
+   ],
+   "requisitos": [
+    "EPT-95/cuotas"
+   ],
+   "archivo": "disenos/variantes/V11-cuotas-vacio.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "2a4bc56685367624a29e9ad9c68b456efe20f2b4b7352b1207e77d480d10a6a3",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V11-cuotas-vacio.html",
+    "fuente_sha256": "d968867bb5aa3f282107c2d9eff5791e1c9d2dcff977a1f6ce116f2fbde77333",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V12",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Cuotas · error de conexión",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Error"
+   ],
+   "requisitos": [
+    "EPT-95/cuotas"
+   ],
+   "archivo": "disenos/variantes/V12-cuotas-error-conexion.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "3e97e943111c6bc8d3e33829b23c8c940875b81dcb12a3cd6ee776e2bc25d186",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V12-cuotas-error-conexion.html",
+    "fuente_sha256": "69f2e1249318e67dba4f9abd90aa5e095cdb11219f16737773bafdda91428465",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V13",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Guía de los cuatro estados de cuota",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Pendiente",
+    "Pago parcial",
+    "Pagada",
+    "Vencida"
+   ],
+   "requisitos": [
+    "EPT-95/cuotas",
+    "EPT-95/roles-y-estados"
+   ],
+   "archivo": "disenos/variantes/V13-estados-de-cuota.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "10ac7e79201605834aaa7733eed7ce02cf89266cd66bd1db3cda8d24c8ee871e",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V13-estados-de-cuota.html",
+    "fuente_sha256": "eeff2cfb305ccfc12b6bf72d6154467a7b273a0700e496d516964075132f7cbd",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V14",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Detalle de factura · estudiante",
+   "roles": [
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Consulta propia",
+    "Vencida",
+    "En verificación"
+   ],
+   "requisitos": [
+    "EPT-95/factura-items",
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/variantes/V14-factura-estudiante.png",
+   "pixeles": [
+    780,
+    2366
+   ],
+   "sha256": "24b2256cd02fce0f2e060c6c43a2ea578f9ad3d0103b4eb643a9a9f61c8ae107",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V14-factura-estudiante.html",
+    "fuente_sha256": "aba3fe920ff83771b83a96810f963ad621355e3672242534999dfc1165d239ef",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V15",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Selección · validación sin ítems",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Validación",
+    "Selección"
+   ],
+   "requisitos": [
+    "EPT-95/seleccion-transferencia"
+   ],
+   "archivo": "disenos/variantes/V15-seleccion-validacion.png",
+   "pixeles": [
+    780,
+    3620
+   ],
+   "sha256": "086003792898662e52dc56dce4eaadbf65044d28d02b44f55dd8643b0c8f8820",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V15-seleccion-validacion.html",
+    "fuente_sha256": "ad7868fcb7b84926cc911d4659ad72ba1a2cacd7e1ce4f68f30390a7a8b17f00",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V16",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Pago registrado · pendiente de verificación",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Confirmación",
+    "En verificación"
+   ],
+   "requisitos": [
+    "EPT-95/seleccion-transferencia",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/variantes/V16-pago-registrado.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "2b34eb5aff6df6886ec911739909845cb1928b9631f0faf283e44eb160f2290c",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V16-pago-registrado.html",
+    "fuente_sha256": "0674b852002788e0cc4bec9c4bf2015c054e0fc6621582ee1323a09958d43866",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V17",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Comprobante · errores de validación",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Validación",
+    "Error"
+   ],
+   "requisitos": [
+    "EPT-95/comprobantes",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/variantes/V17-comprobante-validacion.png",
+   "pixeles": [
+    780,
+    2754
+   ],
+   "sha256": "0d599f979b0859827cbc50f922a812e0e33a25934899e64d287b4d1547263a59",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V17-comprobante-validacion.html",
+    "fuente_sha256": "5643de69ac0bcb1653612bea8d79a8e3e4e14c485addb89f4a9375c020f84f1c",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V18",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Comprobante · confirmación",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Confirmación",
+    "En verificación"
+   ],
+   "requisitos": [
+    "EPT-95/comprobantes",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/variantes/V18-comprobante-confirmacion.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "ecb239b7ce22cba75c94fd8cb0750b88f709e9db41cafe5a445ac0bb95d06d3b",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V18-comprobante-confirmacion.html",
+    "fuente_sha256": "fc33d30679daa91fd9a5265852bade00d250135a51f20dbe9008d354daa837f4",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V19",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Comprobante · resultado incierto",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Error incierto"
+   ],
+   "requisitos": [
+    "EPT-95/comprobantes",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/variantes/V19-comprobante-error-incierto.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "1c5a1f8cd2e414370e87334c7ec148631f2cf7bbd08470b7e99cf61596011899",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V19-comprobante-error-incierto.html",
+    "fuente_sha256": "8c875b216ddf3ce1d884473a77c7f46658143d93152808dcda809d0cade5dfd6",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V20",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Comprobantes · otro padre vinculado",
+   "roles": [
+    "PADRE_VINCULADO_NO_CARGADOR"
+   ],
+   "estados": [
+    "Original no autorizado",
+    "Pendiente de verificación"
+   ],
+   "requisitos": [
+    "EPT-95/comprobantes",
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/variantes/V20-comprobantes-otro-padre.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "4830bfdf018d121d91b45c7851c9668cfcc4a14c0da6022da62ae438e0cd67e3",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V20-comprobantes-otro-padre.html",
+    "fuente_sha256": "0b18d4bd643dc9ea73c014c2589456e222dbafe7e02b1bd65707508587417f96",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V21",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Comprobantes · estudiante",
+   "roles": [
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Consulta propia",
+    "Original no autorizado"
+   ],
+   "requisitos": [
+    "EPT-95/comprobantes",
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/variantes/V21-comprobantes-estudiante.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "e0ccbaf83b81249aefaa149fd074b43b436ce272bd94408bb18a280e23031391",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V21-comprobantes-estudiante.html",
+    "fuente_sha256": "7ed9819fe9078b01fc04e63b7d3220f9d33ab3870f753bc88945bf0714d4aec0",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V22",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Facturas por período · estudiante",
+   "roles": [
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Consulta propia",
+    "Pendiente de verificación"
+   ],
+   "requisitos": [
+    "EPT-95/periodo",
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/variantes/V22-periodo-estudiante.png",
+   "pixeles": [
+    780,
+    3354
+   ],
+   "sha256": "14c624978bec5402195a01cef6a0a156bf076d4e6f8839cb7466edbfc5c4a649",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V22-periodo-estudiante.html",
+    "fuente_sha256": "27ace0512a0e8d7d0372b8281027f0c25dbe5af08e707e55f69385575627cac2",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V23",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Deuda por ítem · estudiante",
+   "roles": [
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Consulta propia",
+    "En verificación"
+   ],
+   "requisitos": [
+    "EPT-95/deuda-item",
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/variantes/V23-deuda-estudiante.png",
+   "pixeles": [
+    780,
+    4550
+   ],
+   "sha256": "92f85721c769f14a33ab75117e5a7c46fde8ab49270e574e1376e7d6d78b3482",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V23-deuda-estudiante.html",
+    "fuente_sha256": "c508559726d9d77ff8ec8b4e3fb35c6e47786567cfacef6f7dc5d52850d095fb",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V24",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Inscripciones · estudiante",
+   "roles": [
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Consulta propia"
+   ],
+   "requisitos": [
+    "EPT-95/inscripciones",
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "archivo": "disenos/variantes/V24-inscripciones-estudiante.png",
+   "pixeles": [
+    780,
+    1688
+   ],
+   "sha256": "aa658433f9b947982672be2fd0cd6537b93a95adc9339a29a057652ba192d32d",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V24-inscripciones-estudiante.html",
+    "fuente_sha256": "75d6c3f541021819a51c94d2940775b8a99f48afeb63706f0a0aa98b9e482f97",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V25",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Comprobante · formulario con teclado abierto",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Teclado",
+    "Carga"
+   ],
+   "requisitos": [
+    "EPT-95/comprobantes",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/variantes/V25-comprobante-teclado.png",
+   "pixeles": [
+    780,
+    2740
+   ],
+   "sha256": "e63aab04236a24897a553927eb9a3b06dc42a6ddfec2fbbcf446113f9f8dfa07",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V25-comprobante-teclado.html",
+    "fuente_sha256": "575b4baeab97d6eb039bb7965aa1c04a6d8b6859dc42d1788afda9fbe3fb5d06",
+    "escala_texto": 1
+   }
+  },
+  {
+   "pantalla": "V26",
+   "tipo": "variante",
+   "area": "variantes",
+   "titulo": "Cuotas · texto ampliado al 200 %",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Texto 200%",
+    "Vencida"
+   ],
+   "requisitos": [
+    "EPT-95/cuotas",
+    "EPT-98/contrato-movil"
+   ],
+   "archivo": "disenos/variantes/V26-cuotas-texto-200.png",
+   "pixeles": [
+    780,
+    3546
+   ],
+   "sha256": "90f126c9407a24ca476e4523f82808900b72c9a336d84ecd6f93f6b2af00ea3b",
+   "origen": {
+    "tipo": "diseno-local",
+    "fuente": "fuentes/html/V26-cuotas-texto-200.html",
+    "fuente_sha256": "d531defb7ea9e4baf0abdb16c49e8fdef894839b3801102213fecb0e3a36f2f4",
+    "escala_texto": 2
+   }
+  }
+ ]
+}
