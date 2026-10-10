@@ -3,11 +3,14 @@ import { appendFileSync, readFileSync, readdirSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { suiteProfile, validateRegistry } from './suites.mjs'
 import { ept95Paths, secureRelative, validateEpt95Assets } from './ept95-assets.mjs'
+import { ept96Paths, validateEpt96Assets } from './ept96-assets.mjs'
 import { families, aliases, validateUiRegistry } from './ui.mjs'
 
 export const pureTests = ['tarifas-lib', 'asistencias-lib', 'reportes-lib', 'paginacion',
   'paginacion-paralela', 'inscripciones-legadas-lib', 'accesos-qr-cripto',
   'credenciales-qr-cripto', 'semantica-estatica', 'accesos-qr-servicio', 'redireccion-login']
+// Cambios de infraestructura que pueden alterar el prototipo o su verificación: obligan a ejecutar su navegación real.
+const PROTOTIPO_INFRA = new Set(['scripts/ci/ept96-assets.mjs', 'scripts/ci/impact.mjs', 'scripts/ci/impact.test.mjs', '.github/workflows/ci.yml', 'package.json', 'package-lock.json'])
 export function changedPaths(raw) {
   const tokens = raw.split('\0'), paths = []
   if (tokens.pop() !== '') throw new Error('Incomplete Git diff')
@@ -25,12 +28,20 @@ export function changedPaths(raw) {
 export function profile(paths, { root = process.cwd() } = {}) {
   for (const file of paths) { try { secureRelative(file) } catch (error) { error.message += `: ${JSON.stringify(file)}`; throw error } }
   if (paths.some(file => ept95Paths.has(file) || file === 'scripts/ci/ept95-assets.mjs')) validateEpt95Assets(root)
-  let db = false, mutations = false
+  if (paths.some(file => ept96Paths.has(file) || file === 'scripts/ci/ept96-assets.mjs')) validateEpt96Assets(root)
+  let db = false, mutations = false, prototipo = false
   const ui = new Set()
   const core = () => { db = true; ui.add('core') }
   for (const file of paths) {
-    if (ept95Paths.has(file)) continue
+    // El prototipo EPT-96 contiene HTML/CSS/JS que se ejecuta: su selección exige la navegación real, nunca solo hashes.
+    if (ept96Paths.has(file)) { prototipo = true; continue }
+    if (file.startsWith('docs/parte3/EPT-96/')) throw new Error(`Ruta EPT-96 sin contrato: ${file}`)
+    if (ept95Paths.has(file)) {
+      if (/\/fuentes\/(?:fuentes-tipograficas|imagenes)\//u.test(file)) prototipo = true // el servidor del prototipo las sirve
+      continue
+    }
     if (file.startsWith('docs/parte3/EPT-95/')) throw new Error(`Ruta EPT-95 sin contrato: ${file}`)
+    if (PROTOTIPO_INFRA.has(file)) prototipo = true
     if (/^scripts\/ci\/.*\.test\.mjs$/u.test(file) && file !== 'scripts/ci/impact.test.mjs') throw new Error(`Prueba CI sin contrato: ${file}`)
     if (/^(?:docs\/.*\.md|(?:README|AGENTS)\.md|\.github\/pull_request_template\.md)$/u.test(file)) continue
     if (pureTests.some(name => file === `tests/${name}.spec.ts`)) continue
@@ -61,7 +72,7 @@ export function profile(paths, { root = process.cwd() } = {}) {
     if (families[name]) { db = true; ui.add(name); continue }
     throw new Error(`Ruta sin contrato de comprobación: ${file}; registrar cobertura antes de integrar`)
   }
-  return { db, mutations, ui: [...ui].sort() }
+  return { db, mutations, ui: [...ui].sort(), ...(prototipo ? { prototipo: true } : {}) }
 }
 export function unsupportedPackage(file, content) {
   const dependencies = { ...content.dependencies, ...content.devDependencies }
@@ -77,6 +88,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (!/^[a-f0-9]{40}$/u.test(head ?? '')) throw new Error('Invalid HEAD SHA')
   const plan = !/^[a-f0-9]{40}$/u.test(base ?? '') || /^0+$/u.test(base) ? profile(['package.json'])
     : profile(changedPaths(execFileSync('git', ['diff', '--name-status', '-z', execFileSync('git', ['merge-base', base, head], { encoding: 'utf8' }).trim(), head], { encoding: 'utf8' })))
-  appendFileSync(process.env.GITHUB_OUTPUT, `db=${plan.db}\nmutations=${plan.mutations}\nui=${JSON.stringify(plan.ui)}\n`)
+  appendFileSync(process.env.GITHUB_OUTPUT, `db=${plan.db}\nmutations=${plan.mutations}\nui=${JSON.stringify(plan.ui)}\nprototipo=${Boolean(plan.prototipo)}\n`)
   console.log(`Plan de comprobación: ${JSON.stringify(plan)}; revisión: ${head}`)
 }
