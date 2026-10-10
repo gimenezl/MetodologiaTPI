@@ -1,0 +1,20 @@
+appId: org.educarparatransformar.app
+name: Verificación de la base móvil
+---
+- launchApp:
+    clearState: true
+- assertVisible: 'Verificación de la base móvil'
+- assertVisible: 'Pantalla de desarrollo'
+- assertVisible: 'Sesión del dispositivo'
+- takeScreenshot: 01-inicio
+- tapOn: 'Guardar y leer'
+- assertVisible: 'Almacenamiento seguro: correcto'
+- takeScreenshot: 02-almacenamiento-correcto
+- tapOn:
+    id: 'campo-tamano'
+- eraseText: 5
+- inputText: '0'
+- hideKeyboard
+- tapOn: 'Guardar y leer'
+- assertVisible: 'Ingresá un tamaño entre 1 y 32 KB.'
+- takeScreenshot: 03-validacion
