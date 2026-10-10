@@ -5,10 +5,13 @@ import { suiteProfile, validateRegistry } from './suites.mjs'
 import { ept95Paths, secureRelative, validateEpt95Assets } from './ept95-assets.mjs'
 import { ept96Paths, validateEpt96Assets } from './ept96-assets.mjs'
 import { families, aliases, validateUiRegistry } from './ui.mjs'
+import { requireMobileContract, touchesMobile, validateMobileWorkflowFile } from './mobile.mjs'
 
 export const pureTests = ['tarifas-lib', 'asistencias-lib', 'reportes-lib', 'paginacion',
   'paginacion-paralela', 'inscripciones-legadas-lib', 'accesos-qr-cripto',
   'credenciales-qr-cripto', 'semantica-estatica', 'accesos-qr-servicio', 'redireccion-login']
+// Infraestructura que decide cómo se prueba la app móvil: su cambio exige recorrer los gates móviles completos.
+const MOBILE_INFRA = new Set(['scripts/ci/mobile.mjs', 'scripts/ci/impact.mjs', 'scripts/ci/impact.test.mjs', '.github/workflows/ci.yml'])
 // Cambios de infraestructura que pueden alterar el prototipo o su verificación: obligan a ejecutar su navegación real.
 const PROTOTIPO_INFRA = new Set(['scripts/ci/ept96-assets.mjs', 'scripts/ci/impact.mjs', 'scripts/ci/impact.test.mjs', '.github/workflows/ci.yml', 'package.json', 'package-lock.json'])
 export function changedPaths(raw) {
@@ -29,10 +32,17 @@ export function profile(paths, { root = process.cwd() } = {}) {
   for (const file of paths) { try { secureRelative(file) } catch (error) { error.message += `: ${JSON.stringify(file)}`; throw error } }
   if (paths.some(file => ept95Paths.has(file) || file === 'scripts/ci/ept95-assets.mjs')) validateEpt95Assets(root)
   if (paths.some(file => ept96Paths.has(file) || file === 'scripts/ci/ept96-assets.mjs')) validateEpt96Assets(root)
-  let db = false, mutations = false, prototipo = false
+  let db = false, mutations = false, prototipo = false, mobile = false
   const ui = new Set()
   const core = () => { db = true; ui.add('core') }
   for (const file of paths) {
+    // La app móvil (EPT-102) es código nativo: sus archivos exigen contrato propio y sus gates (Android, iOS, JS).
+    if (touchesMobile(file)) {
+      requireMobileContract(file)
+      mobile = true
+      if (file.startsWith('mobile/')) continue
+    }
+    if (MOBILE_INFRA.has(file)) mobile = true
     // El prototipo EPT-96 contiene HTML/CSS/JS que se ejecuta: su selección exige la navegación real, nunca solo hashes.
     if (ept96Paths.has(file)) { prototipo = true; continue }
     if (file.startsWith('docs/parte3/EPT-96/')) throw new Error(`Ruta EPT-96 sin contrato: ${file}`)
@@ -72,9 +82,11 @@ export function profile(paths, { root = process.cwd() } = {}) {
     if (families[name]) { db = true; ui.add(name); continue }
     throw new Error(`Ruta sin contrato de comprobación: ${file}; registrar cobertura antes de integrar`)
   }
-  return { db, mutations, ui: [...ui].sort(), ...(prototipo ? { prototipo: true } : {}) }
+  return { db, mutations, ui: [...ui].sort(), ...(prototipo ? { prototipo: true } : {}), ...(mobile ? { mobile: true } : {}) }
 }
 export function unsupportedPackage(file, content) {
+  // Único paquete móvil registrado: sus gates reales viven en `CI / móvil`, Android e iOS (validateMobileWorkflowFile).
+  if (file === 'mobile/package.json') return false
   const dependencies = { ...content.dependencies, ...content.devDependencies }
   return /(?:^|\/)(?:mobile|android|ios)\//u.test(file) || 'expo' in dependencies || 'react-native' in dependencies
 }
@@ -84,10 +96,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (readdirSync('scripts/ci').some(f => f.endsWith('.test.mjs') && f !== 'impact.test.mjs')) throw new Error('Registrar las nuevas pruebas CI antes de integrar')
   const packages = execFileSync('git', ['ls-files', '-z', '--', 'package.json', '*/package.json'], { encoding: 'utf8' }).split('\0').filter(Boolean)
   if (packages.some(file => unsupportedPackage(file, JSON.parse(readFileSync(file, 'utf8'))))) throw new Error('Mobile detectado: configurar sus comprobaciones reales antes de integrar; CI web insuficiente')
+  if (packages.includes('mobile/package.json')) {
+    validateMobileWorkflowFile()
+    const archivosMobile = execFileSync('git', ['ls-files', '-z', '--', 'mobile'], { encoding: 'utf8' }).split('\0').filter(Boolean)
+    archivosMobile.forEach(requireMobileContract)
+  }
   const base = process.env.CI_BASE_SHA, head = process.env.CI_HEAD_SHA
   if (!/^[a-f0-9]{40}$/u.test(head ?? '')) throw new Error('Invalid HEAD SHA')
-  const plan = !/^[a-f0-9]{40}$/u.test(base ?? '') || /^0+$/u.test(base) ? profile(['package.json'])
+  const plan = !/^[a-f0-9]{40}$/u.test(base ?? '') || /^0+$/u.test(base) ? { ...profile(['package.json']), ...(packages.includes('mobile/package.json') ? { mobile: true } : {}) }
     : profile(changedPaths(execFileSync('git', ['diff', '--name-status', '-z', execFileSync('git', ['merge-base', base, head], { encoding: 'utf8' }).trim(), head], { encoding: 'utf8' })))
-  appendFileSync(process.env.GITHUB_OUTPUT, `db=${plan.db}\nmutations=${plan.mutations}\nui=${JSON.stringify(plan.ui)}\nprototipo=${Boolean(plan.prototipo)}\n`)
+  appendFileSync(process.env.GITHUB_OUTPUT, `db=${plan.db}\nmutations=${plan.mutations}\nui=${JSON.stringify(plan.ui)}\nprototipo=${Boolean(plan.prototipo)}\nmobile=${Boolean(plan.mobile)}\n`)
   console.log(`Plan de comprobación: ${JSON.stringify(plan)}; revisión: ${head}`)
 }

@@ -1,0 +1,35 @@
+appId: org.educarparatransformar.app
+name: Verificación de la base móvil
+---
+# Los avisos son un único elemento accesible (título + mensaje): se comparan con expresión regular.
+- launchApp:
+    clearState: true
+- assertVisible: 'Verificación de la base móvil'
+- assertVisible: '.*Pantalla de desarrollo.*'
+- assertVisible: 'Sesión del dispositivo'
+- takeScreenshot: 01-inicio
+- scrollUntilVisible:
+    element: 'Guardar y leer'
+- tapOn: 'Guardar y leer'
+- assertVisible: '.*Almacenamiento seguro: correcto.*'
+- takeScreenshot: 02-almacenamiento-correcto
+- tapOn:
+    id: 'campo-tamano'
+- eraseText: 5
+- inputText: '0'
+# El teclado numérico de iOS no tiene tecla de acción ni responde a hideKeyboard: se usa «Done» de la barra.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn: 'Done'
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - hideKeyboard
+- scrollUntilVisible:
+    element: 'Guardar y leer'
+- tapOn: 'Guardar y leer'
+- assertVisible: 'Ingresá un tamaño entre 1 y 32 KB.'
+- takeScreenshot: 03-validacion

@@ -16,7 +16,20 @@ Estos son presupuestos que fallan al agotarse, no duraciones garantizadas. La ú
 
 El core incluye seed y login DIRECTOR, banco niveles, todos los endpoints sin sesión (401), PERSONAL (403) y DIRECTOR bloqueado con JWT vigente. La UI familiar conserva positivas y negativas de sus archivos en los proyectos Chromium aplicables; no afirma cobertura móvil. El reporter exige casos no-setup, todos los archivos solicitados y los cuatro proyectos core, y rechaza ejecuciones incompletas u omisiones inesperadas. Cada archivo focal debe ejecutar al menos una comprobación. `--list` valida la selección antes de ejecutar.
 
-Una ruta, suite o paquete mobile/Expo/React Native sin contrato bloquea el plan: registrar comprobaciones reales antes de integrar. No se concede un PASS web a mobile. Los helpers de producción/preflight/carga/replay histórico no se ejecutan por extensión; sus cambios requieren un contrato seguro específico. Pruebas de captura y responsive exclusivas siguen en la matriz completa; cambiarlas exige registrar su gate aplicable, no sustituirlo por un smoke ajeno.
+Una ruta, suite o paquete mobile/Expo/React Native sin contrato bloquea el plan: registrar comprobaciones reales antes de integrar. No se concede un PASS web a mobile. Desde EPT-102 el único paquete móvil registrado es `mobile/` (ver «Aplicación móvil»); cualquier otro paquete con Expo o React Native, y cualquier archivo de `mobile/` fuera de `scripts/ci/mobile.mjs`, sigue bloqueando. Los helpers de producción/preflight/carga/replay histórico no se ejecutan por extensión; sus cambios requieren un contrato seguro específico. Pruebas de captura y responsive exclusivas siguen en la matriz completa; cambiarlas exige registrar su gate aplicable, no sustituirlo por un smoke ajeno.
+
+## Aplicación móvil
+
+`scripts/ci/mobile.mjs` registra, con patrones literales, los archivos permitidos bajo `mobile/`. `impact.mjs` marca `mobile=true` cuando cambia `mobile/`, `src/lib/errores.ts` o `src/types/database.generated.ts` (que la app copia de la web) o la infraestructura que decide cómo se prueba (`ci.yml`, `impact.mjs`, `impact.test.mjs`, `mobile.mjs`). Con plan móvil, `CI / gate` exige **los tres** jobs; un skip obligatorio lo deja rojo.
+
+| Job | Qué prueba | Límite |
+|---|---|---|
+| `CI / plan móvil` | Evalúa el plan sin esperar al job `fast` | 5 min |
+| `CI / móvil` | `npm ci`, copia compartida sin deriva, importaciones prohibidas y secretos, `expo install --check`, `expo-doctor`, tipos, lint, Jest y `node:test`, bundles Android e iOS y su escaneo | 20 min |
+| `CI / móvil Android` | `prebuild`, `assembleRelease` (x86_64), instalación en emulador API 34 y flujo Maestro | 50 min |
+| `CI / móvil iOS` | `prebuild` con pods, `xcodebuild` Release para simulador, instalación en simulador y flujo Maestro (`macos-26`) | 60 min |
+
+Exportar bundles, Expo web o compilar TypeScript no demuestra un APK ni una aplicación iOS: por eso los builds y la ejecución son parte del gate. Los artefactos (`movil-android-<sha>`, `movil-ios-<sha>`) se conservan 14 días con logs, capturas y resultados JUnit. No se ejecutan los E2E web ni la matriz completa por cambios móviles.
 
 ## Omisiones de aplicabilidad
 
