@@ -9,6 +9,7 @@ import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, mkdirSync, writ
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { changedPaths, profile, pureTests, unsupportedPackage } from './impact.mjs'
+import { validateMobileWorkflow } from './mobile.mjs'
 import { sqlSuites, sqlRole, dbScripts, fullScripts, supportFiles, excludedFiles, validateRegistry } from './suites.mjs'
 import { families, uiFiles, validateUiRegistry, fullProjects } from './ui.mjs'
 import { withCleanup } from './cleanup.mjs'
@@ -25,9 +26,9 @@ test('malformed records fail closed', () => {
   for (const raw of ['M\0a', 'R100\0a\0', 'Z\0a\0', 'M\0../a\0', 'M\0/a\0']) assert.throws(() => changedPaths(raw))
 })
 test('PR plans never select the full matrix, including shared auth and infrastructure', () => {
-  for (const file of ['package-lock.json', '.github/workflows/ci.yml']) {
-    assert.deepEqual(profile([file]), { db: true, mutations: false, ui: ['core'], prototipo: true }) // también recorre el prototipo
-  }
+  assert.deepEqual(profile(['package-lock.json']), { db: true, mutations: false, ui: ['core'], prototipo: true }) // también recorre el prototipo
+  // El workflow decide cómo se prueba la app: también recorre los gates móviles.
+  assert.deepEqual(profile(['.github/workflows/ci.yml']), { db: true, mutations: false, ui: ['core'], prototipo: true, mobile: true })
   for (const file of ['src/proxy.ts', 'supabase/migrations/new.sql']) {
     assert.deepEqual(profile([file]), { db: true, mutations: false, ui: ['core'] })
   }
@@ -37,16 +38,74 @@ test('PR plans never select the full matrix, including shared auth and infrastru
   assert.throws(() => profile(['package-lock.json', 'tests/responsive-regresion.spec.ts']), /sin contrato/u)
   assert.deepEqual(profile(['src/services/facturacion-job.ts']), { db: true, mutations: false, ui: [] })
   assert.deepEqual(profile(['src/app/dashboard/tarifas/page.tsx']), { db: true, mutations: false, ui: ['tarifas'] })
-  for (const file of ['unknown', 'mobile/package.json', 'tests/new.spec.ts', 'src/app/api/new/route.ts']) assert.throws(() => profile([file]))
+  for (const file of ['unknown', 'tests/new.spec.ts', 'src/app/api/new/route.ts']) assert.throws(() => profile([file]))
   assert.throws(() => profile(['scripts/ci/new.test.mjs']))
   assert.deepEqual(profile(['src/app/api/tarifas/route.ts', 'src/app/dashboard/cursos/page.tsx']),
     { db: true, mutations: false, ui: ['cursos', 'tarifas'] })
 })
 test('mobile cannot pass web-only checks', () => {
-  for (const [file, deps] of [['mobile/package.json', {}], ['apps/app/package.json', { expo: '54' }], ['apps/app/package.json', { 'react-native': '0.81' }]]) {
-    assert.equal(unsupportedPackage(file, { dependencies: deps }), true)
+  // Cualquier paquete móvil NO registrado sigue bloqueando; solo `mobile/package.json` tiene gates propios.
+  for (const [file, deps] of [['mobile/nested/package.json', {}], ['apps/app/package.json', { expo: '54' }], ['apps/app/package.json', { 'react-native': '0.81' }],
+    ['ios/package.json', {}], ['android/package.json', {}], ['packages/mobile/package.json', { expo: '57' }]]) {
+    assert.equal(unsupportedPackage(file, { dependencies: deps }), true, file)
   }
   assert.equal(unsupportedPackage('packages/shared/package.json', { dependencies: { zod: '4' } }), false)
+  assert.equal(unsupportedPackage('mobile/package.json', { dependencies: { expo: '57', 'react-native': '0.86' } }), false)
+})
+test('EPT-102: mobile/ se registra con contrato propio y bloquea lo desconocido', () => {
+  for (const file of ['mobile/package.json', 'mobile/package-lock.json', 'mobile/app/index.tsx', 'mobile/app/_layout.tsx',
+    'mobile/src/servicios/supabase.ts', 'mobile/src/catalogo/Boton.tsx', 'mobile/__tests__/componentes.test.tsx',
+    'mobile/scripts/verificar-importaciones.mjs', 'mobile/scripts/ejecutar-android.sh', 'mobile/maestro/verificacion.yaml',
+    'mobile/assets/fonts/Outfit_400Regular.ttf']) {
+    assert.deepEqual(profile([file]), { db: false, mutations: false, ui: [], mobile: true }, file)
+  }
+  // Un cambio móvil nunca pasa con el plan web vacío: `mobile` lo exige el gate.
+  assert.equal(profile(['mobile/src/tokens/index.ts']).mobile, true)
+  for (const file of ['mobile/otro.bin', 'mobile/android/app/build.gradle', 'mobile/ios/Podfile', 'mobile/dist/android/index.js',
+    'mobile/node_modules/x/index.js', 'mobile/.env', 'mobile/.env.local', 'mobile/src/a b.ts', 'mobile/scripts/instalar.exe',
+    'mobile/assets/imagen.png', 'mobile/maestro/otro.json', 'mobile/package-lock.json.bak', 'mobile/../package.json']) {
+    assert.throws(() => profile([file]), /sin contrato|\.\.|Invalid/u, file)
+  }
+  // Lo que la app copia de la web dispara sus gates, además de las comprobaciones web.
+  assert.deepEqual(profile(['src/lib/errores.ts']), { db: true, mutations: false, ui: ['core'], mobile: true })
+  assert.deepEqual(profile(['src/types/database.generated.ts']), { db: true, mutations: false, ui: ['core'], mobile: true })
+  // Un cambio web sin relación con la app no activa los gates móviles.
+  assert.equal(profile(['src/proxy.ts']).mobile, undefined)
+})
+test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
+  const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
+  assert.equal(validateMobileWorkflow(yml), true)
+  // Cada pieza del contrato es necesaria: quitarla debe romper la validación.
+  const roturas = [
+    ['sin job Android', t => t.replace(/^  mobile-android:/mu, '  movil-android-x:')],
+    ['sin job iOS', t => t.replace(/^  mobile-ios:/mu, '  movil-ios-x:')],
+    ['sin job JS', t => t.replace(/^  mobile:/mu, '  movil-x:')],
+    ['gate sin iOS', t => t.replace('IOS: ${{ needs.mobile-ios.result }}', 'IOS: success')],
+    ['gate sin Android', t => t.replace('ANDROID: ${{ needs.mobile-android.result }}', 'ANDROID: success')],
+    ['gate sin plan', t => t.replace('PLAN_MOBILE: ${{ needs.plan.outputs.mobile }}', 'PLAN_MOBILE: false')],
+    ['gate que tolera skips', t => t.replace('test "$MOBILE" = success && test "$ANDROID" = success && test "$IOS" = success', 'true')],
+    ['needs sin móviles', t => t.replace('needs: [fast, database, ui, plan, mobile, mobile-android, mobile-ios]', 'needs: [fast, database, ui]')],
+    ['Android sin ejecución', t => t.replace('mobile/scripts/ejecutar-android.sh', 'mobile/scripts/x.sh')],
+    ['iOS sin ejecución', t => t.replaceAll('mobile/scripts/ejecutar-ios.sh', 'mobile/scripts/x.sh')],
+  ]
+  for (const [nombre, romper] of roturas) {
+    const roto = romper(yml)
+    assert.notEqual(roto, yml, `la rotura «${nombre}» no cambió el texto`)
+    assert.throws(() => validateMobileWorkflow(roto), undefined, nombre)
+  }
+  // Los jobs nativos no heredan el plan web: usan el plan móvil y corren sobre el SHA del PR.
+  assert.match(yml, /mobile-android:\n    name: CI \/ móvil Android\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
+  assert.match(yml, /mobile-ios:\n    name: CI \/ móvil iOS\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
+  assert.match(yml, /runs-on: macos-26/u)
+})
+test('EPT-102: el paquete móvil no altera dependencias ni lockfile de Next', () => {
+  const raiz = JSON.parse(readFileSync('package.json', 'utf8'))
+  const dependencias = Object.keys({ ...raiz.dependencies, ...raiz.devDependencies })
+  for (const prohibida of ['expo', 'expo-router', 'react-native', 'expo-secure-store', 'react-native-safe-area-context']) {
+    assert.ok(!dependencias.includes(prohibida), `${prohibida} no debe estar en el paquete web`)
+  }
+  assert.ok(JSON.parse(readFileSync('tsconfig.json', 'utf8')).exclude.includes('mobile'))
+  assert.match(readFileSync('eslint.config.mjs', 'utf8'), /"mobile\/\*\*"/u)
 })
 test('pure config and actual UI registry remain aligned, new tests block', () => {
   const config = readFileSync('playwright.pure.config.ts', 'utf8')
@@ -72,7 +131,8 @@ test('CLI validates SHAs and emits a bounded PR plan for initial publication', (
       const output = path.join(directory, `plan-${db}`)
       execFileSync(process.execPath, ['scripts/ci/impact.mjs'], { env: { ...process.env,
         CI_BASE_SHA: base, CI_HEAD_SHA: head, GITHUB_OUTPUT: output } })
-      assert.equal(readFileSync(output, 'utf8'), `db=${db}\nmutations=false\nui=${JSON.stringify(ui)}\nprototipo=${db}\n`)
+      // Sin base conocida (publicación inicial) el plan es el conservador: incluye la app móvil registrada.
+      assert.equal(readFileSync(output, 'utf8'), `db=${db}\nmutations=false\nui=${JSON.stringify(ui)}\nprototipo=${db}\nmobile=${db}\n`)
     }
     assert.notEqual(spawnSync(process.execPath, ['scripts/ci/impact.mjs'], { env: { ...process.env, CI_HEAD_SHA: 'untrusted; command' } }).status, 0)
   } finally { rmSync(directory, { recursive: true, force: true }) }
@@ -302,10 +362,10 @@ test('EPT-95 acepta únicamente un paquete local completo, reproducible y móvil
     for (const file of [designs[0].archivo, designs[0].fuente, 'fuentes/estilos.css', 'fuentes/render.mjs', 'manifest.json']) {
       assert.deepEqual(profile([BASE + file], { root: ok.root }), { db: false, mutations: false, ui: [] })
     }
-    for (const file of ['docs/other.png', BASE + 'new.png', BASE + 'other.json', BASE + 'fuentes/nuevo.html', 'mobile/package.json', '../docs/a.md', 'C:/docs/a.md', '\\\\server/share', 'docs\\a.md']) {
+    for (const file of ['docs/other.png', BASE + 'new.png', BASE + 'other.json', BASE + 'fuentes/nuevo.html', 'mobile/archivo-sin-contrato.bin', '../docs/a.md', 'C:/docs/a.md', '\\\\server/share', 'docs\\a.md']) {
       assert.throws(() => profile([file], { root: ok.root }), undefined, file)
     }
-    for (const file of ['scripts/ci/impact.mjs', 'scripts/ci/impact.test.mjs']) assert.deepEqual(profile([file]), { db: true, mutations: false, ui: ['core'], prototipo: true })
+    for (const file of ['scripts/ci/impact.mjs', 'scripts/ci/impact.test.mjs']) assert.deepEqual(profile([file]), { db: true, mutations: false, ui: ['core'], prototipo: true, mobile: true })
     assert.deepEqual(profile(['scripts/ci/ept95-assets.mjs']), { db: true, mutations: false, ui: ['core'] })
   } finally { ok.cleanup() }
 })
