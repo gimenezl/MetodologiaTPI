@@ -66,10 +66,224 @@ jobs:
     with:
       kind: ui
       selection: ${{ needs.fast.outputs.ui }}
+  # --- App móvil (EPT-102) -------------------------------------------------------------------------
+  # El plan decide si el cambio toca `mobile/` o lo que la app copia de la web. Un PASS de Next web no prueba mobile:
+  # con plan móvil el gate exige JS (tipos, lint, pruebas, bundles), build Android + ejecución en emulador y build iOS +
+  # ejecución en simulador sobre el SHA exacto del PR.
+  plan:
+    name: CI / plan móvil
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      mobile: ${{ steps.impact.outputs.mobile }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - id: impact
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_HEAD_SHA: ${{ github.sha }}
+        run: node scripts/ci/impact.mjs
+  mobile:
+    name: CI / móvil
+    needs: plan
+    if: needs.plan.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      CI: '1'
+      EXPO_PUBLIC_SUPABASE_URL: https://placeholder-pruebas.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-solo-para-pruebas
+      EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Instalación reproducible
+        run: npm ci
+      - name: Copia compartida sin deriva
+        run: npm run compartido:check
+      - name: Importaciones prohibidas y secretos
+        run: npm run verificar:importaciones
+      - name: Compatibilidad Expo
+        run: npm run verificar:expo && npm run doctor
+      - name: Tipos
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Componentes, formulario, sesión, almacenamiento y transporte
+        run: npm test
+      - name: Bundle Android
+        run: npm run bundle:android
+      - name: Bundle iOS
+        run: npm run bundle:ios
+      - name: Aislamiento de los bundles exportados
+        run: node scripts/verificar-importaciones.mjs --bundle dist/android --bundle dist/ios
+  mobile-android:
+    name: CI / móvil Android
+    needs: plan
+    if: needs.plan.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      CI: '1'
+      EXPO_PUBLIC_SUPABASE_URL: https://placeholder-pruebas.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-solo-para-pruebas
+      EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/package-lock.json') }}
+          restore-keys: gradle-${{ runner.os }}-
+      - name: Instalación y proyecto nativo
+        working-directory: mobile
+        run: |
+          npm ci
+          npx expo prebuild --platform android --no-install
+      - name: Build Android (release de prueba, x86_64)
+        working-directory: mobile/android
+        run: |
+          start=$(date +%s)
+          ./gradlew :app:assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon --stacktrace
+          echo "duracion_build_segundos=$(( $(date +%s) - start ))" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Localizar APK
+        id: apk
+        run: |
+          apk=$(find mobile/android/app/build/outputs/apk/release -name '*.apk' | head -n 1)
+          test -n "$apk"
+          echo "ruta=$apk" >> "$GITHUB_OUTPUT"
+          sha256sum "$apk" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Instalar Maestro 2.11.0
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/maestro.zip" https://github.com/mobile-dev-inc/maestro/releases/download/cli-2.11.0/maestro.zip
+          echo "5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a  $RUNNER_TEMP/maestro.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
+      - name: Habilitar KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Ejecutar en emulador Android (API 34)
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash mobile/scripts/ejecutar-android.sh ${{ steps.apk.outputs.ruta }}
+      - name: Subir evidencia Android
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: movil-android-${{ github.sha }}
+          path: |
+            ${{ steps.apk.outputs.ruta }}
+            evidencia-movil/**
+          if-no-files-found: warn
+          retention-days: 14
+  mobile-ios:
+    name: CI / móvil iOS
+    needs: plan
+    if: needs.plan.outputs.mobile == 'true'
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      CI: '1'
+      EXPO_PUBLIC_SUPABASE_URL: https://placeholder-pruebas.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-solo-para-pruebas
+      EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Versiones de herramientas
+        run: |
+          xcodebuild -version | tee -a "$GITHUB_STEP_SUMMARY"
+          node --version
+      - name: Instalación y proyecto nativo (incluye pods)
+        working-directory: mobile
+        run: |
+          npm ci
+          npx expo prebuild --platform ios
+      - name: Build iOS para simulador (release de prueba, sin firma)
+        working-directory: mobile/ios
+        run: |
+          set -o pipefail
+          start=$(date +%s)
+          workspace=$(ls -d *.xcworkspace | head -n 1)
+          scheme="${workspace%.xcworkspace}"
+          xcodebuild -workspace "$workspace" -scheme "$scheme" -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/derived" CODE_SIGNING_ALLOWED=NO build \
+            | tee "$RUNNER_TEMP/xcodebuild.log" | tail -n 40
+          echo "duracion_build_segundos=$(( $(date +%s) - start ))" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Localizar aplicación
+        id: app
+        run: |
+          app=$(find "$RUNNER_TEMP/derived/Build/Products/Release-iphonesimulator" -maxdepth 1 -name '*.app' | head -n 1)
+          test -n "$app"
+          echo "ruta=$app" >> "$GITHUB_OUTPUT"
+      - name: Instalar Maestro 2.11.0
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/maestro.zip" https://github.com/mobile-dev-inc/maestro/releases/download/cli-2.11.0/maestro.zip
+          echo "5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a  $RUNNER_TEMP/maestro.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
+      - name: Ejecutar en simulador iOS
+        run: bash mobile/scripts/ejecutar-ios.sh "${{ steps.app.outputs.ruta }}"
+      - name: Empaquetar aplicación
+        if: always()
+        run: |
+          mkdir -p evidencia-movil
+          if [ -n "${{ steps.app.outputs.ruta }}" ]; then ditto -c -k --keepParent "${{ steps.app.outputs.ruta }}" evidencia-movil/aplicacion-ios-simulador.zip; fi
+          cp "$RUNNER_TEMP/xcodebuild.log" evidencia-movil/xcodebuild.log || true
+      - name: Subir evidencia iOS
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: movil-ios-${{ github.sha }}
+          path: evidencia-movil/**
+          if-no-files-found: warn
+          retention-days: 14
   gate:
     name: CI / gate
     if: always()
-    needs: [fast, database, ui]
+    needs: [fast, database, ui, plan, mobile, mobile-android, mobile-ios]
     runs-on: ubuntu-latest
     steps:
       - env:
@@ -81,6 +295,11 @@ jobs:
           PLAN_MUTATIONS: ${{ needs.fast.outputs.mutations }}
           PLAN_PROTOTIPO: ${{ needs.fast.outputs.prototipo }}
           PASO_PROTOTIPO: ${{ needs.fast.outputs.prototipo_paso }}
+          PLAN: ${{ needs.plan.result }}
+          PLAN_MOBILE: ${{ needs.plan.outputs.mobile }}
+          MOBILE: ${{ needs.mobile.result }}
+          ANDROID: ${{ needs.mobile-android.result }}
+          IOS: ${{ needs.mobile-ios.result }}
         run: |
           test "$FAST" = success
           case "$PLAN_MUTATIONS" in true|false) ;; *) exit 1 ;; esac
@@ -93,6 +312,13 @@ jobs:
           case "$PLAN_PROTOTIPO" in
             true) test "$PASO_PROTOTIPO" = success ;;
             false) test "$PASO_PROTOTIPO" = skipped ;;
+            *) exit 1 ;;
+          esac
+          # La app móvil exige JS, Android (build + emulador) e iOS (build + simulador): un skip obligatorio no pasa.
+          test "$PLAN" = success
+          case "$PLAN_MOBILE" in
+            true) test "$MOBILE" = success && test "$ANDROID" = success && test "$IOS" = success ;;
+            false) test "$MOBILE" = skipped && test "$ANDROID" = skipped && test "$IOS" = skipped ;;
             *) exit 1 ;;
           esac
           test -n "$PLAN_UI"

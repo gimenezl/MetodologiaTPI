@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // App móvil (EPT-102): paquete independiente con su propio lint y TypeScript en `CI / móvil`.
+    "mobile/**",
     // Bundle minificado de tercero versionado dentro de la skill `impeccable`:
     // no es código propio y no se edita a mano. El resto de .agents/ sigue
     // sujeto a lint.
