@@ -17,7 +17,17 @@ name: Verificación de la base móvil
     id: 'campo-tamano'
 - eraseText: 5
 - inputText: '0'
-- hideKeyboard
+# El teclado numérico de iOS no tiene tecla de acción ni responde a hideKeyboard: se usa «Done» de la barra.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn: 'Done'
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - hideKeyboard
 - scrollUntilVisible:
     element: 'Guardar y leer'
 - tapOn: 'Guardar y leer'
