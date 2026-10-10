@@ -249,7 +249,8 @@ jobs:
           scheme="${workspace%.xcworkspace}"
           xcodebuild -workspace "$workspace" -scheme "$scheme" -configuration Release \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath "$RUNNER_TEMP/derived" CODE_SIGNING_ALLOWED=NO build \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES DEVELOPMENT_TEAM= build \
             | tee "$RUNNER_TEMP/xcodebuild.log" | tail -n 40
           echo "duracion_build_segundos=$(( $(date +%s) - start ))" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Localizar aplicación

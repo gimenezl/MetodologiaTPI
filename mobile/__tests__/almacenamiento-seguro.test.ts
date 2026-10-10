@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store'
 
 import {
+  codigoNativoDe,
   crearAlmacenamientoSeguro,
   dividirPorBytes,
   ErrorAlmacenamiento,
@@ -61,6 +62,13 @@ describe('utilidades puras', () => {
     const partes = dividirPorBytes(valor, 100)
     expect(partes.join('')).toBe(valor)
     for (const p of partes) expect(mockBytesUtf8(p)).toBeLessThanOrEqual(100)
+  })
+
+  it('conserva solo códigos nativos con forma de identificador, nunca texto libre', () => {
+    expect(codigoNativoDe({ code: 'ERR_SECURESTORE_X' })).toBe('ERR_SECURESTORE_X')
+    expect(codigoNativoDe({ code: 'token=SECRETO con espacios' })).toBeNull()
+    expect(codigoNativoDe(new Error('mensaje con SECRETO'))).toBeNull()
+    expect(codigoNativoDe(null)).toBeNull()
   })
 
   it('devuelve un fragmento vacío para un valor vacío', () => {

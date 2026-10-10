@@ -5,7 +5,7 @@ import { Aviso, CampoTexto, Formulario, Importe, InsigniaEstado, MarcoPantalla, 
 import { color, espacio, estiloDeTexto } from '@/tokens'
 
 export type EstadoSesionVista = 'no_configurada' | 'consultando' | 'sin_sesion' | 'con_sesion'
-export type ResultadoVista = { tipo: 'ninguno' } | { tipo: 'ok'; bytes: number } | { tipo: 'fallo' }
+export type ResultadoVista = { tipo: 'ninguno' } | { tipo: 'ok'; bytes: number } | { tipo: 'fallo'; detalle?: string }
 
 export interface VerificacionVistaProps {
   entornoValido: boolean
@@ -87,7 +87,7 @@ export function VerificacionVista(props: VerificacionVistaProps): ReactElement {
           <Aviso
             tipo="error"
             titulo="Almacenamiento seguro: falló"
-            mensaje="No se pudo completar la verificación en este dispositivo."
+            mensaje={`No se pudo completar la verificación en este dispositivo.${props.resultado.detalle ? ` Código: ${props.resultado.detalle}.` : ''}`}
             anuncio="alerta"
           />
         ) : null}

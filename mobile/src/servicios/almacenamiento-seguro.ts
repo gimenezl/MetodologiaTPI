@@ -15,11 +15,20 @@ export type CodigoErrorAlmacenamiento = 'LECTURA_FALLIDA' | 'ESCRITURA_FALLIDA' 
 
 export class ErrorAlmacenamiento extends Error {
   readonly codigo: CodigoErrorAlmacenamiento
-  constructor(codigo: CodigoErrorAlmacenamiento) {
+  /** Código del error nativo (p. ej. `ERR_...`), solo si tiene forma de identificador. Nunca incluye valores. */
+  readonly codigoNativo: string | null
+  constructor(codigo: CodigoErrorAlmacenamiento, codigoNativo: string | null = null) {
     super(`Error de almacenamiento seguro: ${codigo}`)
     this.name = 'ErrorAlmacenamiento'
     this.codigo = codigo
+    this.codigoNativo = codigoNativo
   }
+}
+
+/** Extrae un código tipo identificador del error nativo; descarta cualquier otro texto para no filtrar valores. */
+export function codigoNativoDe(error: unknown): string | null {
+  const codigo = (error as { code?: unknown } | null)?.code
+  return typeof codigo === 'string' && /^[A-Za-z0-9_.-]{2,64}$/u.test(codigo) ? codigo : null
 }
 
 export interface AlmacenamientoSeguro {
@@ -138,9 +147,9 @@ export function crearAlmacenamientoSeguro(opciones: OpcionesAlmacenamiento = {})
     let crudo: string | null
     try {
       crudo = await SecureStore.getItemAsync(manifiestoDe(clave))
-    } catch {
+    } catch (causa) {
       opciones.alFallar?.('LECTURA_FALLIDA')
-      throw new ErrorAlmacenamiento('LECTURA_FALLIDA')
+      throw new ErrorAlmacenamiento('LECTURA_FALLIDA', codigoNativoDe(causa))
     }
     if (crudo === null) return null
     try {
@@ -169,10 +178,10 @@ export function crearAlmacenamientoSeguro(opciones: OpcionesAlmacenamiento = {})
       let parte: string | null
       try {
         parte = await SecureStore.getItemAsync(fragmentoDe(clave, manifiesto.g, i))
-      } catch {
+      } catch (causa) {
         // Un fallo nativo no prueba que el dato esté dañado (p. ej. almacén bloqueado): no se purga.
         opciones.alFallar?.('LECTURA_FALLIDA')
-        throw new ErrorAlmacenamiento('LECTURA_FALLIDA')
+        throw new ErrorAlmacenamiento('LECTURA_FALLIDA', codigoNativoDe(causa))
       }
       if (parte === null) {
         await purgar(clave, manifiesto)
@@ -217,10 +226,10 @@ export function crearAlmacenamientoSeguro(opciones: OpcionesAlmacenamiento = {})
         c: sumaDeVerificacion(valor),
       }
       await SecureStore.setItemAsync(manifiestoDe(clave), JSON.stringify(manifiesto))
-    } catch {
+    } catch (causa) {
       await borrarSilencioso(escritos)
       opciones.alFallar?.('ESCRITURA_FALLIDA')
-      throw new ErrorAlmacenamiento('ESCRITURA_FALLIDA')
+      throw new ErrorAlmacenamiento('ESCRITURA_FALLIDA', codigoNativoDe(causa))
     }
     if (previo) {
       const viejos: string[] = []
@@ -240,9 +249,9 @@ export function crearAlmacenamientoSeguro(opciones: OpcionesAlmacenamiento = {})
     try {
       // El manifiesto va primero: desde ahí el valor lógico ya no existe aunque queden fragmentos.
       await SecureStore.deleteItemAsync(manifiestoDe(clave))
-    } catch {
+    } catch (causa) {
       opciones.alFallar?.('BORRADO_FALLIDO')
-      throw new ErrorAlmacenamiento('BORRADO_FALLIDO')
+      throw new ErrorAlmacenamiento('BORRADO_FALLIDO', codigoNativoDe(causa))
     }
     if (manifiesto) {
       const claves: string[] = []

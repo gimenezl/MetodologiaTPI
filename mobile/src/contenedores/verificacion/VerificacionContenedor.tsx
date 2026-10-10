@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 
 import { entornoDelBundle } from '@/configuracion/entorno'
-import { crearAlmacenamientoSeguro } from '@/servicios/almacenamiento-seguro'
+import { crearAlmacenamientoSeguro, ErrorAlmacenamiento } from '@/servicios/almacenamiento-seguro'
 import { obtenerClienteSupabase, vincularCicloDeVida } from '@/servicios/supabase'
 import { verificarAlmacenamiento } from '@/servicios/verificacion-almacenamiento'
 
@@ -47,8 +47,10 @@ export function VerificacionContenedor(): ReactElement {
     try {
       const r = await verificarAlmacenamiento(almacenamiento, Number(datos.tamanoKb))
       setResultado(r.ok ? { tipo: 'ok', bytes: r.bytes } : { tipo: 'fallo' })
-    } catch {
-      setResultado({ tipo: 'fallo' })
+    } catch (causa) {
+      const detalle =
+        causa instanceof ErrorAlmacenamiento ? [causa.codigo, causa.codigoNativo].filter(Boolean).join(' / ') : undefined
+      setResultado({ tipo: 'fallo', detalle })
     }
   })
 
