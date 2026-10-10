@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { appendFileSync, readFileSync, readdirSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { suiteProfile, validateRegistry } from './suites.mjs'
+import { ept95Paths, secureRelative, validateEpt95Assets } from './ept95-assets.mjs'
 import { families, aliases, validateUiRegistry } from './ui.mjs'
 
 export const pureTests = ['tarifas-lib', 'asistencias-lib', 'reportes-lib', 'paginacion',
@@ -21,11 +22,15 @@ export function changedPaths(raw) {
   }
   return paths
 }
-export function profile(paths) {
+export function profile(paths, { root = process.cwd() } = {}) {
+  for (const file of paths) { try { secureRelative(file) } catch (error) { error.message += `: ${JSON.stringify(file)}`; throw error } }
+  if (paths.some(file => ept95Paths.has(file) || file === 'scripts/ci/ept95-assets.mjs')) validateEpt95Assets(root)
   let db = false, mutations = false
   const ui = new Set()
   const core = () => { db = true; ui.add('core') }
   for (const file of paths) {
+    if (ept95Paths.has(file)) continue
+    if (file.startsWith('docs/parte3/EPT-95/')) throw new Error(`Ruta EPT-95 sin contrato: ${file}`)
     if (/^scripts\/ci\/.*\.test\.mjs$/u.test(file) && file !== 'scripts/ci/impact.test.mjs') throw new Error(`Prueba CI sin contrato: ${file}`)
     if (/^(?:docs\/.*\.md|(?:README|AGENTS)\.md|\.github\/pull_request_template\.md)$/u.test(file)) continue
     if (pureTests.some(name => file === `tests/${name}.spec.ts`)) continue

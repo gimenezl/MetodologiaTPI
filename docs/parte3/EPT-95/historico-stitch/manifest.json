@@ -1,0 +1,1197 @@
+{
+ "version": 4,
+ "tarea": "EPT-95",
+ "estado": "Histórico rechazado: 33 PNG de Stitch conservados como evidencia; no constituyen la entrega aceptada de EPT-95",
+ "baseline": "4f4818335ba9b7240c58e04bb17b2e7d87a380cb",
+ "stitch_proyecto": "projects/6277945596504536494",
+ "stitch_enlace": "https://stitch.withgoogle.com/projects/6277945596504536494",
+ "exportacion": "PNG derivado de exportación real Stitch: retirado exclusivamente zTXt Raw profile type APP1; demás chunks y todos los píxeles RGBA idénticos; originales preservados fuera de Git",
+ "ronda_correccion": "Histórico: recuperaciones Stitch previas sin cobertura aceptable; ver recuperacion-acotada.md. La entrega vigente está en disenos/ con origen diseno-local",
+ "pantallas": [
+  {
+   "pantalla": "W01",
+   "area": "login",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Normal"
+   ],
+   "requisitos": [
+    "EPT-95/login",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "cf1ccc6e1a06464b8d6bad314d846623",
+   "stitch_resource": "projects/6277945596504536494/screens/cf1ccc6e1a06464b8d6bad314d846623",
+   "archivo": "wireframes/01-login.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "b4dbd2cf33c96ea4622d1511f16c193a5f03a3f006bd314cf6a838d5f07f02fc",
+   "pixeles": [
+    780,
+    1768
+   ],
+   "exportado_utc": "2026-10-09T15:28:04+00:00",
+   "titulo_stitch": "FINAL W01 Iniciar sesión",
+   "titulo_local": "FINAL W01 Iniciar sesión",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "490e218f534bda20884757a8c4a0378491f57368a18380c5c29a3c5f1f5f896f",
+    "derivado_sha256": "b4dbd2cf33c96ea4622d1511f16c193a5f03a3f006bd314cf6a838d5f07f02fc",
+    "pixeles_rgba_sha256": "67dd036ff4cc7cf59220927c4281d215fe9fef1546144ba53629b01289635584",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "W02",
+   "area": "selector-hijo",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Vinculado"
+   ],
+   "requisitos": [
+    "EPT-95/selector-hijo",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "ef43557e90174c26b5ce1c526c2c68d2",
+   "stitch_resource": "projects/6277945596504536494/screens/ef43557e90174c26b5ce1c526c2c68d2",
+   "archivo": "wireframes/02-selector-hijo.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "9efc2d73450c23b47406eb13a07fabee0a7f22b1ec95d65feb086b58c1b82cec",
+   "pixeles": [
+    780,
+    2378
+   ],
+   "exportado_utc": "2026-10-09T15:28:05+00:00",
+   "titulo_stitch": "FINAL W02 Selector de hijo PADRE",
+   "titulo_local": "FINAL W02 Selector de hijo PADRE",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "35bd14c6b3a4ee196854a81354f4f75cb15f21c54fb413bcc563c1260a54812e",
+    "derivado_sha256": "9efc2d73450c23b47406eb13a07fabee0a7f22b1ec95d65feb086b58c1b82cec",
+    "pixeles_rgba_sha256": "94d73f9062cfac14604f2b1f783298ae146693732bcf1cc94a65de2113d1c06d",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "W03",
+   "area": "cuotas",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Pendiente",
+    "Pago parcial",
+    "Pagada",
+    "Vencida"
+   ],
+   "requisitos": [
+    "EPT-95/cuotas",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "3e37aa9f58bc4d3c948a21c3b88bc688",
+   "stitch_resource": "projects/6277945596504536494/screens/3e37aa9f58bc4d3c948a21c3b88bc688",
+   "archivo": "wireframes/03-cuotas.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "28739961b2f47e15b665f2317b80ef0cbbd00363d6bdeb7597b5bf484e544eb3",
+   "pixeles": [
+    780,
+    3194
+   ],
+   "exportado_utc": "2026-10-09T15:28:05+00:00",
+   "titulo_stitch": "FINAL W03 Cuotas PADRE",
+   "titulo_local": "FINAL W03 Cuotas PADRE",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "28a1f94b4257315f90c02a0b84a4cada39de279a8bfe0e36696e9ad8e9365aca",
+    "derivado_sha256": "28739961b2f47e15b665f2317b80ef0cbbd00363d6bdeb7597b5bf484e544eb3",
+    "pixeles_rgba_sha256": "472e1370c8520d3ec36db05cf6faea2f506dba9d78eaf9934c6f729530745acc",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "W04",
+   "area": "factura",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Pago parcial"
+   ],
+   "requisitos": [
+    "EPT-95/factura-items",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "0d6fb2b5b03b4ceab9af45f100f27f3d",
+   "stitch_resource": "projects/6277945596504536494/screens/0d6fb2b5b03b4ceab9af45f100f27f3d",
+   "archivo": "wireframes/04-factura.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "0a0675bae50d6081ef8f9c250d0ae30354bbcbd382506d0f77f6c405a7443e44",
+   "pixeles": [
+    780,
+    3106
+   ],
+   "exportado_utc": "2026-10-09T15:28:06+00:00",
+   "titulo_stitch": "FINAL W04 Detalle factura octubre",
+   "titulo_local": "FINAL W04 Detalle factura octubre",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "0d4eb140326c22231924bfd5a3edb2d67a2f4aca5ddd7af63139e5f8430cf594",
+    "derivado_sha256": "0a0675bae50d6081ef8f9c250d0ae30354bbcbd382506d0f77f6c405a7443e44",
+    "pixeles_rgba_sha256": "ab1dcf1ac89840abf0e2a102d395b1bc551d2ef189d403e7e83803527413812a",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "W05",
+   "area": "transferencia",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Selección",
+    "Banco pendiente"
+   ],
+   "requisitos": [
+    "EPT-95/seleccion-transferencia",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "3089137a3f5845e189fb78f93c5c114d",
+   "stitch_resource": "projects/6277945596504536494/screens/3089137a3f5845e189fb78f93c5c114d",
+   "archivo": "wireframes/05-transferencia.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "65fb6cf8c50190e5ff4845b4a302aed84ccfeb58b2c83a0ee996d496caaf432e",
+   "pixeles": [
+    780,
+    2448
+   ],
+   "exportado_utc": "2026-10-09T15:28:07+00:00",
+   "titulo_stitch": "FINAL W05 Selección transferencia PADRE",
+   "titulo_local": "FINAL W05 Selección transferencia PADRE",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "935101f9ebc88866bfce0bcc4a1cd43d78b7d28be8436dfef0dbbddee29f1f78",
+    "derivado_sha256": "65fb6cf8c50190e5ff4845b4a302aed84ccfeb58b2c83a0ee996d496caaf432e",
+    "pixeles_rgba_sha256": "337b799e0aa2148f7a6db81d65d471ab78f4561b7a2cae3b3003d5a787739e19",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "W06",
+   "area": "comprobantes",
+   "roles": [
+    "PADRE_CARGADOR"
+   ],
+   "estados": [
+    "Pendiente de verificación",
+    "Carga"
+   ],
+   "requisitos": [
+    "EPT-95/comprobantes",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "6c9d87988a1645d9ab0d0a8c4ab0b4d2",
+   "stitch_resource": "projects/6277945596504536494/screens/6c9d87988a1645d9ab0d0a8c4ab0b4d2",
+   "archivo": "wireframes/06-comprobantes.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "b2b3e4979da75339a51bb7e999313e2fe658ce560f47fa619bf7ee328f9d1a7e",
+   "pixeles": [
+    780,
+    3276
+   ],
+   "exportado_utc": "2026-10-09T15:28:08+00:00",
+   "titulo_stitch": "FINAL W06 Comprobantes PADRE cargador",
+   "titulo_local": "FINAL W06 Comprobantes PADRE cargador",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "178433ffbf595ab4f181f0904dc854e21ea92b2acfaa9a76037a6ef509fd7a16",
+    "derivado_sha256": "b2b3e4979da75339a51bb7e999313e2fe658ce560f47fa619bf7ee328f9d1a7e",
+    "pixeles_rgba_sha256": "eb789830f7d2c4a216ca329c78bd1824d0d300350f01eff153e834b0bcd61909",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "W07",
+   "area": "periodo",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Pagos aprobados"
+   ],
+   "requisitos": [
+    "EPT-95/periodo",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "118230683cd942fcb122215c105f61bf",
+   "stitch_resource": "projects/6277945596504536494/screens/118230683cd942fcb122215c105f61bf",
+   "archivo": "wireframes/07-periodo.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "fd0bc429d944cde8dfdd0048a003723c1fd7ca8877ed702151ecc11bc1db86b1",
+   "pixeles": [
+    780,
+    3528
+   ],
+   "exportado_utc": "2026-10-09T15:28:09+00:00",
+   "titulo_stitch": "FINAL W07 Consulta período PADRE",
+   "titulo_local": "FINAL W07 Consulta período PADRE",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "10a65be9ef3374b9469ae02b12483d9e0208f4517cf1a3a044152c778afb527a",
+    "derivado_sha256": "fd0bc429d944cde8dfdd0048a003723c1fd7ca8877ed702151ecc11bc1db86b1",
+    "pixeles_rgba_sha256": "e68778111535dbb0370e0b7a1ae6b48410da2074f9829b2a320f9d445ac2b87a",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "W08",
+   "area": "deuda-item",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Pendiente"
+   ],
+   "requisitos": [
+    "EPT-95/deuda-item",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "46a92f57982343d7acad1e4b89be3744",
+   "stitch_resource": "projects/6277945596504536494/screens/46a92f57982343d7acad1e4b89be3744",
+   "archivo": "wireframes/08-deuda-item.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "f7f57feeb933130292f7d39d9f2c0d8a1743aa0add3ad16d4c983c16c93e8e15",
+   "pixeles": [
+    780,
+    2802
+   ],
+   "exportado_utc": "2026-10-09T15:28:10+00:00",
+   "titulo_stitch": "FINAL W08 Historial deuda por ítem",
+   "titulo_local": "FINAL W08 Historial deuda por ítem",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "4c46c1351fa7ab4fa3da23034b74a559099d8ff9838e97d865abf1ceaab0ba89",
+    "derivado_sha256": "f7f57feeb933130292f7d39d9f2c0d8a1743aa0add3ad16d4c983c16c93e8e15",
+    "pixeles_rgba_sha256": "3b4f2f401454dfd8ff9151f3583aa11a2e545fed6c1a643875576113ec00b4a1",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "W09",
+   "area": "inscripciones",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Consulta"
+   ],
+   "requisitos": [
+    "EPT-95/inscripciones",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "d8117c204d254ffb93dd27d2e39091fe",
+   "stitch_resource": "projects/6277945596504536494/screens/d8117c204d254ffb93dd27d2e39091fe",
+   "archivo": "wireframes/09-inscripciones.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "40636c93db804a0ce840df3ef8763d199ec657d58f813286bbac9eb88d049bdc",
+   "pixeles": [
+    780,
+    2646
+   ],
+   "exportado_utc": "2026-10-09T15:28:10+00:00",
+   "titulo_stitch": "FINAL W09 Inscripciones PADRE",
+   "titulo_local": "FINAL W09 Inscripciones PADRE",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "453b9c059672aea18099ec3e833da2caa4e0463f6e84d86f2737839131397944",
+    "derivado_sha256": "40636c93db804a0ce840df3ef8763d199ec657d58f813286bbac9eb88d049bdc",
+    "pixeles_rgba_sha256": "937c5d1401cf04fec2c31c38d56817dba8a38a896dc7af8a1df7e6235d26da8f",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "M01",
+   "area": "login",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Normal"
+   ],
+   "requisitos": [
+    "EPT-95/login",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "84e028ad86694d5b9e758c47b9a8b05e",
+   "stitch_resource": "projects/6277945596504536494/screens/84e028ad86694d5b9e758c47b9a8b05e",
+   "archivo": "mockups/01-login.png",
+   "device_type": "MOBILE",
+   "revision": "Piloto individual inspeccionado; lienzo MOBILE y copy aceptables como diseño estático, sin aprobación humana",
+   "sha256": "a297e925192079e4b1a8c440a3314ace525ebfb5f38bef50079742ccc22a1808",
+   "pixeles": [
+    780,
+    1768
+   ],
+   "exportado_utc": "2026-10-09T16:22:59+00:00",
+   "titulo_stitch": "REC M01 Inicio de sesión",
+   "titulo_local": "M01 Inicio de sesión",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "428030f16bc165dee7ae2afb8db2513fa6935a643ed3f789cb6b752c4e8c3229",
+    "derivado_sha256": "a297e925192079e4b1a8c440a3314ace525ebfb5f38bef50079742ccc22a1808",
+    "pixeles_rgba_sha256": "6d285d68a0b2a95db73b44da6f9ff8b2c4d9c734d3ee39f41e3b706158774f6e",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "M02",
+   "area": "selector-hijo",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Vinculado"
+   ],
+   "requisitos": [
+    "EPT-95/selector-hijo",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "7ee3a35d7e2149b6b53478925a6e7ba4",
+   "stitch_resource": "projects/6277945596504536494/screens/7ee3a35d7e2149b6b53478925a6e7ba4",
+   "archivo": "mockups/02-selector-hijo.png",
+   "device_type": "DESKTOP",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "341b0e8ab3ca70c8d6200c110fce7263b4b0c13bfde56a7f359ba47c65130ab0",
+   "pixeles": [
+    2560,
+    2048
+   ],
+   "exportado_utc": "2026-10-09T15:24:37+00:00",
+   "titulo_stitch": "FINAL M02 Seleccionar hijo · PADRE",
+   "titulo_local": "FINAL M02 Seleccionar hijo · PADRE",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "26a9e3be107e042872f20b5ef33941be0997515a3bd80ea364cc7f44b3e31d5e",
+    "derivado_sha256": "341b0e8ab3ca70c8d6200c110fce7263b4b0c13bfde56a7f359ba47c65130ab0",
+    "pixeles_rgba_sha256": "7eca05c3288f6367202b236b45ecc6ae76bbbffc489d5c4575e5bc2b66e9b535",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "M03",
+   "area": "cuotas",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Pendiente",
+    "Pago parcial",
+    "Pagada",
+    "Vencida"
+   ],
+   "requisitos": [
+    "EPT-95/cuotas",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "fd18013444504f7c95326199521eb6ae",
+   "stitch_resource": "projects/6277945596504536494/screens/fd18013444504f7c95326199521eb6ae",
+   "archivo": "mockups/03-cuotas.png",
+   "device_type": "DESKTOP",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "08942e1cb19688d1cc112bcdfcd8f09bc93d003c769bcaa1b23abad1ec50c8fc",
+   "pixeles": [
+    2560,
+    2934
+   ],
+   "exportado_utc": "2026-10-09T15:24:26+00:00",
+   "titulo_stitch": "FINAL M03 Cuotas · PADRE",
+   "titulo_local": "FINAL M03 Cuotas · PADRE",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "1442f50352697a0d1fc10d4d100b0e8595bf6b500dd0a48bbca90cb9972ebb1f",
+    "derivado_sha256": "08942e1cb19688d1cc112bcdfcd8f09bc93d003c769bcaa1b23abad1ec50c8fc",
+    "pixeles_rgba_sha256": "42ffcf9f6a050725328ec2957e4c0f678e5e2967a8ef8d37607bf5f7f8582e1e",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "M04",
+   "area": "factura",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Pago parcial"
+   ],
+   "requisitos": [
+    "EPT-95/factura-items",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "c749769f55d841a7a89d2ba7f79eeaa8",
+   "stitch_resource": "projects/6277945596504536494/screens/c749769f55d841a7a89d2ba7f79eeaa8",
+   "archivo": "mockups/04-factura.png",
+   "device_type": "DESKTOP",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "0cb3b8a8cbcbf029892d7d9647335576a1c9aa04d635500846b6ac7f52fccea6",
+   "pixeles": [
+    2560,
+    2106
+   ],
+   "exportado_utc": "2026-10-09T15:24:20+00:00",
+   "titulo_stitch": "FINAL M04 Detalle de factura",
+   "titulo_local": "FINAL M04 Detalle de factura",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "e7f942070218930c9161ff69b343de9bfedbb3a9e294341998923bc3ee2c108f",
+    "derivado_sha256": "0cb3b8a8cbcbf029892d7d9647335576a1c9aa04d635500846b6ac7f52fccea6",
+    "pixeles_rgba_sha256": "9b4c159be08444241a7600ce79da4151161aa80164489b58bbfbb4fa39448e70",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "M05",
+   "area": "transferencia",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Selección",
+    "Banco pendiente"
+   ],
+   "requisitos": [
+    "EPT-95/seleccion-transferencia",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "0cf736e28b8f40f38998902586372e5a",
+   "stitch_resource": "projects/6277945596504536494/screens/0cf736e28b8f40f38998902586372e5a",
+   "archivo": "mockups/05-transferencia.png",
+   "device_type": "DESKTOP",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "38406a33b1a2084668224fae05e803a1dcdb780e99a437929b8055a10b31d936",
+   "pixeles": [
+    2560,
+    2048
+   ],
+   "exportado_utc": "2026-10-09T15:24:36+00:00",
+   "titulo_stitch": "FINAL M05 Preparar transferencia · PADRE",
+   "titulo_local": "FINAL M05 Preparar transferencia · PADRE",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "36999ef6c220ea49686dc57de4de99168225fc1057111fe7adbf2bd9f1d929fe",
+    "derivado_sha256": "38406a33b1a2084668224fae05e803a1dcdb780e99a437929b8055a10b31d936",
+    "pixeles_rgba_sha256": "97ffcba2109861b3afaaa49e9a05bee81649fe44eff92aa431f699349bc4dae9",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "M06",
+   "area": "comprobantes",
+   "roles": [
+    "PADRE_CARGADOR"
+   ],
+   "estados": [
+    "Pendiente de verificación",
+    "Carga"
+   ],
+   "requisitos": [
+    "EPT-95/comprobantes",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "3a217cb1f7c441989d6a6109674f8ffd",
+   "stitch_resource": "projects/6277945596504536494/screens/3a217cb1f7c441989d6a6109674f8ffd",
+   "archivo": "mockups/06-comprobantes.png",
+   "device_type": "DESKTOP",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "c102b627cd4e1bfba079eabf1c0e418626c354a41b744783a0835925ffb3de0b",
+   "pixeles": [
+    2560,
+    2564
+   ],
+   "exportado_utc": "2026-10-09T15:24:23+00:00",
+   "titulo_stitch": "FINAL M06 Comprobantes · PADRE cargador",
+   "titulo_local": "FINAL M06 Comprobantes · PADRE cargador",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "eeef71df1a26932aaf4371e083fe3507b9a512f62c834d0d80597b6b26727c04",
+    "derivado_sha256": "c102b627cd4e1bfba079eabf1c0e418626c354a41b744783a0835925ffb3de0b",
+    "pixeles_rgba_sha256": "1e6274d8e240282a39073e023709108c754ac83bc91083507b617a8e6a8c3f29",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "M07",
+   "area": "periodo",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Pagos aprobados"
+   ],
+   "requisitos": [
+    "EPT-95/periodo",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "f7f93c6246b34a128d03b0c74da3930d",
+   "stitch_resource": "projects/6277945596504536494/screens/f7f93c6246b34a128d03b0c74da3930d",
+   "archivo": "mockups/07-periodo.png",
+   "device_type": "DESKTOP",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "e41b651b6f2922d1987fe42f7677849b683850959fc558e648a5e9e1c3d371a9",
+   "pixeles": [
+    2560,
+    2528
+   ],
+   "exportado_utc": "2026-10-09T15:24:24+00:00",
+   "titulo_stitch": "FINAL M07 Consultar período · PADRE",
+   "titulo_local": "FINAL M07 Consultar período · PADRE",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "35a199f45f6bf1d12bf91fc681ea5b00d654fec8b91d3f518460b085a9e55011",
+    "derivado_sha256": "e41b651b6f2922d1987fe42f7677849b683850959fc558e648a5e9e1c3d371a9",
+    "pixeles_rgba_sha256": "2c25a02cea0f2892667ae0b28f785a97169f2744d529ec01b4c5cb9672cbc999",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "M08",
+   "area": "deuda-item",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Pendiente",
+    "Vencida",
+    "Historial por período"
+   ],
+   "requisitos": [
+    "EPT-95/deuda-item",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "0669aec9e4364cfea9c4ba86b8c5f67d",
+   "stitch_resource": "projects/6277945596504536494/screens/0669aec9e4364cfea9c4ba86b8c5f67d",
+   "archivo": "mockups/08-deuda-item.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; mejora real historial y MOBILE; copy certificación contable inventado pendiente",
+   "sha256": "897e093a9915b692cfbe7da8919f29c31c64a83750deb0a19c5b6c19ab37bdf1",
+   "pixeles": [
+    780,
+    3590
+   ],
+   "exportado_utc": "2026-10-09T15:39:57+00:00",
+   "titulo_stitch": "EPT-95 Historial deuda por ítem Refinado",
+   "titulo_local": "EPT-95 Historial deuda por ítem Refinado",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "7e993c4c1ac93bd8f07afe6ea08b6254633b87c9853fb892f6c103d457aa6f78",
+    "derivado_sha256": "897e093a9915b692cfbe7da8919f29c31c64a83750deb0a19c5b6c19ab37bdf1",
+    "pixeles_rgba_sha256": "efff5b628f160531fa78105a3d2592f2d7dace80e913f4d7de95105835caff4c",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "M09",
+   "area": "inscripciones",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Consulta"
+   ],
+   "requisitos": [
+    "EPT-95/inscripciones",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "a20ac4409e8245c58efba1301886ad89",
+   "stitch_resource": "projects/6277945596504536494/screens/a20ac4409e8245c58efba1301886ad89",
+   "archivo": "mockups/09-inscripciones.png",
+   "device_type": "DESKTOP",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "3af5b8d0fca44a45910a505b0871e986ee10c6c37d7c9ff50f22011866b669ad",
+   "pixeles": [
+    2560,
+    2048
+   ],
+   "exportado_utc": "2026-10-09T15:24:22+00:00",
+   "titulo_stitch": "FINAL M09 Inscripciones · PADRE",
+   "titulo_local": "FINAL M09 Inscripciones · PADRE",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "c791435994a4f20ebe8fb9187c54a3bf2fa4c562bd9f287c7c0f4979d8134a2b",
+    "derivado_sha256": "3af5b8d0fca44a45910a505b0871e986ee10c6c37d7c9ff50f22011866b669ad",
+    "pixeles_rgba_sha256": "706ec388807af9576a7a00ec6db53eb04da72a60382d069805cf5f4c223018c2",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "V1",
+   "area": "variantes",
+   "roles": [
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Consulta propia"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "stitch_id": "f4a9b743a22044f594c89b00cd73422c",
+   "stitch_resource": "projects/6277945596504536494/screens/f4a9b743a22044f594c89b00cd73422c",
+   "archivo": "mockups/v1-variante.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "274a2db615e80821296f873f630bce7bbb2b57f4a1aef8bad147987fb18773a0",
+   "pixeles": [
+    780,
+    3228
+   ],
+   "exportado_utc": "2026-10-09T15:22:52+00:00",
+   "titulo_stitch": "V1 Consulta propia ESTUDIANTE",
+   "titulo_local": "V1 Consulta propia ESTUDIANTE",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "0f5ab66d9b4e9f10ca206870b97241f6f19fbaf597a14c655dac92567ee71826",
+    "derivado_sha256": "274a2db615e80821296f873f630bce7bbb2b57f4a1aef8bad147987fb18773a0",
+    "pixeles_rgba_sha256": "d05ce2da3189e6eedcdb20b0d53425c135da783d235fe3ae5f5a3fb6818ef346",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "V2",
+   "area": "variantes",
+   "roles": [
+    "PADRE_VINCULADO_NO_CARGADOR"
+   ],
+   "estados": [
+    "Original no autorizado"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "stitch_id": "86ff1af1fa44423c8f770d32d3b5d712",
+   "stitch_resource": "projects/6277945596504536494/screens/86ff1af1fa44423c8f770d32d3b5d712",
+   "archivo": "mockups/v2-variante.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "d1dadf60d6cf37354ba2f9c09d9a25b13c71ada94d5a4c17a68ed264e36fb46e",
+   "pixeles": [
+    780,
+    2802
+   ],
+   "exportado_utc": "2026-10-09T15:22:53+00:00",
+   "titulo_stitch": "V2 Registro comprobante otro padre vinculado",
+   "titulo_local": "V2 Registro comprobante otro padre vinculado",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "b2102fa6fa61017aa77a09cac2728972df31e436b22f6d9bf4e101c563999ec6",
+    "derivado_sha256": "d1dadf60d6cf37354ba2f9c09d9a25b13c71ada94d5a4c17a68ed264e36fb46e",
+    "pixeles_rgba_sha256": "630a41672daccca4e2ab58e3a0d3ed56b9a622e885e9ea7cca9150cd487a9c1f",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "V3",
+   "area": "variantes",
+   "roles": [
+    "DIRECTOR",
+    "DOCENTE",
+    "PERSONAL"
+   ],
+   "estados": [
+    "Canal web"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "stitch_id": "971d32e484e541288b502ce99eddbe68",
+   "stitch_resource": "projects/6277945596504536494/screens/971d32e484e541288b502ce99eddbe68",
+   "archivo": "mockups/v3-variante.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "31f409019eb5caeff139dd625b310332769b542e394b3e1a117c7c051d06cf8e",
+   "pixeles": [
+    780,
+    1768
+   ],
+   "exportado_utc": "2026-10-09T15:22:53+00:00",
+   "titulo_stitch": "V3 Acceso canal web",
+   "titulo_local": "V3 Acceso canal web",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "f93719c96caa06d4b014fe913fcd1df43b1cf1afa27fab87f8ffb7ee8888f8d0",
+    "derivado_sha256": "31f409019eb5caeff139dd625b310332769b542e394b3e1a117c7c051d06cf8e",
+    "pixeles_rgba_sha256": "f7a8950b81935420d800ce5962968b8898b7ead1c643c84539cf3ab6be0788aa",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "V4",
+   "area": "variantes",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Sin vínculo"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "stitch_id": "171c9148e584497597ed838670924606",
+   "stitch_resource": "projects/6277945596504536494/screens/171c9148e584497597ed838670924606",
+   "archivo": "mockups/v4-variante.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "ca2daa7625ce2aaae7205c63aae5015711e7581e297c8b33c7c2763aaefe65f8",
+   "pixeles": [
+    780,
+    1768
+   ],
+   "exportado_utc": "2026-10-09T15:22:54+00:00",
+   "titulo_stitch": "V4 PADRE sin vínculo",
+   "titulo_local": "V4 PADRE sin vínculo",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "f691da86d5bd099065d06d098b3a6048f5846c112fa891405e7023896b0232f9",
+    "derivado_sha256": "ca2daa7625ce2aaae7205c63aae5015711e7581e297c8b33c7c2763aaefe65f8",
+    "pixeles_rgba_sha256": "1d9a28a8a13d8a0465ca4181cac8a37cc7dcd3c4ebce679ffb7c8aa469ca12de",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "V5",
+   "area": "variantes",
+   "roles": [
+    "PADRE",
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Cuenta bloqueada",
+    "Sesión expirada"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "stitch_id": "af316b7805c44007bb1092bfbd3fcd1c",
+   "stitch_resource": "projects/6277945596504536494/screens/af316b7805c44007bb1092bfbd3fcd1c",
+   "archivo": "mockups/v5-variante.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "92d426af9d8cde60d1e92a7bca00cea520435b2d2590691d6f3df70ab781e3f7",
+   "pixeles": [
+    780,
+    1768
+   ],
+   "exportado_utc": "2026-10-09T15:22:55+00:00",
+   "titulo_stitch": "V5 Cuenta bloqueada y Sesión expirada",
+   "titulo_local": "V5 Cuenta bloqueada y Sesión expirada",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "05124ead6684d8813ea321bc11103ebfd23e177c4d4db22865a7d5f793eaecde",
+    "derivado_sha256": "92d426af9d8cde60d1e92a7bca00cea520435b2d2590691d6f3df70ab781e3f7",
+    "pixeles_rgba_sha256": "6aee908079ad5526dd1d14d8e1ce1c8a2244682bbbfa30a944e171ecc63606ab",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "V6",
+   "area": "variantes",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Carga",
+    "Vacío",
+    "Error",
+    "Reintento"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "stitch_id": "ab4de4dab4604b6abc7fd132086090a5",
+   "stitch_resource": "projects/6277945596504536494/screens/ab4de4dab4604b6abc7fd132086090a5",
+   "archivo": "mockups/v6-variante.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "e781b8aae39cd5625d15ce1dc05d28dcc25c30a98696ced88624d054a30747f7",
+   "pixeles": [
+    780,
+    3210
+   ],
+   "exportado_utc": "2026-10-09T15:22:56+00:00",
+   "titulo_stitch": "V6 Consulta carga vacío error",
+   "titulo_local": "V6 Consulta carga vacío error",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "e9acb9d6f831f64965508c42dff66c5fc1d571a5d77568530bc7de2dfca32aa9",
+    "derivado_sha256": "e781b8aae39cd5625d15ce1dc05d28dcc25c30a98696ced88624d054a30747f7",
+    "pixeles_rgba_sha256": "5c9ea4026be38c4442ab0d37a3391b71273048fe2c879d56cf9b7a5bb117b7c6",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "V7",
+   "area": "variantes",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Validación"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "stitch_id": "d148997229e54646b496172344955cae",
+   "stitch_resource": "projects/6277945596504536494/screens/d148997229e54646b496172344955cae",
+   "archivo": "mockups/v7-variante.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "83e946754f2106c6ef1370a50017a6eb9136545896413c9cc595382a72144a77",
+   "pixeles": [
+    780,
+    2578
+   ],
+   "exportado_utc": "2026-10-09T15:23:04+00:00",
+   "titulo_stitch": "V8 Confirmación de carga",
+   "titulo_local": "V7 Validación de comprobante",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "9ddf5bb5d390de4af06522b9bf99ea99c054ac17e55ef7f9f6ad7e7c7f9a5c11",
+    "derivado_sha256": "83e946754f2106c6ef1370a50017a6eb9136545896413c9cc595382a72144a77",
+    "pixeles_rgba_sha256": "568a118ba85de3b40308bd26df166a2bd148e5ee310c8ddc332a7ffb5e74e325",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "V8",
+   "area": "variantes",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Confirmación",
+    "Pendiente de verificación",
+    "Error incierto"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/privacidad"
+   ],
+   "stitch_id": "3dc8b0cf8b62458b9c7b3fa3fb2f3514",
+   "stitch_resource": "projects/6277945596504536494/screens/3dc8b0cf8b62458b9c7b3fa3fb2f3514",
+   "archivo": "mockups/v8-variante.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; hallazgos abiertos en evidencia",
+   "sha256": "cab9bf39eb0f7c34086309252742e5dd858f3abb314b22edb3f46c034e2b5e22",
+   "pixeles": [
+    780,
+    2450
+   ],
+   "exportado_utc": "2026-10-09T15:22:56+00:00",
+   "titulo_stitch": "V7 Validación comprobante",
+   "titulo_local": "V8 Confirmación y resultado de carga",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "4a36be9b153dde68f5e09cb2e1b614cfc9f91c99c73cb9e1ae13ed435b04355b",
+    "derivado_sha256": "cab9bf39eb0f7c34086309252742e5dd858f3abb314b22edb3f46c034e2b5e22",
+    "pixeles_rgba_sha256": "54e5bd5b2bc2a8a932beb00c417a3229c40c9820264c89bf6becb466bc40ef5d",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "V9",
+   "area": "variantes",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Ítems en verificación bloqueados"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "12c9ff5d62934a68835c8cac96b58dfb",
+   "stitch_resource": "projects/6277945596504536494/screens/12c9ff5d62934a68835c8cac96b58dfb",
+   "archivo": "mockups/v9-variante.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; diseño estático, no prueba nativa; hallazgos en evidencia",
+   "sha256": "30b49f326b42c0f8056fad7f37491c2683c18d6d388f2f805a3fd11a20293c06",
+   "pixeles": [
+    780,
+    3176
+   ],
+   "exportado_utc": "2026-10-09T15:40:50+00:00",
+   "titulo_stitch": "V09 Selección transferencia PADRE",
+   "titulo_local": "V09 Selección transferencia PADRE",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "3bc5956f1b4360d7443db3c394ed1b10a2ae4bf7e8d879946b1e9db0abb7e67e",
+    "derivado_sha256": "30b49f326b42c0f8056fad7f37491c2683c18d6d388f2f805a3fd11a20293c06",
+    "pixeles_rgba_sha256": "ba1fad30e9c9650bc4fea059fac12c4e23368458d1921f1ff44e6fb17d7d1098",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "V10",
+   "area": "variantes",
+   "roles": [
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Consulta período propia"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "ca729da2aedd422f90465c84554459d6",
+   "stitch_resource": "projects/6277945596504536494/screens/ca729da2aedd422f90465c84554459d6",
+   "archivo": "mockups/v10-variante.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; diseño estático, no prueba nativa; hallazgos en evidencia",
+   "sha256": "42e71cd1fa38c7aa67c1f57f686ac0684bf5f59469eaae5103e5dbf2bad8fecf",
+   "pixeles": [
+    780,
+    2410
+   ],
+   "exportado_utc": "2026-10-09T15:40:51+00:00",
+   "titulo_stitch": "V10 Consulta período ESTUDIANTE",
+   "titulo_local": "V10 Consulta período ESTUDIANTE",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "8629f1abb5acd614ebaf800944d6d015f2718a2e16e7b7fb85970dba97785f8a",
+    "derivado_sha256": "42e71cd1fa38c7aa67c1f57f686ac0684bf5f59469eaae5103e5dbf2bad8fecf",
+    "pixeles_rgba_sha256": "787c27c5f2cf9b18244bd6a6ef53d4281637d72618fa8a125418cd6f939e8924",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "V11",
+   "area": "variantes",
+   "roles": [
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Historial propio",
+    "Pendiente",
+    "Vencida"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "a75806558aa14b718266150e2526f04a",
+   "stitch_resource": "projects/6277945596504536494/screens/a75806558aa14b718266150e2526f04a",
+   "archivo": "mockups/v11-variante.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; diseño estático, no prueba nativa; hallazgos en evidencia",
+   "sha256": "9ce8bad3dbe39bd336267f10b9fc5fc5a749663075db8c4e89809ccdb25d87cb",
+   "pixeles": [
+    780,
+    2552
+   ],
+   "exportado_utc": "2026-10-09T15:40:52+00:00",
+   "titulo_stitch": "V11 Historial deuda ESTUDIANTE",
+   "titulo_local": "V11 Historial deuda ESTUDIANTE",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "4eaa62f2b501a9634ce176bbc025a400b7742455d6678508641a4cea672fb1e9",
+    "derivado_sha256": "9ce8bad3dbe39bd336267f10b9fc5fc5a749663075db8c4e89809ccdb25d87cb",
+    "pixeles_rgba_sha256": "fa21c272854377ae1d803341ebc2d6dcefcbb2b8e18429e964ad5290e03522c2",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "V12",
+   "area": "variantes",
+   "roles": [
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Inscripciones propias"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "6c001951a6c94d92b15abf8468511ddc",
+   "stitch_resource": "projects/6277945596504536494/screens/6c001951a6c94d92b15abf8468511ddc",
+   "archivo": "mockups/v12-variante.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; diseño estático, no prueba nativa; hallazgos en evidencia",
+   "sha256": "aaeed1760c9d8a27e34306ab91ef81b9c7cd16766ffb00062c2b2aeb5965c630",
+   "pixeles": [
+    780,
+    2514
+   ],
+   "exportado_utc": "2026-10-09T15:40:53+00:00",
+   "titulo_stitch": "V12 Inscripciones ESTUDIANTE",
+   "titulo_local": "V12 Inscripciones ESTUDIANTE",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "c9471427d1ac7675992ffaf938a92b509cef8b6753e4e4d892c8be1449ff2c04",
+    "derivado_sha256": "aaeed1760c9d8a27e34306ab91ef81b9c7cd16766ffb00062c2b2aeb5965c630",
+    "pixeles_rgba_sha256": "96053305bce9a096211b0124f8e509e16d9c87667ac33758b235db80d7a99017",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "V14",
+   "area": "variantes",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "iOS",
+    "Teclado",
+    "Áreas seguras"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "540ec6c1d52440799d14207175789b37",
+   "stitch_resource": "projects/6277945596504536494/screens/540ec6c1d52440799d14207175789b37",
+   "archivo": "mockups/v14-variante.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; diseño estático, no prueba nativa; hallazgos en evidencia",
+   "sha256": "6c84469f14a79ff1da73f91f7ff49a341acce3617081977a6fc0da7eedd0b375",
+   "pixeles": [
+    780,
+    1944
+   ],
+   "exportado_utc": "2026-10-09T15:40:54+00:00",
+   "titulo_stitch": "V14 PADRE Login iOS con teclado",
+   "titulo_local": "V14 PADRE Login iOS con teclado",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "12b30105146a600481e1fd3075641667d3563640f5d86fb5b7cb5467dcbe9036",
+    "derivado_sha256": "6c84469f14a79ff1da73f91f7ff49a341acce3617081977a6fc0da7eedd0b375",
+    "pixeles_rgba_sha256": "4811e60b694eb3e3cbf1c3bdcd1914ce74e39e2904f78db7246c473c00b212ba",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "V13",
+   "area": "variantes",
+   "roles": [
+    "PADRE"
+   ],
+   "estados": [
+    "Android",
+    "Teclado",
+    "Áreas seguras"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "f88f7a99c5f6493f98fa37c20054fe1e",
+   "stitch_resource": "projects/6277945596504536494/screens/f88f7a99c5f6493f98fa37c20054fe1e",
+   "archivo": "mockups/v13-variante.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; diseño estático, no prueba nativa; hallazgos en evidencia",
+   "sha256": "a92e4c69f0e635540fab635b211da9fbd741dd8de13dd87e7937c8b551d8f60b",
+   "pixeles": [
+    780,
+    1768
+   ],
+   "exportado_utc": "2026-10-09T15:40:54+00:00",
+   "titulo_stitch": "V13 PADRE Login Android con teclado",
+   "titulo_local": "V13 PADRE Login Android con teclado",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "551dabe65622b9068a22e78e21c797ad172f03116f7dc80b33a1257f3ff537ae",
+    "derivado_sha256": "a92e4c69f0e635540fab635b211da9fbd741dd8de13dd87e7937c8b551d8f60b",
+    "pixeles_rgba_sha256": "7a1704235788c8eb1b05b96f6b53ed5672096c1e55f2f016c36c2625aea21277",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  },
+  {
+   "pantalla": "V15",
+   "area": "variantes",
+   "roles": [
+    "ESTUDIANTE"
+   ],
+   "estados": [
+    "Texto 200%",
+    "Consulta propia"
+   ],
+   "requisitos": [
+    "EPT-95/roles-y-estados",
+    "EPT-98/contrato-movil"
+   ],
+   "stitch_id": "a0ee18773f8e44bfa56b86b251a30b2c",
+   "stitch_resource": "projects/6277945596504536494/screens/a0ee18773f8e44bfa56b86b251a30b2c",
+   "archivo": "mockups/v15-variante.png",
+   "device_type": "MOBILE",
+   "revision": "Inspeccionado; diseño estático, no prueba nativa; hallazgos en evidencia",
+   "sha256": "7723ca2c4c02f2df61413a36a90c4f5ff7e814f8c31d7c18284c92b086635ada",
+   "pixeles": [
+    780,
+    6316
+   ],
+   "exportado_utc": "2026-10-09T15:40:56+00:00",
+   "titulo_stitch": "V15 ESTUDIANTE Factura texto escalado 200%",
+   "titulo_local": "V15 ESTUDIANTE Factura texto escalado 200%",
+   "derivacion": {
+    "tipo": "PNG derivado",
+    "original_sha256": "c2c1f4ccc3d099deeed0cc9415374dc27403d10b887a159ff752f1d912ae8096",
+    "derivado_sha256": "7723ca2c4c02f2df61413a36a90c4f5ff7e814f8c31d7c18284c92b086635ada",
+    "pixeles_rgba_sha256": "e7d979abf2b822e9fd8d6486826211b7581953c6beba5ab9720f50a81b65c4a8",
+    "chunk_retirado": "zTXt:Raw profile type APP1",
+    "verificado_utc": "2026-10-09T17:08:47+00:00"
+   }
+  }
+ ]
+}
