@@ -57,8 +57,16 @@ const NEGATIVAS = [
   ['variable SUPABASE_SERVICE', { 'src/a.ts': 'export const k = process.env.SUPABASE_SERVICE_ROLE_KEY\n' }, /SUPABASE_SERVICE|service_role/u],
   ['variable pública con nombre de secreto', { '.env.example': 'EXPO_PUBLIC_API_SECRET=abc\n' }, /EXPO_PUBLIC/u],
   ['JWT con rol service_role', { 'src/a.ts': `export const k = '${jwt({ role: 'service_role' })}'\n` }, /rol distinto de anon/u],
-  ['.env local presente', { '.env.local': 'X=1\n' }, /archivo de entorno local/u],
+  ['.env.local con clave privilegiada', { '.env.local': `EXPO_PUBLIC_SUPABASE_ANON_KEY=${jwt({ role: 'service_role' })}\n` }, /\.env\.local: JWT embebido/u],
+  ['.env.local con nombre de secreto', { '.env.local': 'EXPO_PUBLIC_API_SECRET=abc\n' }, /\.env\.local: variable EXPO_PUBLIC/u],
+  ['subruta de módulo de Node', { 'src/a.ts': "import { readFile } from 'fs/promises'\n" }, /fs\/promises/u],
 ]
+
+test('un .env.local con solo valores públicos es aceptado', () => {
+  con(proyecto({ '.env.local': 'EXPO_PUBLIC_SUPABASE_URL=https://x.supabase.co\n' }), raiz => {
+    assert.deepEqual(verificarProyecto(raiz), [])
+  })
+})
 
 for (const [nombre, archivos, esperado] of NEGATIVAS) {
   test(`detecta: ${nombre}`, () => {

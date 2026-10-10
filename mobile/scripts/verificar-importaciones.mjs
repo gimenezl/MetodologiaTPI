@@ -18,7 +18,7 @@ const CARPETAS_FUENTE = ['src', 'app']
 const MODULOS_PROHIBIDOS = [
   /^next$/u, /^next\//u, /^react-dom(?:\/|$)/u, /^react-native-web(?:\/|$)/u, /^@supabase\/ssr$/u,
   /^server-only$/u, /^client-only$/u, /^node:/u,
-  /^(?:fs|path|os|child_process|http|https|net|tls|dns|stream|zlib|worker_threads|cluster|vm)$/u,
+  /^(?:fs|path|os|child_process|http|https|net|tls|dns|stream|zlib|worker_threads|cluster|vm|crypto|buffer|util|events|url)(?:\/.*)?$/u,
   /supabase\.server(?:\.|$|\/)/u, /supabase\.admin(?:\.|$|\/)/u, /nodemailer/u, /(?:^|\/)services\/supabase/u,
 ]
 
@@ -124,8 +124,16 @@ export function verificarProyecto(raiz = RAIZ_POR_DEFECTO) {
       if (!carga || carga.role !== 'anon') problemas.push(`${id}: JWT embebido con rol distinto de anon`)
     }
   }
+  // Un `.env.local` es legítimo en desarrollo (está en .gitignore), pero sus variables EXPO_PUBLIC_* se incrustan en
+  // el bundle: se aplica el mismo escaneo de secretos que a las fuentes.
   for (const nombre of readdirSync(raiz)) {
-    if (/^\.env(?:\..+)?$/u.test(nombre) && nombre !== '.env.example') problemas.push(`${nombre}: archivo de entorno local presente en el paquete`)
+    if (!/^\.env(?:\..+)?$/u.test(nombre) || nombre === '.env.example') continue
+    const texto = readFileSync(join(raiz, nombre), 'utf8')
+    for (const { patron, motivo } of TEXTO_PRIVADO) if (patron.test(texto)) problemas.push(`${nombre}: ${motivo}`)
+    for (const jwt of texto.match(PATRON_JWT) ?? []) {
+      const carga = decodificarCarga(jwt.split('.')[1] ?? '')
+      if (!carga || carga.role !== 'anon') problemas.push(`${nombre}: JWT embebido con rol distinto de anon`)
+    }
   }
   return problemas
 }
@@ -151,7 +159,17 @@ export function verificarBundle(directorio) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   const argumentos = process.argv.slice(2)
   const bundles = []
-  for (let i = 0; i < argumentos.length; i++) if (argumentos[i] === '--bundle' && argumentos[i + 1]) bundles.push(argumentos[++i])
+  for (let i = 0; i < argumentos.length; i++) {
+    if (argumentos[i] !== '--bundle') {
+      console.error(`Argumento no reconocido: ${argumentos[i]}`)
+      process.exit(2)
+    }
+    if (!argumentos[i + 1]) {
+      console.error('--bundle requiere un directorio')
+      process.exit(2)
+    }
+    bundles.push(argumentos[++i])
+  }
   const problemas = bundles.length ? bundles.flatMap(b => verificarBundle(resolve(b))) : verificarProyecto()
   if (problemas.length) {
     console.error(problemas.join('\n'))

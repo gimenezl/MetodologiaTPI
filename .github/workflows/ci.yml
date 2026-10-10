@@ -317,8 +317,17 @@ jobs:
           # La app móvil exige JS, Android (build + emulador) e iOS (build + simulador): un skip obligatorio no pasa.
           test "$PLAN" = success
           case "$PLAN_MOBILE" in
-            true) test "$MOBILE" = success && test "$ANDROID" = success && test "$IOS" = success ;;
-            false) test "$MOBILE" = skipped && test "$ANDROID" = skipped && test "$IOS" = skipped ;;
+            true)
+              # Una sentencia por condición: bajo `bash -e` un `&&` intermedio que falla no aborta el script.
+              test "$MOBILE" = success
+              test "$ANDROID" = success
+              test "$IOS" = success
+              ;;
+            false)
+              test "$MOBILE" = skipped
+              test "$ANDROID" = skipped
+              test "$IOS" = skipped
+              ;;
             *) exit 1 ;;
           esac
           test -n "$PLAN_UI"

@@ -83,7 +83,8 @@ test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
     ['gate sin iOS', t => t.replace('IOS: ${{ needs.mobile-ios.result }}', 'IOS: success')],
     ['gate sin Android', t => t.replace('ANDROID: ${{ needs.mobile-android.result }}', 'ANDROID: success')],
     ['gate sin plan', t => t.replace('PLAN_MOBILE: ${{ needs.plan.outputs.mobile }}', 'PLAN_MOBILE: false')],
-    ['gate que tolera skips', t => t.replace('test "$MOBILE" = success && test "$ANDROID" = success && test "$IOS" = success', 'true')],
+    ['gate que tolera skips', t => t.replace('              test "$MOBILE" = success\n', '')],
+    ['gate que encadena con &&', t => t.replace('test "$MOBILE" = success\n              test "$ANDROID" = success', 'test "$MOBILE" = success && test "$ANDROID" = success')],
     ['needs sin móviles', t => t.replace('needs: [fast, database, ui, plan, mobile, mobile-android, mobile-ios]', 'needs: [fast, database, ui]')],
     ['Android sin ejecución', t => t.replace('mobile/scripts/ejecutar-android.sh', 'mobile/scripts/x.sh')],
     ['iOS sin ejecución', t => t.replaceAll('mobile/scripts/ejecutar-ios.sh', 'mobile/scripts/x.sh')],
@@ -97,6 +98,23 @@ test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   assert.match(yml, /mobile-android:\n    name: CI \/ móvil Android\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
   assert.match(yml, /mobile-ios:\n    name: CI \/ móvil iOS\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
   assert.match(yml, /runs-on: macos-26/u)
+})
+test('EPT-102: el bloque del gate se ejecuta con bash -e y falla ante cualquier resultado móvil no exitoso', () => {
+  const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
+  const inicio = yml.indexOf('case "$PLAN_MOBILE" in')
+  const fin = yml.indexOf('esac', inicio) + 'esac'.length
+  assert.ok(inicio > 0 && fin > inicio)
+  const bloque = yml.slice(inicio, fin).split('\n').map(l => l.replace(/^ {10}/u, '')).join('\n')
+  const correr = env => spawnSync('bash', ['-e', '-c', bloque], { env: { PATH: process.env.PATH, ...env }, encoding: 'utf8' }).status
+  const ok = { PLAN_MOBILE: 'true', MOBILE: 'success', ANDROID: 'success', IOS: 'success' }
+  assert.equal(correr(ok), 0)
+  for (const clave of ['MOBILE', 'ANDROID', 'IOS']) {
+    for (const valor of ['failure', 'cancelled', 'skipped']) assert.notEqual(correr({ ...ok, [clave]: valor }), 0, `${clave}=${valor} debe fallar`)
+  }
+  const sinPlan = { PLAN_MOBILE: 'false', MOBILE: 'skipped', ANDROID: 'skipped', IOS: 'skipped' }
+  assert.equal(correr(sinPlan), 0)
+  for (const clave of ['MOBILE', 'ANDROID', 'IOS']) assert.notEqual(correr({ ...sinPlan, [clave]: 'success' }), 0, `${clave} no debe correr sin plan`)
+  assert.notEqual(correr({ ...ok, PLAN_MOBILE: '' }), 0)
 })
 test('EPT-102: el paquete móvil no altera dependencias ni lockfile de Next', () => {
   const raiz = JSON.parse(readFileSync('package.json', 'utf8'))

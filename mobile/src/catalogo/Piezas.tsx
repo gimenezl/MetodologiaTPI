@@ -72,6 +72,7 @@ export function InsigniaEstado(props: InsigniaEstadoProps): ReactElement {
         flexDirection: 'row',
         alignItems: 'center',
         alignSelf: 'flex-start',
+        maxWidth: '100%',
         gap: 6,
         paddingHorizontal: 10,
         paddingVertical: 4,
@@ -85,7 +86,7 @@ export function InsigniaEstado(props: InsigniaEstadoProps): ReactElement {
       <Text importantForAccessibility="no" accessibilityElementsHidden style={{ color: v.tinta, fontSize: 14 }}>
         {v.glifo}
       </Text>
-      <Text style={[estiloDeTexto('insignia'), { color: v.tinta }]}>{v.texto}</Text>
+      <Text style={[estiloDeTexto('insignia'), { color: v.tinta, flexShrink: 1 }]}>{v.texto}</Text>
     </View>
   )
 }

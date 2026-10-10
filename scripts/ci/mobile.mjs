@@ -46,9 +46,11 @@ export function validateMobileWorkflow(yml) {
   for (const fragmento of ['mobile: ${{ steps.impact.outputs.mobile }}', 'MOBILE: ${{ needs.mobile.result }}',
     'ANDROID: ${{ needs.mobile-android.result }}', 'IOS: ${{ needs.mobile-ios.result }}', 'PLAN_MOBILE: ${{ needs.plan.outputs.mobile }}',
     'needs: [fast, database, ui, plan, mobile, mobile-android, mobile-ios]',
-    'test "$MOBILE" = success && test "$ANDROID" = success && test "$IOS" = success']) {
+    '              test "$MOBILE" = success\n              test "$ANDROID" = success\n              test "$IOS" = success\n']) {
     if (!yml.includes(fragmento)) throw new Error(`El gate no exige el resultado móvil: falta «${fragmento}»`)
   }
+  // `bash -e` no aborta ante un `&&` intermedio que falla: el gate no puede encadenar sus condiciones con `&&`.
+  if (/test "\$(?:MOBILE|ANDROID|IOS)" = \w+ &&/u.test(yml)) throw new Error('El gate encadena condiciones móviles con &&: bajo bash -e no abortan')
   // Cada job nativo debe ejecutar la app, no solo compilarla.
   if (!yml.includes('mobile/scripts/ejecutar-android.sh') || !yml.includes('mobile/scripts/ejecutar-ios.sh')) {
     throw new Error('Los jobs Android e iOS deben ejecutar la aplicación (ejecutar-android.sh / ejecutar-ios.sh)')

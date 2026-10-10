@@ -15,14 +15,14 @@ export interface AvisoProps {
   testID?: string
 }
 
-const PALETA: Record<TipoAviso, { fondo: string; texto: string; barra: string }> = {
-  informativo: { fondo: color.primario50, texto: color.primario700, barra: color.primario500 },
-  advertencia: { fondo: color.advertenciaFondo, texto: color.advertenciaTexto, barra: color.advertencia },
-  error: { fondo: color.peligroFondo, texto: color.peligroTexto, barra: color.peligro },
-  exito: { fondo: color.exitoFondo, texto: color.exitoTexto, barra: color.exito },
+const PALETA: Record<TipoAviso, { fondo: string; texto: string; barra: string; glifo: string }> = {
+  informativo: { fondo: color.primario50, texto: color.primario700, barra: color.primario500, glifo: 'i' },
+  advertencia: { fondo: color.advertenciaFondo, texto: color.advertenciaTexto, barra: color.advertencia, glifo: '!' },
+  error: { fondo: color.peligroFondo, texto: color.peligroTexto, barra: color.peligro, glifo: '×' },
+  exito: { fondo: color.exitoFondo, texto: color.exitoTexto, barra: color.exito, glifo: '✓' },
 }
 
-/** El tipo se comunica con el texto del título/mensaje y la barra lateral; el color nunca es el único canal. */
+/** El tipo se comunica con un glifo decorativo distinto por tipo, el texto y la barra lateral; el color no es el único canal. */
 export function Aviso({ tipo, titulo, mensaje, anuncio, testID }: AvisoProps): ReactElement {
   const paleta = PALETA[tipo]
   return (
@@ -41,8 +41,19 @@ export function Aviso({ tipo, titulo, mensaje, anuncio, testID }: AvisoProps): R
         gap: espacio.xs,
       }}
     >
-      {titulo ? <Text style={[estiloDeTexto('avisoTitulo'), { color: paleta.texto }]}>{titulo}</Text> : null}
-      <Text style={[estiloDeTexto('avisoCuerpo'), { color: paleta.texto }]}>{mensaje}</Text>
+      <View style={{ flexDirection: 'row', gap: espacio.sm }}>
+        <Text
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={[estiloDeTexto('avisoTitulo'), { color: paleta.texto, width: 18, textAlign: 'center' }]}
+        >
+          {paleta.glifo}
+        </Text>
+        <View style={{ flex: 1, gap: espacio.xs }}>
+          {titulo ? <Text style={[estiloDeTexto('avisoTitulo'), { color: paleta.texto }]}>{titulo}</Text> : null}
+          <Text style={[estiloDeTexto('avisoCuerpo'), { color: paleta.texto }]}>{mensaje}</Text>
+        </View>
+      </View>
     </View>
   )
 }

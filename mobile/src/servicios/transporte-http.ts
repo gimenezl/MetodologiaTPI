@@ -66,7 +66,7 @@ export interface RespuestaHttp<T> {
   datos: T
 }
 
-const HOSTS_LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '10.0.2.2'])
+const HOSTS_LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]'])
 
 export function validarBaseUrl(baseUrl: string, permitirHttpLocal = false): URL {
   let url: URL
@@ -85,7 +85,7 @@ export function validarBaseUrl(baseUrl: string, permitirHttpLocal = false): URL 
 
 /** Une `ruta` con la base. Rechaza esquemas, `//host`, `..`, barras invertidas y caracteres de control. */
 export function resolverRuta(base: URL, ruta: string, consulta?: SolicitudHttp['consulta']): URL {
-  if (!ruta.startsWith('/') || ruta.startsWith('//') || /[\\\u0000-\u001f]/u.test(ruta)) {
+  if (!ruta.startsWith('/') || ruta.startsWith('//') || /[\\#\u0000-\u001f]/u.test(ruta)) {
     throw new ErrorTransporte('RUTA_INVALIDA')
   }
   const segmentos = ruta.split('?')[0]?.split('/') ?? []
@@ -112,14 +112,8 @@ export function crearTransporteHttp(opciones: OpcionesTransporte): TransporteHtt
     const destino = resolverRuta(base, ruta, solicitud.consulta)
     if (solicitud.senal?.aborted) throw new ErrorTransporte('CANCELADO')
 
-    const cabeceras: Record<string, string> = { Accept: 'application/json' }
-    if (!solicitud.anonima) {
-      const token = await opciones.obtenerToken()
-      if (!token) throw new ErrorTransporte('SIN_SESION')
-      cabeceras.Authorization = `Bearer ${token}`
-    }
-    if (solicitud.cuerpo !== undefined) cabeceras['Content-Type'] = 'application/json'
-
+    // El controlador, el temporizador y el listener existen ANTES de esperar el token: obtenerlo puede
+    // tocar la red (refresco de sesión) y una cancelación o un vencimiento en ese tramo no debe perderse.
     const controlador = new AbortController()
     let vencio = false
     const temporizador = setTimeout(() => {
@@ -130,6 +124,21 @@ export function crearTransporteHttp(opciones: OpcionesTransporte): TransporteHtt
     solicitud.senal?.addEventListener('abort', alCancelar)
 
     try {
+      const cabeceras: Record<string, string> = { Accept: 'application/json' }
+      if (!solicitud.anonima) {
+        let token: string | null
+        try {
+          token = await opciones.obtenerToken()
+        } catch {
+          throw new ErrorTransporte('SIN_SESION')
+        }
+        if (!token) throw new ErrorTransporte('SIN_SESION')
+        cabeceras.Authorization = `Bearer ${token}`
+      }
+      if (solicitud.cuerpo !== undefined) cabeceras['Content-Type'] = 'application/json'
+      if (vencio) throw new ErrorTransporte('TIEMPO_AGOTADO')
+      if (solicitud.senal?.aborted || controlador.signal.aborted) throw new ErrorTransporte('CANCELADO')
+
       let respuesta: Response
       try {
         respuesta = await llamar(destino.toString(), {

@@ -30,15 +30,17 @@ describe('validación de la URL base', () => {
   })
 
   it('permite http solo hacia loopback y únicamente si se habilita', () => {
-    expect(() => validarBaseUrl('http://10.0.2.2:3000')).toThrow(ErrorTransporte)
-    expect(validarBaseUrl('http://10.0.2.2:3000', true).hostname).toBe('10.0.2.2')
+    expect(() => validarBaseUrl('http://localhost:3000')).toThrow(ErrorTransporte)
+    expect(validarBaseUrl('http://localhost:3000', true).hostname).toBe('localhost')
     expect(() => validarBaseUrl('http://api.example.org', true)).toThrow(ErrorTransporte)
+    // 10.0.2.2 es un alias del emulador, no un loopback: en una red real sería un host cualquiera.
+    expect(() => validarBaseUrl('http://10.0.2.2:3000', true)).toThrow(ErrorTransporte)
   })
 })
 
 describe('resolución de rutas', () => {
   const base = new URL(BASE)
-  it.each(['//evil.example/x', 'https://evil.example/x', '/../x', '/a/%2e%2e/b', '/a\\b', 'sin-barra', '/a\n'])(
+  it.each(['//evil.example/x', 'https://evil.example/x', '/../x', '/a/%2e%2e/b', '/a\\b', 'sin-barra', '/a\n', '/..#', '/x/..#a'])(
     'rechaza %j',
     ruta => {
       expect(() => resolverRuta(base, ruta)).toThrow(ErrorTransporte)
@@ -135,6 +137,38 @@ describe('solicitudes', () => {
     await Promise.resolve()
     control.abort()
     await expect(promesa).rejects.toMatchObject({ tipo: 'CANCELADO' })
+  })
+
+  it('una cancelación durante la espera del token no se pierde y no envía la solicitud', async () => {
+    const f = jest.fn()
+    const control = new AbortController()
+    let liberar: (t: string) => void = () => undefined
+    const transporte = crearTransporteHttp({
+      baseUrl: BASE,
+      obtenerToken: () => new Promise<string>(res => (liberar = res)),
+      fetchImpl: f as unknown as typeof fetch,
+    })
+    const promesa = transporte.solicitar('/api/x', { senal: control.signal })
+    const resultado = promesa.catch((e: unknown) => e as ErrorTransporte)
+    control.abort()
+    liberar('TOKEN')
+    expect(await resultado).toMatchObject({ tipo: 'CANCELADO' })
+    expect(f).not.toHaveBeenCalled()
+  })
+
+  it('un token que lanza se informa como falta de sesión, sin exponer el error original', async () => {
+    const f = jest.fn()
+    const transporte = crearTransporteHttp({
+      baseUrl: BASE,
+      obtenerToken: async () => {
+        throw new Error('almacén bloqueado TOKEN-SECRETO')
+      },
+      fetchImpl: f as unknown as typeof fetch,
+    })
+    const error = (await transporte.solicitar('/api/x').catch((e: unknown) => e)) as ErrorTransporte
+    expect(error.tipo).toBe('SIN_SESION')
+    expect(error.message).not.toContain('SECRETO')
+    expect(f).not.toHaveBeenCalled()
   })
 
   it('una señal ya cancelada no envía nada', async () => {
