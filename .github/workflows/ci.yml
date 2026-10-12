@@ -225,7 +225,7 @@ jobs:
     name: CI / móvil iOS
     needs: plan
     if: needs.plan.outputs.mobile == 'true'
-    runs-on: macos-15-intel
+    runs-on: macos-26-intel
     timeout-minutes: 60
     env:
       CI: '1'
