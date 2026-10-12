@@ -36,12 +36,22 @@ export async function esperarBearerExpirado(consultarEstado, {
   intentosMaximos = 20,
   intervaloMs = 1_000,
   pausar = ms => new Promise(resolve => setTimeout(resolve, ms)),
+  registrarIntento,
 } = {}) {
-  for (let intento = 1; intento <= intentosMaximos; intento++) {
+  const limiteIntentos = Math.min(20, Math.max(0, Math.floor(intentosMaximos)))
+  for (let intento = 1; intento <= limiteIntentos; intento++) {
     const estado = await consultarEstado()
+    if (typeof registrarIntento === 'function') {
+      const telemetry = Object.freeze({ intento, estado: Number.isInteger(estado) ? estado : null })
+      try {
+        registrarIntento(telemetry)
+      } catch {
+        // Diagnostics must not alter the authorization check or expose callback failures.
+      }
+    }
     if (estado === 401) return intento
     if (estado !== 200) throw new Error('El endpoint de identidad devolvió un estado inesperado al comprobar la expiración.')
-    if (intento < intentosMaximos) await pausar(intervaloMs)
+    if (intento < limiteIntentos) await pausar(intervaloMs)
   }
   throw new Error('El endpoint de identidad no confirmó la expiración dentro del límite de comprobaciones.')
 }

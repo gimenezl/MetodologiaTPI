@@ -188,24 +188,44 @@ test('falla cerrado ante startsWith ajeno, sin rama o con receptor secreto', () 
 test('espera mediante sondeo acotado hasta que Auth rechaza el bearer expirado', async () => {
   const estados = [200, 200, 401]
   const pausas = []
+  const telemetry = []
   const intentos = await esperarBearerExpirado(() => estados.shift(), {
     intentosMaximos: 4,
     intervaloMs: 7,
     pausar: async ms => pausas.push(ms),
+    registrarIntento: evento => telemetry.push(evento),
   })
   assert.equal(intentos, 3)
   assert.deepEqual(pausas, [7, 7])
+  assert.deepEqual(telemetry, [
+    { intento: 1, estado: 200 },
+    { intento: 2, estado: 200 },
+    { intento: 3, estado: 401 },
+  ])
 })
 
 test('el sondeo de expiración termina al alcanzar el límite y no revela datos', async () => {
+  const telemetry = []
   await assert.rejects(
-    esperarBearerExpirado(async () => 200, { intentosMaximos: 2, pausar: async () => {} }),
+    esperarBearerExpirado(async () => 200, {
+      intentosMaximos: 50,
+      pausar: async () => {},
+      registrarIntento: evento => telemetry.push(evento),
+    }),
     { message: /no confirmó la expiración/u },
   )
+  assert.equal(telemetry.length, 20)
+  assert.deepEqual(telemetry.at(-1), { intento: 20, estado: 200 })
+  assert.ok(telemetry.every(evento => Object.keys(evento).sort().join(',') === 'estado,intento'))
+  assert.ok(telemetry.every(evento => Number.isInteger(evento.intento) && Number.isInteger(evento.estado)))
   await assert.rejects(
-    esperarBearerExpirado(async () => 503, { intentosMaximos: 2 }),
+    esperarBearerExpirado(async () => 503, {
+      intentosMaximos: 2,
+      registrarIntento: evento => telemetry.push(evento),
+    }),
     { message: /estado inesperado/u },
   )
+  assert.deepEqual(telemetry.at(-1), { intento: 1, estado: 503 })
 })
 
 test('rechaza expiración no finita o ya pasada antes de sondear', () => {
