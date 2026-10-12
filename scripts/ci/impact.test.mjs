@@ -99,7 +99,7 @@ test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   // Los jobs nativos no heredan el plan web: usan el plan móvil y corren sobre el SHA del PR.
   assert.match(yml, /mobile-android:\n    name: CI \/ móvil Android\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
   assert.match(yml, /mobile-ios:\n    name: CI \/ móvil iOS\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
-  assert.match(yml, /runs-on: macos-15-intel/u)
+  assert.match(yml, /runs-on: macos-26-intel/u)
   const prepararDockerMacos = readFileSync('mobile/scripts/preparar-docker-macos.sh', 'utf8').replace(/\r\n/gu, '\n')
   assert.match(prepararDockerMacos, /^brew install colima docker qemu$/mu)
   assert.match(prepararDockerMacos, /^colima start --vm-type qemu --mount-type 9p\b/mu)
