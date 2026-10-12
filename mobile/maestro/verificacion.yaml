@@ -27,10 +27,12 @@ name: Acceso real por rol, persistencia y cierre
 - tapOn: 'Ingresar'
 - assertVisible: 'Hijos vinculados'
 - scrollUntilVisible:
-    element: 'Legajo:'
+    element:
+      text: '.*Legajo:.*'
     direction: DOWN
     timeout: 15000
-- assertVisible: 'Legajo:'
+- assertVisible:
+    text: '.*Legajo:.*'
 - stopApp
 - launchApp:
     clearState: false
