@@ -220,9 +220,20 @@ test('exige que Auth acepte el bearer recién emitido como línea base', () => {
 
 test('el rótulo de fallo identifica una etapa sin interpolar texto arbitrario', () => {
   assert.match(mensajeFalloEtapaAuth('expiracion'), /expiración y renovación de access token/u)
+  for (const [etapa, rotulo] of Object.entries({
+    identidadInicial: 'identidad inicial del access token',
+    esperaExp: 'espera hasta la expiración declarada',
+    sondeoExp: 'comprobación de identidad tras expirar',
+    refreshExpirado: 'renovación y rol tras expirar',
+    logoutExpirado: 'cierre global de sesión efímera',
+    refreshRevocado: 'rechazo de renovación revocada',
+  })) {
+    assert.ok(mensajeFalloEtapaAuth(etapa).includes(rotulo), `Falta el rótulo fijo para ${etapa}.`)
+  }
   const mensaje = mensajeFalloEtapaAuth('TOKEN_PRIVADO_que_no_debe_aparecer')
   assert.match(mensaje, /etapa no identificada/u)
   assert.doesNotMatch(mensaje, /TOKEN_PRIVADO/u)
+  assert.doesNotMatch(mensajeFalloEtapaAuth('refresh TOKEN_PRIVADO'), /TOKEN_PRIVADO/u)
 })
 
 test('un bundle limpio no tiene hallazgos', () => {

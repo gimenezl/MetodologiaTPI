@@ -245,23 +245,29 @@ async function ejecutar() {
   const sesionExpirable = await iniciar(expiracion)
   const [, carga] = sesionExpirable.access_token.split('.')
   const exp = JSON.parse(Buffer.from(carga, 'base64url').toString('utf8')).exp
+  etapaActual = 'identidadInicial'
   const identidadInicial = await respuesta('/auth/v1/user', {
     token: sesionExpirable.access_token, timeoutMs: 5_000,
   })
   validarLineaBaseExpiracion(exp, identidadInicial.status)
   assert.equal(identidadInicial.data?.id, expiracion.id, 'La sesión recién emitida no corresponde al fixture esperado.')
   const demora = Math.max(0, exp * 1000 - Date.now())
+  etapaActual = 'esperaExp'
   if (demora > 0) await new Promise(resolve => setTimeout(resolve, demora))
+  etapaActual = 'sondeoExp'
   const comprobacionesExpiracion = await esperarBearerExpirado(() => respuesta('/auth/v1/user', {
     token: sesionExpirable.access_token, timeoutMs: 5_000,
   }).then(result => result.status))
+  etapaActual = 'refreshExpirado'
   const recuperada = exigirStatus(await respuesta('/auth/v1/token?grant_type=refresh_token', {
     method: 'POST', body: { refresh_token: sesionExpirable.refresh_token },
   }), [200], 'Refresh de sesión después de expirar access token')
   assert.equal(await rpc({ ...expiracion, ...recuperada }, 'rol_actual'), 'PADRE')
+  etapaActual = 'logoutExpirado'
   exigirStatus(await respuesta('/auth/v1/logout?scope=global', {
     method: 'POST', token: recuperada.access_token,
   }), [204], 'Revocación global de fixture efímero')
+  etapaActual = 'refreshRevocado'
   assert.ok([400, 401].includes((await respuesta('/auth/v1/token?grant_type=refresh_token', {
     method: 'POST', body: { refresh_token: recuperada.refresh_token },
   })).status), 'El refresh token revocado volvió a emitir sesión.')

@@ -7,6 +7,12 @@ export const ETAPAS_INTEGRACION_AUTH = Object.freeze({
   estadosAcceso: 'estados de acceso y autorización',
   refresh: 'renovación de sesión',
   expiracion: 'expiración y renovación de access token',
+  identidadInicial: 'identidad inicial del access token',
+  esperaExp: 'espera hasta la expiración declarada',
+  sondeoExp: 'comprobación de identidad tras expirar',
+  refreshExpirado: 'renovación y rol tras expirar',
+  logoutExpirado: 'cierre global de sesión efímera',
+  refreshRevocado: 'rechazo de renovación revocada',
   exportacion: 'exportación de credenciales efímeras',
 })
 
