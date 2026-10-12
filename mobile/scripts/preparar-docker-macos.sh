@@ -7,8 +7,8 @@ if docker info >/dev/null 2>&1; then
   exit 0
 fi
 
-brew install colima docker
-colima start --vm-type vz --cpu 4 --memory 6 --disk 50
+brew install colima docker qemu
+colima start --vm-type qemu --mount-type 9p --cpu 4 --memory 6 --disk 50
 docker_host="unix://${HOME}/.colima/default/docker.sock"
 export DOCKER_HOST="$docker_host"
 docker info >/dev/null
