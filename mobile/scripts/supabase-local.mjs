@@ -1,7 +1,7 @@
 // Crea un proyecto Supabase efímero aislado para la integración móvil.
 // Solo exporta la URL y la clave pública; la SERVICE_ROLE_KEY nunca abandona este proceso.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
@@ -15,13 +15,42 @@ function exigir(condicion, mensaje) {
   if (!condicion) throw new Error(mensaje)
 }
 
-function cli(argumentos, { timeout = 3_600_000 } = {}) {
+function redactedCliOutput(resultado) {
+  let salida = [resultado.stdout, resultado.stderr].filter((valor) => typeof valor === 'string' && valor.length > 0).join('\n')
+  const nombresDeRuta = /^(?:HOME|USERPROFILE|RUNNER_TEMP|RUNNER_WORKSPACE|GITHUB_WORKSPACE|TMPDIR|TMP|TEMP|EPT_MOBILE_SUPABASE_WORKDIR)$/iu
+  const valoresSensibles = Object.entries(process.env)
+    .filter(([nombre, valor]) => valor && (nombresDeRuta.test(nombre) || /(?:SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL|AUTH|URL)/iu.test(nombre)))
+    .map(([, valor]) => valor)
+    .sort((a, b) => b.length - a.length)
+  for (const valor of valoresSensibles) salida = salida.split(valor).join('[REDACTED]')
+
+  // Keep diagnostics useful without retaining local endpoints, credentials, or runner paths.
+  salida = salida
+    .replace(/\b[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s"'<>]+/giu, '[REDACTED_URL]')
+    .replace(/\bBearer\s+[^\s"'<>]+/giu, 'Bearer [REDACTED]')
+    .replace(/\beyJ[a-zA-Z0-9_-]{8,}\.[a-zA-Z0-9_-]{8,}\.[a-zA-Z0-9_-]{8,}\b/gu, '[REDACTED_TOKEN]')
+    .replace(/\b[A-Za-z0-9_+/=-]{48,}\b/gu, '[REDACTED_OPAQUE_TOKEN]')
+    .replace(/(?:[A-Za-z]:[\\/](?:Users|home|tmp|Temp|Windows[\\/]Temp)[\\/][^\s"'<>:,;]*|\/(?:Users|home|root|tmp|private\/tmp|private\/var\/folders|var\/folders|var\/tmp)\/[^\s"'<>:,;]*)/giu, '[REDACTED_PATH]')
+
+  const etiquetaSensible = /(?:[A-Z0-9_-]*(?:SECRET|TOKEN|KEY|PASSWORD|PASSWD|CREDENTIAL|AUTH)[A-Z0-9_-]*|(?:SERVICE[ _-]+ROLE|PUBLISHABLE|ANON(?:YMOUS)?|API|ACCESS|REFRESH|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTHORIZATION|AUTH|TOKEN|KEY)(?:[ _-]+(?:ROLE|PUBLISHABLE|ANON|KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTHORIZATION|AUTH))?)\s*["']?\s*[:=]/iu
+  return salida.split(/\r?\n/u).map((linea) => etiquetaSensible.test(linea) ? '[REDACTED_SENSITIVE_LINE]' : linea).join('\n').slice(-80_000)
+}
+
+function conservarDiagnosticoSeguro(ruta, resultado) {
+  if (!ruta) return
+  mkdirSync(join(ruta, '..'), { recursive: true })
+  writeFileSync(ruta, `Supabase CLI start failed (exit=${resultado.status ?? 'unknown'}).\n${redactedCliOutput(resultado)}\n`, { mode: 0o600 })
+  chmodSync(ruta, 0o600)
+}
+
+function cli(argumentos, { timeout = 3_600_000, diagnosticFile } = {}) {
   const resultado = spawnSync('npx', ['supabase', ...argumentos], {
     cwd: raiz, encoding: 'utf8', timeout, windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   if (resultado.error || resultado.status !== 0) {
-    // La salida del CLI puede contener claves locales. No la propagamos a logs ni artifacts.
+    if (diagnosticFile) conservarDiagnosticoSeguro(diagnosticFile, resultado)
+    // La salida completa se conserva solo en el artifact temporal después de redactarla.
     throw new Error(`Supabase CLI finalizó con código ${resultado.status ?? 'desconocido'} en ${argumentos[0]}.`)
   }
   return resultado.stdout
@@ -61,7 +90,9 @@ function preparar(plataformaObjetivo) {
 
   const migrationNames = execFileSync('node', ['-e', "const fs=require('node:fs');process.stdout.write(String(fs.readdirSync(process.argv[1]).filter(f=>f.endsWith('.sql')).length))", join(destino, 'migrations')], { encoding: 'utf8' })
   exigir(Number(migrationNames) > 0, 'El stack efímero no tiene migraciones.')
-  cli(['start', '--workdir', workdir, '--exclude', 'studio,logflare,vector,analytics,imgproxy,storage,realtime,edge-runtime'])
+  cli(['start', '--workdir', workdir, '--exclude', 'studio,logflare,vector,analytics,imgproxy,storage,realtime,edge-runtime'], {
+    diagnosticFile: plataformaObjetivo === 'ios' ? process.env.EPT_MOBILE_SUPABASE_DIAGNOSTICS_FILE : undefined,
+  })
 
   const local = entornoDeEstado()
   const url = new URL(local.API_URL ?? '')

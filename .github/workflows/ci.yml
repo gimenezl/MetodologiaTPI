@@ -250,6 +250,8 @@ jobs:
       - name: Instalar Supabase CLI
         run: bash scripts/ci/install-cli.sh
       - name: Iniciar proyecto Supabase local descartable
+        env:
+          EPT_MOBILE_SUPABASE_DIAGNOSTICS_FILE: ${{ runner.temp }}/evidencia-movil-ios/supabase-start-redacted.log
         run: node mobile/scripts/supabase-local.mjs start ios
       - name: Instalación y proyecto nativo (incluye pods)
         working-directory: mobile
