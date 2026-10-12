@@ -55,13 +55,15 @@ test('mobile cannot pass web-only checks', () => {
 test('EPT-102: mobile/ se registra con contrato propio y bloquea lo desconocido', () => {
   for (const file of ['mobile/package.json', 'mobile/package-lock.json', 'mobile/app/index.tsx', 'mobile/app/_layout.tsx',
     'mobile/src/servicios/supabase.ts', 'mobile/src/catalogo/Boton.tsx', 'mobile/__tests__/componentes.test.tsx',
+    'mobile/plugins/with-auth-integration-network-security.js', 'mobile/plugins/network/android/permitir-loopback.ts',
     'mobile/scripts/verificar-importaciones.mjs', 'mobile/scripts/ejecutar-android.sh', 'mobile/maestro/verificacion.yaml',
     'mobile/assets/fonts/Outfit_400Regular.ttf']) {
     assert.deepEqual(profile([file]), { db: false, mutations: false, ui: [], mobile: true }, file)
   }
   // Un cambio móvil nunca pasa con el plan web vacío: `mobile` lo exige el gate.
   assert.equal(profile(['mobile/src/tokens/index.ts']).mobile, true)
-  for (const file of ['mobile/otro.bin', 'mobile/android/app/build.gradle', 'mobile/ios/Podfile', 'mobile/dist/android/index.js',
+  for (const file of ['mobile/otro.bin', 'mobile/plugins/payload.json', 'mobile/plugins/binary.bin', 'mobile/plugins/package.json',
+    'mobile/android/app/build.gradle', 'mobile/ios/Podfile', 'mobile/dist/android/index.js',
     'mobile/node_modules/x/index.js', 'mobile/.env', 'mobile/.env.local', 'mobile/src/a b.ts', 'mobile/scripts/instalar.exe',
     'mobile/assets/imagen.png', 'mobile/maestro/otro.json', 'mobile/package-lock.json.bak', 'mobile/../package.json']) {
     assert.throws(() => profile([file]), /sin contrato|\.\.|Invalid/u, file)

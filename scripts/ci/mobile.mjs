@@ -14,6 +14,7 @@ export const mobilePatterns = [
   /^mobile\/app\/(?:[A-Za-z0-9_()-]+\/)*[A-Za-z0-9_()-]+\.tsx?$/u,
   /^mobile\/src\/(?:[a-z0-9-]+\/)*[A-Za-z0-9_.-]+\.tsx?$/u,
   /^mobile\/__tests__\/[A-Za-z0-9._-]+\.test\.tsx?$/u,
+  /^mobile\/plugins\/(?:[a-z0-9-]+\/)*[a-z0-9-]+\.(?:cjs|js|mjs|ts)$/u,
   /^mobile\/scripts\/[a-z0-9.-]+\.(?:mjs|sh)$/u,
   /^mobile\/assets\/fonts\/[A-Za-z0-9_.-]+\.(?:ttf|txt)$/u,
   /^mobile\/maestro\/[a-z0-9-]+\.ya?ml$/u,
