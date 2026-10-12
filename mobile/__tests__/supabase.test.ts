@@ -18,6 +18,27 @@ describe('configuración pública', () => {
     expect(leerEntorno({ ...VALIDAS, EXPO_PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_abcdefghij' })).toMatchObject({ ok: true })
   })
 
+  it('permite HTTP solo con la opt-in de integración y el host/puerto local exacto de Android', () => {
+    expect(leerEntorno({ ...VALIDAS, EXPO_PUBLIC_SUPABASE_URL: 'http://10.0.2.2:54321' }, {
+      authIntegracionLocal: true, plataforma: 'android',
+    })).toMatchObject({ ok: true })
+    expect(leerEntorno({ ...VALIDAS, EXPO_PUBLIC_SUPABASE_URL: 'http://10.0.2.2:54321' }).ok).toBe(false)
+    for (const url of ['http://localhost:54321', 'http://10.0.2.2:54322', 'http://10.0.2.2:54321/rest/v1', 'http://user@10.0.2.2:54321']) {
+      expect(leerEntorno({ ...VALIDAS, EXPO_PUBLIC_SUPABASE_URL: url }, {
+        authIntegracionLocal: true, plataforma: 'android',
+      }).ok).toBe(false)
+    }
+  })
+
+  it('permite únicamente loopback en iOS cuando la opt-in está activa', () => {
+    expect(leerEntorno({ ...VALIDAS, EXPO_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321' }, {
+      authIntegracionLocal: true, plataforma: 'ios',
+    })).toMatchObject({ ok: true })
+    expect(leerEntorno({ ...VALIDAS, EXPO_PUBLIC_SUPABASE_URL: 'http://10.0.2.2:54321' }, {
+      authIntegracionLocal: true, plataforma: 'ios',
+    }).ok).toBe(false)
+  })
+
   it('rechaza una clave con rol service_role', () => {
     const r = leerEntorno({ ...VALIDAS, EXPO_PUBLIC_SUPABASE_ANON_KEY: jwt({ role: 'service_role' }) })
     expect(r.ok).toBe(false)

@@ -66,7 +66,7 @@ jobs:
     with:
       kind: ui
       selection: ${{ needs.fast.outputs.ui }}
-  # --- App móvil (EPT-102) -------------------------------------------------------------------------
+  # --- App móvil (EPT-102 + EPT-105) ---------------------------------------------------------------
   # El plan decide si el cambio toca `mobile/` o lo que la app copia de la web. Un PASS de Next web no prueba mobile:
   # con plan móvil el gate exige JS (tipos, lint, pruebas, bundles), build Android + ejecución en emulador y build iOS +
   # ejecución en simulador sobre el SHA exacto del PR.
@@ -140,8 +140,6 @@ jobs:
     timeout-minutes: 50
     env:
       CI: '1'
-      EXPO_PUBLIC_SUPABASE_URL: https://placeholder-pruebas.supabase.co
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-solo-para-pruebas
       EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -156,6 +154,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Preparar dependencias del instalador Supabase
+        run: npm ci
+      - name: Instalar Supabase CLI
+        run: bash scripts/ci/install-cli.sh
+      - name: Iniciar proyecto Supabase local descartable
+        run: node mobile/scripts/supabase-local.mjs start android
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
@@ -187,6 +191,8 @@ jobs:
           echo "5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a  $RUNNER_TEMP/maestro.zip" | sha256sum -c -
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
+      - name: Verificar Auth, roles, expiración y RLS con actores sintéticos
+        run: node mobile/scripts/integracion-auth-local.mjs
       - name: Habilitar KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -208,9 +214,12 @@ jobs:
           name: movil-android-${{ github.sha }}
           path: |
             ${{ steps.apk.outputs.ruta }}
-            evidencia-movil/**
+            ${{ runner.temp }}/evidencia-movil-android/android-version.txt
           if-no-files-found: warn
           retention-days: 14
+      - name: Detener el stack local de pruebas
+        if: always()
+        run: node mobile/scripts/supabase-local.mjs stop
   mobile-ios:
     name: CI / móvil iOS
     needs: plan
@@ -219,8 +228,6 @@ jobs:
     timeout-minutes: 60
     env:
       CI: '1'
-      EXPO_PUBLIC_SUPABASE_URL: https://placeholder-pruebas.supabase.co
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-solo-para-pruebas
       EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -235,6 +242,14 @@ jobs:
         run: |
           xcodebuild -version | tee -a "$GITHUB_STEP_SUMMARY"
           node --version
+      - name: Preparar Docker efímero
+        run: bash mobile/scripts/preparar-docker-macos.sh
+      - name: Preparar dependencias del instalador Supabase
+        run: npm ci
+      - name: Instalar Supabase CLI
+        run: bash scripts/ci/install-cli.sh
+      - name: Iniciar proyecto Supabase local descartable
+        run: node mobile/scripts/supabase-local.mjs start ios
       - name: Instalación y proyecto nativo (incluye pods)
         working-directory: mobile
         run: |
@@ -265,22 +280,28 @@ jobs:
           echo "5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a  $RUNNER_TEMP/maestro.zip" | shasum -a 256 -c -
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
+      - name: Verificar Auth, roles, expiración y RLS con actores sintéticos
+        run: node mobile/scripts/integracion-auth-local.mjs
       - name: Ejecutar en simulador iOS
         run: bash mobile/scripts/ejecutar-ios.sh "${{ steps.app.outputs.ruta }}"
       - name: Empaquetar aplicación
         if: always()
         run: |
-          mkdir -p evidencia-movil
-          if [ -n "${{ steps.app.outputs.ruta }}" ]; then ditto -c -k --keepParent "${{ steps.app.outputs.ruta }}" evidencia-movil/aplicacion-ios-simulador.zip; fi
-          cp "$RUNNER_TEMP/xcodebuild.log" evidencia-movil/xcodebuild.log || true
+          mkdir -p "$RUNNER_TEMP/evidencia-movil-ios"
+          if [ -n "${{ steps.app.outputs.ruta }}" ]; then ditto -c -k --keepParent "${{ steps.app.outputs.ruta }}" "$RUNNER_TEMP/evidencia-movil-ios/aplicacion-ios-simulador.zip"; fi
       - name: Subir evidencia iOS
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: movil-ios-${{ github.sha }}
-          path: evidencia-movil/**
+          path: ${{ runner.temp }}/evidencia-movil-ios/aplicacion-ios-simulador.zip
           if-no-files-found: warn
           retention-days: 14
+      - name: Detener el stack local de pruebas
+        if: always()
+        run: |
+          node mobile/scripts/supabase-local.mjs stop
+          if command -v colima >/dev/null 2>&1; then colima stop || true; fi
   gate:
     name: CI / gate
     if: always()

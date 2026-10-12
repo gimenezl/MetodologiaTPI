@@ -21,8 +21,13 @@ const config: ExpoConfig = {
     'expo-router',
     ['expo-secure-store', { configureAndroidBackup: true }],
     'expo-font',
+    './plugins/with-auth-integration-network-security',
   ],
   experiments: { typedRoutes: false },
+  extra: {
+    // Flag booleana no secreta. Sin esta opción explícita, HTTP local se rechaza en runtime.
+    eptAuthIntegration: process.env.EPT_MOBILE_AUTH_INTEGRATION === '1',
+  },
 }
 
 export default config

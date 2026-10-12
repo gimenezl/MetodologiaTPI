@@ -1,5 +1,7 @@
 // Configuración pública del dispositivo: URL del proyecto, clave pública y origen del servidor web.
 // Las variables EXPO_PUBLIC_* se incrustan en el bundle, por eso aquí se rechazan claves privilegiadas.
+import Constants from 'expo-constants'
+import { Platform } from 'react-native'
 
 export interface EntornoPublico {
   supabaseUrl: string
@@ -15,6 +17,12 @@ export interface VariablesCrudas {
   EXPO_PUBLIC_SUPABASE_URL?: string
   EXPO_PUBLIC_SUPABASE_ANON_KEY?: string
   EXPO_PUBLIC_API_BASE_URL?: string
+}
+
+export interface OpcionesEntorno {
+  /** Solo se habilita en builds e2e efímeros que esperan el Supabase local exacto del runner. */
+  authIntegracionLocal?: boolean
+  plataforma?: 'android' | 'ios'
 }
 
 function decodificarBase64Url(segmento: string): string | null {
@@ -61,13 +69,27 @@ export function esUrlHttpsValida(valor: string): boolean {
   }
 }
 
-export function leerEntorno(variables: VariablesCrudas): ResultadoEntorno {
+function esUrlLocalIntegracionValida(valor: string, plataforma: OpcionesEntorno['plataforma']): boolean {
+  const hostEsperado = plataforma === 'android' ? '10.0.2.2' : '127.0.0.1'
+  try {
+    const url = new URL(valor)
+    return url.protocol === 'http:' && url.hostname === hostEsperado && url.port === '54321' &&
+      url.pathname === '/' && !url.username && !url.password && !url.search && !url.hash
+  } catch {
+    return false
+  }
+}
+
+export function leerEntorno(variables: VariablesCrudas, opciones: OpcionesEntorno = {}): ResultadoEntorno {
   const motivos: string[] = []
   const supabaseUrl = (variables.EXPO_PUBLIC_SUPABASE_URL ?? '').trim()
   const supabaseAnonKey = (variables.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim()
   const apiBaseUrl = (variables.EXPO_PUBLIC_API_BASE_URL ?? '').trim()
   if (!supabaseUrl) motivos.push('Falta EXPO_PUBLIC_SUPABASE_URL.')
-  else if (!esUrlHttpsValida(supabaseUrl)) motivos.push('EXPO_PUBLIC_SUPABASE_URL debe ser una URL https sin credenciales.')
+  else if (!esUrlHttpsValida(supabaseUrl) &&
+    !(opciones.authIntegracionLocal && esUrlLocalIntegracionValida(supabaseUrl, opciones.plataforma))) {
+    motivos.push('EXPO_PUBLIC_SUPABASE_URL debe ser una URL https sin credenciales.')
+  }
   if (!supabaseAnonKey) motivos.push('Falta EXPO_PUBLIC_SUPABASE_ANON_KEY.')
   else if (esClavePrivada(supabaseAnonKey)) motivos.push('EXPO_PUBLIC_SUPABASE_ANON_KEY contiene una clave privilegiada: solo se admite la clave pública.')
   if (!apiBaseUrl) motivos.push('Falta EXPO_PUBLIC_API_BASE_URL.')
@@ -77,9 +99,12 @@ export function leerEntorno(variables: VariablesCrudas): ResultadoEntorno {
 
 /** Expo reemplaza `process.env.EXPO_PUBLIC_*` solo con acceso estático: no se puede iterar `process.env`. */
 export function entornoDelBundle(): ResultadoEntorno {
+  // Esta excepción se activa únicamente por app.config.ts en builds CI de integración.
+  // La URL además debe coincidir con el host y puerto del emulador/simulador esperado.
+  const integracionLocal = Constants.expoConfig?.extra?.eptAuthIntegration === true
   return leerEntorno({
     EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
     EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
     EXPO_PUBLIC_API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL,
-  })
+  }, { authIntegracionLocal: integracionLocal, plataforma: Platform.OS === 'android' ? 'android' : 'ios' })
 }

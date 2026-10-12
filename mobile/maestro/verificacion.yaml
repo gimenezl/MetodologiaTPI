@@ -1,35 +1,68 @@
 appId: org.educarparatransformar.app
-name: Verificación de la base móvil
+name: Acceso real por rol, persistencia y cierre
 ---
-# Los avisos son un único elemento accesible (título + mensaje): se comparan con expresión regular.
 - launchApp:
     clearState: true
-- assertVisible: 'Verificación de la base móvil'
-- assertVisible: '.*Pantalla de desarrollo.*'
-- assertVisible: 'Sesión del dispositivo'
-- takeScreenshot: 01-inicio
-- scrollUntilVisible:
-    element: 'Guardar y leer'
-- tapOn: 'Guardar y leer'
-- assertVisible: '.*Almacenamiento seguro: correcto.*'
-- takeScreenshot: 02-almacenamiento-correcto
+- assertVisible: 'Iniciar sesión'
+# Credenciales sintéticas aleatorias de una identidad inexistente: el mensaje no debe revelar el resultado de Auth.
 - tapOn:
-    id: 'campo-tamano'
-- eraseText: 5
-- inputText: '0'
-# El teclado numérico de iOS no tiene tecla de acción ni responde a hideKeyboard: se usa «Done» de la barra.
-- runFlow:
-    when:
-      platform: iOS
-    commands:
-      - tapOn: 'Done'
-- runFlow:
-    when:
-      platform: Android
-    commands:
-      - hideKeyboard
-- scrollUntilVisible:
-    element: 'Guardar y leer'
-- tapOn: 'Guardar y leer'
-- assertVisible: 'Ingresá un tamaño entre 1 y 32 KB.'
-- takeScreenshot: 03-validacion
+    id: 'correo'
+- inputText: ${MAESTRO_INVALIDO_EMAIL}
+- tapOn:
+    id: 'contrasena'
+- inputText: ${MAESTRO_INVALIDO_PASSWORD}
+- tapOn: 'Ingresar'
+- assertVisible: '.*No se pudo iniciar sesión.*Revisá el correo y la contraseña.*'
+- stopApp
+- launchApp:
+    clearState: true
+
+# PADRE: login JWT real, sesión persistida entre procesos y cierre local.
+- tapOn:
+    id: 'correo'
+- inputText: ${MAESTRO_PADRE_EMAIL}
+- tapOn:
+    id: 'contrasena'
+- inputText: ${MAESTRO_PADRE_PASSWORD}
+- tapOn: 'Ingresar'
+- assertVisible: 'Acceso para familias'
+- assertVisible: 'Hijos vinculados'
+- assertVisible: 'Legajo:'
+- stopApp
+- launchApp:
+    clearState: false
+- assertVisible: 'Acceso para familias'
+- tapOn: 'Cerrar sesión'
+- assertVisible: 'Iniciar sesión'
+
+# ESTUDIANTE: el acceso corresponde a su rol de base, no al user_metadata editable.
+- tapOn:
+    id: 'correo'
+- inputText: ${MAESTRO_ESTUDIANTE_EMAIL}
+- tapOn:
+    id: 'contrasena'
+- inputText: ${MAESTRO_ESTUDIANTE_PASSWORD}
+- tapOn: 'Ingresar'
+- assertVisible: 'Acceso para estudiantes'
+- assertVisible: 'Mi información académica'
+- assertVisible: 'Legajo:'
+- tapOn: 'Cerrar sesión'
+- assertVisible: 'Iniciar sesión'
+
+# DOCENTE: rol autenticado pero móvil no soportado, con orientación web y sin menú móvil.
+- tapOn:
+    id: 'correo'
+- inputText: ${MAESTRO_DOCENTE_EMAIL}
+- tapOn:
+    id: 'contrasena'
+- inputText: ${MAESTRO_DOCENTE_PASSWORD}
+- tapOn: 'Ingresar'
+- assertVisible: 'Continuá desde el sistema web'
+- assertVisible: '.*Esta cuenta usa el sistema web.*'
+- tapOn: 'Cerrar sesión'
+- assertVisible: 'Iniciar sesión'
+
+- stopApp
+- launchApp:
+    clearState: false
+- assertVisible: 'Iniciar sesión'

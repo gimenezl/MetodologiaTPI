@@ -106,7 +106,7 @@ test('EPT-102: el bloque del gate se ejecuta con bash -e y falla ante cualquier 
   assert.ok(inicio > 0 && fin > inicio)
   const bloque = yml.slice(inicio, fin).split('\n').map(l => l.replace(/^ {10}/u, '')).join('\n')
   const correr = env => spawnSync('bash', ['-e', '-c', bloque], { env: { PATH: process.env.PATH, ...env }, encoding: 'utf8' }).status
-  const ok = { PLAN_MOBILE: 'true', MOBILE: 'success', ANDROID: 'success', IOS: 'success' }
+  const ok = { PLAN: 'success', PLAN_MOBILE: 'true', MOBILE: 'success', ANDROID: 'success', IOS: 'success' }
   assert.equal(correr(ok), 0)
   for (const clave of ['MOBILE', 'ANDROID', 'IOS']) {
     for (const valor of ['failure', 'cancelled', 'skipped']) assert.notEqual(correr({ ...ok, [clave]: valor }), 0, `${clave}=${valor} debe fallar`)
