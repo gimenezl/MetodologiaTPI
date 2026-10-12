@@ -90,7 +90,7 @@ function preparar(plataformaObjetivo) {
 
   const migrationNames = execFileSync('node', ['-e', "const fs=require('node:fs');process.stdout.write(String(fs.readdirSync(process.argv[1]).filter(f=>f.endsWith('.sql')).length))", join(destino, 'migrations')], { encoding: 'utf8' })
   exigir(Number(migrationNames) > 0, 'El stack efímero no tiene migraciones.')
-  cli(['start', '--workdir', workdir, '--exclude', 'studio,logflare,vector,analytics,imgproxy,storage,realtime,edge-runtime'], {
+  cli(['start', '--workdir', workdir, '--exclude', 'studio,logflare,vector,imgproxy,storage-api,realtime,edge-runtime,postgres-meta'], {
     diagnosticFile: plataformaObjetivo === 'ios' ? process.env.EPT_MOBILE_SUPABASE_DIAGNOSTICS_FILE : undefined,
   })
 
