@@ -262,11 +262,16 @@ jobs:
           start=$(date +%s)
           workspace=$(ls -d *.xcworkspace | head -n 1)
           scheme="${workspace%.xcworkspace}"
-          xcodebuild -workspace "$workspace" -scheme "$scheme" -configuration Release \
+          if ! xcodebuild -workspace "$workspace" -scheme "$scheme" -configuration Release \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/derived" \
             CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES DEVELOPMENT_TEAM= build \
-            | tee "$RUNNER_TEMP/xcodebuild.log" | tail -n 40
+            > "$RUNNER_TEMP/xcodebuild.log" 2>&1; then
+            # Keep successful builds concise; on failure expose enough script/compiler context to diagnose it.
+            sed "s#${EXPO_PUBLIC_SUPABASE_ANON_KEY}#[REDACTED]#g" "$RUNNER_TEMP/xcodebuild.log" | tail -n 160
+            exit 1
+          fi
+          tail -n 40 "$RUNNER_TEMP/xcodebuild.log"
           echo "duracion_build_segundos=$(( $(date +%s) - start ))" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Localizar aplicación
         id: app

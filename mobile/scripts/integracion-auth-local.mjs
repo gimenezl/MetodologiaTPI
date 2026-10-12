@@ -92,6 +92,7 @@ async function crearActor(rol, { nombre = 'Prueba', userRole = 'PERSONAL', legaj
   assert.equal(typeof created?.id, 'string', 'Auth no devolvió el campo raíz id esperado.')
   assert.match(created.id, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu, 'Auth devolvió un id con formato inesperado.')
   const actor = { id: created.id, email, password, rol }
+  actor.legajoNro = alta.legajo_nro
   actors.push(actor)
   const profiles = await restAdmin(`perfiles?select=id&user_id=eq.${actor.id}`, 'GET')
   assert.equal(profiles?.length, 1, `El perfil transaccional no se creó para el rol ${rol}.`)
@@ -191,6 +192,11 @@ async function ejecutar() {
     token: padreSession.access_token,
   }), [200], 'Vínculos de PADRE bajo RLS')
   assert.deepEqual(vinculosA.map(row => row.hijo_id), [estudianteA.profileId])
+  const alumnosAcademicosPadre = exigirStatus(await respuesta('/rest/v1/alumnos_academicos?select=id,legajo_nro', {
+    token: padreSession.access_token,
+  }), [200], 'Vista académica de PADRE bajo RLS')
+  assert.deepEqual(alumnosAcademicosPadre, [{ id: estudianteA.profileId, legajo_nro: estudianteA.legajoNro }],
+    'PADRE debe consultar en alumnos_academicos solo el legajo de su hijo vinculado.')
 
   const padreBSesion = await iniciar(padreB)
   const visibleFamiliaB = await idsVisibles({ ...padreB, ...padreBSesion })

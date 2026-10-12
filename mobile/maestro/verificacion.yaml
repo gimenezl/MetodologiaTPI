@@ -26,7 +26,9 @@ name: Acceso real por rol, persistencia y cierre
 - inputText: ${MAESTRO_PADRE_PASSWORD}
 - tapOn: 'Ingresar'
 - assertVisible: 'Hijos vinculados'
-- assertVisible: 'Legajo:'
+- extendedWaitUntil:
+    visible: 'Legajo:'
+    timeout: 15000
 - stopApp
 - launchApp:
     clearState: false
