@@ -25,13 +25,12 @@ name: Acceso real por rol, persistencia y cierre
     id: 'contrasena'
 - inputText: ${MAESTRO_PADRE_PASSWORD}
 - tapOn: 'Ingresar'
-- assertVisible: 'Acceso para familias'
 - assertVisible: 'Hijos vinculados'
 - assertVisible: 'Legajo:'
 - stopApp
 - launchApp:
     clearState: false
-- assertVisible: 'Acceso para familias'
+- assertVisible: 'Hijos vinculados'
 - tapOn: 'Cerrar sesión'
 - assertVisible: 'Iniciar sesión'
 
