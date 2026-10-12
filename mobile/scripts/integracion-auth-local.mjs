@@ -6,6 +6,7 @@ import { randomBytes } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { esperarBearerExpirado, mensajeFalloEtapaAuth, validarLineaBaseExpiracion } from './integracion-auth-utils.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const workdir = process.env.EPT_MOBILE_SUPABASE_WORKDIR
@@ -30,9 +31,10 @@ function runStatus() {
 }
 
 let local
-const timeoutSignal = () => AbortSignal.timeout(safeTimeout)
+let etapaActual = 'estadoStack'
+const timeoutSignal = timeoutMs => AbortSignal.timeout(timeoutMs)
 
-async function respuesta(path, { key = local.anon, token, method = 'GET', body, prefer } = {}) {
+async function respuesta(path, { key = local.anon, token, method = 'GET', body, prefer, timeoutMs = safeTimeout } = {}) {
   const headers = { apikey: key }
   if (token) headers.authorization = `Bearer ${token}`
   if (body !== undefined) headers['content-type'] = 'application/json'
@@ -40,7 +42,7 @@ async function respuesta(path, { key = local.anon, token, method = 'GET', body, 
   let response
   try {
     response = await fetch(`${local.api}${path}`, {
-      method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: timeoutSignal(),
+      method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: timeoutSignal(timeoutMs),
     })
   } catch {
     throw new Error('No se pudo completar una petición al stack local de integración.')
@@ -136,6 +138,7 @@ function ok(label) { console.log(`OK ${label}`) }
 async function ejecutar() {
   const rols = ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE', 'PERSONAL']
   const roleActors = {}
+  etapaActual = 'fixtures'
   for (const rol of rols) {
     roleActors[rol] = await crearActor(rol, { userRole: rol, legajo: rol === 'ESTUDIANTE' })
   }
@@ -164,6 +167,7 @@ async function ejecutar() {
   await restAdmin(`perfiles?user_id=eq.${bloqueada.id}`, 'PATCH', { estado_acceso: 'BLOQUEADO' }, 'return=minimal')
   await restAdmin(`perfiles?user_id=eq.${sinPerfil.id}`, 'DELETE', undefined, 'return=minimal')
 
+  etapaActual = 'roles'
   for (const rol of rols) {
     const actor = roleActors[rol]
     const session = await comprobarAuthUsuario(actor, rol)
@@ -175,6 +179,7 @@ async function ejecutar() {
   assert.equal(await rpc({ ...padreA, ...sesionManipulada }, 'rol_actual'), 'PADRE')
   ok('Auth remoto, perfil, estado y rol de los cinco roles; user_metadata editable no altera el rol vigente.')
 
+  etapaActual = 'rlsPadres'
   const padreSession = await iniciar(padreA)
   const visibleFamiliaA = await idsVisibles({ ...padreA, ...padreSession })
   assert.ok(visibleFamiliaA.includes(padreA.profileId))
@@ -194,6 +199,7 @@ async function ejecutar() {
   assert.ok(!visibleFamiliaB.includes(estudianteSinVinculo.profileId))
   ok('Dos familias vinculadas y un estudiante no vinculado: los padres no cruzan el límite RLS.')
 
+  etapaActual = 'rlsEstudiante'
   const sesionEstudiante = await iniciar(estudianteA)
   const perfilesEstudiante = await idsVisibles({ ...estudianteA, ...sesionEstudiante })
   assert.deepEqual(perfilesEstudiante, [estudianteA.profileId])
@@ -208,6 +214,7 @@ async function ejecutar() {
   if (anon.status === 200) assert.deepEqual(anon.data, [])
   ok('ESTUDIANTE consulta solo su perfil/legajo; la API anónima no lee perfiles.')
 
+  etapaActual = 'estadosAcceso'
   const sesionBloqueada = await iniciar(bloqueada)
   assert.equal(await rpc({ ...bloqueada, ...sesionBloqueada }, 'mi_estado_acceso'), 'BLOQUEADO')
   assert.equal(await rpc({ ...bloqueada, ...sesionBloqueada }, 'rol_actual'), null)
@@ -223,6 +230,7 @@ async function ejecutar() {
   assert.deepEqual(await idsVisibles({ ...desconocido, ...sesionDesconocida }), [desconocido.profileId])
   ok('JWT bloqueado, perfil ausente y rol no soportado quedan autenticados pero sin autorización ampliada.')
 
+  etapaActual = 'refresh'
   const sesionRefreshable = await iniciar(padreA)
   const refrescada = exigirStatus(await respuesta('/auth/v1/token?grant_type=refresh_token', {
     method: 'POST', body: { refresh_token: sesionRefreshable.refresh_token },
@@ -233,12 +241,20 @@ async function ejecutar() {
   assert.equal(await rpc({ ...padreA, ...refrescada }, 'rol_actual'), 'PADRE')
   ok('Refresh token real emitido por GoTrue renueva la sesión sin cambiar el rol de base.')
 
+  etapaActual = 'expiracion'
   const sesionExpirable = await iniciar(expiracion)
   const [, carga] = sesionExpirable.access_token.split('.')
   const exp = JSON.parse(Buffer.from(carga, 'base64url').toString('utf8')).exp
-  const demora = Math.max(0, exp * 1000 - Date.now() + 15_000)
+  const identidadInicial = await respuesta('/auth/v1/user', {
+    token: sesionExpirable.access_token, timeoutMs: 5_000,
+  })
+  validarLineaBaseExpiracion(exp, identidadInicial.status)
+  assert.equal(identidadInicial.data?.id, expiracion.id, 'La sesión recién emitida no corresponde al fixture esperado.')
+  const demora = Math.max(0, exp * 1000 - Date.now())
   if (demora > 0) await new Promise(resolve => setTimeout(resolve, demora))
-  assert.equal((await respuesta('/auth/v1/user', { token: sesionExpirable.access_token })).status, 401)
+  const comprobacionesExpiracion = await esperarBearerExpirado(() => respuesta('/auth/v1/user', {
+    token: sesionExpirable.access_token, timeoutMs: 5_000,
+  }).then(result => result.status))
   const recuperada = exigirStatus(await respuesta('/auth/v1/token?grant_type=refresh_token', {
     method: 'POST', body: { refresh_token: sesionExpirable.refresh_token },
   }), [200], 'Refresh de sesión después de expirar access token')
@@ -249,8 +265,9 @@ async function ejecutar() {
   assert.ok([400, 401].includes((await respuesta('/auth/v1/token?grant_type=refresh_token', {
     method: 'POST', body: { refresh_token: recuperada.refresh_token },
   })).status), 'El refresh token revocado volvió a emitir sesión.')
-  ok('Access token expirado falla; un refresh válido lo renueva y logout global revoca el refresh token.')
+  ok(`La identidad rechazó el access token tras ${comprobacionesExpiracion} comprobaciones; refresh válido y logout global revocan la sesión.`)
 
+  etapaActual = 'exportacion'
   const githubEnv = process.env.GITHUB_ENV
   assert.ok(githubEnv, 'Las credenciales efímeras solo se exportan a un runner GitHub.')
   const actorMaestro = [
@@ -268,12 +285,11 @@ async function ejecutar() {
 
 try {
   assert.ok(workdir, 'Falta el identificador del Supabase efímero local.')
+  etapaActual = 'estadoStack'
   local = runStatus()
   await ejecutar()
-} catch (error) {
+} catch (_error) {
   // No imprimir objetos de proveedor ni trazas: pueden incluir credenciales o material JWT.
-  console.error(error instanceof Error && error.name === 'AssertionError'
-    ? 'Falló una comprobación funcional de Auth/RLS local.'
-    : 'Falló la integración Auth/RLS local.')
+  console.error(mensajeFalloEtapaAuth(etapaActual))
   process.exitCode = 1
 }
