@@ -257,7 +257,9 @@ async function ejecutar() {
   etapaActual = 'sondeoExp'
   const comprobacionesExpiracion = await esperarBearerExpirado(() => respuesta('/auth/v1/user', {
     token: sesionExpirable.access_token, timeoutMs: 5_000,
-  }).then(result => result.status))
+  }).then(result => result.status), {
+    registrarIntento: ({ intento, estado }) => console.log(`Sondeo de expiración: intento ${intento}, estado HTTP ${estado ?? 'desconocido'}.`),
+  })
   etapaActual = 'refreshExpirado'
   const recuperada = exigirStatus(await respuesta('/auth/v1/token?grant_type=refresh_token', {
     method: 'POST', body: { refresh_token: sesionExpirable.refresh_token },
