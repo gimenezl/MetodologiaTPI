@@ -215,6 +215,7 @@ jobs:
           path: |
             ${{ steps.apk.outputs.ruta }}
             ${{ runner.temp }}/evidencia-movil-android/android-version.txt
+            ${{ runner.temp }}/evidencia-movil-android/maestro-android/
           if-no-files-found: warn
           retention-days: 14
       - name: Detener el stack local de pruebas
