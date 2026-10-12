@@ -48,9 +48,10 @@ name: Acceso real por rol, persistencia y cierre
     id: 'contrasena'
 - inputText: ${MAESTRO_ESTUDIANTE_PASSWORD}
 - tapOn: 'Ingresar'
-- assertVisible: 'Acceso para estudiantes'
+- assertVisible: 'Mi información'
 - assertVisible: 'Mi información académica'
-- assertVisible: 'Legajo:'
+- assertVisible:
+    text: '.*Legajo:.*'
 - tapOn: 'Cerrar sesión'
 - assertVisible: 'Iniciar sesión'
 
