@@ -185,7 +185,7 @@ test('falla cerrado ante startsWith ajeno, sin rama o con receptor secreto', () 
   assert.equal(contieneClaveSecretaHermes(llamada('fetchWithAuth', '    LoadConstString   r9, "sb_secret_fragment"')), true)
 })
 
-test('espera mediante sondeo acotado hasta que Auth rechaza el bearer expirado', async () => {
+test('espera mediante sondeo acotado hasta que Auth deniega el bearer expirado', async () => {
   const estados = [200, 200, 401]
   const pausas = []
   const telemetry = []
@@ -202,6 +202,15 @@ test('espera mediante sondeo acotado hasta que Auth rechaza el bearer expirado',
     { intento: 2, estado: 200 },
     { intento: 3, estado: 401 },
   ])
+})
+
+test('acepta 403 como denegación del bearer expirado y conserva el estado en telemetría', async () => {
+  const telemetry = []
+  const intentos = await esperarBearerExpirado(async () => 403, {
+    registrarIntento: evento => telemetry.push(evento),
+  })
+  assert.equal(intentos, 1)
+  assert.deepEqual(telemetry, [{ intento: 1, estado: 403 }])
 })
 
 test('el sondeo de expiración termina al alcanzar el límite y no revela datos', async () => {

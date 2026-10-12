@@ -49,7 +49,7 @@ export async function esperarBearerExpirado(consultarEstado, {
         // Diagnostics must not alter the authorization check or expose callback failures.
       }
     }
-    if (estado === 401) return intento
+    if (estado === 401 || estado === 403) return intento
     if (estado !== 200) throw new Error('El endpoint de identidad devolvió un estado inesperado al comprobar la expiración.')
     if (intento < limiteIntentos) await pausar(intervaloMs)
   }
