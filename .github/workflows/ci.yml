@@ -345,9 +345,26 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
-      - run: python3 scripts/ci/run-stage.test.py
+      - name: Conservar diagnóstico de pruebas Linux
+        run: |
+          echo "EPT_STAGE_LOG_DIR=$RUNNER_TEMP/evidencia-process-linux/stages" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/evidencia-process-linux/stages"
+      - name: Supervisión POSIX con evidencia persistente
+        run: |
+          set -o pipefail
+          python3 scripts/ci/run-stage.test.py 2>&1 | tee "$EPT_STAGE_LOG_DIR/process-tests-redacted.log"
       - run: node --test mobile/scripts/stack-isolation.test.mjs
       - run: node --test --test-name-pattern='EPT-102|diagnóstico' scripts/ci/impact.test.mjs
+      - name: Sanear evidencia Linux
+        if: always()
+        run: python3 scripts/ci/run-stage.py --sanitize-directory "$RUNNER_TEMP/evidencia-process-linux"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: diagnostico-procesos-linux-${{ github.sha }}
+          path: ${{ runner.temp }}/evidencia-process-linux/
+          if-no-files-found: warn
+          retention-days: 14
   ios-infrastructure-diagnostic:
     name: CI / diagnóstico de infraestructura iOS
     needs: diagnostic-smoke
@@ -369,7 +386,10 @@ jobs:
           echo "EPT_STAGE_LOG_DIR=$RUNNER_TEMP/evidencia-ios-infra/stages" >> "$GITHUB_ENV"
           printf 'head=%s\nmerge_ref=%s\n' '${{ github.event.pull_request.head.sha }}' '${{ github.sha }}' >> "$GITHUB_STEP_SUMMARY"
       - name: Probar supervisión POSIX también en macOS
-        run: python3 scripts/ci/run-stage.test.py
+        run: |
+          mkdir -p "$EPT_STAGE_LOG_DIR"
+          set -o pipefail
+          python3 scripts/ci/run-stage.test.py 2>&1 | tee "$EPT_STAGE_LOG_DIR/process-tests-redacted.log"
       - name: Preparar Docker efímero
         run: bash mobile/scripts/preparar-docker-macos.sh
       - name: CLI aislada y fijada

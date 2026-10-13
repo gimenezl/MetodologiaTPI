@@ -26,7 +26,21 @@ def redact(text, preserve_structure=False):
     return "[REDACTED_SENSITIVE_LINE]" if not preserve_structure and re.search(r"(?:secret|token|password|credential|anon.key|service.role(?:.key)?|authorization)\s*[\"']?\s*[:=]", text, re.I) else text
 
 
-def terminate_group(pid):
+def group_has_live_members(pid):
+    # XNU can return EPERM for zombie-only groups; verify states, not permissions.
+    result = subprocess.run(["ps", "-axo", "pgid=,stat="], capture_output=True, text=True, timeout=2)
+    if result.returncode:
+        raise RuntimeError("Owned group state unavailable")
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) != 2 or not fields[0].isdigit():
+            raise RuntimeError("Owned group state invalid")
+        if int(fields[0]) == pid and not fields[1].startswith("Z"):
+            return True
+    return False
+
+
+def terminate_group(pid, emit=lambda _message: None):
     # Always address the original group, including when its leader already exited.
     # A nested supervisor must KILL its own group before an ancestor's 3s TERM grace ends.
     nested = int(os.environ.get("EPT_STAGE_DEPTH", "0")) > 0
@@ -35,13 +49,28 @@ def terminate_group(pid):
             os.killpg(pid, sig)
         except ProcessLookupError:
             return
+        except PermissionError:
+            emit(f"owned group signal denied signal={sig.name}")
+            if sig == signal.SIGTERM:
+                continue  # Still attempt the bounded KILL; do not call the group gone.
+            if group_has_live_members(pid):
+                raise
+            return
         until = time.monotonic() + grace
         while time.monotonic() < until:
             try:
                 os.killpg(pid, 0)
             except ProcessLookupError:
                 return
+            except PermissionError:
+                # An inconclusive TERM probe cannot stop cleanup before KILL.
+                if sig == signal.SIGTERM:
+                    break
+                if not group_has_live_members(pid):
+                    return
             time.sleep(.05)
+    if group_has_live_members(pid):
+        raise RuntimeError("Owned group still has live members after KILL")
 
 
 def main():
@@ -141,7 +170,11 @@ def main():
                     emit("container-readiness probe unavailable")
         time.sleep(.1)
     # Clean remaining descendants even if the leader failed/exited before the deadline.
-    terminate_group(child.pid)
+    try:
+        terminate_group(child.pid, emit)
+    except (OSError, RuntimeError, subprocess.TimeoutExpired):
+        emit(f"stage={args.stage} owned group cleanup failed or could not be verified")
+        return 125
     try:
         child.wait(timeout=2)
     except subprocess.TimeoutExpired:

@@ -35,6 +35,8 @@ Checks rápidos: `python3 scripts/ci/run-stage.test.py` en **Linux y macOS** (pa
 
 **Corrección posterior a revisión:** se admiten como máximo **dos niveles de supervisor** (etapa exterior y CLI/status interior). Un tercer nivel se rechaza antes de crear proceso/sesión; no comparte una gracia de cleanup que pueda abandonar otro grupo. La topología actual de los scripts cumple ese límite. La redacción reconoce las familias `sb_secret_` y `sb_publishable_` aunque no estén en variables de entorno, tanto en salida en vivo como en artifacts JSON/tablas. La suite actual contiene nueve pruebas: cuatro aprobadas en Windows y **cinco POSIX omitidas**, pendientes de ejecución Linux/macOS; esta cuenta reemplaza la fotografía anterior de tres casos omitidos.
 
+Tras el primer diagnóstico, Linux aprobó las nueve pruebas; macOS detectó EPERM en el sondeo `killpg(..., 0)` y **no llegó a iniciar infraestructura**. La corrección trata ese sondeo como inconcluso, conserva KILL y verifica únicamente PGID/estados del grupo propio. No confunde zombie con proceso vivo ni oculta una denegación de TERM/KILL con miembros vivos: cleanup inaccesible o incompleto falla con código 125. La suite agrega tres regresiones inyectadas (12 pruebas; siete aprobadas y cinco POSIX omitidas en Windows). Los artifacts de diagnóstico ahora incluyen los logs saneados de fixtures y el resumen del smoke incluso al fallar. Resultados, SHA y fundamento Apple: [evidencia EPT-105](evidence/EPT-105.md#primer-diagnóstico-y-corrección-específica-de-eperm).
+
 | Comprobación | Alcance real | Límite del job |
 |---|---|---|
 | Rápida | Tipos, lint, puras, build, smoke público Chromium | 8 min |
