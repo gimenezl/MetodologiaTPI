@@ -100,6 +100,7 @@ test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   assert.match(yml, /mobile-android:\n    name: CI \/ móvil Android\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
   assert.match(yml, /mobile-ios:\n    name: CI \/ móvil iOS\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
   assert.match(yml, /runs-on: macos-26-intel/u)
+  assert.match(yml, /timeout-minutes: 120/u)
   const prepararDockerMacos = readFileSync('mobile/scripts/preparar-docker-macos.sh', 'utf8').replace(/\r\n/gu, '\n')
   assert.match(prepararDockerMacos, /^brew install colima docker qemu$/mu)
   assert.match(prepararDockerMacos, /^colima start --vm-type qemu --mount-type 9p\b/mu)

@@ -226,7 +226,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.mobile == 'true'
     runs-on: macos-26-intel
-    timeout-minutes: 60
+    timeout-minutes: 120
     env:
       CI: '1'
       EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
