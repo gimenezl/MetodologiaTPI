@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
+mode="${1:-web}"
+case "$mode" in web|--isolated) ;; *) echo 'Modo instalador desconocido' >&2; exit 1 ;; esac
 npm install --prefix "$RUNNER_TEMP/supabase-cli" --no-save --package-lock=false supabase@2.117.0
+entry="$RUNNER_TEMP/supabase-cli/node_modules/supabase/dist/supabase.js"
+node "$entry" --version | grep -Fx '2.117.0'
+if [ "$mode" = --isolated ]; then
+  printf 'EPT_SUPABASE_CLI_ENTRY=%s\n' "$entry" >> "${GITHUB_ENV:?}"
+  node "$entry" start --help
+  exit 0
+fi
 ln -s "$RUNNER_TEMP/supabase-cli/node_modules/supabase" node_modules/supabase
 ln -s "$RUNNER_TEMP/supabase-cli/node_modules/.bin/supabase" node_modules/.bin/supabase
 git diff --exit-code -- package.json package-lock.json

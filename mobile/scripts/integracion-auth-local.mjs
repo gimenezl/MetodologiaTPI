@@ -14,7 +14,8 @@ const safeTimeout = 15_000
 const localOnly = new Set(['127.0.0.1', 'localhost'])
 
 function runStatus() {
-  const stdout = execFileSync('npx', ['supabase', 'status', '-o', 'env', '--workdir', workdir], {
+  assert.ok(process.env.EPT_SUPABASE_CLI_ENTRY, 'Falta la CLI Supabase aislada.')
+  const stdout = execFileSync('python3', [resolve(root, 'scripts/ci/run-stage.py'), '--stage', 'auth-status', '--seconds', '30', '--capture', '--', process.execPath, process.env.EPT_SUPABASE_CLI_ENTRY, 'status', '-o', 'env', '--workdir', workdir], {
     cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
   })
   const env = {}

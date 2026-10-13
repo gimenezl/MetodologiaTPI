@@ -1,7 +1,7 @@
 // Crea un proyecto Supabase efímero aislado para la integración móvil.
 // Solo exporta la URL y la clave pública; la SERVICE_ROLE_KEY nunca abandona este proceso.
-import { execFileSync, spawnSync } from 'node:child_process'
-import { appendFileSync, chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { appendFileSync, chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
@@ -19,7 +19,7 @@ function redactedCliOutput(resultado) {
   let salida = [resultado.stdout, resultado.stderr].filter((valor) => typeof valor === 'string' && valor.length > 0).join('\n')
   const nombresDeRuta = /^(?:HOME|USERPROFILE|RUNNER_TEMP|RUNNER_WORKSPACE|GITHUB_WORKSPACE|TMPDIR|TMP|TEMP|EPT_MOBILE_SUPABASE_WORKDIR)$/iu
   const valoresSensibles = Object.entries(process.env)
-    .filter(([nombre, valor]) => valor && (nombresDeRuta.test(nombre) || /(?:SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL|AUTH|URL)/iu.test(nombre)))
+    .filter(([nombre, valor]) => valor && (nombresDeRuta.test(nombre) || /(?:SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL|EMAIL|AUTHORIZATION)(?:$|_)|_URL$/iu.test(nombre)))
     .map(([, valor]) => valor)
     .sort((a, b) => b.length - a.length)
   for (const valor of valoresSensibles) salida = salida.split(valor).join('[REDACTED]')
@@ -43,11 +43,14 @@ function conservarDiagnosticoSeguro(ruta, resultado) {
   chmodSync(ruta, 0o600)
 }
 
-function cli(argumentos, { timeout = 3_600_000, diagnosticFile } = {}) {
-  const resultado = spawnSync('npx', ['supabase', ...argumentos], {
-    cwd: raiz, encoding: 'utf8', timeout, windowsHide: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
+function cli(argumentos, { timeout = 240_000, diagnosticFile } = {}) {
+  const entry = process.env.EPT_SUPABASE_CLI_ENTRY
+  exigir(Boolean(entry), 'Falta la CLI Supabase aislada y fijada.')
+  const resultado = spawnSync('python3', [join(raiz, 'scripts/ci/run-stage.py'), '--stage', argumentos[0] === 'stop' ? 'cleanup-supabase' : `supabase-${argumentos[0]}`, '--seconds', String(timeout / 1000), ...(argumentos[0] === 'status' ? ['--capture'] : []), '--', process.execPath, entry, ...argumentos], {
+    cwd: raiz, encoding: 'utf8', windowsHide: true, maxBuffer: 4 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', argumentos[0] === 'status' ? 'pipe' : 'inherit'],
   })
+  // Only status returns credentials to memory. Start/stop diagnostics are already redacted by the supervisor.
   if (resultado.error || resultado.status !== 0) {
     if (diagnosticFile) conservarDiagnosticoSeguro(diagnosticFile, resultado)
     // La salida completa se conserva solo en el artifact temporal después de redactarla.
@@ -68,6 +71,7 @@ function entornoDeEstado() {
 
 function preparar(plataformaObjetivo) {
   exigir(plataformaObjetivo === 'android' || plataformaObjetivo === 'ios', 'Plataforma móvil desconocida.')
+  exigir(Boolean(process.env.GITHUB_RUN_ID && process.env.GITHUB_RUN_ATTEMPT), 'Falta el propietario del run de integración.')
   const source = join(raiz, 'supabase')
   const workdir = mkdtempSync(join(tmpdir(), 'ept105-supabase-'))
   const destino = join(workdir, 'supabase')
@@ -80,6 +84,7 @@ function preparar(plataformaObjetivo) {
   config = config.replace(/^enabled\s*=\s*true(?=\s*\n\s*# Specifies an ordered list of seed files)/mu, 'enabled = false')
   config = config.replace(/^sql_paths\s*=\s*\["\.\/seed\.sql"\]/mu, 'sql_paths = []')
   writeFileSync(join(destino, 'config.toml'), config, { mode: 0o600 })
+  writeFileSync(join(workdir, 'owner.json'), JSON.stringify({ run: process.env.GITHUB_RUN_ID, attempt: process.env.GITHUB_RUN_ATTEMPT }), { mode: 0o600 })
 
   // Registrar el workdir antes de arrancar servicios para que el step `always()` pueda
   // detener una startup parcial. El teardown valida el prefijo y el project_id antes de actuar.
@@ -88,9 +93,10 @@ function preparar(plataformaObjetivo) {
   exigir(githubEnv, 'La integración local solo puede preparar variables en un runner de GitHub Actions.')
   appendFileSync(githubEnv, `EPT_MOBILE_SUPABASE_WORKDIR=${workdir}\n`, { mode: 0o600 })
 
-  const migrationNames = execFileSync('node', ['-e', "const fs=require('node:fs');process.stdout.write(String(fs.readdirSync(process.argv[1]).filter(f=>f.endsWith('.sql')).length))", join(destino, 'migrations')], { encoding: 'utf8' })
+  const migrationNames = readdirSync(join(destino, 'migrations')).filter(file => file.endsWith('.sql')).length
   exigir(Number(migrationNames) > 0, 'El stack efímero no tiene migraciones.')
-  cli(['start', '--workdir', workdir, '--exclude', 'studio,logflare,vector,imgproxy,storage-api,realtime,edge-runtime,postgres-meta'], {
+  cli(['start', '--workdir', workdir, '--exclude', 'studio,logflare,vector,imgproxy,storage-api,realtime,edge-runtime,postgres-meta,mailpit,supavisor'], {
+    timeout: 240_000,
     diagnosticFile: plataformaObjetivo === 'ios' ? process.env.EPT_MOBILE_SUPABASE_DIAGNOSTICS_FILE : undefined,
   })
 
@@ -115,10 +121,13 @@ try {
     const directorioPropio = Boolean(workdir) && resolve(workdir) === workdir &&
       resolve(workdir).startsWith(`${resolve(tmpdir())}${process.platform === 'win32' ? '\\' : '/'}`) &&
       workdir.split(/[\\/]/u).at(-1)?.startsWith('ept105-supabase-')
-    const esProyectoPropio = directorioPropio && existsSync(configPath) &&
+    const marker = workdir ? join(workdir, 'owner.json') : ''
+    const owner = directorioPropio && existsSync(marker) ? JSON.parse(readFileSync(marker, 'utf8')) : {}
+    const esProyectoPropio = directorioPropio && Boolean(process.env.GITHUB_RUN_ID) &&
+      owner.run === process.env.GITHUB_RUN_ID && owner.attempt === process.env.GITHUB_RUN_ATTEMPT && existsSync(configPath) &&
       /^project_id\s*=\s*"ept105-[a-f0-9]{12}"/mu.test(readFileSync(configPath, 'utf8'))
     if (esProyectoPropio) {
-      cli(['stop', '--workdir', workdir, '--no-backup'], { timeout: 120_000 })
+      cli(['stop', '--workdir', workdir, '--no-backup'], { timeout: 60_000 })
     }
     console.log('Stack descartable Supabase detenido.')
   } else if (accion === 'status') {

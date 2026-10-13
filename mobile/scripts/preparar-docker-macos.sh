@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-# Supabase local exige Docker. El runner iOS usa Colima si no recibe un daemon.
-if docker info >/dev/null 2>&1; then
+stage() { python3 scripts/ci/run-stage.py --stage "$1" --seconds "$2" -- "${@:3}"; }
+if stage docker-status 15 docker info --format '{{.Architecture}} {{.NCPU}} {{.MemTotal}}'; then
   echo 'Docker local disponible para Supabase efímero.'
   exit 0
 fi
-
-brew install colima docker qemu
-colima start --vm-type qemu --mount-type 9p --cpu 4 --memory 6 --disk 50
-docker_host="unix://${HOME}/.colima/default/docker.sock"
-export DOCKER_HOST="$docker_host"
-docker info >/dev/null
-printf 'DOCKER_HOST=%s\n' "$docker_host" >> "$GITHUB_ENV"
-echo 'Daemon Docker efímero disponible para el stack local de pruebas.'
+# Preserve the proven Intel/QEMU route; VZ is unavailable on the audited runner.
+stage docker-install 120 brew install colima docker qemu
+PROFILE="ept105-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
+printf 'EPT_COLIMA_PROFILE=%s\n' "$PROFILE" >> "${GITHUB_ENV:?}"
+stage docker-vm 300 colima start --profile "$PROFILE" --vm-type qemu --mount-type 9p --cpu 4 --memory 6 --disk 50
+export DOCKER_HOST="unix://${HOME}/.colima/${PROFILE}/docker.sock"
+stage docker-readiness 15 docker info --format '{{.Architecture}} {{.NCPU}} {{.MemTotal}}'
+printf 'DOCKER_HOST=%s\n' "$DOCKER_HOST" >> "$GITHUB_ENV"

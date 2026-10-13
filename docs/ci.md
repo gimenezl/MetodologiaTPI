@@ -2,6 +2,39 @@
 
 Cada PR comprueba tipos, lint, pruebas puras, build y cuatro recorridos públicos. Luego ejecuta contratos DB y UI focal **en paralelo**, si el registro de impacto los requiere. `CI / gate` siempre aparece; resultados faltantes, cancelados, fallidos o saltados indebidamente lo dejan rojo. No existe una matriz completa automática por cambios compartidos ni por push a main.
 
+## Presupuesto nativo EPT-105
+
+### Diagnóstico previo explícito, sin aprobación de entrega
+
+La etiqueta de PR **`ci:ios-infrastructure-diagnostic`** opta por una corrida acotada: primero supervisión/negativas en Ubuntu (3 minutos), después únicamente Docker, CLI, migraciones y Auth real en `macos-26-intel` (12 minutos, 10 operativos). No instala dependencias de la aplicación ni ejecuta Xcode/Maestro. Los jobs completos se omiten y **`CI / gate` falla explícitamente incluso si el diagnóstico aprueba**. No modifica branch protection ni permite cerrar Jira.
+
+Para el PR existente: aplicar la etiqueta antes del primer push del candidato revisado; `synchronize` ejecuta el workflow del merge ref nuevo. Tras inspeccionar los artifacts, retirar la etiqueta dispara `unlabeled` y ejecuta los checks completos del mismo candidato. No se depende de `workflow_dispatch` disponible en la rama predeterminada. Se mantienen los eventos normales `opened`, `synchronize`, `reopened` y push a main; se agregan `labeled`, `unlabeled`, `ready_for_review`. Las etiquetas deben aplicarse con una credencial humana autorizada: eventos producidos por `GITHUB_TOKEN` no son un mecanismo fiable para lanzar otra corrida. Fuente: [eventos GitHub Actions](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request).
+
+No repetir un diagnóstico que falla sin inspeccionar primero la evidencia. Registrar head y merge ref de cada corrida; un diagnóstico saludable no equivale a login nativo ni a aceptación. La etiqueta no se aplica ni se retira automáticamente desde CI.
+
+Android e iOS conservan build **y ejecución de login real** contra PostgreSQL/GoTrue/PostgREST/RLS; el gate exige SUCCESS de ambas plataformas. Los jobs tienen techo de 30 minutos y presupuesto operativo común de 28 minutos, con cleanup independiente. El objetivo de 20–25 minutos con caché requiere medición; no se garantiza para una ejecución fría.
+
+`scripts/ci/run-stage.py` crea un grupo POSIX por comando, transmite progreso saneado y cada 30s registra etapa, tiempo, arquitectura, carga, RSS/CPU de herramientas (sin argv/entorno) y disco disponible. En Supabase registra solo contenedores `ept105-`. Al vencer el deadline, recibir cancelación o quedar descendientes tras salir el líder, conserva diagnóstico y termina el grupo con TERM/KILL acotados; propaga códigos de fallo. Los daemons de servicio tienen teardown explícito: nunca se detiene el Colima por defecto ni un stack de otro run.
+
+| Etapa | Deadline propio |
+|---|---:|
+| Instalador Supabase aislado/fijado `2.117.0` | 90s |
+| Brew / VM QEMU / Docker info | 120s / 300s / 15s |
+| Supabase start / status | 240s / 30s |
+| Contratos Auth reales y fixtures | 210s |
+| npm iOS / prebuild+pods | 120s / 240s |
+| Xcode o Gradle | 720s |
+| simctl boot / bootstatus / install | 30s / 120s / 60s |
+| adb wait-for-device / install | 60s / 60s |
+| Maestro | 240s (driver iOS 120s) |
+| Supabase stop / Colima stop propio | 60s / 45s, fuera del presupuesto operativo |
+
+Se selecciona un UDID disponible en `macos-26-intel`; build de integración Release solo x86_64 y comprobación `lipo` antes de instalar. No cambia soporte productivo. La caché CocoaPods almacena descargas/repos, invalidada por OS, arquitectura, Xcode/SDK, configuración, lockfiles y plugins; no se cachean DerivedData/bundles, credenciales, sesiones ni fixtures. Los jobs móviles instalan la CLI aislada sin `npm ci` web; el modo web del instalador mantiene su verificación de lockfile. Los artifacts se redactan antes de subirlos y después del cleanup.
+
+Checks rápidos: `python3 scripts/ci/run-stage.test.py` en **Linux y macOS** (padre/nieto bloqueado, líder que sale antes, supervisores anidados, TERM/KILL y proceso ajeno intacto); `node --test mobile/scripts/stack-isolation.test.mjs` (stack ajeno y ownership de otro run); `node --test scripts/ci/impact.test.mjs` (incluye negativas del gate y rechazo incondicional del diagnóstico parcial). Windows omite explícitamente tres casos POSIX: no equivale a PASS nativo. El supervisor anidado completa TERM/KILL con una gracia menor que la del ancestro para no abandonar su grupo al morir el padre. Diagnóstico previo, causas históricas, SHA de head/merge ref, resultados medidos y rollback: [evidencia EPT-105](evidence/EPT-105.md). No se ejecuta la matriz completa web como rutina.
+
+**Corrección posterior a revisión:** se admiten como máximo **dos niveles de supervisor** (etapa exterior y CLI/status interior). Un tercer nivel se rechaza antes de crear proceso/sesión; no comparte una gracia de cleanup que pueda abandonar otro grupo. La topología actual de los scripts cumple ese límite. La redacción reconoce las familias `sb_secret_` y `sb_publishable_` aunque no estén en variables de entorno, tanto en salida en vivo como en artifacts JSON/tablas. La suite actual contiene nueve pruebas: cuatro aprobadas en Windows y **cinco POSIX omitidas**, pendientes de ejecución Linux/macOS; esta cuenta reemplaza la fotografía anterior de tres casos omitidos.
+
 | Comprobación | Alcance real | Límite del job |
 |---|---|---|
 | Rápida | Tipos, lint, puras, build, smoke público Chromium | 8 min |

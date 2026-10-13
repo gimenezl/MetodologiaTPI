@@ -100,11 +100,20 @@ test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   assert.match(yml, /mobile-android:\n    name: CI \/ móvil Android\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
   assert.match(yml, /mobile-ios:\n    name: CI \/ móvil iOS\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
   assert.match(yml, /runs-on: macos-26-intel/u)
-  assert.match(yml, /timeout-minutes: 120/u)
-  assert.match(yml, /MAESTRO_DRIVER_STARTUP_TIMEOUT: '300000'/u)
+  for (const native of ['mobile-android', 'mobile-ios']) {
+    const block = yml.slice(yml.indexOf(`  ${native}:`)).split(/\n  [a-z-]+:/u)[0]
+    const minutes = Number(/timeout-minutes: (\d+)/u.exec(block)?.[1])
+    assert.ok(minutes > 0 && minutes <= 30)
+    assert.match(block, /EPT_NATIVE_DEADLINE/u)
+    assert.match(block, /run-stage\.test\.py/u)
+    assert.match(block, /supabase-local\.mjs stop/u)
+  }
+  assert.match(readFileSync('mobile/scripts/compilar-ios.sh', 'utf8'), /ONLY_ACTIVE_ARCH=YES/u)
+  assert.match(yml, /MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'/u)
   const prepararDockerMacos = readFileSync('mobile/scripts/preparar-docker-macos.sh', 'utf8').replace(/\r\n/gu, '\n')
-  assert.match(prepararDockerMacos, /^brew install colima docker qemu$/mu)
-  assert.match(prepararDockerMacos, /^colima start --vm-type qemu --mount-type 9p\b/mu)
+  assert.match(prepararDockerMacos, /stage docker-install \d+ brew install/u)
+  assert.match(prepararDockerMacos, /--profile "\$PROFILE"/u)
+  assert.match(prepararDockerMacos, /stage docker-readiness/u)
 })
 test('EPT-102: el bloque del gate se ejecuta con bash -e y falla ante cualquier resultado móvil no exitoso', () => {
   const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
@@ -131,6 +140,34 @@ test('EPT-102: el paquete móvil no altera dependencias ni lockfile de Next', ()
   }
   assert.ok(JSON.parse(readFileSync('tsconfig.json', 'utf8')).exclude.includes('mobile'))
   assert.match(readFileSync('eslint.config.mjs', 'utf8'), /"mobile\/\*\*"/u)
+})
+
+test('diagnóstico iOS es opt-in, acotado y nunca aprueba entrega', () => {
+  const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
+  assert.match(yml, /types: \[opened, synchronize, reopened, labeled, unlabeled, ready_for_review\]/u)
+  assert.match(yml, /push:\n    branches: \[main\]/u)
+  const diagnostic = yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:')).split(/\n  [a-z-]+:/u)[0]
+  assert.match(diagnostic, /needs: diagnostic-smoke/u)
+  assert.match(diagnostic, /timeout-minutes: 12/u)
+  assert.match(diagnostic, /ci:ios-infrastructure-diagnostic/u)
+  assert.match(diagnostic, /supabase-local\.mjs start ios/u)
+  assert.match(diagnostic, /integracion-auth-local\.mjs/u)
+  assert.match(diagnostic, /if: always\(\)/u)
+  assert.match(diagnostic, /cleanup-colima/u)
+  assert.doesNotMatch(diagnostic, /expo prebuild|compilar-ios|ejecutar-ios|maestro test/u)
+  const smoke = yml.slice(yml.indexOf('  diagnostic-smoke:')).split(/\n  [a-z-]+:/u)[0]
+  assert.match(smoke, /timeout-minutes: 3/u)
+  assert.match(smoke, /run-stage\.test\.py/u)
+  const start = yml.indexOf('          if [ "$DIAGNOSTIC" = true ]; then')
+  const end = yml.indexOf('          test "$FAST" = success', start)
+  assert.ok(start > 0 && end > start)
+  const guard = yml.slice(start, end).split('\n').map(line => line.replace(/^ {10}/u, '')).join('\n')
+  for (const [value, success] of [['true', false], ['false', true]]) {
+    const result = spawnSync('bash', ['-e', '-c', guard], { env: { PATH: process.env.PATH, DIAGNOSTIC: value }, encoding: 'utf8', timeout: 5000 })
+    assert.equal(result.status === 0, success, result.stderr)
+  }
+  assert.throws(() => validateMobileWorkflow(yml.replace('            exit 1\n          fi\n          test "$FAST" = success', '          fi\n          test "$FAST" = success')))
+  assert.throws(() => validateMobileWorkflow(yml.replace("!(github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:ios-infrastructure-diagnostic'))", 'true')))
 })
 test('pure config and actual UI registry remain aligned, new tests block', () => {
   const config = readFileSync('playwright.pure.config.ts', 'utf8')
