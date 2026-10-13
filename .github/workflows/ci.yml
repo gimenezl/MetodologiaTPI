@@ -291,6 +291,8 @@ jobs:
       - name: Verificar Auth, roles, expiración y RLS con actores sintéticos
         run: node mobile/scripts/integracion-auth-local.mjs
       - name: Ejecutar en simulador iOS
+        env:
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: '300000'
         run: bash mobile/scripts/ejecutar-ios.sh "${{ steps.app.outputs.ruta }}"
       - name: Empaquetar aplicación
         if: always()
