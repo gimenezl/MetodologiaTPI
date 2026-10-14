@@ -25,7 +25,7 @@ class SimulatorOwnership(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.env = patch.dict(os.environ, {"RUNNER_TEMP": str(Path(self.tmp.name).resolve()), "GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "2"})
+        self.env = patch.dict(os.environ, {"RUNNER_TEMP": str(Path(self.tmp.name).resolve()), "GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "2", "EPT_IOS_DIAGNOSTIC_PHASE": "full"})
         self.env.start()
         self.addCleanup(self.env.stop)
         self.uid = patch.object(ios.os, "getuid", return_value=42, create=True)
@@ -369,13 +369,13 @@ class SimulatorOwnership(unittest.TestCase):
             calls.append((label, seconds, args, kwargs))
             return {'ios-toolchain-path': swift_path, 'ios-toolchain-xcode': 'Xcode 26.1.1\nBuild version 17B100', 'ios-toolchain-swift': 'Apple Swift version 6.2.1 (private-provider-text)'}[label]
         output = io.StringIO()
-        with patch.dict(os.environ, {'DEVELOPER_DIR': ios.PINNED_DEVELOPER_DIR}), patch.object(Path, 'is_dir', return_value=True), patch.object(ios, 'command', side_effect=command), redirect_stdout(output):
+        with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': 'full', 'DEVELOPER_DIR': ios.PINNED_DEVELOPER_DIR}), patch.object(Path, 'is_dir', return_value=True), patch.object(ios, 'command', side_effect=command), redirect_stdout(output):
             self.assertTrue(ios.toolchain_preflight()['selected'])
         self.assertEqual(calls[0][2], ('xcrun', '--find', 'swift'))
         self.assertTrue(all(c[1] == 5 and c[3]['capture'] is True for c in calls))
         for private in ('/Applications', 'private', 'Toolchains'):
             self.assertNotIn(private, output.getvalue())
-        with patch.dict(os.environ, {'DEVELOPER_DIR': ios.PINNED_DEVELOPER_DIR}), patch.object(Path, 'is_dir', return_value=True), patch.object(ios, 'command', return_value='/private/foreign/swift') as command:
+        with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': 'full', 'DEVELOPER_DIR': ios.PINNED_DEVELOPER_DIR}), patch.object(Path, 'is_dir', return_value=True), patch.object(ios, 'command', return_value='/private/foreign/swift') as command:
             with self.assertRaises(ios.InventoryContractError) as error: ios.toolchain_preflight()
             self.assertEqual(error.exception.reason_code, 'TOOLCHAIN_PATH')
             self.assertEqual(command.call_count, 1)
