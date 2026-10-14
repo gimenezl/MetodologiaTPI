@@ -208,8 +208,67 @@ class NativeSafety(unittest.TestCase):
         source = (HERE / 'native-backend.py').read_text(encoding='utf-8')
         self.assertLess(source.index("bounded('native-storage-migrations'"), source.index("bounded('native-project-migrations'"))
         self.assertIn('dist/scripts/migrate-call.js', source)
-        self.assertNotIn('CREATE TABLE', source)
+        for schema in ('storage', 'auth', 'public'):
+            self.assertNotIn(f'CREATE TABLE {schema}.', source)
         self.assertIn("if len(migrations) != 37", source)
+
+    def test_project_migrations_are_separate_atomic_files_and_preserve_bytes(self):
+        files = sorted((native.ROOT / 'supabase/migrations').glob('*.sql'))
+        before = {file: file.read_bytes() for file in files}
+        self.assertEqual(len(files), 37)
+        explicit = [file.name for file in files if not native.migration_uses_implicit_transaction(file)]
+        self.assertEqual(explicit, ['20260926154000_ept_58_privacidad_perfiles.sql', '20260926190000_ept_59_usuarios_permisos.sql'])
+        with patch.object(native.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run, redirect_stdout(io.StringIO()):
+            native.run_project_migrations('synthetic-psql', files)
+        self.assertEqual(run.call_count, 37)
+        for file, call in zip(files, run.call_args_list):
+            command = call.args[0]
+            self.assertEqual(command[-2:], ['-f', str(file)])
+            self.assertEqual(command.count('-f'), 1)
+            self.assertIn('ON_ERROR_STOP=1', command)
+            self.assertIn('AUTOCOMMIT=on', command)
+            self.assertEqual('--single-transaction' in command, file.name not in explicit)
+            self.assertEqual(file.read_bytes(), before[file])
+
+    def test_sql_failure_stops_later_files_and_propagates_exit(self):
+        files = [self.path / f'{number}.sql' for number in range(3)]
+        for file in files:
+            file.write_text('SELECT 1;', encoding='utf-8')
+        with patch.object(native.subprocess, 'run', side_effect=[subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 3)]) as run, redirect_stdout(io.StringIO()) as trace:
+            with self.assertRaises(native.MigrationFailure) as failure:
+                native.run_project_migrations('synthetic-psql', files)
+            self.assertEqual(failure.exception.code, 3)
+            self.assertEqual(run.call_count, 2)
+            self.assertIn('subsequent files not executed', trace.getvalue())
+
+    def test_unsupported_transaction_control_is_rejected_before_any_sql(self):
+        first = self.path / 'first.sql'
+        second = self.path / 'second.sql'
+        first.write_text('SELECT 1;', encoding='utf-8')
+        with patch.object(native.subprocess, 'run') as run:
+            for body in ('BEGIN; SELECT 1;', 'COMMIT;', 'SELECT 1; BEGIN; SELECT 2; COMMIT;', 'BEGIN WORK; SELECT 1; COMMIT;', 'BEGIN; SELECT 1; ROLLBACK;', 'VACUUM;', 'CREATE INDEX CONCURRENTLY x ON y(z);'):
+                second.write_text(body, encoding='utf-8')
+                with self.assertRaisesRegex(RuntimeError, 'Unsupported'):
+                    native.run_project_migrations('synthetic-psql', [first, second])
+            run.assert_not_called()
+
+    def test_transaction_probe_checks_rollback_readback_and_rejects_wrong_error(self):
+        def result(code=0, help=False):
+            return subprocess.CompletedProcess([], code, stdout='--single-transaction' if help else '')
+        with patch.object(native.subprocess, 'run', side_effect=[result(help=True), result(), result(), result(3), result(), result(3), result()]) as run, redirect_stdout(io.StringIO()) as trace:
+            native.prove_transaction_contract(self.path, 'synthetic-psql')
+            self.assertEqual(run.call_count, 7)
+            self.assertIn('TEMP ON COMMIT lifetime passed', trace.getvalue())
+            self.assertIn('explicit rollback readback passed', trace.getvalue())
+            self.assertIn('ON COMMIT DROP', (self.path / 'transaction-positive.sql').read_text(encoding='utf-8'))
+            self.assertIn('SELECT 1/0', (self.path / 'transaction-rollback.sql').read_text(encoding='utf-8'))
+        with patch.object(native.subprocess, 'run', side_effect=[result(help=True), result(), result(), result(3), result(3)]), redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(native.MigrationFailure, 'rollback-readback'):
+                native.prove_transaction_contract(self.path, 'synthetic-psql')
+        with patch.object(native.subprocess, 'run', side_effect=[result(help=True), result(), result(), result(2)]), redirect_stdout(io.StringIO()):
+            with self.assertRaises(native.MigrationFailure) as failure:
+                native.prove_transaction_contract(self.path, 'synthetic-psql')
+            self.assertEqual(failure.exception.code, 2)
 
     def test_redactor_knows_generated_secrets_and_jwt(self):
         token = native.jwt('synthetic-secret', 'service_role')

@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import platform
+import re
 import secrets
 import signal
 import socket
@@ -330,6 +331,88 @@ def publish_public_environment(config):
         output.write(f"EXPO_PUBLIC_SUPABASE_ANON_KEY={config['status']['ANON_KEY']}\n")
 
 
+class MigrationFailure(RuntimeError):
+    def __init__(self, filename, code):
+        self.code = code
+        super().__init__(f'Project migration failed: {filename}; exit={code}')
+
+
+def migration_uses_implicit_transaction(file):
+    text = file.read_text(encoding='utf-8')
+    # Inspect top-level statements, ignoring comments/literals/function bodies.
+    # This is a bounded project contract, not a general migration engine.
+    noncode = r'--[^\n]*|/\*.*?\*/|\$(?P<tag>[A-Za-z_][A-Za-z0-9_]*|)\$.*?\$(?P=tag)\$|\'(?:\'\'|[^\'])*\'|"(?:""|[^"])*"'
+    code = re.sub(noncode, ' ', text, flags=re.S)
+    statements = [statement.strip() for statement in code.split(';') if statement.strip()]
+    controls = [statement for statement in statements if re.match(r'^(?:BEGIN|START\s+TRANSACTION|COMMIT|END|ROLLBACK|ABORT|SAVEPOINT|RELEASE|PREPARE\s+TRANSACTION)\b', statement, re.I)]
+    if any(re.match(r'^(?:VACUUM|ALTER\s+SYSTEM|CLUSTER)\b|^(?:CREATE|DROP)\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\b|^REINDEX\b.*\bCONCURRENTLY\b', statement, re.I) for statement in statements):
+        raise RuntimeError(f'Unsupported nontransactional migration: {file.name}')
+    if not controls:
+        return True
+    if [value.upper() for value in controls] != ['BEGIN', 'COMMIT'] or statements[0].upper() != 'BEGIN' or statements[-1].upper() != 'COMMIT':
+        raise RuntimeError(f'Unsupported explicit migration transaction: {file.name}')
+    return False
+
+
+def run_project_migrations(psql, migrations):
+    # One psql connection per file: never turn all 37 into a global transaction.
+    # The outer native-project-migrations stage owns this helper and its children.
+    plans = [(file, migration_uses_implicit_transaction(file)) for file in migrations]
+    for file, implicit in plans:
+        print(f'migration begin: {file.name}; transaction={"implicit" if implicit else "explicit"}', flush=True)
+        command = [str(psql), '-X', '-v', 'ON_ERROR_STOP=1', '-v', 'AUTOCOMMIT=on', '--no-password']
+        if implicit:
+            command.append('--single-transaction')
+        result = subprocess.run([*command, '-f', str(file)])
+        if result.returncode:
+            print(f'migration failed: {file.name}; exit={result.returncode}; subsequent files not executed', flush=True)
+            raise MigrationFailure(file.name, result.returncode)
+        print(f'migration committed: {file.name}', flush=True)
+
+
+def prove_transaction_contract(path, psql):
+    # Actual portable PG proof, not Windows mocks: only isolated CI probe objects.
+    help_result = subprocess.run([str(psql), '--help'], capture_output=True, text=True)
+    if help_result.returncode or '--single-transaction' not in help_result.stdout:
+        raise RuntimeError('Portable psql lacks required single-transaction support')
+    schema = 'ept105_tx_probe_' + secrets.token_hex(6)
+    positive = path / 'transaction-positive.sql'
+    positive.write_text('CREATE TEMP TABLE ept105_tx_lifetime (value integer) ON COMMIT DROP;\nINSERT INTO ept105_tx_lifetime VALUES (1);\nDO $$ BEGIN IF (SELECT count(*) FROM ept105_tx_lifetime) <> 1 THEN RAISE EXCEPTION \'TEMP lifetime failed\'; END IF; END $$;\n', encoding='utf-8')
+    run_project_migrations(psql, [positive])
+    explicit_positive = path / 'transaction-explicit-positive.sql'
+    explicit_positive.write_text('BEGIN;\n' + positive.read_text(encoding='utf-8') + 'COMMIT;\n', encoding='utf-8')
+    run_project_migrations(psql, [explicit_positive])
+    print('native transaction probe: TEMP ON COMMIT lifetime passed', flush=True)
+    negative = path / 'transaction-rollback.sql'
+    negative.write_text(f'CREATE SCHEMA {schema};\nCREATE TABLE {schema}.probe (value integer);\nSELECT 1/0;\n', encoding='utf-8')
+    try:
+        run_project_migrations(psql, [negative])
+    except MigrationFailure as error:
+        if error.code != 3:
+            raise
+        print('native transaction probe: expected SQL error propagated exit=3', flush=True)
+    else:
+        raise RuntimeError('Rollback probe unexpectedly succeeded')
+    check = f"DO $$ BEGIN IF EXISTS (SELECT FROM pg_namespace WHERE nspname='{schema}') THEN RAISE EXCEPTION 'Rollback left schema behind'; END IF; END $$;"
+    result = subprocess.run([str(psql), '-X', '-v', 'ON_ERROR_STOP=1', '--no-password', '-c', check])
+    if result.returncode:
+        raise MigrationFailure('transaction-rollback-readback', result.returncode)
+    print('native transaction probe: rollback readback passed', flush=True)
+    explicit_negative = path / 'transaction-explicit-rollback.sql'
+    explicit_negative.write_text('BEGIN;\n' + negative.read_text(encoding='utf-8') + 'COMMIT;\n', encoding='utf-8')
+    try:
+        run_project_migrations(psql, [explicit_negative])
+    except MigrationFailure as error:
+        if error.code != 3:
+            raise
+    else:
+        raise RuntimeError('Explicit rollback probe unexpectedly succeeded')
+    result = subprocess.run([str(psql), '-X', '-v', 'ON_ERROR_STOP=1', '--no-password', '-c', check])
+    if result.returncode:
+        raise MigrationFailure('transaction-explicit-rollback-readback', result.returncode)
+    print('native transaction probe: explicit rollback readback passed', flush=True)
+
+
 def start():
     if platform.system() != 'Darwin' or platform.machine() != 'arm64':
         raise RuntimeError('Native iOS requires macOS ARM64')
@@ -379,7 +462,7 @@ def start():
         migrations = sorted((ROOT / 'supabase/migrations').glob('*.sql'))
         if len(migrations) != 37:
             raise RuntimeError('Project migration count changed; native contract needs explicit review')
-        bounded('native-project-migrations', 90, [*psql, *[part for migration in migrations for part in ('-f', migration)]], pg_env)
+        bounded('native-project-migrations', 90, [sys.executable, Path(__file__).resolve(), 'migrate-project', path], pg_env)
         print(f'native project migrations applied: {len(migrations)}', flush=True)
         spawn_worker(path, config, 'storage')
         ready(path, 'storage', 30, lambda: http_ready(5010, '/status'))
@@ -409,6 +492,14 @@ def main():
         bundles.mkdir(mode=0o700)
         for service in SERVICES[:-1]:
             extract_archive(path / 'archives' / f'{service}.tar', bundles / service)
+    elif action == 'migrate-project':
+        path = owned_root(sys.argv[2])
+        psql = path / 'bundles/postgres/bin/psql'
+        prove_transaction_contract(path, psql)
+        migrations = sorted((ROOT / 'supabase/migrations').glob('*.sql'))
+        if len(migrations) != 37:
+            raise RuntimeError('Project migration count changed')
+        run_project_migrations(psql, migrations)
     elif action in ('stop', 'status'):
         value = os.environ.get('EPT_MOBILE_NATIVE_WORKDIR')
         if not value and action == 'stop':
@@ -427,4 +518,4 @@ if __name__ == '__main__':
         main()
     except Exception as error:
         print(stage.redact(f'Native backend failure: {error}'), file=sys.stderr)
-        sys.exit(1)
+        sys.exit(error.code if isinstance(error, MigrationFailure) else 1)
