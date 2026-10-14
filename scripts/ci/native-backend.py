@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Experimental, loopback-only iOS backend from pinned official ARM archives."""
 import base64
+import ctypes
 import hashlib
 import hmac
 import http.client
@@ -58,6 +59,24 @@ def owned_root(value):
     return path.resolve()
 
 
+def runtime_executable(pid):
+    # Kernel executable identity, never infer it from an arbitrary argv[0].
+    if platform.system() == 'Darwin':
+        library = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
+        function = library.proc_pidpath
+        function.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32]
+        function.restype = ctypes.c_int
+        buffer = ctypes.create_string_buffer(4096)  # PROC_PIDPATHINFO_MAXSIZE.
+        if function(pid, buffer, len(buffer)) <= 0 or not buffer.value:
+            raise RuntimeError('Owned executable identity unavailable')
+        value = os.fsdecode(buffer.value)
+    elif platform.system() == 'Linux':
+        value = os.readlink(f'/proc/{pid}/exe')
+    else:
+        raise RuntimeError('Owned executable identity unsupported')
+    return str(Path(value).resolve(strict=True))
+
+
 def process_identity(pid):
     result = subprocess.run(['ps', '-ww', '-p', str(pid), '-o', 'uid=,pgid=,lstart=,args='], capture_output=True, text=True, timeout=2)
     if result.returncode == 1 and not result.stdout.strip():
@@ -67,17 +86,29 @@ def process_identity(pid):
     fields = result.stdout.strip().split(None, 7)
     if len(fields) != 8:
         raise RuntimeError('Owned process identity invalid')
-    return {'uid': int(fields[0]), 'pgid': int(fields[1]), 'start': ' '.join(fields[2:7]), 'args': fields[7]}
+    return {'pid': pid, 'uid': int(fields[0]), 'pgid': int(fields[1]), 'start': ' '.join(fields[2:7]), 'args': fields[7], 'exe': runtime_executable(pid)}
 
 
 def verify_worker(path, service, record, identity):
-    expected = f'{sys.executable} {Path(__file__).resolve()} worker {path} {service}'
     if identity is None:
         raise RuntimeError('Worker disappeared; group ownership cannot be re-established')
-    if identity != {'uid': record['uid'], 'pgid': record['pid'], 'start': record['start'], 'args': expected}:
-        raise RuntimeError('Stale PID or foreign process: refusing signals')
-    if record['uid'] != os.getuid():
-        raise RuntimeError('Foreign owner: refusing signals')
+    trusted_exe = runtime_executable(os.getpid())
+    suffix = f' {Path(__file__).resolve()} worker {path} {service}'
+    args = identity.get('args', '')
+    # CPython framework launcher rewrites argv[0] to Python.app, preserving PID.
+    # Only the supervisor's actual interpreter or its exact launcher is accepted,
+    # and the independently read kernel executable must match the supervisor.
+    checks = {'pid': identity.get('pid') == record['pid'],
+              'uid': identity.get('uid') == record['uid'],
+              'pgid': identity.get('pgid') == record['pid'],
+              'start': identity.get('start') == record['start'],
+              'executable': identity.get('exe') == trusted_exe,
+              'arguments': args.endswith(suffix) and args[:-len(suffix)] in (sys.executable, trusted_exe),
+              'owner': record['uid'] == os.getuid()}
+    mismatches = [name for name, matches in checks.items() if not matches]
+    if mismatches:
+        # Field names only: no argv, executable paths, UID values or environment.
+        raise RuntimeError('Stale PID or foreign process: refusing signals; mismatch=' + ','.join(mismatches))
 
 
 def cleanup(path):

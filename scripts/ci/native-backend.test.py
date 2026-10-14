@@ -62,11 +62,58 @@ class NativeSafety(unittest.TestCase):
     def test_stale_and_foreign_pid_rejected_without_signal(self):
         record = {'uid': 10, 'pid': 100, 'start': 'old'}
         identity = {'uid': 10, 'pgid': 100, 'start': 'new', 'args': 'another stack'}
-        with patch.object(native.stage, 'terminate_group') as kill:
+        with patch.object(native.stage, 'terminate_group') as kill, patch.object(native, 'runtime_executable', return_value='/synthetic/python'), patch.object(native.os, 'getuid', return_value=10, create=True):
             for evidence in (None, identity):
                 with self.assertRaises(RuntimeError):
                     native.verify_worker(self.path, 'auth', record, evidence)
             kill.assert_not_called()
+
+    def test_framework_interpreter_identity_and_safe_negative_fields(self):
+        record = {'uid': 10, 'pid': 100, 'start': 'synthetic-start'}
+        interpreter = '/synthetic/Python.app/Python'
+        suffix = f' {Path(native.__file__).resolve()} worker {self.path} auth'
+        identity = {'pid': 100, 'uid': 10, 'pgid': 100, 'start': 'synthetic-start', 'exe': interpreter, 'args': interpreter + suffix}
+        with patch.object(native, 'runtime_executable', return_value=interpreter), patch.object(native.os, 'getuid', return_value=10, create=True), patch.object(native.stage, 'terminate_group') as kill:
+            # Reproduces CPython's argv[0] rewrite; old literal sys.executable rejected it.
+            self.assertNotEqual(identity['args'], sys.executable + suffix)
+            native.verify_worker(self.path, 'auth', record, identity)
+            native.verify_worker(self.path, 'auth', record, {**identity, 'args': sys.executable + suffix})
+            for field, value, diagnostic in (('exe', '/foreign/python', 'executable'), ('uid', 11, 'uid'), ('pgid', 101, 'pgid'), ('pid', 101, 'pid'), ('start', 'stale', 'start'), ('args', interpreter + suffix.replace(str(self.path), '/foreign/stack'), 'arguments'), ('args', '/foreign/executable' + suffix, 'arguments')):
+                with self.assertRaises(RuntimeError) as failure:
+                    native.verify_worker(self.path, 'auth', record, {**identity, field: value})
+                message = str(failure.exception)
+                self.assertIn('mismatch=' + diagnostic, message)
+                self.assertNotIn('/foreign', message)
+                self.assertNotIn(str(self.path), message)
+                self.assertNotIn(interpreter, message)
+            with self.assertRaisesRegex(RuntimeError, 'mismatch=owner'):
+                native.verify_worker(self.path, 'auth', {**record, 'uid': 11}, {**identity, 'uid': 11})
+            kill.assert_not_called()
+
+    def test_unavailable_executable_identity_fails_closed(self):
+        with patch.object(native, 'runtime_executable', side_effect=RuntimeError('Owned executable identity unavailable')), patch.object(native.stage, 'terminate_group') as kill:
+            with self.assertRaisesRegex(RuntimeError, 'identity unavailable'):
+                native.verify_worker(self.path, 'auth', {'uid': 10, 'pid': 100, 'start': 'old'}, {'args': 'not trusted'})
+            kill.assert_not_called()
+
+    def test_darwin_pidpath_uses_kernel_binding_and_fails_closed(self):
+        binary = self.path / 'synthetic-interpreter'
+        binary.write_text('unit fixture', encoding='utf-8')
+        function = unittest.mock.Mock()
+        def pidpath(pid, buffer, size):
+            self.assertEqual(pid, 12345)
+            self.assertEqual(size, 4096)
+            buffer.value = os.fsencode(str(binary))
+            return len(buffer.value)
+        function.side_effect = pidpath
+        library = unittest.mock.Mock(proc_pidpath=function)
+        with patch.object(native.platform, 'system', return_value='Darwin'), patch.object(native.ctypes, 'CDLL', return_value=library) as load:
+            self.assertEqual(native.runtime_executable(12345), str(binary.resolve()))
+            load.assert_called_once_with('/usr/lib/libproc.dylib', use_errno=True)
+            function.side_effect = None
+            function.return_value = 0
+            with self.assertRaisesRegex(RuntimeError, 'identity unavailable'):
+                native.runtime_executable(12345)
 
     @unittest.skipUnless(os.name == 'posix', 'POSIX UID proof')
     def test_cleanup_preserves_foreign_stack(self):
@@ -234,28 +281,54 @@ class NativeSafety(unittest.TestCase):
 
     @unittest.skipUnless(os.name == 'posix', 'Real foreground worker tree proof in Linux/macOS diagnostics')
     def test_owned_worker_kills_blocked_parent_and_grandchild(self):
+        self.exercise_owned_tree()
+
+    @unittest.skipUnless(os.name == 'posix', 'Fixture failure teardown proof in Linux/macOS diagnostics')
+    def test_owned_fixture_reaps_tree_even_if_identity_verification_fails(self):
+        self.exercise_owned_tree(force_failure=True)
+
+    def exercise_owned_tree(self, force_failure=False):
         ids = self.path / 'child-ids'
         child = 'import os,signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);print(os.getpid(),flush=True);time.sleep(60)'
         parent = f'import subprocess,sys,os,signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);p=subprocess.Popen([sys.executable,"-c",{child!r}],stdout=open({str(ids)!r},"w"));time.sleep(60)'
         config = {'deadline': time.time() + 60, 'secret_env': {}, 'services': {'postgres': {'command': [sys.executable, '-c', parent], 'env': {}}}}
         native.private_json(self.path / 'config.json', config)
-        process = None
+        handles = []
+        popen = native.subprocess.Popen
+        def retain_handle(*args, **kwargs):
+            process = popen(*args, **kwargs)
+            if kwargs.get('start_new_session') and args[0][2:3] == ['worker']:
+                handles.append(process)  # Retained before spawn_worker can raise.
+            return process
         try:
-            native.spawn_worker(self.path, config, 'postgres')
-            record = native.read_private(self.path / 'postgres.pid.json')
-            process = record['pid']
+            with patch.object(native.subprocess, 'Popen', side_effect=retain_handle):
+                if force_failure:
+                    # Fail only worker admission, after it has created its witness.
+                    with patch.object(native, 'verify_worker', side_effect=RuntimeError('Synthetic identity failure')):
+                        with self.assertRaisesRegex(RuntimeError, 'Synthetic identity failure'):
+                            native.spawn_worker(self.path, config, 'postgres')
+                else:
+                    native.spawn_worker(self.path, config, 'postgres')
+            process = handles[0].pid
             until = time.monotonic() + 5
             while (not ids.exists() or not ids.read_text().strip()) and time.monotonic() < until:
                 time.sleep(.05)
             self.assertTrue(ids.exists(), 'Grandchild did not start')
             self.assertTrue(ids.read_text().strip().isdigit())
             self.assertTrue(native.stage.group_has_live_members(process))
+            if force_failure:
+                return  # finally must close/reap this already running blocked tree.
             native.cleanup(self.path)
             self.assertFalse(native.stage.group_has_live_members(process))
             native.cleanup(self.path)  # Confirm readback makes repeated cleanup harmless.
         finally:
-            if process and native.stage.group_has_live_members(process):
-                os.killpg(process, signal.SIGKILL)
+            for handle in handles:
+                # Only freshly created live Popen children, never a pid from metadata.
+                if handle.poll() is None:
+                    self.assertEqual(os.getpgid(handle.pid), handle.pid)
+                    native.stage.terminate_group(handle.pid)
+                handle.wait(timeout=2)
+                self.assertFalse(native.stage.group_has_live_members(handle.pid))
 
 
 if __name__ == '__main__':
