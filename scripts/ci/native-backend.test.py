@@ -538,6 +538,88 @@ class NativeSafety(unittest.TestCase):
         self.assertNotIn(token, result)
         self.assertNotIn('sb_secret_syntheticvalue', result)
 
+    def test_native_role_contract_diagnostics_exclude_secrets_and_private_objects(self):
+        # Execute actual helpers/assertions with injected fetch; not Auth acceptance.
+        source = (native.ROOT / 'mobile/scripts/integracion-auth-local.mjs').read_text(encoding='utf-8').split('async function ejecutar()')[0]
+        source = source.replace("resolve(import.meta.dirname, '../..')", f'resolve({json.dumps(str(native.ROOT))})')
+        source = source.replace("'./integracion-auth-utils.mjs'", json.dumps((native.ROOT / 'mobile/scripts/integracion-auth-utils.mjs').as_uri()))
+        checks = r"""
+const privateMarker = 'private-marker-sb_secret_synthetic';
+const actorTemplate = { id: privateMarker + '-id', email: privateMarker + '@invalid', password: privateMarker, rol: 'DIRECTOR' };
+const jwtRole = role => 'eyJhbGciOiJIUzI1NiJ9.' + Buffer.from(JSON.stringify({ role, sub: privateMarker, secret: privateMarker })).toString('base64url') + '.private-signature';
+local = { api: 'http://127.0.0.1:54321', anon: privateMarker + '-anon', service: privateMarker + '-service' };
+const cases = [
+ ['login-status', 'AUTH_LOGIN_HTTP', 401], ['network', 'AUTH_LOGIN_HTTP', null],
+ ['tokens', 'AUTH_TOKEN_PAIR', 200], ['database-role', 'AUTH_DATABASE_JWT_ROLE', 200],
+ ['user-status', 'AUTH_USER_HTTP', 403], ['identity', 'AUTH_USER_IDENTITY', 200],
+ ['metadata', 'AUTH_USER_METADATA', 200], ['state-status', 'AUTH_ACCESS_STATE_HTTP', 403],
+ ['state-value', 'AUTH_ACCESS_STATE_VALUE', 200], ['role-status', 'AUTH_APPLICATION_ROLE_HTTP', 403],
+ ['role-value', 'AUTH_APPLICATION_ROLE_VALUE', 200],
+];
+for (const [scenario, expectedCode, expectedStatus] of cases) {
+ const actor = { ...actorTemplate };
+ globalThis.fetch = async url => {
+  assert.ok(url.startsWith(local.api));
+  let status = 200, value;
+  if (url.includes('/auth/v1/token')) {
+   if (scenario === 'network') throw new Error(privateMarker);
+   status = scenario === 'login-status' ? 401 : 200;
+   value = scenario === 'tokens' ? { error: privateMarker } : { access_token: jwtRole(scenario === 'database-role' ? '' : 'authenticated'), refresh_token: privateMarker };
+  } else if (url.endsWith('/auth/v1/user')) {
+   status = scenario === 'user-status' ? 403 : 200;
+   value = { id: scenario === 'identity' ? privateMarker + '-other' : actor.id, user_metadata: { role: scenario === 'metadata' ? { private: privateMarker } : actor.rol } };
+  } else if (url.endsWith('/mi_estado_acceso')) {
+   status = scenario === 'state-status' ? 403 : 200;
+   value = scenario === 'state-value' ? 'BLOQUEADO' : 'HABILITADO';
+  } else if (url.endsWith('/rol_actual')) {
+   status = scenario === 'role-status' ? 403 : 200;
+   value = scenario === 'role-value' ? { error: privateMarker, token: privateMarker } : actor.rol;
+  } else throw new Error('Unexpected synthetic operation');
+  return new Response(JSON.stringify(value), { status });
+ };
+ let failed = false;
+ try { await comprobarAuthUsuario(actor); } catch (_privateError) { failed = true; }
+ assert.equal(failed, true, scenario);
+ const rendered = nativeAuthDiagnostic();
+ assert.ok(!rendered.includes(privateMarker));
+ assert.ok(!rendered.includes('eyJhbG'));
+ assert.ok(!rendered.includes('127.0.0.1'));
+ const diagnostic = JSON.parse(rendered.slice('CHECKCODE '.length));
+ assert.equal(diagnostic.code, expectedCode, scenario);
+ assert.equal(diagnostic.status, expectedStatus, scenario);
+ assert.equal(diagnostic.role, 'DIRECTOR');
+ assert.deepEqual(Object.keys(diagnostic), ['code','operation','status','role','actual','expected','matches']);
+ if (scenario === 'database-role') assert.equal(diagnostic.actual, 'EMPTY');
+ if (scenario === 'state-value') assert.equal(diagnostic.actual, 'BLOQUEADO');
+ if (scenario === 'role-value' || scenario === 'metadata') assert.equal(diagnostic.actual, 'OTHER');
+}
+const privateObject = { secret: privateMarker, toJSON() { throw new Error('Private object serialized'); } };
+setNativeCheck(privateMarker, privateMarker, { role: privateObject, actual: privateObject, expected: privateMarker, matches: privateObject });
+setNativeStatus(privateObject);
+assert.equal(nativeAuthDiagnostic(), 'CHECKCODE ' + JSON.stringify({ code:'UNIDENTIFIED', operation:'UNKNOWN', status:null, role:'OTHER', actual:'OTHER', expected:'OTHER', matches:null }));
+"""
+        result = subprocess.run(['node', '--input-type=module', '--eval', source + checks], env={**os.environ, 'EPT_MOBILE_NATIVE_BACKEND': '1'}, capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, 'Native diagnostic contract regression failed')
+        self.assertEqual(result.stdout, '')
+        self.assertEqual(result.stderr, '')
+
+    def test_android_auth_assertions_do_not_activate_native_diagnostics_or_jwt_check(self):
+        source = (native.ROOT / 'mobile/scripts/integracion-auth-local.mjs').read_text(encoding='utf-8').split('async function ejecutar()')[0]
+        source = source.replace("resolve(import.meta.dirname, '../..')", f'resolve({json.dumps(str(native.ROOT))})')
+        source = source.replace("'./integracion-auth-utils.mjs'", json.dumps((native.ROOT / 'mobile/scripts/integracion-auth-utils.mjs').as_uri()))
+        checks = r"""
+local = { api:'http://127.0.0.1:54321', anon:'synthetic', service:'synthetic' };
+const actor = { id:'synthetic', email:'synthetic@invalid', password:'synthetic', rol:'DIRECTOR' };
+globalThis.fetch = async url => new Response(JSON.stringify(url.includes('/auth/v1/token') ? {access_token:'not-decoded-in-Android',refresh_token:'synthetic'} : url.endsWith('/auth/v1/user') ? {id:actor.id,user_metadata:{role:'DIRECTOR'}} : url.endsWith('/mi_estado_acceso') ? 'HABILITADO' : 'DIRECTOR'), {status:200});
+await comprobarAuthUsuario(actor);
+assert.equal(actor.access_token, 'not-decoded-in-Android');
+assert.equal(JSON.parse(nativeAuthDiagnostic().slice('CHECKCODE '.length)).code, 'UNIDENTIFIED');
+"""
+        result = subprocess.run(['node', '--input-type=module', '--eval', source + checks], env={**os.environ, 'EPT_MOBILE_NATIVE_BACKEND': '0'}, capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, 'Android original Auth assertion contract changed')
+        self.assertEqual(result.stdout, '')
+        self.assertEqual(result.stderr, '')
+
     def consume_auth_startup(self, env, expect_success=True):
         # Execute the existing startup guard/status code, not Auth assertion mocks.
         source = (native.ROOT / 'mobile/scripts/integracion-auth-local.mjs').read_text(encoding='utf-8').split('let local\n')[0]
@@ -580,6 +662,10 @@ class NativeSafety(unittest.TestCase):
         self.assertEqual(env['EXPO_PUBLIC_SUPABASE_URL'], 'http://127.0.0.1:54321')
         path = Path(env['EPT_MOBILE_NATIVE_WORKDIR'])
         config = native.read_private(path / 'config.json')
+        auth_env = config['services']['auth']['env']
+        self.assertEqual(auth_env['GOTRUE_JWT_DEFAULT_GROUP_NAME'], 'authenticated')
+        self.assertEqual(auth_env['GOTRUE_JWT_AUD'], 'authenticated')
+        self.assertEqual(auth_env['GOTRUE_JWT_ADMIN_ROLES'], 'service_role')
         exported = '\n'.join(env.values())
         self.assertNotIn(config['status']['SERVICE_ROLE_KEY'], exported)
         for secret in config['secret_env'].values():
