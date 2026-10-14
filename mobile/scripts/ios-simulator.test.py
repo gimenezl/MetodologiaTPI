@@ -122,13 +122,27 @@ class SimulatorOwnership(unittest.TestCase):
         self.assertEqual((record['sdk'], record['runtime'], record['udid']), ('18.5', RUNTIME, UDID))
         self.assertIn('EPT_IOS_UDID=' + UDID, envfile.read_text(encoding='utf8'))
 
+    def test_runtime_identifier_is_opaque_and_numeric_version_drives_sdk_match(self):
+        fixture = self.selection_fixture()
+        # Independent fields per upstream model; synthetic values, not the withheld hosted payload.
+        fixture['runtimes'][0]['version'] = '18.5.1'
+        inventory = ios.selection_inventory(json.dumps(fixture))
+        self.assertEqual(ios.select(inventory['runtimes'], inventory['devicetypes'], '18.5.1')[0], RUNTIME)
+        with self.assertRaises(ios.InventoryContractError) as missing:
+            ios.select(inventory['runtimes'], inventory['devicetypes'], '18.5')
+        self.assertEqual(missing.exception.reason_code, 'NO_SDK_RUNTIME')
+        fixture['runtimes'][0]['identifier'] = 'com.apple.CoreSimulator.SimRuntime.iOS-private'
+        with self.assertRaises(ios.InventoryContractError) as invalid:
+            ios.selection_inventory(json.dumps(fixture))
+        self.assertEqual(invalid.exception.reason_code, 'RUNTIME_ID')
+
     def test_selection_inventory_rejects_conflicting_identity_and_field_types(self):
-        for change in ('duplicate-runtime', 'duplicate-type', 'string-availability', 'version-mismatch', 'invalid-range', 'invalid-device-group'):
+        for change in ('duplicate-runtime', 'duplicate-type', 'string-availability', 'invalid-version', 'invalid-range', 'invalid-device-group'):
             fixture = self.selection_fixture()
             if change == 'duplicate-runtime': fixture['runtimes'] *= 2
             if change == 'duplicate-type': fixture['devicetypes'] *= 2
             if change == 'string-availability': fixture['runtimes'][0]['isAvailable'] = 'true'
-            if change == 'version-mismatch': fixture['runtimes'][0]['version'] = '26.2'
+            if change == 'invalid-version': fixture['runtimes'][0]['version'] = 'private-secret'
             if change == 'invalid-range': fixture['devicetypes'][0]['maxRuntimeVersionString'] = '17.0'
             if change == 'invalid-device-group': fixture['devices'][RUNTIME] = [{'name': {'private': 'never print'}}]
             with self.assertRaises(RuntimeError): ios.selection_inventory(json.dumps(fixture))

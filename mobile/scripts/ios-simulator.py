@@ -138,12 +138,9 @@ def selection_inventory(text):
             if type(runtime.get("isAvailable")) is not bool:
                 raise InventoryContractError("RUNTIME_AVAILABILITY")
             try:
-                runtime_version = version(runtime.get("version", ""))
-                identifier_version = version(runtime["identifier"].split(".iOS-", 1)[1].replace("-", "."))
+                version(runtime.get("version", ""))
             except RuntimeError:
                 raise InventoryContractError("RUNTIME_VERSION") from None
-            if runtime_version != identifier_version:
-                raise InventoryContractError("RUNTIME_VERSION_ID")
     for device_type in data["devicetypes"]:
         if not isinstance(device_type, dict) or not isinstance(device_type.get("productFamily"), str) or not isinstance(device_type.get("identifier"), str):
             raise InventoryContractError("TYPE_FIELDS")
