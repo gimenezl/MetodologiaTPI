@@ -4,9 +4,19 @@ Cada PR comprueba tipos, lint, pruebas puras, build y cuatro recorridos público
 
 ## Presupuesto nativo EPT-105
 
+**Estado medido del PR #57:** [38455446859](https://github.com/gimenezl/MetodologiaTPI/actions/runs/38455446859), head `b31961e2502156871baae69836e9d16712460d4a`, árbol `6d34ef0c32fa7c3b03b04f016803e28565911db5`, merge ref `c8191f442248badc8766026477c44394274af1ab`: supervisor **12/12 Linux y 12/12 macOS**; Brew 51.6s; VM timeout 300.4s; cleanup Colima timeout 45.3s. Backend, fixtures/Auth y Xcode/Maestro **no se ejecutaron**. Artifacts [iOS `11843191236`](https://github.com/gimenezl/MetodologiaTPI/actions/runs/38455446859/artifacts/11843191236) y [Linux `11842190695`](https://github.com/gimenezl/MetodologiaTPI/actions/runs/38455446859/artifacts/11842190695) conservados. La etiqueta diagnóstica y el draft permanecen; ningún merge ni cierre de Jira está autorizado por esta evidencia.
+
+Colima 0.10.3 dispone de un reinicio de VM para aplicar acceso del grupo Docker cuando falla `docker info` sin root; el log es compatible, pero no demuestra un crash/deadlock. Lima 2.2.0 desacopla el hostagent mediante otro grupo y permite hasta tres minutos de shutdown QEMU: el daemon escapó al grupo del CLI y Actions lo eliminó como orphan al finalizar. **El cleanup real todavía falla**; no se declara resuelto por las pruebas del supervisor. Fuentes, tiempos y límites: [segundo diagnóstico](evidence/EPT-105.md#segundo-diagnóstico-supervisor-probado-infraestructura-todavía-bloqueada).
+
+**Cambio autorizado posteriormente:** el usuario aprobó únicamente iOS en `macos-15` ARM64 y backend nativo real sin VM. El candidato local usa archivos experimentales oficiales de [Supabase Slim Services](https://github.com/supabase/slim-services), no un paquete `@supabase/stack` privado ni un flag inventado de la CLI. Android conserva exactamente su job Docker/CLI. No se ha ejecutado todavía este backend ni un build ARM: revisión independiente y diagnóstico siguen pendientes.
+
+`native-services.lock.json` fija PostgreSQL 17.6.1.167, Auth v2.196.0-r0, PostgREST v16.2-r0 y Storage v1.72.1 por commit fuente y SHA-256 de archive, manifest y SHA256SUMS. Se revalida la caché y se extrae en un directorio privado nuevo; solo se cachean archivos oficiales inmutables, nunca bases, fixtures, claves ni sesiones. El bootstrap original `supabase-postgres-start` precede a GoTrue; Storage ejecuta su entrypoint upstream `app/dist/scripts/migrate-call.js` (v1.72.1 no contiene `bin/prepare`), antes de las 37 migraciones del proyecto sin omisiones ni tablas sustitutas. Backend y contratos Auth/RLS existentes deben aprobar antes de pods/Xcode.
+
+Servicios y proxy SDK escuchan exclusivamente en loopback. El proxy conserva Authorization recibido: una apikey service-role no se convierte en Bearer privilegiado. Claves/passwords aleatorios permanecen en estado privado fuera de artifacts; solo anon llega al build. Cada servicio es hijo foreground de un worker con grupo propio, UID, instante de inicio y comando ligado al directorio del run. Cleanup valida identidad antes de TERM/KILL y comprueba ausencia de miembros vivos; symlinks, PID reciclado o stack ajeno fallan sin señalarlos. El watchdog retira el grupo al vencer el deadline operativo aunque se interrumpa el coordinador. Evitar Colima no demuestra por sí solo cleanup: se exige prueba POSIX y diagnóstico nuevo.
+
 ### Diagnóstico previo explícito, sin aprobación de entrega
 
-La etiqueta de PR **`ci:ios-infrastructure-diagnostic`** opta por una corrida acotada: primero supervisión/negativas en Ubuntu (3 minutos), después únicamente Docker, CLI, migraciones y Auth real en `macos-26-intel` (12 minutos, 10 operativos). No instala dependencias de la aplicación ni ejecuta Xcode/Maestro. Los jobs completos se omiten y **`CI / gate` falla explícitamente incluso si el diagnóstico aprueba**. No modifica branch protection ni permite cerrar Jira.
+La etiqueta de PR **`ci:ios-infrastructure-diagnostic`** opta por una corrida acotada: primero supervisión/negativas en Ubuntu (3 minutos), después archivos oficiales, backend nativo, migraciones y Auth real en `macos-15` ARM64 (12 minutos, 10 operativos). No instala dependencias de la aplicación ni ejecuta Xcode/Maestro. Los jobs completos se omiten y **`CI / gate` falla explícitamente incluso si el diagnóstico aprueba**. No modifica branch protection ni permite cerrar Jira.
 
 Para el PR existente: aplicar la etiqueta antes del primer push del candidato revisado; `synchronize` ejecuta el workflow del merge ref nuevo. Tras inspeccionar los artifacts, retirar la etiqueta dispara `unlabeled` y ejecuta los checks completos del mismo candidato. No se depende de `workflow_dispatch` disponible en la rama predeterminada. Se mantienen los eventos normales `opened`, `synchronize`, `reopened` y push a main; se agregan `labeled`, `unlabeled`, `ready_for_review`. Las etiquetas deben aplicarse con una credencial humana autorizada: eventos producidos por `GITHUB_TOKEN` no son un mecanismo fiable para lanzar otra corrida. Fuente: [eventos GitHub Actions](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request).
 
@@ -19,17 +29,24 @@ Android e iOS conservan build **y ejecución de login real** contra PostgreSQL/G
 | Etapa | Deadline propio |
 |---|---:|
 | Instalador Supabase aislado/fijado `2.117.0` | 90s |
-| Brew / VM QEMU / Docker info | 120s / 300s / 15s |
-| Supabase start / status | 240s / 30s |
+| Archivos nativos iOS | 240s total, 90s por archivo |
+| Extracción confinada iOS | 60s |
+| Readiness PG / Auth / Storage / REST / proxy | 120s / 60s / 30s / 30s / 10s |
+| Migraciones upstream Storage / 37 SQL del proyecto | 90s / 90s |
+| Supabase Docker Android start / status | 240s / 30s |
 | Contratos Auth reales y fixtures | 210s |
 | npm iOS / prebuild+pods | 120s / 240s |
 | Xcode o Gradle | 720s |
 | simctl boot / bootstatus / install | 30s / 120s / 60s |
 | adb wait-for-device / install | 60s / 60s |
 | Maestro | 240s (driver iOS 120s) |
-| Supabase stop / Colima stop propio | 60s / 45s, fuera del presupuesto operativo |
+| Supabase Android stop / workers iOS cleanup | 60s / 45s, fuera del presupuesto operativo |
 
-Se selecciona un UDID disponible en `macos-26-intel`; build de integración Release solo x86_64 y comprobación `lipo` antes de instalar. No cambia soporte productivo. La caché CocoaPods almacena descargas/repos, invalidada por OS, arquitectura, Xcode/SDK, configuración, lockfiles y plugins; no se cachean DerivedData/bundles, credenciales, sesiones ni fixtures. Los jobs móviles instalan la CLI aislada sin `npm ci` web; el modo web del instalador mantiene su verificación de lockfile. Los artifacts se redactan antes de subirlos y después del cleanup.
+Se selecciona un UDID disponible en `macos-15` ARM64; build de integración Release solo arm64 y comprobación `lipo` antes de instalar. No cambia soporte productivo. CocoaPods cachea descargas/repos, invalidado por OS, arquitectura, Xcode/SDK, configuración, lockfiles y plugins; no se cachean DerivedData/bundles, credenciales, sesiones ni fixtures. Android instala la CLI aislada sin `npm ci` web; iOS no usa CLI Docker. Los artifacts se redactan antes de subirlos y después del cleanup.
+
+Las nuevas suites `native-backend.test.py` e `install-native.test.mjs` cubren procedencia, caché corrupta, extracción confinada, identidad/stack ajeno, árbol bloqueado y proxy sin elevación. Sus fixtures de transporte son unitarios, no reemplazan Auth real. Windows aprobó 11 pruebas nativas y omitió 3 POSIX; instalador 4/4 PASS. No se afirma ejecución ARM ni cumplimiento del presupuesto frío.
+
+**Corrección acotada de revisión:** el arranque Auth exige el workdir correspondiente al backend elegido, sin aceptar el de CLI como sustituto del nativo ni viceversa. Tras completar readiness se publican únicamente `EPT_MOBILE_AUTH_INTEGRATION=1`, URL loopback y clave anon para el build; service-role/passwords permanecen privados. La regresión ejecuta la entrada de status/guard existente con el entorno emitido, rechaza workdir/owner incorrectos y comprueba que readiness fallido no publica variables del build. El startup simulado de esta prueba es unitario, no evidencia de migraciones ni Auth alojado.
 
 Checks rápidos: `python3 scripts/ci/run-stage.test.py` en **Linux y macOS** (padre/nieto bloqueado, líder que sale antes, supervisores anidados, TERM/KILL y proceso ajeno intacto); `node --test mobile/scripts/stack-isolation.test.mjs` (stack ajeno y ownership de otro run); `node --test scripts/ci/impact.test.mjs` (incluye negativas del gate y rechazo incondicional del diagnóstico parcial). Windows omite explícitamente tres casos POSIX: no equivale a PASS nativo. El supervisor anidado completa TERM/KILL con una gracia menor que la del ancestro para no abandonar su grupo al morir el padre. Diagnóstico previo, causas históricas, SHA de head/merge ref, resultados medidos y rollback: [evidencia EPT-105](evidence/EPT-105.md). No se ejecuta la matriz completa web como rutina.
 
@@ -61,8 +78,8 @@ Una ruta, suite o paquete mobile/Expo/React Native sin contrato bloquea el plan:
 |---|---|---|
 | `CI / plan móvil` | Evalúa el plan sin esperar al job `fast` | 5 min |
 | `CI / móvil` | `npm ci`, copia compartida sin deriva, importaciones prohibidas y secretos, `expo install --check`, `expo-doctor`, tipos, lint, Jest y `node:test`, bundles Android e iOS y su escaneo | 20 min |
-| `CI / móvil Android` | `prebuild`, `assembleRelease` (x86_64), instalación en emulador API 34 y flujo Maestro | 50 min |
-| `CI / móvil iOS` | `prebuild` con pods, `xcodebuild` Release para simulador, instalación en simulador y flujo Maestro (`macos-26`) | 60 min |
+| `CI / móvil Android` | `prebuild`, `assembleRelease` (x86_64), instalación en emulador API 34 y flujo Maestro | 30 min |
+| `CI / móvil iOS` | `prebuild` con pods, `xcodebuild` Release arm64 para simulador seleccionado y flujo Maestro (`macos-15` ARM64) | 30 min |
 
 Exportar bundles, Expo web o compilar TypeScript no demuestra un APK ni una aplicación iOS: por eso los builds y la ejecución son parte del gate. Los artefactos (`movil-android-<sha>`, `movil-ios-<sha>`) se conservan 14 días con logs, capturas y resultados JUnit. No se ejecutan los E2E web ni la matriz completa por cambios móviles.
 

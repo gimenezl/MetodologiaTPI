@@ -9,11 +9,21 @@ import { resolve } from 'node:path'
 import { esperarBearerExpirado, mensajeFalloEtapaAuth, validarLineaBaseExpiracion } from './integracion-auth-utils.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
-const workdir = process.env.EPT_MOBILE_SUPABASE_WORKDIR
+const nativeBackend = process.env.EPT_MOBILE_NATIVE_BACKEND === '1'
+const workdir = nativeBackend ? process.env.EPT_MOBILE_NATIVE_WORKDIR : process.env.EPT_MOBILE_SUPABASE_WORKDIR
 const safeTimeout = 15_000
 const localOnly = new Set(['127.0.0.1', 'localhost'])
 
 function runStatus() {
+  if (nativeBackend) {
+    const stdout = execFileSync('python3', [resolve(root, 'scripts/ci/native-backend.py'), 'status'], {
+      cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, timeout: 15_000,
+    })
+    const env = JSON.parse(stdout)
+    assert.equal(env.API_URL, 'http://127.0.0.1:54321', 'El backend nativo debe usar el endpoint loopback fijado.')
+    assert.ok(env.ANON_KEY && env.SERVICE_ROLE_KEY, 'Faltan claves efímeras del backend nativo.')
+    return { api: env.API_URL, anon: env.ANON_KEY, service: env.SERVICE_ROLE_KEY }
+  }
   assert.ok(process.env.EPT_SUPABASE_CLI_ENTRY, 'Falta la CLI Supabase aislada.')
   const stdout = execFileSync('python3', [resolve(root, 'scripts/ci/run-stage.py'), '--stage', 'auth-status', '--seconds', '30', '--capture', '--', process.execPath, process.env.EPT_SUPABASE_CLI_ENTRY, 'status', '-o', 'env', '--workdir', workdir], {
     cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
@@ -29,6 +39,10 @@ function runStatus() {
   assert.equal(url.port, '54321', 'El endpoint no usa el puerto efímero fijado.')
   assert.ok(env.ANON_KEY && env.SERVICE_ROLE_KEY, 'Faltan claves locales emitidas por Supabase.')
   return { api: env.API_URL, anon: env.ANON_KEY, service: env.SERVICE_ROLE_KEY }
+}
+
+function requireWorkdir() {
+  assert.ok(workdir, nativeBackend ? 'Falta el identificador del backend nativo efímero local.' : 'Falta el identificador del Supabase efímero local.')
 }
 
 let local
@@ -299,7 +313,7 @@ async function ejecutar() {
 }
 
 try {
-  assert.ok(workdir, 'Falta el identificador del Supabase efímero local.')
+  requireWorkdir()
   etapaActual = 'estadoStack'
   local = runStatus()
   await ejecutar()

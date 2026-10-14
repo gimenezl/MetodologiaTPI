@@ -11,7 +11,8 @@ export const pureTests = ['tarifas-lib', 'asistencias-lib', 'reportes-lib', 'pag
   'paginacion-paralela', 'inscripciones-legadas-lib', 'accesos-qr-cripto',
   'credenciales-qr-cripto', 'semantica-estatica', 'accesos-qr-servicio', 'redireccion-login']
 // Infraestructura que decide cómo se prueba la app móvil: su cambio exige recorrer los gates móviles completos.
-const MOBILE_INFRA = new Set(['scripts/ci/run-stage.py', 'scripts/ci/run-stage.test.py', 'scripts/ci/install-cli.sh', 'scripts/ci/mobile.mjs', 'scripts/ci/impact.mjs', 'scripts/ci/impact.test.mjs', '.github/workflows/ci.yml'])
+const MOBILE_INFRA = new Set(['scripts/ci/native-backend.py', 'scripts/ci/native-backend.test.py', 'scripts/ci/native-services.lock.json', 'scripts/ci/install-native.mjs', 'scripts/ci/install-native.test.mjs', 'scripts/ci/run-stage.py', 'scripts/ci/run-stage.test.py', 'scripts/ci/install-cli.sh', 'scripts/ci/mobile.mjs', 'scripts/ci/impact.mjs', 'scripts/ci/impact.test.mjs', '.github/workflows/ci.yml'])
+const CI_TESTS = new Set(['scripts/ci/impact.test.mjs', 'scripts/ci/install-native.test.mjs'])
 // Cambios de infraestructura que pueden alterar el prototipo o su verificación: obligan a ejecutar su navegación real.
 const PROTOTIPO_INFRA = new Set(['scripts/ci/ept96-assets.mjs', 'scripts/ci/impact.mjs', 'scripts/ci/impact.test.mjs', '.github/workflows/ci.yml', 'package.json', 'package-lock.json'])
 export function changedPaths(raw) {
@@ -52,7 +53,7 @@ export function profile(paths, { root = process.cwd() } = {}) {
     }
     if (file.startsWith('docs/parte3/EPT-95/')) throw new Error(`Ruta EPT-95 sin contrato: ${file}`)
     if (PROTOTIPO_INFRA.has(file)) prototipo = true
-    if (/^scripts\/ci\/.*\.test\.mjs$/u.test(file) && file !== 'scripts/ci/impact.test.mjs') throw new Error(`Prueba CI sin contrato: ${file}`)
+    if (/^scripts\/ci\/.*\.test\.mjs$/u.test(file) && !CI_TESTS.has(file)) throw new Error(`Prueba CI sin contrato: ${file}`)
     if (/^(?:docs\/.*\.md|(?:README|AGENTS)\.md|\.github\/pull_request_template\.md)$/u.test(file)) continue
     if (pureTests.some(name => file === `tests/${name}.spec.ts`)) continue
     if (/^supabase\/tests\/[^/]+\.(?:sql|mjs)$/u.test(file)) {
@@ -93,7 +94,7 @@ export function unsupportedPackage(file, content) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   validateRegistry(readdirSync('supabase/tests'))
   validateUiRegistry(readdirSync('tests'), pureTests)
-  if (readdirSync('scripts/ci').some(f => f.endsWith('.test.mjs') && f !== 'impact.test.mjs')) throw new Error('Registrar las nuevas pruebas CI antes de integrar')
+  if (readdirSync('scripts/ci').some(f => f.endsWith('.test.mjs') && !CI_TESTS.has(`scripts/ci/${f}`))) throw new Error('Registrar las nuevas pruebas CI antes de integrar')
   const packages = execFileSync('git', ['ls-files', '-z', '--', 'package.json', '*/package.json'], { encoding: 'utf8' }).split('\0').filter(Boolean)
   if (packages.some(file => unsupportedPackage(file, JSON.parse(readFileSync(file, 'utf8'))))) throw new Error('Mobile detectado: configurar sus comprobaciones reales antes de integrar; CI web insuficiente')
   if (packages.includes('mobile/package.json')) {

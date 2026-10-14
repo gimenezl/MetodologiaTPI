@@ -238,7 +238,7 @@ jobs:
     name: CI / móvil iOS
     needs: plan
     if: needs.plan.outputs.mobile == 'true' && !(github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:ios-infrastructure-diagnostic'))
-    runs-on: macos-26-intel
+    runs-on: macos-15
     timeout-minutes: 30
     env:
       CI: '1'
@@ -264,7 +264,9 @@ jobs:
         run: |
           python3 scripts/ci/run-stage.test.py
           node --test mobile/scripts/stack-isolation.test.mjs
-      - name: Seleccionar simulador y arquitectura Intel
+          python3 scripts/ci/native-backend.test.py
+          node --test scripts/ci/install-native.test.mjs
+      - name: Seleccionar simulador y arquitectura ARM64
         run: bash mobile/scripts/preparar-ios.sh
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
@@ -272,14 +274,15 @@ jobs:
             ~/Library/Caches/CocoaPods
             ~/.cocoapods/repos
           key: pods-${{ runner.os }}-${{ runner.arch }}-${{ env.EPT_IOS_TOOLCHAIN }}-Release-${{ hashFiles('mobile/package-lock.json', 'mobile/app.config.*', 'mobile/app.json', 'mobile/plugins/**', 'mobile/ios/Podfile.lock') }}
-      - name: Preparar Docker efímero
-        run: bash mobile/scripts/preparar-docker-macos.sh
-      - name: Instalar CLI Supabase aislada (2.117.0)
-        run: python3 scripts/ci/run-stage.py --stage cli-install --seconds 90 -- bash scripts/ci/install-cli.sh --isolated
-      - name: Iniciar proyecto Supabase local descartable
-        env:
-          EPT_MOBILE_SUPABASE_DIAGNOSTICS_FILE: ${{ runner.temp }}/evidencia-movil-ios/supabase-start-redacted.log
-        run: node mobile/scripts/supabase-local.mjs start ios
+      - name: Caché de archivos oficiales inmutables (sin datos ni sesiones)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ept105-native-archives
+          key: native-backend-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/ci/native-services.lock.json') }}
+      - name: Backend ARM real y todas las migraciones (sin VM)
+        run: |
+          export EPT_NATIVE_BINARY_CACHE="$HOME/.cache/ept105-native-archives"
+          python3 scripts/ci/native-backend.py start
       - name: Verificar Auth, roles, expiración y RLS con actores sintéticos
         run: python3 scripts/ci/run-stage.py --stage auth-integration --seconds 210 -- node mobile/scripts/integracion-auth-local.mjs
       - name: Instalación y proyecto nativo (incluye pods)
@@ -287,7 +290,7 @@ jobs:
         run: |
           python3 ../scripts/ci/run-stage.py --stage ios-deps --seconds 120 -- npm ci
           python3 ../scripts/ci/run-stage.py --stage ios-prebuild-pods --seconds 240 -- npx --no-install expo prebuild --platform ios
-      - name: Build iOS Release x86_64 para el simulador seleccionado
+      - name: Build iOS Release ARM64 para el simulador seleccionado
         run: bash mobile/scripts/compilar-ios.sh
       - name: Localizar aplicación
         id: app
@@ -313,15 +316,9 @@ jobs:
             python3 scripts/ci/run-stage.py --stage cleanup-package --seconds 20 -- ditto -c -k --keepParent "${{ steps.app.outputs.ruta }}" "$RUNNER_TEMP/evidencia-movil-ios/aplicacion-ios-simulador.zip"
           fi
           python3 scripts/ci/run-stage.py --sanitize-directory "$RUNNER_TEMP/evidencia-movil-ios"
-      - name: Detener el stack local de pruebas
+      - name: Detener únicamente workers nativos propios
         if: always()
-        run: |
-          status=0
-          node mobile/scripts/supabase-local.mjs stop || status=$?
-          if [[ "${EPT_COLIMA_PROFILE:-}" =~ ^ept105-[0-9]+-[0-9]+$ ]]; then
-            python3 scripts/ci/run-stage.py --stage cleanup-colima --seconds 45 -- colima stop --profile "$EPT_COLIMA_PROFILE" || status=$?
-          fi
-          exit "$status"
+        run: python3 scripts/ci/run-stage.py --stage cleanup-native --seconds 45 -- python3 scripts/ci/native-backend.py stop
       - name: Sanear artifacts nativos
         if: always()
         run: python3 scripts/ci/run-stage.py --sanitize-directory "$RUNNER_TEMP/evidencia-movil-ios"
@@ -353,6 +350,8 @@ jobs:
         run: |
           set -o pipefail
           python3 scripts/ci/run-stage.test.py 2>&1 | tee "$EPT_STAGE_LOG_DIR/process-tests-redacted.log"
+      - run: python3 scripts/ci/native-backend.test.py
+      - run: node --test scripts/ci/install-native.test.mjs
       - run: node --test mobile/scripts/stack-isolation.test.mjs
       - run: node --test --test-name-pattern='EPT-102|diagnóstico' scripts/ci/impact.test.mjs
       - name: Sanear evidencia Linux
@@ -369,7 +368,7 @@ jobs:
     name: CI / diagnóstico de infraestructura iOS
     needs: diagnostic-smoke
     if: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:ios-infrastructure-diagnostic') }}
-    runs-on: macos-26-intel
+    runs-on: macos-15
     timeout-minutes: 12
     env:
       CI: '1'
@@ -390,23 +389,22 @@ jobs:
           mkdir -p "$EPT_STAGE_LOG_DIR"
           set -o pipefail
           python3 scripts/ci/run-stage.test.py 2>&1 | tee "$EPT_STAGE_LOG_DIR/process-tests-redacted.log"
-      - name: Preparar Docker efímero
-        run: bash mobile/scripts/preparar-docker-macos.sh
-      - name: CLI aislada y fijada
-        run: python3 scripts/ci/run-stage.py --stage cli-install --seconds 90 -- bash scripts/ci/install-cli.sh --isolated
-      - name: Backend real y migraciones
-        run: node mobile/scripts/supabase-local.mjs start ios
+      - run: python3 scripts/ci/native-backend.test.py
+      - run: node --test scripts/ci/install-native.test.mjs
+      - name: Caché de archivos oficiales inmutables (sin datos ni sesiones)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ept105-native-archives
+          key: native-backend-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/ci/native-services.lock.json') }}
+      - name: Backend ARM real y todas las migraciones (sin VM)
+        run: |
+          export EPT_NATIVE_BINARY_CACHE="$HOME/.cache/ept105-native-archives"
+          python3 scripts/ci/native-backend.py start
       - name: Contratos Auth reales y fixtures
         run: python3 scripts/ci/run-stage.py --stage auth-integration --seconds 210 -- node mobile/scripts/integracion-auth-local.mjs
-      - name: Limpiar únicamente infraestructura propia
+      - name: Limpiar únicamente workers nativos propios
         if: always()
-        run: |
-          status=0
-          node mobile/scripts/supabase-local.mjs stop || status=$?
-          if [[ "${EPT_COLIMA_PROFILE:-}" =~ ^ept105-[0-9]+-[0-9]+$ ]]; then
-            python3 scripts/ci/run-stage.py --stage cleanup-colima --seconds 45 -- colima stop --profile "$EPT_COLIMA_PROFILE" || status=$?
-          fi
-          exit "$status"
+        run: python3 scripts/ci/run-stage.py --stage cleanup-native --seconds 45 -- python3 scripts/ci/native-backend.py stop
       - name: Sanear diagnóstico
         if: always()
         run: python3 scripts/ci/run-stage.py --sanitize-directory "$RUNNER_TEMP/evidencia-ios-infra"

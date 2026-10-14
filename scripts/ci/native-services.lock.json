@@ -1,0 +1,38 @@
+{
+  "repository": "https://github.com/supabase/slim-services",
+  "target": "darwin-arm64",
+  "services": {
+    "postgres": {
+      "tag": "postgres-17.6.1.167",
+      "version": "17.6.1.167",
+      "source_commit": "768c053ff22f0247b492be162449d4b2752286cc",
+      "archive_sha256": "7669c3615efb0489fb1bc05ce07d2709935540db82435890c4d70e1caa51d1c9",
+      "manifest_sha256": "f2271f76ac600083e2845af5ad7bff11f3091d96221dd388c441835821e38096",
+      "sums_sha256": "2e0309af7483dd52f8de044bdecb7d176a37fd7c0349a8cf84d33655e8325970"
+    },
+    "auth": {
+      "tag": "auth-v2.196.0-r0",
+      "version": "v2.196.0-r0",
+      "source_commit": "0204331ca41a5b49f076b6fa3dc6c0d20b996590",
+      "archive_sha256": "c4b8c701e380cddd6d01780100b3b35fae132bee886543cb2ff37798ca6d4aa2",
+      "manifest_sha256": "9b6c11eaa8b618203777fe56bd67edc706f1c8fcbf413bb017d19b0fcf7db7df",
+      "sums_sha256": "7309e6f200e05f46c4661809759f8a85b4159f4d3331e1a31a8a5d1206d09b2b"
+    },
+    "postgrest": {
+      "tag": "postgrest-v16.2-r0",
+      "version": "v16.2-r0",
+      "source_commit": "47ef77b88091ceeb570992dc775b8292b9c45907",
+      "archive_sha256": "2aa250e5b8b627768bd2e65da7973cecba8c2764d03d3f45faa9c2e0a5fec193",
+      "manifest_sha256": "f5f8652ccdfe9fcbcb803bfa525898ee1741b918043778ea8a4239835d6e819b",
+      "sums_sha256": "0dc136a08e5b37fbab52dd4fcc9538c2c0d92b2a66eb2de9e0e047d92017e177"
+    },
+    "storage": {
+      "tag": "storage-v1.72.1",
+      "version": "v1.72.1",
+      "source_commit": "3a37da57d3984e24eeb15e11e81f7f98879db25d",
+      "archive_sha256": "4aea8d1d021f14949aeea29a1eb0c9375a2d5c790097339e19c4abf712186796",
+      "manifest_sha256": "a775f0eba9a4c3d7b70237cdbb1c4a91f69381078347bd0eb33c014c506603af",
+      "sums_sha256": "c85ca931501f5959cdd37e31c4fc7c1d695ac19f7d196d4215ca69cc5dad7bcb"
+    }
+  }
+}

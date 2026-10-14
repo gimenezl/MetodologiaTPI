@@ -99,14 +99,14 @@ test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   // Los jobs nativos no heredan el plan web: usan el plan móvil y corren sobre el SHA del PR.
   assert.match(yml, /mobile-android:\n    name: CI \/ móvil Android\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
   assert.match(yml, /mobile-ios:\n    name: CI \/ móvil iOS\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
-  assert.match(yml, /runs-on: macos-26-intel/u)
+  assert.match(yml, /runs-on: macos-15/u)
   for (const native of ['mobile-android', 'mobile-ios']) {
     const block = yml.slice(yml.indexOf(`  ${native}:`)).split(/\n  [a-z-]+:/u)[0]
     const minutes = Number(/timeout-minutes: (\d+)/u.exec(block)?.[1])
     assert.ok(minutes > 0 && minutes <= 30)
     assert.match(block, /EPT_NATIVE_DEADLINE/u)
     assert.match(block, /run-stage\.test\.py/u)
-    assert.match(block, /supabase-local\.mjs stop/u)
+    assert.match(block, native === 'mobile-ios' ? /native-backend\.py stop/u : /supabase-local\.mjs stop/u)
   }
   assert.match(readFileSync('mobile/scripts/compilar-ios.sh', 'utf8'), /ONLY_ACTIVE_ARCH=YES/u)
   assert.match(yml, /MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'/u)
@@ -150,10 +150,16 @@ test('diagnóstico iOS es opt-in, acotado y nunca aprueba entrega', () => {
   assert.match(diagnostic, /needs: diagnostic-smoke/u)
   assert.match(diagnostic, /timeout-minutes: 12/u)
   assert.match(diagnostic, /ci:ios-infrastructure-diagnostic/u)
-  assert.match(diagnostic, /supabase-local\.mjs start ios/u)
+  assert.match(diagnostic, /native-backend\.py start/u)
+  assert.match(diagnostic, /runs-on: macos-15/u)
+  assert.doesNotMatch(diagnostic, /preparar-docker|supabase-local|install-cli|cleanup-colima/u)
+  assert.match(diagnostic, /native-backend-\$\{\{ runner\.os \}\}-\$\{\{ runner\.arch \}\}/u)
+  for (const file of ['scripts/ci/install-native.test.mjs', 'scripts/ci/native-backend.test.py', 'scripts/ci/native-backend.py', 'scripts/ci/native-services.lock.json']) {
+    assert.deepEqual(profile([file]), { db: true, mutations: false, ui: ['core'], mobile: true })
+  }
   assert.match(diagnostic, /integracion-auth-local\.mjs/u)
   assert.match(diagnostic, /if: always\(\)/u)
-  assert.match(diagnostic, /cleanup-colima/u)
+  assert.match(diagnostic, /cleanup-native/u)
   assert.doesNotMatch(diagnostic, /expo prebuild|compilar-ios|ejecutar-ios|maestro test/u)
   const smoke = yml.slice(yml.indexOf('  diagnostic-smoke:')).split(/\n  [a-z-]+:/u)[0]
   assert.match(smoke, /timeout-minutes: 3/u)
