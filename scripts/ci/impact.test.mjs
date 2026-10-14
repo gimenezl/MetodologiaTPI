@@ -213,7 +213,18 @@ test('diagnóstico iOS es opt-in, acotado y nunca aprueba entrega', () => {
   const diagnostic = yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:')).split(/\n  [a-z-]+:/u)[0]
   assert.match(diagnostic, /needs: diagnostic-smoke/u)
   assert.match(diagnostic, /timeout-minutes: 30/u)
-  assert.match(diagnostic, /date \+%s\) \+ 1680/u)
+  assert.match(diagnostic, /EPT_IOS_DIAGNOSTIC_PHASE: runtime/u)
+  assert.match(diagnostic, /runtime\) budget=180/u)
+  assert.match(diagnostic, /full\) budget=1680/u)
+  assert.match(diagnostic, /Invalid iOS diagnostic phase'; exit 1/u)
+  assert.match(diagnostic, /sdk-inventory --seconds 90/u)
+  assert.match(diagnostic, /ios-simulator\.py inventory/u)
+  for (const token of ['native-backend.py start', 'integracion-auth-local.mjs', 'preparar-ios.sh', 'npm ci', 'expo prebuild', 'compilar-ios.sh', 'ejecutar-ios.sh']) {
+    const steps = diagnostic.split(/\n      - /u)
+    const step = steps.find(part => part.includes(token))
+    assert.ok(step?.includes("if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'"), `${token} must be full-only`)
+  }
+  assert.match(diagnostic, /always\(\) && env\.EPT_IOS_DIAGNOSTIC_PHASE == 'full'/u)
   assert.match(diagnostic, /ci:ios-infrastructure-diagnostic/u)
   assert.match(diagnostic, /native-backend\.py start/u)
   assert.match(diagnostic, /runs-on: macos-15/u)

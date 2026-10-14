@@ -2,6 +2,8 @@
 """Ownership/cleanup contract tests; no simulator or native acceptance is mocked."""
 import importlib.util
 import json
+import io
+from contextlib import redirect_stdout
 import os
 from pathlib import Path
 import stat
@@ -98,6 +100,47 @@ class SimulatorOwnership(unittest.TestCase):
         text = f"PID Status Label\n123 0 UIKitApplication:{ios.APP}[opaque]\n- 0 {ios.DRIVER}\n999 0 foreign.secret\n"
         self.assertEqual(ios.app_processes(text), {ios.APP: True, ios.DRIVER: False})
         self.assertEqual(ios.app_processes(f"123 0 {ios.APP}.foreign"), {ios.APP: False, ios.DRIVER: False})
+
+    def test_sdk_phase_invalid_refuses_before_process_or_simulator_commands(self):
+        for phase in ('invalid', 'full'):
+            with patch.dict(os.environ, {"EPT_IOS_DIAGNOSTIC_PHASE": phase}), patch.object(ios, "command") as command, patch.object(ios.subprocess, "run") as run:
+                with self.assertRaises(RuntimeError): ios.inventory_probe()
+                command.assert_not_called()
+                run.assert_not_called()
+        with patch.dict(os.environ, {"EPT_IOS_DIAGNOSTIC_PHASE": 'runtime'}): self.assertEqual(ios.diagnostic_phase(), 'runtime')
+
+    def test_sdk_shape_reports_counts_only_and_rejects_malformed(self):
+        data = {"runtimes": [{"identifier": RUNTIME, "isAvailable": True, "private": "secret"}], "devicetypes": [{"name": "private"}], "devices": {"private": []}}
+        self.assertEqual(ios.inventory_shape(json.dumps(data)), {"ios_runtime_count": 1, "available_ios_count": 1, "device_type_count": 1, "device_group_count": 1})
+        for bad in ('private-invalid', '[]', '{"runtimes":[]}', '{"runtimes":{},"devicetypes":[],"devices":{}}'):
+            with self.assertRaises((ValueError, RuntimeError)): ios.inventory_shape(bad)
+
+    def test_sdk_resources_do_not_emit_foreign_paths_argv_or_ids(self):
+        result = ios.resource_summary('2.0 100 S /private/secret/CoreSimulatorService\n3.0 200 R /Applications/Xcode.app/simctl\n99 999 S foreign-secret-password\nNaN 10 S /private/secret/Simulator')
+        self.assertEqual(result['CoreSimulatorService']['count'], 1)
+        self.assertEqual(result['simctl']['states'], {'R': 1})
+        self.assertEqual(result['Simulator']['count'], 0)
+        self.assertNotIn('private', json.dumps(result))
+        self.assertNotIn('password', json.dumps(result))
+
+    def test_sdk_probe_queries_once_bounds_and_keeps_private_json_stderr_hidden(self):
+        for code in (0, 124, 125, 1):
+            queries = []
+            def run(args, **kwargs):
+                if args[0] == 'ps': return SimpleNamespace(returncode=0, stdout='1 200 S /private/secret/CoreSimulatorService')
+                queries.append(args)
+                return SimpleNamespace(returncode=code, stdout=json.dumps({'runtimes': [], 'devicetypes': [], 'devices': {}, 'private': 'private-secret-password'}), stderr='stage=sdk-inventory-query password=private-secret-password')
+            def command(label, *_args, **kwargs):
+                return '/private/secret/Xcode_16.4.app/Contents/Developer' if label == 'sdk-selected-xcode' else '18.5'
+            output = io.StringIO()
+            with patch.dict(os.environ, {"EPT_IOS_DIAGNOSTIC_PHASE": 'runtime'}), patch.object(ios, 'command', side_effect=command), patch.object(ios.subprocess, 'run', side_effect=run), redirect_stdout(output):
+                self.assertEqual(ios.inventory_probe(), code)
+            self.assertEqual(len(queries), 1)
+            self.assertEqual(queries[0][-4:], ['xcrun', 'simctl', 'list', '-j'])
+            self.assertEqual(queries[0][queries[0].index('--seconds') + 1], '65')
+            self.assertNotIn('private', output.getvalue())
+            self.assertNotIn('password', output.getvalue())
+            self.assertFalse(ios.marker_path().exists())
 
     def test_status_body_never_logged_and_endpoint_pinned(self):
         with patch.object(ios, "load", return_value=self.record), patch.object(ios, "devices", return_value=self.listing), patch.object(ios, "command", return_value=""), patch.object(ios.http.client, "HTTPConnection") as http:

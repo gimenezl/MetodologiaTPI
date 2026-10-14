@@ -9,6 +9,10 @@ import re
 import stat
 import subprocess
 import sys
+import platform
+import threading
+import time
+import math
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = "org.educarparatransformar.app"
@@ -172,12 +176,99 @@ def cleanup():
     print("owned simulator cleanup: shutdown/deletion verified", flush=True)
 
 
+def diagnostic_phase():
+    phase = os.environ.get("EPT_IOS_DIAGNOSTIC_PHASE", "full")
+    if phase not in ("runtime", "full"):
+        raise RuntimeError("Invalid iOS diagnostic phase")
+    return phase
+
+
+def inventory_shape(text):
+    data = json.loads(text)
+    if not isinstance(data, dict) or not isinstance(data.get("runtimes"), list) or not isinstance(data.get("devicetypes"), list) or not isinstance(data.get("devices"), dict):
+        raise RuntimeError("Unexpected SDK inventory shape")
+    ios = [r for r in data["runtimes"] if isinstance(r, dict) and isinstance(r.get("identifier"), str) and r["identifier"].startswith("com.apple.CoreSimulator.SimRuntime.iOS-")]
+    return {"ios_runtime_count": len(ios), "available_ios_count": sum(r.get("isAvailable") is True for r in ios),
+            "device_type_count": len(data["devicetypes"]), "device_group_count": len(data["devices"])}
+
+
+def resource_summary(text):
+    classes = {name: {"count": 0, "cpu": 0.0, "rss_kb": 0, "states": {}} for name in ("CoreSimulatorService", "simctl", "Simulator", "simdiskimaged")}
+    for line in text.splitlines():
+        fields = line.split(maxsplit=3)
+        if len(fields) != 4:
+            continue
+        name = fields[3].rsplit("/", 1)[-1]
+        if name not in classes:
+            continue
+        try:
+            cpu, rss = float(fields[0]), int(fields[1])
+            if not math.isfinite(cpu) or cpu < 0 or cpu > 10000 or rss < 0 or rss > 10**10:
+                continue
+        except ValueError:
+            continue
+        classes[name]["count"] += 1
+        classes[name]["cpu"] += cpu
+        classes[name]["rss_kb"] += rss
+        state = fields[2][0] if fields[2] and fields[2][0] in "RSDTZUI" else "OTHER"
+        classes[name]["states"][state] = classes[name]["states"].get(state, 0) + 1
+    return classes
+
+
+def inventory_probe():
+    if diagnostic_phase() != "runtime":
+        raise RuntimeError("SDK inventory requires explicit runtime phase")
+    print("sdk inventory architecture=" + ("arm64" if platform.machine() == "arm64" else "OTHER"), flush=True)
+    selected = command("sdk-selected-xcode", 5, "xcode-select", "--print-path", capture=True)
+    match = re.search(r"/(Xcode(?:_[0-9.]+)?\.app)/", selected)
+    print("sdk selected_xcode=" + (match.group(1) if match else "OTHER"), flush=True)
+    command("sdk-xcode-version", 5, "xcodebuild", "-version")
+    sdk = command("sdk-version", 5, "xcrun", "--sdk", "iphonesimulator", "--show-sdk-version", capture=True).strip()
+    print("sdk simulator_version=" + (sdk if re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,2}", sdk) else "OTHER"), flush=True)
+    stopped = threading.Event()
+    def sample(phase):
+        try:
+            result = subprocess.run(["ps", "-axo", "pcpu=,rss=,stat=,comm="], capture_output=True, text=True, timeout=2)
+            if result.returncode:
+                raise RuntimeError("Resource sample unavailable")
+            print("sdk process_sample=" + phase + " " + json.dumps(resource_summary(result.stdout), sort_keys=True), flush=True)
+        except (OSError, RuntimeError, subprocess.TimeoutExpired):
+            print("sdk process_sample=" + phase + " unavailable", flush=True)
+    def heartbeat():
+        while not stopped.wait(10):
+            sample("during")
+    sample("before")
+    monitor = threading.Thread(target=heartbeat, daemon=True)
+    monitor.start()
+    started = time.monotonic()
+    try:
+        # One read-only query. Pinned Maestro LocalSimulatorUtils uses this exact list -j command.
+        result = subprocess.run([sys.executable, str(ROOT / "scripts/ci/run-stage.py"), "--capture", "--stage", "sdk-inventory-query", "--seconds", "65", "--", "xcrun", "simctl", "list", "-j"], capture_output=True, text=True, timeout=75)
+        # Inner supervisor retains redacted stderr in its own artifact; never reprint provider data.
+        print(f"sdk query elapsed_s={time.monotonic()-started:.1f} exit={result.returncode}", flush=True)
+        if result.returncode:
+            print("sdk query failure_class=" + ("deadline" if result.returncode == 124 else "cleanup" if result.returncode == 125 else "provider_exit"), flush=True)
+            return result.returncode
+        try:
+            shape = inventory_shape(result.stdout)
+        except (ValueError, RuntimeError):
+            print("sdk query failure_class=shape", flush=True)
+            raise RuntimeError("Unexpected SDK inventory shape")
+        print("sdk inventory_shape=" + json.dumps(shape, sort_keys=True), flush=True)
+        return 0
+    finally:
+        stopped.set()
+        monitor.join(timeout=2)
+        sample("after")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("create", "status", "driver-preflight", "cleanup"))
+    parser.add_argument("action", choices=("create", "status", "driver-preflight", "cleanup", "inventory"))
     action = parser.parse_args().action
     try:
-        {"create": create, "status": status, "driver-preflight": driver_preflight, "cleanup": cleanup}[action]()
+        result = {"create": create, "status": status, "driver-preflight": driver_preflight, "cleanup": cleanup, "inventory": inventory_probe}[action]()
+        sys.exit(result or 0)
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.TimeoutExpired):
         print(f"owned simulator action={action} failed; private details withheld", file=sys.stderr)
         sys.exit(1)

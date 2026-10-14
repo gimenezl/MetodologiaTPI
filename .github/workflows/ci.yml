@@ -378,6 +378,7 @@ jobs:
     timeout-minutes: 30
     env:
       CI: '1'
+      EPT_IOS_DIAGNOSTIC_PHASE: runtime
       EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -386,9 +387,14 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
-      - name: Presupuesto diagnóstico nativo (28 minutos operativos; 30 de job)
+      - name: Presupuesto diagnóstico cerrado (runtime 3 minutos; full 28; job 30)
         run: |
-          echo "EPT_NATIVE_DEADLINE=$(( $(date +%s) + 1680 ))" >> "$GITHUB_ENV"
+          case "$EPT_IOS_DIAGNOSTIC_PHASE" in
+            runtime) budget=180 ;;
+            full) budget=1680 ;;
+            *) echo 'Invalid iOS diagnostic phase'; exit 1 ;;
+          esac
+          echo "EPT_NATIVE_DEADLINE=$(( $(date +%s) + budget ))" >> "$GITHUB_ENV"
           echo "EPT_STAGE_LOG_DIR=$RUNNER_TEMP/evidencia-ios-infra/stages" >> "$GITHUB_ENV"
           echo "EPT_IOS_EVIDENCE_DIR=$RUNNER_TEMP/evidencia-ios-infra" >> "$GITHUB_ENV"
           printf 'head=%s\nmerge_ref=%s\n' '${{ github.event.pull_request.head.sha }}' '${{ github.sha }}' >> "$GITHUB_STEP_SUMMARY"
@@ -400,53 +406,66 @@ jobs:
       - run: python3 scripts/ci/native-backend.test.py
       - run: python3 mobile/scripts/ios-simulator.test.py
       - run: node --test scripts/ci/install-native.test.mjs
+      - name: Inventario SDK de solo lectura (una consulta; sin backend ni simulador)
+        if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'runtime'
+        run: python3 scripts/ci/run-stage.py --stage sdk-inventory --seconds 90 -- python3 mobile/scripts/ios-simulator.py inventory
       - name: Caché de archivos oficiales inmutables (sin datos ni sesiones)
+        if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/ept105-native-archives
           key: native-backend-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/ci/native-services.lock.json') }}
       - name: Backend ARM real y todas las migraciones (sin VM)
+        if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         run: |
           export EPT_NATIVE_BINARY_CACHE="$HOME/.cache/ept105-native-archives"
           python3 scripts/ci/native-backend.py start
       - name: Contratos Auth reales y fixtures
+        if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         run: python3 scripts/ci/run-stage.py --stage auth-integration --seconds 210 -- node mobile/scripts/integracion-auth-local.mjs
       - name: Seleccionar simulador y arquitectura ARM64
+        if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         run: bash mobile/scripts/preparar-ios.sh
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         with:
           path: |
             ~/Library/Caches/CocoaPods
             ~/.cocoapods/repos
           key: pods-${{ runner.os }}-${{ runner.arch }}-${{ env.EPT_IOS_TOOLCHAIN }}-Release-${{ hashFiles('mobile/package-lock.json', 'mobile/app.config.*', 'mobile/app.json', 'mobile/plugins/**', 'mobile/ios/Podfile.lock') }}
       - name: Instalación y proyecto nativo (incluye pods)
+        if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         working-directory: mobile
         run: |
           python3 ../scripts/ci/run-stage.py --stage ios-deps --seconds 120 -- npm ci
           python3 ../scripts/ci/run-stage.py --stage ios-prebuild-pods --seconds 240 -- npx --no-install expo prebuild --platform ios
       - name: Build iOS Release ARM64 para el simulador seleccionado
+        if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         run: bash mobile/scripts/compilar-ios.sh
       - name: Localizar aplicación
+        if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         id: app
         run: |
           app=$(find "$RUNNER_TEMP/derived/Build/Products/Release-iphonesimulator" -maxdepth 1 -name '*.app' | head -n 1)
           test -n "$app"
           echo "ruta=$app" >> "$GITHUB_OUTPUT"
       - name: Instalar Maestro 2.11.0
+        if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         run: |
           curl --connect-timeout 10 --max-time 60 -fsSL -o "$RUNNER_TEMP/maestro.zip" https://github.com/mobile-dev-inc/maestro/releases/download/cli-2.11.0/maestro.zip
           echo "5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a  $RUNNER_TEMP/maestro.zip" | shasum -a 256 -c -
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
       - name: Ejecutar en simulador iOS
+        if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         env:
           MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'
         run: bash mobile/scripts/ejecutar-ios.sh "${{ steps.app.outputs.ruta }}"
       - name: Cerrar y eliminar únicamente el simulador de este intento
-        if: always()
+        if: always() && env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         run: python3 scripts/ci/run-stage.py --stage cleanup-ios-simulator --seconds 55 -- python3 mobile/scripts/ios-simulator.py cleanup
       - name: Limpiar únicamente workers nativos propios
-        if: always()
+        if: always() && env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         run: python3 scripts/ci/run-stage.py --stage cleanup-native --seconds 45 -- python3 scripts/ci/native-backend.py stop
       - name: Sanear diagnóstico
         if: always()
