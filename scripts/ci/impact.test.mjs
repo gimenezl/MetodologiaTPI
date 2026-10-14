@@ -181,6 +181,31 @@ test('EPT-102: el paquete móvil no altera dependencias ni lockfile de Next', ()
   assert.match(readFileSync('eslint.config.mjs', 'utf8'), /"mobile\/\*\*"/u)
 })
 
+test('diagnóstico iOS publica la ruta del runner en setup, no en job env', () => {
+  const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
+  // GitHub's jobs.<job_id>.env availability table; full expression semantics use actionlint separately.
+  const allowed = new Set(['github', 'needs', 'strategy', 'matrix', 'vars', 'secrets', 'inputs'])
+  const checkJobEnv = text => {
+    for (const block of text.matchAll(/^    env:\n((?:^      [^\n]*\n)*)/gmu)) {
+      for (const expression of block[1].matchAll(/\$\{\{([\s\S]*?)\}\}/gu)) {
+        for (const root of expression[1].matchAll(/(?<![\w.])([A-Za-z_][A-Za-z_0-9]*)\s*[.[]/gu)) {
+          assert.ok(allowed.has(root[1]), `Forbidden job env context: ${root[1]}`)
+        }
+      }
+    }
+  }
+  checkJobEnv(yml)
+  for (const forbidden of ['runner', 'env', 'steps', 'job']) {
+    assert.throws(() => checkJobEnv('    env:\n      PATH_VALUE: ${{ ' + forbidden + '.temp }}\n'), /Forbidden job env context/u)
+  }
+  for (const [job, suffix] of [['mobile-ios', 'evidencia-movil-ios'], ['ios-infrastructure-diagnostic', 'evidencia-ios-infra']]) {
+    const block = yml.slice(yml.indexOf(`  ${job}:`)).split(/\n  [a-z-]+:/u)[0]
+    assert.ok(block.includes(`echo "EPT_IOS_EVIDENCE_DIR=$RUNNER_TEMP/${suffix}" >> "$GITHUB_ENV"`))
+    assert.doesNotMatch(block, /^      EPT_IOS_EVIDENCE_DIR:/mu)
+    assert.ok(block.indexOf('EPT_IOS_EVIDENCE_DIR=$RUNNER_TEMP') < block.indexOf('ejecutar-ios.sh'))
+  }
+})
+
 test('diagnóstico iOS es opt-in, acotado y nunca aprueba entrega', () => {
   const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
   assert.match(yml, /types: \[opened, synchronize, reopened, labeled, unlabeled, ready_for_review\]/u)

@@ -256,6 +256,7 @@ jobs:
         run: |
           echo "EPT_NATIVE_DEADLINE=$(( $(date +%s) + 1680 ))" >> "$GITHUB_ENV"
           echo "EPT_STAGE_LOG_DIR=$RUNNER_TEMP/evidencia-movil-ios/stages" >> "$GITHUB_ENV"
+          echo "EPT_IOS_EVIDENCE_DIR=$RUNNER_TEMP/evidencia-movil-ios" >> "$GITHUB_ENV"
       - name: Versiones de herramientas
         run: |
           python3 scripts/ci/run-stage.py --stage ios-version --seconds 15 -- xcodebuild -version
@@ -378,7 +379,6 @@ jobs:
     env:
       CI: '1'
       EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
-      EPT_IOS_EVIDENCE_DIR: ${{ runner.temp }}/evidencia-ios-infra
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -390,6 +390,7 @@ jobs:
         run: |
           echo "EPT_NATIVE_DEADLINE=$(( $(date +%s) + 1680 ))" >> "$GITHUB_ENV"
           echo "EPT_STAGE_LOG_DIR=$RUNNER_TEMP/evidencia-ios-infra/stages" >> "$GITHUB_ENV"
+          echo "EPT_IOS_EVIDENCE_DIR=$RUNNER_TEMP/evidencia-ios-infra" >> "$GITHUB_ENV"
           printf 'head=%s\nmerge_ref=%s\n' '${{ github.event.pull_request.head.sha }}' '${{ github.sha }}' >> "$GITHUB_STEP_SUMMARY"
       - name: Probar supervisión POSIX también en macOS
         run: |
