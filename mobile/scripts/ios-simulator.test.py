@@ -3,7 +3,7 @@
 import importlib.util
 import json
 import io
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, redirect_stderr
 import os
 from pathlib import Path
 import stat
@@ -156,6 +156,42 @@ class SimulatorOwnership(unittest.TestCase):
         fixture['runtimes'].append({'identifier': 'com.apple.CoreSimulator.SimRuntime.iOS-26-2', 'isAvailable': True, 'version': '26.2'})
         self.assertEqual(ios.select(fixture['runtimes'], fixture['devicetypes'], '18.5')[0], RUNTIME)
 
+    def test_closed_parser_codes_keep_private_values_and_exception_objects_out(self):
+        scenarios = [
+            ('invalid-private-secret', 'INVENTORY_JSON'), ('{}', 'INVENTORY_SHAPE'),
+            (json.dumps({**self.selection_fixture(), 'devicetypes': [{'identifier': 'private-secret', 'productFamily': 'iPhone'}]}), 'TYPE_ID'),
+            (json.dumps({**self.selection_fixture(), 'devicetypes': [{**self.selection_fixture()['devicetypes'][0], 'minRuntimeVersionString': None}]}), 'TYPE_RANGE_VERSION'),
+        ]
+        for data, expected in scenarios:
+            output, error_output = io.StringIO(), io.StringIO()
+            with redirect_stdout(output), redirect_stderr(error_output):
+                try: ios.selection_inventory(data)
+                except ios.InventoryContractError as error: ios.report_inventory_failure(error)
+                else: self.fail('Negative parser should fail')
+            self.assertEqual(error_output.getvalue(), 'SDK_CHECKCODE=' + expected + '\n')
+            self.assertNotIn('private', output.getvalue() + error_output.getvalue())
+            self.assertNotIn('secret', output.getvalue() + error_output.getvalue())
+        private = ios.InventoryContractError({'private': 'secret'})
+        private.reason_code = 'private-secret'
+        with redirect_stderr(io.StringIO()) as output: ios.report_inventory_failure(private)
+        self.assertEqual(output.getvalue(), 'SDK_CHECKCODE=INVENTORY_UNIDENTIFIED\n')
+
+    def test_current_identifier_hypothesis_is_reported_not_silently_relaxed(self):
+        for identifier in ('com.apple.CoreSimulator.SimDeviceType.iPhone-SE-3rd-generation', 'com.apple.CoreSimulator.SimDeviceType.iPhone-SE-(3rd-generation)'):
+            fixture = self.selection_fixture()
+            fixture['devicetypes'][0]['identifier'] = identifier
+            if '(' in identifier:
+                with self.assertRaises(ios.InventoryContractError) as error: ios.selection_inventory(json.dumps(fixture))
+                self.assertEqual(error.exception.reason_code, 'TYPE_ID')
+            else:
+                self.assertEqual(ios.selection_inventory(json.dumps(fixture))['devicetypes'][0]['identifier'], identifier)
+
+    def test_select_reports_closed_missing_sdk_or_compatible_type(self):
+        fixture = self.selection_fixture()
+        for runtimes, types, sdk, code in (([], fixture['devicetypes'], '18.5', 'NO_SDK_RUNTIME'), (fixture['runtimes'], [], '18.5', 'NO_COMPATIBLE_IPHONE'), (fixture['runtimes'], fixture['devicetypes'], 'private-secret', 'SDK_VERSION')):
+            with self.assertRaises(ios.InventoryContractError) as error: ios.select(runtimes, types, sdk)
+            self.assertEqual(error.exception.reason_code, code)
+
     def test_sdk_phase_invalid_refuses_before_process_or_simulator_commands(self):
         for phase in ('invalid', 'full'):
             with patch.dict(os.environ, {"EPT_IOS_DIAGNOSTIC_PHASE": phase}), patch.object(ios, "command") as command, patch.object(ios.subprocess, "run") as run:
@@ -184,11 +220,13 @@ class SimulatorOwnership(unittest.TestCase):
             def run(args, **kwargs):
                 if args[0] == 'ps': return SimpleNamespace(returncode=0, stdout='1 200 S /private/secret/CoreSimulatorService')
                 queries.append(args)
-                return SimpleNamespace(returncode=code, stdout=json.dumps({'runtimes': [], 'devicetypes': [], 'devices': {}, 'private': 'private-secret-password'}), stderr='stage=sdk-inventory-query password=private-secret-password')
+                return SimpleNamespace(returncode=code, stdout=json.dumps({**self.selection_fixture(), 'private': 'private-secret-password'}), stderr='stage=sdk-inventory-query password=private-secret-password')
             def command(label, *_args, **kwargs):
                 return '/private/secret/Xcode_16.4.app/Contents/Developer' if label == 'sdk-selected-xcode' else '18.5'
             output = io.StringIO()
-            with patch.dict(os.environ, {"EPT_IOS_DIAGNOSTIC_PHASE": 'runtime'}), patch.object(ios, 'command', side_effect=command), patch.object(ios.subprocess, 'run', side_effect=run), redirect_stdout(output):
+            envfile = Path(self.tmp.name) / 'dry-run-env'
+            envfile.write_text('untouched\n', encoding='utf8')
+            with patch.dict(os.environ, {"EPT_IOS_DIAGNOSTIC_PHASE": 'runtime', 'GITHUB_ENV': str(envfile)}), patch.object(ios, 'command', side_effect=command), patch.object(ios.subprocess, 'run', side_effect=run), redirect_stdout(output):
                 self.assertEqual(ios.inventory_probe(), code)
             self.assertEqual(len(queries), 1)
             self.assertEqual(queries[0][-4:], ['xcrun', 'simctl', 'list', '-j'])
@@ -196,6 +234,7 @@ class SimulatorOwnership(unittest.TestCase):
             self.assertNotIn('private', output.getvalue())
             self.assertNotIn('password', output.getvalue())
             self.assertFalse(ios.marker_path().exists())
+            self.assertEqual(envfile.read_text(encoding="utf8"), "untouched\n")
 
     def test_status_body_never_logged_and_endpoint_pinned(self):
         with patch.object(ios, "load", return_value=self.record), patch.object(ios, "devices", return_value=self.listing), patch.object(ios, "command", return_value=""), patch.object(ios.http.client, "HTTPConnection") as http:

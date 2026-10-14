@@ -19,6 +19,20 @@ APP = "org.educarparatransformar.app"
 DRIVER = "dev.mobile.maestro-driver-iosUITests.xctrunner"
 
 
+INVENTORY_CODES = frozenset({"INVENTORY_JSON", "INVENTORY_SHAPE", "RUNTIME_FIELDS", "RUNTIME_DUPLICATE", "RUNTIME_ID", "RUNTIME_AVAILABILITY", "RUNTIME_VERSION", "RUNTIME_VERSION_ID", "TYPE_FIELDS", "TYPE_DUPLICATE", "TYPE_ID", "TYPE_RANGE_VERSION", "TYPE_RANGE_ORDER", "DEVICE_GROUPS", "SDK_VERSION", "NO_SDK_RUNTIME", "NO_COMPATIBLE_IPHONE", "INVENTORY_UNIDENTIFIED"})
+
+
+class InventoryContractError(RuntimeError):
+    def __init__(self, code):
+        self.reason_code = code if isinstance(code, str) and code in INVENTORY_CODES else "INVENTORY_UNIDENTIFIED"
+        super().__init__(self.reason_code)
+
+
+def report_inventory_failure(error):
+    code = error.reason_code if isinstance(error.reason_code, str) and error.reason_code in INVENTORY_CODES else "INVENTORY_UNIDENTIFIED"
+    print("SDK_CHECKCODE=" + code, file=sys.stderr, flush=True)
+
+
 def identity():
     run, attempt = os.environ["GITHUB_RUN_ID"], os.environ["GITHUB_RUN_ATTEMPT"]
     if not run.isdigit() or not attempt.isdigit():
@@ -86,47 +100,69 @@ def version(text):
 
 
 def select(runtime_data, type_data, sdk_version=None):
+    try:
+        sdk = version(sdk_version) if sdk_version is not None else None
+    except RuntimeError:
+        raise InventoryContractError("SDK_VERSION") from None
     runtimes = sorted((r for r in runtime_data if r.get("isAvailable") and r["identifier"].startswith("com.apple.CoreSimulator.SimRuntime.iOS-")), key=lambda r: version(r["version"]), reverse=True)
-    for runtime in runtimes:
-        if sdk_version is not None and version(runtime["version"]) != version(sdk_version):
-            continue
+    matching = [r for r in runtimes if sdk is None or version(r["version"]) == sdk]
+    if not matching:
+        raise InventoryContractError("NO_SDK_RUNTIME")
+    for runtime in matching:
         compatible = [d for d in type_data if d.get("productFamily") == "iPhone" and version(d["minRuntimeVersionString"]) <= version(runtime["version"]) <= version(d["maxRuntimeVersionString"])]
         if compatible:
             return runtime["identifier"], sorted(compatible, key=lambda d: d["identifier"])[-1]["identifier"]
-    raise RuntimeError("No installed compatible iPhone runtime/type")
+    raise InventoryContractError("NO_COMPATIBLE_IPHONE")
 
 
 def selection_inventory(text):
-    shape = inventory_shape(text)
-    data = json.loads(text)
+    try:
+        shape = inventory_shape(text)
+        data = json.loads(text)
+    except ValueError:
+        raise InventoryContractError("INVENTORY_JSON") from None
+    except RuntimeError:
+        raise InventoryContractError("INVENTORY_SHAPE") from None
+    print("SDK_SHAPE_COUNTS=" + json.dumps(shape, sort_keys=True), flush=True)
     runtime_ids = set()
     type_ids = set()
     for runtime in data["runtimes"]:
         if not isinstance(runtime, dict) or not isinstance(runtime.get("identifier"), str):
-            raise RuntimeError("Invalid inventory runtime fields")
+            raise InventoryContractError("RUNTIME_FIELDS")
         if runtime["identifier"] in runtime_ids:
-            raise RuntimeError("Duplicate runtime identity")
+            raise InventoryContractError("RUNTIME_DUPLICATE")
         runtime_ids.add(runtime["identifier"])
         if runtime["identifier"].startswith("com.apple.CoreSimulator.SimRuntime.iOS-"):
-            if not re.fullmatch(r"com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]+", runtime["identifier"]) or type(runtime.get("isAvailable")) is not bool:
-                raise RuntimeError("Invalid iOS runtime identity/availability")
-            if version(runtime.get("version", "")) != version(runtime["identifier"].split(".iOS-", 1)[1].replace("-", ".")):
-                raise RuntimeError("Runtime identifier/version mismatch")
+            if not re.fullmatch(r"com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]+", runtime["identifier"]):
+                raise InventoryContractError("RUNTIME_ID")
+            if type(runtime.get("isAvailable")) is not bool:
+                raise InventoryContractError("RUNTIME_AVAILABILITY")
+            try:
+                runtime_version = version(runtime.get("version", ""))
+                identifier_version = version(runtime["identifier"].split(".iOS-", 1)[1].replace("-", "."))
+            except RuntimeError:
+                raise InventoryContractError("RUNTIME_VERSION") from None
+            if runtime_version != identifier_version:
+                raise InventoryContractError("RUNTIME_VERSION_ID")
     for device_type in data["devicetypes"]:
         if not isinstance(device_type, dict) or not isinstance(device_type.get("productFamily"), str) or not isinstance(device_type.get("identifier"), str):
-            raise RuntimeError("Invalid inventory device type fields")
+            raise InventoryContractError("TYPE_FIELDS")
         if device_type["identifier"] in type_ids:
-            raise RuntimeError("Duplicate device type identity")
+            raise InventoryContractError("TYPE_DUPLICATE")
         type_ids.add(device_type["identifier"])
         if device_type["productFamily"] == "iPhone":
             if not re.fullmatch(r"com\.apple\.CoreSimulator\.SimDeviceType\.iPhone-[A-Za-z0-9-]+", device_type["identifier"]):
-                raise RuntimeError("Invalid iPhone type identity")
-            if version(device_type.get("minRuntimeVersionString", "")) > version(device_type.get("maxRuntimeVersionString", "")):
-                raise RuntimeError("Invalid device runtime range")
+                raise InventoryContractError("TYPE_ID")
+            try:
+                minimum = version(device_type.get("minRuntimeVersionString", ""))
+                maximum = version(device_type.get("maxRuntimeVersionString", ""))
+            except RuntimeError:
+                raise InventoryContractError("TYPE_RANGE_VERSION") from None
+            if minimum > maximum:
+                raise InventoryContractError("TYPE_RANGE_ORDER")
     for runtime, group in data["devices"].items():
         if not isinstance(runtime, str) or not isinstance(group, list) or any(not isinstance(device, dict) or not isinstance(device.get("name"), str) for device in group):
-            raise RuntimeError("Invalid inventory device groups")
-    print("owned simulator inventory_shape=" + json.dumps(shape, sort_keys=True), flush=True)
+            raise InventoryContractError("DEVICE_GROUPS")
     return data
 
 
@@ -136,7 +172,10 @@ def create():
     if marker_path().exists() or marker_path().is_symlink():
         raise RuntimeError("Simulator marker already exists")
     sdk = command("ios-sdk-selection", 5, "xcrun", "--sdk", "iphonesimulator", "--show-sdk-version", capture=True).strip()
-    version(sdk)
+    try:
+        version(sdk)
+    except RuntimeError:
+        raise InventoryContractError("SDK_VERSION") from None
     # Exact aggregate query measured at30.6s; one query, no separate discovery or warm-up.
     inventory = selection_inventory(command("ios-inventory-json", 65, "xcrun", "simctl", "list", "-j", capture=True))
     runtime, device_type = select(inventory["runtimes"], inventory["devicetypes"], sdk)
@@ -290,12 +329,10 @@ def inventory_probe():
         if result.returncode:
             print("sdk query failure_class=" + ("deadline" if result.returncode == 124 else "cleanup" if result.returncode == 125 else "provider_exit"), flush=True)
             return result.returncode
-        try:
-            shape = inventory_shape(result.stdout)
-        except (ValueError, RuntimeError):
-            print("sdk query failure_class=shape", flush=True)
-            raise RuntimeError("Unexpected SDK inventory shape")
-        print("sdk inventory_shape=" + json.dumps(shape, sort_keys=True), flush=True)
+        inventory = selection_inventory(result.stdout)
+        runtime, _device_type = select(inventory["runtimes"], inventory["devicetypes"], sdk)
+        runtime_version = next(r["version"] for r in inventory["runtimes"] if r["identifier"] == runtime)
+        print("sdk dry_run_selection=" + json.dumps({"sdk_version": sdk, "runtime_version": runtime_version, "family": "iPhone", "passed": True}, sort_keys=True), flush=True)
         return 0
     finally:
         stopped.set()
@@ -310,6 +347,9 @@ if __name__ == "__main__":
     try:
         result = {"create": create, "status": status, "driver-preflight": driver_preflight, "cleanup": cleanup, "inventory": inventory_probe}[action]()
         sys.exit(result or 0)
+    except InventoryContractError as error:
+        report_inventory_failure(error)
+        sys.exit(1)
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.TimeoutExpired):
         print(f"owned simulator action={action} failed; private details withheld", file=sys.stderr)
         sys.exit(1)

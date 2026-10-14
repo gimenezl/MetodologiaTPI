@@ -378,7 +378,7 @@ jobs:
     timeout-minutes: 30
     env:
       CI: '1'
-      EPT_IOS_DIAGNOSTIC_PHASE: full
+      EPT_IOS_DIAGNOSTIC_PHASE: runtime
       EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
