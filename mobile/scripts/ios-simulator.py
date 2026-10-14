@@ -80,28 +80,69 @@ def owned_device(record, listing):
 
 
 def version(text):
-    if not re.fullmatch(r"\d+(?:\.\d+){0,2}", text):
+    if not isinstance(text, str) or not re.fullmatch(r"\d+(?:\.\d+){0,2}", text):
         raise RuntimeError("Invalid installed runtime version")
     return tuple(int(v) for v in text.split(".")) + (0,) * (3 - len(text.split(".")))
 
 
-def select(runtime_data, type_data):
+def select(runtime_data, type_data, sdk_version=None):
     runtimes = sorted((r for r in runtime_data if r.get("isAvailable") and r["identifier"].startswith("com.apple.CoreSimulator.SimRuntime.iOS-")), key=lambda r: version(r["version"]), reverse=True)
     for runtime in runtimes:
+        if sdk_version is not None and version(runtime["version"]) != version(sdk_version):
+            continue
         compatible = [d for d in type_data if d.get("productFamily") == "iPhone" and version(d["minRuntimeVersionString"]) <= version(runtime["version"]) <= version(d["maxRuntimeVersionString"])]
         if compatible:
             return runtime["identifier"], sorted(compatible, key=lambda d: d["identifier"])[-1]["identifier"]
     raise RuntimeError("No installed compatible iPhone runtime/type")
 
 
+def selection_inventory(text):
+    shape = inventory_shape(text)
+    data = json.loads(text)
+    runtime_ids = set()
+    type_ids = set()
+    for runtime in data["runtimes"]:
+        if not isinstance(runtime, dict) or not isinstance(runtime.get("identifier"), str):
+            raise RuntimeError("Invalid inventory runtime fields")
+        if runtime["identifier"] in runtime_ids:
+            raise RuntimeError("Duplicate runtime identity")
+        runtime_ids.add(runtime["identifier"])
+        if runtime["identifier"].startswith("com.apple.CoreSimulator.SimRuntime.iOS-"):
+            if not re.fullmatch(r"com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]+", runtime["identifier"]) or type(runtime.get("isAvailable")) is not bool:
+                raise RuntimeError("Invalid iOS runtime identity/availability")
+            if version(runtime.get("version", "")) != version(runtime["identifier"].split(".iOS-", 1)[1].replace("-", ".")):
+                raise RuntimeError("Runtime identifier/version mismatch")
+    for device_type in data["devicetypes"]:
+        if not isinstance(device_type, dict) or not isinstance(device_type.get("productFamily"), str) or not isinstance(device_type.get("identifier"), str):
+            raise RuntimeError("Invalid inventory device type fields")
+        if device_type["identifier"] in type_ids:
+            raise RuntimeError("Duplicate device type identity")
+        type_ids.add(device_type["identifier"])
+        if device_type["productFamily"] == "iPhone":
+            if not re.fullmatch(r"com\.apple\.CoreSimulator\.SimDeviceType\.iPhone-[A-Za-z0-9-]+", device_type["identifier"]):
+                raise RuntimeError("Invalid iPhone type identity")
+            if version(device_type.get("minRuntimeVersionString", "")) > version(device_type.get("maxRuntimeVersionString", "")):
+                raise RuntimeError("Invalid device runtime range")
+    for runtime, group in data["devices"].items():
+        if not isinstance(runtime, str) or not isinstance(group, list) or any(not isinstance(device, dict) or not isinstance(device.get("name"), str) for device in group):
+            raise RuntimeError("Invalid inventory device groups")
+    print("owned simulator inventory_shape=" + json.dumps(shape, sort_keys=True), flush=True)
+    return data
+
+
 def create():
+    if diagnostic_phase() != "full":
+        raise RuntimeError("Simulator creation requires full phase")
     if marker_path().exists() or marker_path().is_symlink():
         raise RuntimeError("Simulator marker already exists")
-    runtimes = json.loads(command("ios-runtime-json", 15, "xcrun", "simctl", "list", "runtimes", "-j", capture=True))["runtimes"]
-    types = json.loads(command("ios-type-json", 15, "xcrun", "simctl", "list", "devicetypes", "-j", capture=True))["devicetypes"]
-    runtime, device_type = select(runtimes, types)
-    record = {**identity(), "runtime": runtime, "type": device_type}
-    if any(d.get("name") == record["name"] for group in devices().values() for d in group):
+    sdk = command("ios-sdk-selection", 5, "xcrun", "--sdk", "iphonesimulator", "--show-sdk-version", capture=True).strip()
+    version(sdk)
+    # Exact aggregate query measured at30.6s; one query, no separate discovery or warm-up.
+    inventory = selection_inventory(command("ios-inventory-json", 65, "xcrun", "simctl", "list", "-j", capture=True))
+    runtime, device_type = select(inventory["runtimes"], inventory["devicetypes"], sdk)
+    print(f"owned simulator selection sdk={sdk} runtime={runtime} type={device_type}", flush=True)
+    record = {**identity(), "runtime": runtime, "type": device_type, "sdk": sdk}
+    if any(d.get("name") == record["name"] for group in inventory["devices"].values() for d in group):
         raise RuntimeError("Attempt simulator name already occupied")
     # Persist the intent before create, so a timed-out create remains attributable.
     save(record)

@@ -101,6 +101,61 @@ class SimulatorOwnership(unittest.TestCase):
         self.assertEqual(ios.app_processes(text), {ios.APP: True, ios.DRIVER: False})
         self.assertEqual(ios.app_processes(f"123 0 {ios.APP}.foreign"), {ios.APP: False, ios.DRIVER: False})
 
+    def selection_fixture(self):
+        return {'runtimes': [{'identifier': RUNTIME, 'isAvailable': True, 'version': '18.5'}], 'devicetypes': [{'identifier': 'com.apple.CoreSimulator.SimDeviceType.iPhone-16', 'productFamily': 'iPhone', 'minRuntimeVersionString': '18.0', 'maxRuntimeVersionString': '65535.255.255'}], 'devices': {RUNTIME: []}}
+
+    def test_full_creation_uses_one_aggregate_query_and_same_sdk_owned_udid(self):
+        fixture = self.selection_fixture()
+        calls = []
+        def command(label, seconds, *args, **kwargs):
+            calls.append((label, seconds, args))
+            if label == 'ios-sdk-selection': return '18.5\n'
+            if label == 'ios-inventory-json': return json.dumps(fixture)
+            if label == 'ios-create': return UDID
+            self.fail('Unexpected provider command')
+        envfile = Path(self.tmp.name) / 'github-env'
+        with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': 'full', 'GITHUB_ENV': str(envfile)}), patch.object(ios, 'command', side_effect=command), patch.object(ios, 'devices', return_value=self.listing):
+            ios.create()
+        self.assertEqual([c for c in calls if c[2][:3] == ('xcrun', 'simctl', 'list')], [('ios-inventory-json', 65, ('xcrun', 'simctl', 'list', '-j'))])
+        self.assertEqual(calls[-1][2][-2:], (fixture['devicetypes'][0]['identifier'], RUNTIME))
+        record = json.loads(ios.marker_path().read_text(encoding='utf8'))
+        self.assertEqual((record['sdk'], record['runtime'], record['udid']), ('18.5', RUNTIME, UDID))
+        self.assertIn('EPT_IOS_UDID=' + UDID, envfile.read_text(encoding='utf8'))
+
+    def test_selection_inventory_rejects_conflicting_identity_and_field_types(self):
+        for change in ('duplicate-runtime', 'duplicate-type', 'string-availability', 'version-mismatch', 'invalid-range', 'invalid-device-group'):
+            fixture = self.selection_fixture()
+            if change == 'duplicate-runtime': fixture['runtimes'] *= 2
+            if change == 'duplicate-type': fixture['devicetypes'] *= 2
+            if change == 'string-availability': fixture['runtimes'][0]['isAvailable'] = 'true'
+            if change == 'version-mismatch': fixture['runtimes'][0]['version'] = '26.2'
+            if change == 'invalid-range': fixture['devicetypes'][0]['maxRuntimeVersionString'] = '17.0'
+            if change == 'invalid-device-group': fixture['devices'][RUNTIME] = [{'name': {'private': 'never print'}}]
+            with self.assertRaises(RuntimeError): ios.selection_inventory(json.dumps(fixture))
+
+    def test_discovery_error_or_malformed_never_creates_marker_or_simulator(self):
+        for data in ('invalid-private', '{}', json.dumps({**self.selection_fixture(), 'devicetypes': [{}]})):
+            with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': 'full'}), patch.object(ios, 'command', side_effect=['18.5', data]) as command:
+                with self.assertRaises((ValueError, RuntimeError)): ios.create()
+                self.assertEqual(command.call_count, 2)
+                self.assertFalse(ios.marker_path().exists())
+        with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': 'full'}), patch.object(ios, 'command', side_effect=['18.5', RuntimeError('query exit124')]) as command:
+            with self.assertRaises(RuntimeError): ios.create()
+            self.assertEqual(command.call_count, 2)
+            self.assertFalse(ios.marker_path().exists())
+        for phase in ('runtime', 'unknown'):
+            with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': phase}), patch.object(ios, 'command') as command:
+                with self.assertRaises(RuntimeError): ios.create()
+                command.assert_not_called()
+
+    def test_selection_requires_sdk_runtime_and_compatible_available_iphone(self):
+        fixture = self.selection_fixture()
+        for runtime, types, sdk in ([{**fixture['runtimes'][0], 'isAvailable': False}], fixture['devicetypes'], '18.5'), (fixture['runtimes'], fixture['devicetypes'], '26.2'), (fixture['runtimes'], [{**fixture['devicetypes'][0], 'minRuntimeVersionString': '19.0'}], '18.5'):
+            with self.assertRaises(RuntimeError): ios.select(runtime, types, sdk)
+        with self.assertRaises(RuntimeError): ios.version({'private': 'never print'})
+        fixture['runtimes'].append({'identifier': 'com.apple.CoreSimulator.SimRuntime.iOS-26-2', 'isAvailable': True, 'version': '26.2'})
+        self.assertEqual(ios.select(fixture['runtimes'], fixture['devicetypes'], '18.5')[0], RUNTIME)
+
     def test_sdk_phase_invalid_refuses_before_process_or_simulator_commands(self):
         for phase in ('invalid', 'full'):
             with patch.dict(os.environ, {"EPT_IOS_DIAGNOSTIC_PHASE": phase}), patch.object(ios, "command") as command, patch.object(ios.subprocess, "run") as run:

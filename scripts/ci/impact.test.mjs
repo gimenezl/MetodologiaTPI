@@ -213,7 +213,7 @@ test('diagnóstico iOS es opt-in, acotado y nunca aprueba entrega', () => {
   const diagnostic = yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:')).split(/\n  [a-z-]+:/u)[0]
   assert.match(diagnostic, /needs: diagnostic-smoke/u)
   assert.match(diagnostic, /timeout-minutes: 30/u)
-  assert.match(diagnostic, /EPT_IOS_DIAGNOSTIC_PHASE: runtime/u)
+  assert.match(diagnostic, /EPT_IOS_DIAGNOSTIC_PHASE: full/u)
   assert.match(diagnostic, /runtime\) budget=180/u)
   assert.match(diagnostic, /full\) budget=1680/u)
   assert.match(diagnostic, /Invalid iOS diagnostic phase'; exit 1/u)
