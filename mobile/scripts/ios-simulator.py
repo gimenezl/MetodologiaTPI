@@ -115,6 +115,24 @@ def select(runtime_data, type_data, sdk_version=None):
     raise InventoryContractError("NO_COMPATIBLE_IPHONE")
 
 
+def type_id_conditions(identifier):
+    # Closed booleans only: never return the value, length or character samples.
+    prefix = "com.apple.CoreSimulator.SimDeviceType.iPhone-"
+    string = isinstance(identifier, str)
+    return {
+        "namespace_iPhone": string and identifier.startswith(prefix),
+        "nonempty": string and len(identifier) > len(prefix),
+        "bounded": string and len(identifier) <= 256,
+        "no_control": string and all(character.isprintable() for character in identifier),
+        "no_whitespace": string and not any(character.isspace() for character in identifier),
+        "base_apple_namespace": string and identifier.startswith("com.apple.CoreSimulator.SimDeviceType."),
+    }
+
+
+def type_id_accepted(conditions):
+    return all(conditions[key] for key in ("namespace_iPhone", "nonempty", "bounded", "no_control", "no_whitespace"))
+
+
 def selection_inventory(text):
     try:
         shape = inventory_shape(text)
@@ -149,8 +167,9 @@ def selection_inventory(text):
         type_ids.add(device_type["identifier"])
         if device_type["productFamily"] == "iPhone":
             identifier = device_type["identifier"]
-            prefix = "com.apple.CoreSimulator.SimDeviceType.iPhone-"
-            if not identifier.startswith(prefix) or len(identifier) <= len(prefix) or len(identifier) > 256 or any(character.isspace() or not character.isprintable() for character in identifier):
+            conditions = type_id_conditions(identifier)
+            if not type_id_accepted(conditions):
+                print("SDK_TYPE_ID_FLAGS=" + json.dumps(conditions, sort_keys=True), file=sys.stderr, flush=True)
                 raise InventoryContractError("TYPE_ID")
             try:
                 minimum = version(device_type.get("minRuntimeVersionString", ""))

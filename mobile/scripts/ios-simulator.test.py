@@ -182,7 +182,7 @@ class SimulatorOwnership(unittest.TestCase):
                 try: ios.selection_inventory(data)
                 except ios.InventoryContractError as error: ios.report_inventory_failure(error)
                 else: self.fail('Negative parser should fail')
-            self.assertEqual(error_output.getvalue(), 'SDK_CHECKCODE=' + expected + '\n')
+            self.assertEqual(error_output.getvalue().splitlines()[-1], 'SDK_CHECKCODE=' + expected)
             self.assertNotIn('private', output.getvalue() + error_output.getvalue())
             self.assertNotIn('secret', output.getvalue() + error_output.getvalue())
         private = ios.InventoryContractError({'private': 'secret'})
@@ -228,6 +228,40 @@ class SimulatorOwnership(unittest.TestCase):
             self.assertEqual(ios.command('ios-create', 30, 'xcrun', 'simctl', 'create', 'owned', identifier, RUNTIME, capture=True), UDID)
         self.assertEqual(run.call_args.args[0][-6:], ['xcrun', 'simctl', 'create', 'owned', identifier, RUNTIME])
         self.assertFalse(run.call_args.kwargs.get('shell', False))
+
+    def test_type_id_flags_are_exact_booleans_with_identical_acceptance_predicate(self):
+        prefix = 'com.apple.CoreSimulator.SimDeviceType.iPhone-'
+        cases = [prefix, 'private-secret', prefix + '16', prefix + 'opaque();$', prefix + 'x' * 256]
+        cases += [prefix + left + right for left in ('a', ' ', '\x00', '\n', '\u200b', '(third)') for right in ('', 'b', '\t', '\x7f')]
+        for identifier in cases:
+            old = identifier.startswith(prefix) and len(identifier) > len(prefix) and len(identifier) <= 256 and not any(c.isspace() or not c.isprintable() for c in identifier)
+            flags = ios.type_id_conditions(identifier)
+            self.assertEqual(set(flags), {'namespace_iPhone', 'nonempty', 'bounded', 'no_control', 'no_whitespace', 'base_apple_namespace'})
+            self.assertTrue(all(type(value) is bool for value in flags.values()))
+            self.assertEqual(ios.type_id_accepted(flags), old)
+            self.assertNotIn(identifier, json.dumps(flags))
+        self.assertTrue(ios.type_id_conditions(prefix)['base_apple_namespace'])
+        self.assertFalse(ios.type_id_conditions(prefix)['nonempty'])
+
+    def test_type_id_failure_logs_only_boolean_vector_and_closed_code(self):
+        fixture = self.selection_fixture()
+        fixture['devicetypes'][0]['identifier'] = 'private-secret-password-newline\nnot-an-identifier'
+        output = io.StringIO()
+        with redirect_stderr(output):
+            try: ios.selection_inventory(json.dumps(fixture))
+            except ios.InventoryContractError as error: ios.report_inventory_failure(error)
+            else: self.fail('Negative must reject')
+        lines = output.getvalue().splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[0].startswith('SDK_TYPE_ID_FLAGS='))
+        flags = json.loads(lines[0].split('=', 1)[1])
+        self.assertFalse(flags['base_apple_namespace'])
+        self.assertFalse(flags['namespace_iPhone'])
+        self.assertFalse(flags['no_control'])
+        self.assertFalse(flags['no_whitespace'])
+        self.assertEqual(lines[1], 'SDK_CHECKCODE=TYPE_ID')
+        for private in ('private', 'password', 'identifier'):
+            self.assertNotIn(private, output.getvalue())
 
     def test_select_reports_closed_missing_sdk_or_compatible_type(self):
         fixture = self.selection_fixture()
