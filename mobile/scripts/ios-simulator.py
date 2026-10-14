@@ -17,9 +17,10 @@ import math
 ROOT = Path(__file__).resolve().parents[2]
 APP = "org.educarparatransformar.app"
 DRIVER = "dev.mobile.maestro-driver-iosUITests.xctrunner"
+PINNED_DEVELOPER_DIR = "/Applications/Xcode_26.1.1.app/Contents/Developer"
 
 
-INVENTORY_CODES = frozenset({"INVENTORY_JSON", "INVENTORY_SHAPE", "RUNTIME_FIELDS", "RUNTIME_DUPLICATE", "RUNTIME_ID", "RUNTIME_AVAILABILITY", "RUNTIME_VERSION", "RUNTIME_VERSION_ID", "TYPE_FIELDS", "TYPE_DUPLICATE", "TYPE_ID", "TYPE_RANGE_VERSION", "TYPE_RANGE_ORDER", "DEVICE_GROUPS", "SDK_VERSION", "NO_SDK_RUNTIME", "NO_COMPATIBLE_IPHONE", "INVENTORY_UNIDENTIFIED"})
+INVENTORY_CODES = frozenset({"INVENTORY_JSON", "INVENTORY_SHAPE", "RUNTIME_FIELDS", "RUNTIME_DUPLICATE", "RUNTIME_ID", "RUNTIME_AVAILABILITY", "RUNTIME_VERSION", "RUNTIME_VERSION_ID", "TYPE_FIELDS", "TYPE_DUPLICATE", "TYPE_ID", "TYPE_RANGE_VERSION", "TYPE_RANGE_ORDER", "DEVICE_GROUPS", "SDK_VERSION", "NO_SDK_RUNTIME", "NO_COMPATIBLE_IPHONE", "INVENTORY_UNIDENTIFIED", "TOOLCHAIN_CONFIG", "TOOLCHAIN_UNAVAILABLE", "TOOLCHAIN_PATH", "TOOLCHAIN_XCODE", "TOOLCHAIN_SWIFT"})
 
 
 class InventoryContractError(RuntimeError):
@@ -315,14 +316,39 @@ def resource_summary(text):
     return classes
 
 
+def checked_toolchain_versions(xcode_text, swift_text):
+    xcode = re.fullmatch(r"Xcode ([0-9.]+)\s+Build version ([A-Za-z0-9]+)\s*", xcode_text.strip())
+    if not xcode or xcode.groups() != ("26.1.1", "17B100"):
+        raise InventoryContractError("TOOLCHAIN_XCODE")
+    swift = re.search(r"^Apple Swift version ([0-9]+(?:\.[0-9]+){1,2})(?:\s|$)", swift_text)
+    if not swift or version(swift.group(1)) < (6, 2, 0):
+        raise InventoryContractError("TOOLCHAIN_SWIFT")
+    return {"xcode_version": xcode.group(1), "xcode_build": xcode.group(2), "swift_version": swift.group(1), "swift_minimum": "6.2", "selected": True}
+
+
+def toolchain_preflight():
+    if os.environ.get("DEVELOPER_DIR") != PINNED_DEVELOPER_DIR:
+        raise InventoryContractError("TOOLCHAIN_CONFIG")
+    developer = Path(PINNED_DEVELOPER_DIR).resolve()
+    if not developer.is_dir():
+        raise InventoryContractError("TOOLCHAIN_UNAVAILABLE")
+    # xcrun honors the job-local override; global xcode-select would be misleading here.
+    swift_path = command("ios-toolchain-path", 5, "xcrun", "--find", "swift", capture=True).strip()
+    if not Path(swift_path).resolve().is_relative_to(developer):
+        raise InventoryContractError("TOOLCHAIN_PATH")
+    xcode = command("ios-toolchain-xcode", 5, "xcodebuild", "-version", capture=True)
+    swift = command("ios-toolchain-swift", 5, "xcrun", "swift", "--version", capture=True)
+    result = checked_toolchain_versions(xcode, swift)
+    print("ios toolchain=" + json.dumps(result, sort_keys=True), flush=True)
+    return result
+
+
 def inventory_probe():
     if diagnostic_phase() != "runtime":
         raise RuntimeError("SDK inventory requires explicit runtime phase")
     print("sdk inventory architecture=" + ("arm64" if platform.machine() == "arm64" else "OTHER"), flush=True)
-    selected = command("sdk-selected-xcode", 5, "xcode-select", "--print-path", capture=True)
-    match = re.search(r"/(Xcode(?:_[0-9.]+)?\.app)/", selected)
-    print("sdk selected_xcode=" + (match.group(1) if match else "OTHER"), flush=True)
-    command("sdk-xcode-version", 5, "xcodebuild", "-version")
+    toolchain = toolchain_preflight()
+    print("sdk selected_xcode_version=" + toolchain["xcode_version"], flush=True)
     sdk = command("sdk-version", 5, "xcrun", "--sdk", "iphonesimulator", "--show-sdk-version", capture=True).strip()
     print("sdk simulator_version=" + (sdk if re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,2}", sdk) else "OTHER"), flush=True)
     stopped = threading.Event()
@@ -362,11 +388,11 @@ def inventory_probe():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("create", "status", "driver-preflight", "cleanup", "inventory"))
+    parser.add_argument("action", choices=("create", "status", "driver-preflight", "cleanup", "inventory", "toolchain"))
     action = parser.parse_args().action
     try:
-        result = {"create": create, "status": status, "driver-preflight": driver_preflight, "cleanup": cleanup, "inventory": inventory_probe}[action]()
-        sys.exit(result or 0)
+        result = {"create": create, "status": status, "driver-preflight": driver_preflight, "cleanup": cleanup, "inventory": inventory_probe, "toolchain": toolchain_preflight}[action]()
+        sys.exit(result if isinstance(result, int) else 0)
     except InventoryContractError as error:
         report_inventory_failure(error)
         sys.exit(1)

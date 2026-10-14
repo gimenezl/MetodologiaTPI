@@ -242,6 +242,7 @@ jobs:
     timeout-minutes: 30
     env:
       CI: '1'
+      DEVELOPER_DIR: /Applications/Xcode_26.1.1.app/Contents/Developer
       EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -257,6 +258,8 @@ jobs:
           echo "EPT_NATIVE_DEADLINE=$(( $(date +%s) + 1680 ))" >> "$GITHUB_ENV"
           echo "EPT_STAGE_LOG_DIR=$RUNNER_TEMP/evidencia-movil-ios/stages" >> "$GITHUB_ENV"
           echo "EPT_IOS_EVIDENCE_DIR=$RUNNER_TEMP/evidencia-movil-ios" >> "$GITHUB_ENV"
+      - name: Verificar toolchain iOS seleccionado antes del backend
+        run: python3 scripts/ci/run-stage.py --stage ios-toolchain --seconds 20 -- python3 mobile/scripts/ios-simulator.py toolchain
       - name: Versiones de herramientas
         run: |
           python3 scripts/ci/run-stage.py --stage ios-version --seconds 15 -- xcodebuild -version
@@ -378,7 +381,8 @@ jobs:
     timeout-minutes: 30
     env:
       CI: '1'
-      EPT_IOS_DIAGNOSTIC_PHASE: full
+      DEVELOPER_DIR: /Applications/Xcode_26.1.1.app/Contents/Developer
+      EPT_IOS_DIAGNOSTIC_PHASE: runtime
       EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -398,6 +402,9 @@ jobs:
           echo "EPT_STAGE_LOG_DIR=$RUNNER_TEMP/evidencia-ios-infra/stages" >> "$GITHUB_ENV"
           echo "EPT_IOS_EVIDENCE_DIR=$RUNNER_TEMP/evidencia-ios-infra" >> "$GITHUB_ENV"
           printf 'head=%s\nmerge_ref=%s\n' '${{ github.event.pull_request.head.sha }}' '${{ github.sha }}' >> "$GITHUB_STEP_SUMMARY"
+      - name: Verificar toolchain iOS seleccionado antes del backend
+        if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
+        run: python3 scripts/ci/run-stage.py --stage ios-toolchain --seconds 20 -- python3 mobile/scripts/ios-simulator.py toolchain
       - name: Probar supervisión POSIX también en macOS
         run: |
           mkdir -p "$EPT_STAGE_LOG_DIR"

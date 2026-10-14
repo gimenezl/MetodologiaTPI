@@ -181,6 +181,20 @@ test('EPT-102: el paquete móvil no altera dependencias ni lockfile de Next', ()
   assert.match(readFileSync('eslint.config.mjs', 'utf8'), /"mobile\/\*\*"/u)
 })
 
+test('diagnóstico iOS fija toolchain local y verifica compatibilidad antes del backend', () => {
+  const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
+  for (const job of ['mobile-ios', 'ios-infrastructure-diagnostic']) {
+    const block = yml.slice(yml.indexOf(`  ${job}:`)).split(/\n  [a-z-]+:/u)[0]
+    assert.match(block, /DEVELOPER_DIR: \/Applications\/Xcode_26\.1\.1\.app\/Contents\/Developer/u)
+    assert.match(block, /ios-toolchain --seconds 20/u)
+    assert.ok(block.indexOf('ios-simulator.py toolchain') < block.indexOf('native-backend.py start'))
+    assert.doesNotMatch(block, /sudo.*xcode-select|runFirstLaunch/u)
+  }
+  const helper = readFileSync('mobile/scripts/ios-simulator.py', 'utf8')
+  assert.doesNotMatch(helper, /xcode-select.*--print-path/u)
+  assert.match(helper, /"xcrun", "--find", "swift"/u)
+})
+
 test('diagnóstico iOS publica la ruta del runner en setup, no en job env', () => {
   const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
   // GitHub's jobs.<job_id>.env availability table; full expression semantics use actionlint separately.
@@ -213,7 +227,7 @@ test('diagnóstico iOS es opt-in, acotado y nunca aprueba entrega', () => {
   const diagnostic = yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:')).split(/\n  [a-z-]+:/u)[0]
   assert.match(diagnostic, /needs: diagnostic-smoke/u)
   assert.match(diagnostic, /timeout-minutes: 30/u)
-  assert.match(diagnostic, /EPT_IOS_DIAGNOSTIC_PHASE: full/u)
+  assert.match(diagnostic, /EPT_IOS_DIAGNOSTIC_PHASE: runtime/u)
   assert.match(diagnostic, /runtime\) budget=180/u)
   assert.match(diagnostic, /full\) budget=1680/u)
   assert.match(diagnostic, /Invalid iOS diagnostic phase'; exit 1/u)

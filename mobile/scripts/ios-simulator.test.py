@@ -315,7 +315,7 @@ class SimulatorOwnership(unittest.TestCase):
             output = io.StringIO()
             envfile = Path(self.tmp.name) / 'dry-run-env'
             envfile.write_text('untouched\n', encoding='utf8')
-            with patch.dict(os.environ, {"EPT_IOS_DIAGNOSTIC_PHASE": 'runtime', 'GITHUB_ENV': str(envfile)}), patch.object(ios, 'command', side_effect=command), patch.object(ios.subprocess, 'run', side_effect=run), redirect_stdout(output):
+            with patch.dict(os.environ, {"EPT_IOS_DIAGNOSTIC_PHASE": 'runtime', 'GITHUB_ENV': str(envfile)}), patch.object(ios, 'command', side_effect=command), patch.object(ios, 'toolchain_preflight', return_value={'xcode_version': '26.1.1'}), patch.object(ios.subprocess, 'run', side_effect=run), redirect_stdout(output):
                 self.assertEqual(ios.inventory_probe(), code)
             self.assertEqual(len(queries), 1)
             self.assertEqual(queries[0][-4:], ['xcrun', 'simctl', 'list', '-j'])
@@ -324,6 +324,46 @@ class SimulatorOwnership(unittest.TestCase):
             self.assertNotIn('password', output.getvalue())
             self.assertFalse(ios.marker_path().exists())
             self.assertEqual(envfile.read_text(encoding="utf8"), "untouched\n")
+
+    def test_pinned_xcode_and_swift_contract_versions_fail_closed(self):
+        xcode = 'Xcode 26.1.1\nBuild version 17B100\n'
+        result = ios.checked_toolchain_versions(xcode, 'Apple Swift version 6.2.1 (swiftlang-public)\nTarget: arm64-apple-macosx\n')
+        self.assertEqual(result['xcode_version'], '26.1.1')
+        self.assertEqual(result['swift_version'], '6.2.1')
+        for bad in ('Xcode 16.4\nBuild version 16F6', xcode + 'private-secret', 'private-provider-object'):
+            with self.assertRaises(ios.InventoryContractError) as error: ios.checked_toolchain_versions(bad, 'Apple Swift version 6.2.1')
+            self.assertEqual(error.exception.reason_code, 'TOOLCHAIN_XCODE')
+        for bad in ('Apple Swift version 6.1.0', 'private-secret', 'Apple Swift version unknown'):
+            with self.assertRaises(ios.InventoryContractError) as error: ios.checked_toolchain_versions(xcode, bad)
+            self.assertEqual(error.exception.reason_code, 'TOOLCHAIN_SWIFT')
+
+    def test_toolchain_unavailable_or_foreign_config_stops_before_provider_commands(self):
+        with patch.dict(os.environ, {'DEVELOPER_DIR': 'private-foreign'}), patch.object(ios, 'command') as command:
+            with self.assertRaises(ios.InventoryContractError) as error: ios.toolchain_preflight()
+            self.assertEqual(error.exception.reason_code, 'TOOLCHAIN_CONFIG')
+            command.assert_not_called()
+        with patch.dict(os.environ, {'DEVELOPER_DIR': ios.PINNED_DEVELOPER_DIR}), patch.object(Path, 'is_dir', return_value=False), patch.object(ios, 'command') as command:
+            with self.assertRaises(ios.InventoryContractError) as error: ios.toolchain_preflight()
+            self.assertEqual(error.exception.reason_code, 'TOOLCHAIN_UNAVAILABLE')
+            command.assert_not_called()
+
+    def test_toolchain_xcrun_provenance_and_public_summary_without_paths(self):
+        swift_path = str(Path(ios.PINNED_DEVELOPER_DIR) / 'Toolchains/XcodeDefault.xctoolchain/usr/bin/swift')
+        calls = []
+        def command(label, seconds, *args, **kwargs):
+            calls.append((label, seconds, args, kwargs))
+            return {'ios-toolchain-path': swift_path, 'ios-toolchain-xcode': 'Xcode 26.1.1\nBuild version 17B100', 'ios-toolchain-swift': 'Apple Swift version 6.2.1 (private-provider-text)'}[label]
+        output = io.StringIO()
+        with patch.dict(os.environ, {'DEVELOPER_DIR': ios.PINNED_DEVELOPER_DIR}), patch.object(Path, 'is_dir', return_value=True), patch.object(ios, 'command', side_effect=command), redirect_stdout(output):
+            self.assertTrue(ios.toolchain_preflight()['selected'])
+        self.assertEqual(calls[0][2], ('xcrun', '--find', 'swift'))
+        self.assertTrue(all(c[1] == 5 and c[3]['capture'] is True for c in calls))
+        for private in ('/Applications', 'private', 'Toolchains'):
+            self.assertNotIn(private, output.getvalue())
+        with patch.dict(os.environ, {'DEVELOPER_DIR': ios.PINNED_DEVELOPER_DIR}), patch.object(Path, 'is_dir', return_value=True), patch.object(ios, 'command', return_value='/private/foreign/swift') as command:
+            with self.assertRaises(ios.InventoryContractError) as error: ios.toolchain_preflight()
+            self.assertEqual(error.exception.reason_code, 'TOOLCHAIN_PATH')
+            self.assertEqual(command.call_count, 1)
 
     def test_status_body_never_logged_and_endpoint_pinned(self):
         with patch.object(ios, "load", return_value=self.record), patch.object(ios, "devices", return_value=self.listing), patch.object(ios, "command", return_value=""), patch.object(ios.http.client, "HTTPConnection") as http:
