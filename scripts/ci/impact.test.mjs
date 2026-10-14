@@ -74,6 +74,45 @@ test('EPT-102: mobile/ se registra con contrato propio y bloquea lo desconocido'
   // Un cambio web sin relación con la app no activa los gates móviles.
   assert.equal(profile(['src/proxy.ts']).mobile, undefined)
 })
+test('EPT-102: simulador Python exige registro exacto y plan CLI real por archivo', () => {
+  const files = ['mobile/scripts/ios-simulator.py', 'mobile/scripts/ios-simulator.test.py']
+  for (const file of files) assert.deepEqual(profile([file]), { db: false, mutations: false, ui: [], mobile: true })
+  assert.throws(() => profile(['mobile/scripts/unregistered.py']), /Ruta mobile sin contrato/u)
+  const directory = mkdtempSync(path.join(tmpdir(), 'ept105-impact-python-'))
+  const git = args => execFileSync('git', ['-C', directory, ...args], { encoding: 'utf8' }).trim()
+  const identity = { ...process.env, GIT_AUTHOR_NAME: 'CI Fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid', GIT_COMMITTER_NAME: 'CI Fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid' }
+  try {
+    // Synthetic Git objects live only in the fixture repository; no branch/index of the task changes.
+    git(['init', '--quiet', '--template='])
+    mkdirSync(path.join(directory, 'mobile', 'scripts'), { recursive: true })
+    for (const file of ['package.json', 'mobile/package.json']) cpSync(file, path.join(directory, file))
+    git(['add', '--', 'package.json', 'mobile/package.json'])
+    const baseTree = git(['write-tree'])
+    const commit = (tree, parent) => execFileSync('git', ['-C', directory, 'commit-tree', tree, ...(parent ? ['-p', parent] : []), '-m', 'test: isolated impact fixture'], { env: identity, encoding: 'utf8' }).trim()
+    const base = commit(baseTree)
+    for (const [index, file] of [...files, 'mobile/scripts/unregistered.py'].entries()) {
+      git(['read-tree', baseTree])
+      writeFileSync(path.join(directory, file), '# synthetic changed file\n')
+      git(['add', '--', file])
+      const head = commit(git(['write-tree']), base)
+      const output = path.join(directory, `output-${index}`)
+      const result = spawnSync(process.execPath, ['scripts/ci/impact.mjs'], { env: { ...process.env,
+        GIT_DIR: path.join(directory, '.git'), GIT_WORK_TREE: process.cwd(),
+        CI_BASE_SHA: base, CI_HEAD_SHA: head, GITHUB_OUTPUT: output }, encoding: 'utf8', timeout: 10000 })
+      if (files.includes(file)) {
+        assert.equal(result.status, 0, result.stderr)
+        assert.equal(readFileSync(output, 'utf8'), 'db=false\nmutations=false\nui=[]\nprototipo=false\nmobile=true\n')
+      } else {
+        assert.notEqual(result.status, 0)
+        assert.match(result.stderr, /Ruta mobile sin contrato/u)
+      }
+    }
+  } finally {
+    assert.ok(path.resolve(directory).startsWith(path.resolve(tmpdir()) + path.sep))
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
 test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
   assert.equal(validateMobileWorkflow(yml), true)
@@ -148,7 +187,8 @@ test('diagnóstico iOS es opt-in, acotado y nunca aprueba entrega', () => {
   assert.match(yml, /push:\n    branches: \[main\]/u)
   const diagnostic = yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:')).split(/\n  [a-z-]+:/u)[0]
   assert.match(diagnostic, /needs: diagnostic-smoke/u)
-  assert.match(diagnostic, /timeout-minutes: 12/u)
+  assert.match(diagnostic, /timeout-minutes: 30/u)
+  assert.match(diagnostic, /date \+%s\) \+ 1680/u)
   assert.match(diagnostic, /ci:ios-infrastructure-diagnostic/u)
   assert.match(diagnostic, /native-backend\.py start/u)
   assert.match(diagnostic, /runs-on: macos-15/u)
@@ -160,7 +200,13 @@ test('diagnóstico iOS es opt-in, acotado y nunca aprueba entrega', () => {
   assert.match(diagnostic, /integracion-auth-local\.mjs/u)
   assert.match(diagnostic, /if: always\(\)/u)
   assert.match(diagnostic, /cleanup-native/u)
-  assert.doesNotMatch(diagnostic, /expo prebuild|compilar-ios|ejecutar-ios|maestro test/u)
+  assert.match(diagnostic, /expo prebuild --platform ios/u)
+  assert.match(diagnostic, /compilar-ios\.sh/u)
+  assert.match(diagnostic, /ejecutar-ios\.sh/u)
+  assert.ok(diagnostic.indexOf('integracion-auth-local.mjs') < diagnostic.indexOf('expo prebuild'))
+  assert.match(diagnostic, /cleanup-ios-simulator --seconds 55/u)
+  assert.match(diagnostic, /MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'/u)
+  assert.doesNotMatch(diagnostic, /DerivedData|derivedDataPath.*cache/u)
   const smoke = yml.slice(yml.indexOf('  diagnostic-smoke:')).split(/\n  [a-z-]+:/u)[0]
   assert.match(smoke, /timeout-minutes: 3/u)
   assert.match(smoke, /run-stage\.test\.py/u)

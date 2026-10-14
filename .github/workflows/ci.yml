@@ -265,6 +265,7 @@ jobs:
           python3 scripts/ci/run-stage.test.py
           node --test mobile/scripts/stack-isolation.test.mjs
           python3 scripts/ci/native-backend.test.py
+          python3 mobile/scripts/ios-simulator.test.py
           node --test scripts/ci/install-native.test.mjs
       - name: Seleccionar simulador y arquitectura ARM64
         run: bash mobile/scripts/preparar-ios.sh
@@ -316,6 +317,9 @@ jobs:
             python3 scripts/ci/run-stage.py --stage cleanup-package --seconds 20 -- ditto -c -k --keepParent "${{ steps.app.outputs.ruta }}" "$RUNNER_TEMP/evidencia-movil-ios/aplicacion-ios-simulador.zip"
           fi
           python3 scripts/ci/run-stage.py --sanitize-directory "$RUNNER_TEMP/evidencia-movil-ios"
+      - name: Cerrar y eliminar únicamente el simulador de este intento
+        if: always()
+        run: python3 scripts/ci/run-stage.py --stage cleanup-ios-simulator --seconds 55 -- python3 mobile/scripts/ios-simulator.py cleanup
       - name: Detener únicamente workers nativos propios
         if: always()
         run: python3 scripts/ci/run-stage.py --stage cleanup-native --seconds 45 -- python3 scripts/ci/native-backend.py stop
@@ -351,6 +355,7 @@ jobs:
           set -o pipefail
           python3 scripts/ci/run-stage.test.py 2>&1 | tee "$EPT_STAGE_LOG_DIR/process-tests-redacted.log"
       - run: python3 scripts/ci/native-backend.test.py
+      - run: python3 mobile/scripts/ios-simulator.test.py
       - run: node --test scripts/ci/install-native.test.mjs
       - run: node --test mobile/scripts/stack-isolation.test.mjs
       - run: node --test --test-name-pattern='EPT-102|diagnóstico' scripts/ci/impact.test.mjs
@@ -365,13 +370,15 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
   ios-infrastructure-diagnostic:
-    name: CI / diagnóstico de infraestructura iOS
+    name: CI / diagnóstico iOS build y Maestro
     needs: diagnostic-smoke
     if: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:ios-infrastructure-diagnostic') }}
     runs-on: macos-15
-    timeout-minutes: 12
+    timeout-minutes: 30
     env:
       CI: '1'
+      EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
+      EPT_IOS_EVIDENCE_DIR: ${{ runner.temp }}/evidencia-ios-infra
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -379,9 +386,9 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
-      - name: Presupuesto diagnóstico (sin build ni Maestro)
+      - name: Presupuesto diagnóstico nativo (28 minutos operativos; 30 de job)
         run: |
-          echo "EPT_NATIVE_DEADLINE=$(( $(date +%s) + 600 ))" >> "$GITHUB_ENV"
+          echo "EPT_NATIVE_DEADLINE=$(( $(date +%s) + 1680 ))" >> "$GITHUB_ENV"
           echo "EPT_STAGE_LOG_DIR=$RUNNER_TEMP/evidencia-ios-infra/stages" >> "$GITHUB_ENV"
           printf 'head=%s\nmerge_ref=%s\n' '${{ github.event.pull_request.head.sha }}' '${{ github.sha }}' >> "$GITHUB_STEP_SUMMARY"
       - name: Probar supervisión POSIX también en macOS
@@ -390,6 +397,7 @@ jobs:
           set -o pipefail
           python3 scripts/ci/run-stage.test.py 2>&1 | tee "$EPT_STAGE_LOG_DIR/process-tests-redacted.log"
       - run: python3 scripts/ci/native-backend.test.py
+      - run: python3 mobile/scripts/ios-simulator.test.py
       - run: node --test scripts/ci/install-native.test.mjs
       - name: Caché de archivos oficiales inmutables (sin datos ni sesiones)
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -402,6 +410,40 @@ jobs:
           python3 scripts/ci/native-backend.py start
       - name: Contratos Auth reales y fixtures
         run: python3 scripts/ci/run-stage.py --stage auth-integration --seconds 210 -- node mobile/scripts/integracion-auth-local.mjs
+      - name: Seleccionar simulador y arquitectura ARM64
+        run: bash mobile/scripts/preparar-ios.sh
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/Library/Caches/CocoaPods
+            ~/.cocoapods/repos
+          key: pods-${{ runner.os }}-${{ runner.arch }}-${{ env.EPT_IOS_TOOLCHAIN }}-Release-${{ hashFiles('mobile/package-lock.json', 'mobile/app.config.*', 'mobile/app.json', 'mobile/plugins/**', 'mobile/ios/Podfile.lock') }}
+      - name: Instalación y proyecto nativo (incluye pods)
+        working-directory: mobile
+        run: |
+          python3 ../scripts/ci/run-stage.py --stage ios-deps --seconds 120 -- npm ci
+          python3 ../scripts/ci/run-stage.py --stage ios-prebuild-pods --seconds 240 -- npx --no-install expo prebuild --platform ios
+      - name: Build iOS Release ARM64 para el simulador seleccionado
+        run: bash mobile/scripts/compilar-ios.sh
+      - name: Localizar aplicación
+        id: app
+        run: |
+          app=$(find "$RUNNER_TEMP/derived/Build/Products/Release-iphonesimulator" -maxdepth 1 -name '*.app' | head -n 1)
+          test -n "$app"
+          echo "ruta=$app" >> "$GITHUB_OUTPUT"
+      - name: Instalar Maestro 2.11.0
+        run: |
+          curl --connect-timeout 10 --max-time 60 -fsSL -o "$RUNNER_TEMP/maestro.zip" https://github.com/mobile-dev-inc/maestro/releases/download/cli-2.11.0/maestro.zip
+          echo "5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a  $RUNNER_TEMP/maestro.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
+      - name: Ejecutar en simulador iOS
+        env:
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'
+        run: bash mobile/scripts/ejecutar-ios.sh "${{ steps.app.outputs.ruta }}"
+      - name: Cerrar y eliminar únicamente el simulador de este intento
+        if: always()
+        run: python3 scripts/ci/run-stage.py --stage cleanup-ios-simulator --seconds 55 -- python3 mobile/scripts/ios-simulator.py cleanup
       - name: Limpiar únicamente workers nativos propios
         if: always()
         run: python3 scripts/ci/run-stage.py --stage cleanup-native --seconds 45 -- python3 scripts/ci/native-backend.py stop
