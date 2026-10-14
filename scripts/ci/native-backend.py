@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath
 import platform
 import re
 import secrets
+import shutil
 import signal
 import socket
 import subprocess
@@ -323,6 +324,32 @@ def http_ready(port, route):
         return response.status == 200
 
 
+def verify_loopback_listeners(path, service, expected_port):
+    # macOS lsof's AND selection confines readback to the witnessed owned group.
+    record = read_private(path / f'{service}.pid.json')
+    verify_worker(path, service, record, process_identity(record['pid']))
+    result = subprocess.run(['lsof', '-nP', '-a', '-g', str(record['pid']), '-iTCP', '-sTCP:LISTEN', '-Fpn'], capture_output=True, text=True, timeout=3)
+    if result.returncode:
+        raise RuntimeError(f'Owned listener readback unavailable: {service}')
+    ports, pid = set(), None
+    for field in result.stdout.splitlines():
+        if field.startswith('p'):
+            pid = int(field[1:])
+            identity = process_identity(pid)
+            if identity is None or identity['uid'] != record['uid'] or identity['pgid'] != record['pid']:
+                raise RuntimeError(f'Foreign listener readback: {service}')
+        elif field.startswith('n'):
+            address = field[1:]
+            if pid is None or not re.fullmatch(r'127\.0\.0\.1:[0-9]+', address):
+                raise RuntimeError(f'Non-loopback listener refused: {service}')
+            ports.add(int(address.rsplit(':', 1)[1]))
+        else:
+            raise RuntimeError(f'Unexpected listener readback: {service}')
+    if expected_port not in ports:
+        raise RuntimeError(f'Expected owned listener missing: {service}')
+    print(f'native {service} owned listeners: loopback verified', flush=True)
+
+
 def publish_public_environment(config):
     # Only after readiness. The private status also has service_role: never export it.
     with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
@@ -354,9 +381,9 @@ def migration_uses_implicit_transaction(file):
     return False
 
 
-def run_project_migrations(psql, migrations):
-    # One psql connection per file: never turn all 37 into a global transaction.
-    # The outer native-project-migrations stage owns this helper and its children.
+def run_transaction_probe_files(psql, migrations):
+    # Isolated TEMP/rollback probes only; project SQL uses the official CLI below.
+    # One psql connection per probe, owned by native-project-migrations.
     plans = [(file, migration_uses_implicit_transaction(file)) for file in migrations]
     for file, implicit in plans:
         print(f'migration begin: {file.name}; transaction={"implicit" if implicit else "explicit"}', flush=True)
@@ -370,6 +397,85 @@ def run_project_migrations(psql, migrations):
         print(f'migration committed: {file.name}', flush=True)
 
 
+def native_cli_entry():
+    return Path(os.environ['RUNNER_TEMP']) / 'supabase-cli/node_modules/supabase/dist/supabase.js'
+
+
+def verify_migration_cli(entry):
+    version = subprocess.run(['node', str(entry), '--version'], capture_output=True, text=True)
+    help_result = subprocess.run(['node', str(entry), 'migration', 'up', '--help'], capture_output=True, text=True)
+    if version.returncode or version.stdout.strip() != '2.117.0' or help_result.returncode or any(flag not in help_result.stdout for flag in ('--db-url', '--workdir')):
+        raise RuntimeError('Pinned CLI migration-up direct database contract unavailable')
+
+
+def apply_cli_migrations(entry, project, expected_sql_error=False):
+    # Explicit loopback target, password from private PGPASSWORD, never argv.
+    # Official CLI owns statement splitting, per-file boundaries and history.
+    result = subprocess.run(['node', str(entry), 'migration', 'up', '--db-url', 'postgresql://supabase_admin@127.0.0.1:54322/postgres?sslmode=disable&connect_timeout=5', '--workdir', str(project), '--yes'], stdin=subprocess.DEVNULL, capture_output=expected_sql_error, text=True)
+    if expected_sql_error:
+        output = result.stdout + result.stderr
+        print(stage.redact(output), flush=True)
+        if result.returncode != 1 or 'division by zero' not in output or '22012' not in output:
+            raise MigrationFailure('history-negative-unexpected-error', result.returncode or 125)
+    return result.returncode
+
+
+def copy_project_migrations(path, migrations):
+    project = path / 'migration-project'
+    destination = project / 'supabase/migrations'
+    destination.mkdir(parents=True, mode=0o700)
+    # Fresh private workdir: no remote refs, vault config, seeds or app .env.
+    for file in migrations:
+        shutil.copyfile(file, destination / file.name)
+        if (destination / file.name).read_bytes() != file.read_bytes():
+            raise RuntimeError('Migration copy integrity failure')
+    return project
+
+
+def verify_project_history(psql, migrations):
+    expected = []
+    for file in migrations:
+        match = re.fullmatch(r'([0-9]+)_(.*)\.sql', file.name)
+        if match is None:
+            raise RuntimeError('Project migration filename contract changed')
+        expected.append({'version': match[1], 'name': match[2]})
+    payload = json.dumps(expected).replace("'", "''")
+    check = f"DO $$ BEGIN IF (SELECT count(*) FROM supabase_migrations.schema_migrations) <> {len(expected)} OR EXISTS (SELECT FROM (SELECT version,name FROM jsonb_to_recordset('{payload}'::jsonb) AS e(version text,name text) EXCEPT SELECT version,name FROM supabase_migrations.schema_migrations) missing) OR EXISTS (SELECT FROM supabase_migrations.schema_migrations WHERE statements IS NULL OR cardinality(statements)=0) THEN RAISE EXCEPTION 'Project migration history readback failed'; END IF; END $$;"
+    result = subprocess.run([str(psql), '-X', '-v', 'ON_ERROR_STOP=1', '--no-password', '-c', check])
+    if result.returncode:
+        raise MigrationFailure('project-history-readback', result.returncode)
+    print(f'native official CLI history: {len(expected)} versions/names verified', flush=True)
+
+
+def prove_cli_history_contract(path, psql, entry):
+    # Genuine CLI + PG proof; synthetic schemas live only in this private CI DB.
+    for explicit in (False, True):
+        project = path / ('history-explicit' if explicit else 'history-implicit')
+        migrations = project / 'supabase/migrations'
+        migrations.mkdir(parents=True, mode=0o700)
+        base = '9000000000000' + ('1' if explicit else '0')
+        versions = [base + str(index) for index in range(3)]
+        schema = 'ept105_history_probe_' + secrets.token_hex(6)
+        bodies = [f'CREATE SCHEMA {schema};', f'CREATE TABLE {schema}.failed (id integer); SELECT 1/0;', f'CREATE TABLE {schema}.later (id integer);']
+        for version, body in zip(versions, bodies):
+            (migrations / f'{version}_probe.sql').write_text(('BEGIN;\n' + body + '\nCOMMIT;') if explicit else body, encoding='utf-8')
+        code = apply_cli_migrations(entry, project, expected_sql_error=True)
+        if code != 1:  # CLI maps typed SQL failure to exit1, unlike psql exit3.
+            raise MigrationFailure('history-negative-cli', code if code else 125)
+        expected_statements = [f'CREATE SCHEMA {schema}']
+        if explicit:
+            expected_statements = ['BEGIN', *expected_statements, 'COMMIT']
+        expected_array = 'ARRAY[' + ','.join("'" + value + "'" for value in expected_statements) + ']::text[]'
+        check = f"DO $$ BEGIN IF (SELECT count(*) FROM supabase_migrations.schema_migrations WHERE version='{versions[0]}' AND name='probe' AND statements={expected_array}) <> 1 OR EXISTS (SELECT FROM supabase_migrations.schema_migrations WHERE version IN ('{versions[1]}','{versions[2]}')) OR to_regclass('{schema}.failed') IS NOT NULL OR to_regclass('{schema}.later') IS NOT NULL OR to_regnamespace('{schema}') IS NULL THEN RAISE EXCEPTION 'CLI history rollback contract failed'; END IF; END $$; DROP SCHEMA {schema}; DELETE FROM supabase_migrations.schema_migrations WHERE version='{versions[0]}';"
+        result = subprocess.run([str(psql), '-X', '-v', 'ON_ERROR_STOP=1', '--single-transaction', '--no-password', '-c', check])
+        if result.returncode:
+            raise MigrationFailure('history-negative-readback', result.returncode)
+        print(f'native CLI history probe: {"explicit" if explicit else "implicit"} prior retained; failed/later absent; rollback verified', flush=True)
+    result = subprocess.run([str(psql), '-X', '-v', 'ON_ERROR_STOP=1', '--no-password', '-c', "DO $$ BEGIN IF EXISTS (SELECT FROM supabase_migrations.schema_migrations) THEN RAISE EXCEPTION 'Project history must start empty'; END IF; END $$;"])
+    if result.returncode:
+        raise MigrationFailure('history-empty-readback', result.returncode)
+
+
 def prove_transaction_contract(path, psql):
     # Actual portable PG proof, not Windows mocks: only isolated CI probe objects.
     help_result = subprocess.run([str(psql), '--help'], capture_output=True, text=True)
@@ -378,15 +484,15 @@ def prove_transaction_contract(path, psql):
     schema = 'ept105_tx_probe_' + secrets.token_hex(6)
     positive = path / 'transaction-positive.sql'
     positive.write_text('CREATE TEMP TABLE ept105_tx_lifetime (value integer) ON COMMIT DROP;\nINSERT INTO ept105_tx_lifetime VALUES (1);\nDO $$ BEGIN IF (SELECT count(*) FROM ept105_tx_lifetime) <> 1 THEN RAISE EXCEPTION \'TEMP lifetime failed\'; END IF; END $$;\n', encoding='utf-8')
-    run_project_migrations(psql, [positive])
+    run_transaction_probe_files(psql, [positive])
     explicit_positive = path / 'transaction-explicit-positive.sql'
     explicit_positive.write_text('BEGIN;\n' + positive.read_text(encoding='utf-8') + 'COMMIT;\n', encoding='utf-8')
-    run_project_migrations(psql, [explicit_positive])
+    run_transaction_probe_files(psql, [explicit_positive])
     print('native transaction probe: TEMP ON COMMIT lifetime passed', flush=True)
     negative = path / 'transaction-rollback.sql'
     negative.write_text(f'CREATE SCHEMA {schema};\nCREATE TABLE {schema}.probe (value integer);\nSELECT 1/0;\n', encoding='utf-8')
     try:
-        run_project_migrations(psql, [negative])
+        run_transaction_probe_files(psql, [negative])
     except MigrationFailure as error:
         if error.code != 3:
             raise
@@ -401,7 +507,7 @@ def prove_transaction_contract(path, psql):
     explicit_negative = path / 'transaction-explicit-rollback.sql'
     explicit_negative.write_text('BEGIN;\n' + negative.read_text(encoding='utf-8') + 'COMMIT;\n', encoding='utf-8')
     try:
-        run_project_migrations(psql, [explicit_negative])
+        run_transaction_probe_files(psql, [explicit_negative])
     except MigrationFailure as error:
         if error.code != 3:
             raise
@@ -425,6 +531,7 @@ def start():
         output.write(f'EPT_MOBILE_NATIVE_BACKEND=1\nEPT_MOBILE_NATIVE_WORKDIR={path}\n')
     log_dir = Path(os.environ['EPT_STAGE_LOG_DIR'])
     log_dir.mkdir(parents=True, exist_ok=True)
+    bounded('native-cli-install', 60, ['bash', HERE / 'install-cli.sh', '--isolated'])
     artifact = path / 'archives'
     bounded('native-archives', 240, ['node', HERE / 'install-native.mjs'], {'EPT_NATIVE_ARTIFACT_DIR': str(artifact)})
     bounded('native-extract', 60, [sys.executable, Path(__file__).resolve(), 'extract', path])
@@ -454,8 +561,10 @@ def start():
     try:
         spawn_worker(path, config, 'postgres')
         ready(path, 'postgres', 120, lambda: subprocess.run([pg / 'pg_isready', '-t', '1'], env={**os.environ, **pg_env}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2).returncode == 0)
+        verify_loopback_listeners(path, 'postgres', 54322)
         spawn_worker(path, config, 'auth')
         ready(path, 'auth', 60, lambda: http_ready(8010, '/health'))
+        verify_loopback_listeners(path, 'auth', 8010)
         # The pinned v1.72.1 artifact owns this genuine tenant migration entrypoint.
         bounded('native-storage-migrations', 90, [bundles / 'storage/node/bin/node', 'dist/scripts/migrate-call.js'], {**storage_env, 'DATABASE_URL': db('supabase_admin')}, bundles / 'storage/app')
         bounded('native-storage-ownership', 15, [*psql, '-c', 'ALTER TABLE storage.objects OWNER TO supabase_storage_admin; ALTER TABLE storage.buckets OWNER TO supabase_storage_admin; ALTER TABLE storage.migrations OWNER TO supabase_storage_admin; GRANT ALL ON ALL TABLES IN SCHEMA storage TO supabase_storage_admin; GRANT ALL ON ALL SEQUENCES IN SCHEMA storage TO supabase_storage_admin;'], pg_env)
@@ -466,10 +575,13 @@ def start():
         print(f'native project migrations applied: {len(migrations)}', flush=True)
         spawn_worker(path, config, 'storage')
         ready(path, 'storage', 30, lambda: http_ready(5010, '/status'))
+        verify_loopback_listeners(path, 'storage', 5010)
         spawn_worker(path, config, 'postgrest')
         ready(path, 'postgrest', 30, lambda: http_ready(3010, '/'))
+        verify_loopback_listeners(path, 'postgrest', 3010)
         spawn_worker(path, config, 'proxy')
         ready(path, 'proxy', 10, lambda: socket.create_connection(('127.0.0.1', 54321), timeout=1).close() is None)
+        verify_loopback_listeners(path, 'proxy', 54321)
         publish_public_environment(config)
         print('native backend healthy; real Auth/REST assertions still required', flush=True)
     except Exception:
@@ -499,7 +611,14 @@ def main():
         migrations = sorted((ROOT / 'supabase/migrations').glob('*.sql'))
         if len(migrations) != 37:
             raise RuntimeError('Project migration count changed')
-        run_project_migrations(psql, migrations)
+        entry = native_cli_entry()
+        verify_migration_cli(entry)
+        prove_cli_history_contract(path, psql, entry)
+        project = copy_project_migrations(path, migrations)
+        code = apply_cli_migrations(entry, project)
+        if code:
+            raise MigrationFailure('official-cli-project', code)
+        verify_project_history(psql, migrations)
     elif action in ('stop', 'status'):
         value = os.environ.get('EPT_MOBILE_NATIVE_WORKDIR')
         if not value and action == 'stop':

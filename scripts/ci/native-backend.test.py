@@ -219,7 +219,7 @@ class NativeSafety(unittest.TestCase):
         explicit = [file.name for file in files if not native.migration_uses_implicit_transaction(file)]
         self.assertEqual(explicit, ['20260926154000_ept_58_privacidad_perfiles.sql', '20260926190000_ept_59_usuarios_permisos.sql'])
         with patch.object(native.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run, redirect_stdout(io.StringIO()):
-            native.run_project_migrations('synthetic-psql', files)
+            native.run_transaction_probe_files('synthetic-psql', files)
         self.assertEqual(run.call_count, 37)
         for file, call in zip(files, run.call_args_list):
             command = call.args[0]
@@ -236,7 +236,7 @@ class NativeSafety(unittest.TestCase):
             file.write_text('SELECT 1;', encoding='utf-8')
         with patch.object(native.subprocess, 'run', side_effect=[subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 3)]) as run, redirect_stdout(io.StringIO()) as trace:
             with self.assertRaises(native.MigrationFailure) as failure:
-                native.run_project_migrations('synthetic-psql', files)
+                native.run_transaction_probe_files('synthetic-psql', files)
             self.assertEqual(failure.exception.code, 3)
             self.assertEqual(run.call_count, 2)
             self.assertIn('subsequent files not executed', trace.getvalue())
@@ -249,7 +249,7 @@ class NativeSafety(unittest.TestCase):
             for body in ('BEGIN; SELECT 1;', 'COMMIT;', 'SELECT 1; BEGIN; SELECT 2; COMMIT;', 'BEGIN WORK; SELECT 1; COMMIT;', 'BEGIN; SELECT 1; ROLLBACK;', 'VACUUM;', 'CREATE INDEX CONCURRENTLY x ON y(z);'):
                 second.write_text(body, encoding='utf-8')
                 with self.assertRaisesRegex(RuntimeError, 'Unsupported'):
-                    native.run_project_migrations('synthetic-psql', [first, second])
+                    native.run_transaction_probe_files('synthetic-psql', [first, second])
             run.assert_not_called()
 
     def test_transaction_probe_checks_rollback_readback_and_rejects_wrong_error(self):
@@ -269,6 +269,88 @@ class NativeSafety(unittest.TestCase):
             with self.assertRaises(native.MigrationFailure) as failure:
                 native.prove_transaction_contract(self.path, 'synthetic-psql')
             self.assertEqual(failure.exception.code, 2)
+
+    def test_official_cli_project_copy_preserves_all_sql_and_private_target(self):
+        files = sorted((native.ROOT / 'supabase/migrations').glob('*.sql'))
+        self.assertEqual(len(files), 37)
+        project = native.copy_project_migrations(self.path, files)
+        self.assertEqual(sorted(file.name for file in (project / 'supabase/migrations').iterdir()), [file.name for file in files])
+        for file in files:
+            self.assertEqual((project / 'supabase/migrations' / file.name).read_bytes(), file.read_bytes())
+        self.assertFalse((project / 'supabase/config.toml').exists())
+        with patch.object(native.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1)) as run:
+            self.assertEqual(native.apply_cli_migrations('synthetic-cli', project), 1)
+            args = run.call_args.args[0]
+            self.assertEqual(args[:4], ['node', 'synthetic-cli', 'migration', 'up'])
+            self.assertIn('--db-url', args)
+            self.assertIn('postgresql://supabase_admin@127.0.0.1:54322/postgres?sslmode=disable&connect_timeout=5', args)
+            self.assertNotIn('--linked', args)
+            self.assertNotIn('--local', args)
+            self.assertNotIn('--include-all', args)
+            self.assertEqual(run.call_args.kwargs['stdin'], subprocess.DEVNULL)
+
+    def test_project_history_readback_checks_every_actual_version_and_name(self):
+        files = sorted((native.ROOT / 'supabase/migrations').glob('*.sql'))
+        with patch.object(native.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run, redirect_stdout(io.StringIO()) as trace:
+            native.verify_project_history('synthetic-psql', files)
+            sql = run.call_args.args[0][-1]
+            self.assertIn(') <> 37', sql)
+            self.assertIn('EXCEPT SELECT version,name', sql)
+            self.assertIn('statements IS NULL OR cardinality(statements)=0', sql)
+            for file in files:
+                version, name = file.stem.split('_', 1)
+                self.assertIn(json.dumps({'version': version, 'name': name}), sql)
+            self.assertIn('37 versions/names verified', trace.getvalue())
+        with patch.object(native.subprocess, 'run', return_value=subprocess.CompletedProcess([], 3)):
+            with self.assertRaisesRegex(native.MigrationFailure, 'project-history-readback'):
+                native.verify_project_history('synthetic-psql', files)
+
+    def test_cli_history_negatives_require_prior_and_no_failed_or_later_rows(self):
+        with patch.object(native, 'apply_cli_migrations', return_value=1) as apply, patch.object(native.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run, redirect_stdout(io.StringIO()) as trace:
+            native.prove_cli_history_contract(self.path, 'synthetic-psql', 'synthetic-cli')
+            self.assertEqual(apply.call_count, 2)
+            self.assertEqual(run.call_count, 3)
+            for call in run.call_args_list[:2]:
+                sql = call.args[0][-1]
+                self.assertIn("name='probe' AND statements=ARRAY[", sql)
+                self.assertIn("WHERE version IN", sql)
+                self.assertIn(".failed') IS NOT NULL", sql)
+                self.assertIn(".later') IS NOT NULL", sql)
+                self.assertIn('DELETE FROM supabase_migrations.schema_migrations WHERE version=', sql)
+            self.assertIn('Project history must start empty', run.call_args_list[-1].args[0][-1])
+            self.assertIn('explicit prior retained', trace.getvalue())
+        other = self.path / 'other'
+        other.mkdir()
+        with patch.object(native, 'apply_cli_migrations', return_value=0), patch.object(native.subprocess, 'run') as run:
+            with self.assertRaises(native.MigrationFailure):
+                native.prove_cli_history_contract(other, 'synthetic-psql', 'synthetic-cli')
+            run.assert_not_called()  # Unexpected success cannot be cleaned into PASS.
+
+    def test_cli_negative_error_cannot_mask_connection_or_unexpected_success(self):
+        for code, output, accepted in [(1, 'ERROR: division by zero (SQLSTATE 22012)', True), (1, 'connection failed', False), (0, 'division by zero 22012', False), (3, 'division by zero 22012', False)]:
+            with patch.object(native.subprocess, 'run', return_value=subprocess.CompletedProcess([], code, stdout=output, stderr='')), redirect_stdout(io.StringIO()):
+                if accepted:
+                    self.assertEqual(native.apply_cli_migrations('synthetic-cli', self.path, expected_sql_error=True), 1)
+                else:
+                    with self.assertRaises(native.MigrationFailure):
+                        native.apply_cli_migrations('synthetic-cli', self.path, expected_sql_error=True)
+
+    def test_owned_listener_readback_rejects_wildcard_foreign_and_missing_port(self):
+        native.private_json(self.path / 'auth.pid.json', {'pid': 123, 'uid': 5, 'start': 'synthetic'})
+        owned = {'uid': 5, 'pgid': 123}
+        with patch.object(native, 'verify_worker'), patch.object(native, 'process_identity', return_value=owned), redirect_stdout(io.StringIO()):
+            for output, code, expected in [('p124\nn127.0.0.1:8010\n', 0, None), ('p124\nn*:8010\n', 0, 'Non-loopback'), ('p124\nn[::]:8010\n', 0, 'Non-loopback'), ('p124\nn127.0.0.1:9999\n', 0, 'missing'), ('', 1, 'unavailable')]:
+                with patch.object(native.subprocess, 'run', return_value=subprocess.CompletedProcess([], code, stdout=output)) as run:
+                    if expected:
+                        with self.assertRaisesRegex(RuntimeError, expected):
+                            native.verify_loopback_listeners(self.path, 'auth', 8010)
+                    else:
+                        native.verify_loopback_listeners(self.path, 'auth', 8010)
+                    self.assertIn('-g', run.call_args.args[0])
+            for foreign in ({'uid': 6, 'pgid': 123}, {'uid': 5, 'pgid': 999}, None):
+                with patch.object(native, 'process_identity', return_value=foreign), patch.object(native.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, stdout='p124\nn127.0.0.1:8010\n')):
+                    with self.assertRaisesRegex(RuntimeError, 'Foreign'):
+                        native.verify_loopback_listeners(self.path, 'auth', 8010)
 
     def test_redactor_knows_generated_secrets_and_jwt(self):
         token = native.jwt('synthetic-secret', 'service_role')
@@ -301,7 +383,7 @@ class NativeSafety(unittest.TestCase):
             if fail_ready and service == 'proxy':
                 raise RuntimeError('Synthetic readiness failure')
         uid = getattr(os, 'getuid', lambda: 0)()
-        with patch.dict(os.environ, {'GITHUB_ENV': str(output)}), patch.object(native.os, 'getuid', return_value=uid, create=True), patch.object(native.platform, 'system', return_value='Darwin'), patch.object(native.platform, 'machine', return_value='arm64'), patch.object(native.socket, 'socket'), patch.object(native, 'bounded'), patch.object(native, 'spawn_worker'), patch.object(native, 'ready', side_effect=readiness), patch.object(native, 'cleanup'), patch.object(native, 'publish_public_environment', wraps=native.publish_public_environment) as publish, redirect_stdout(io.StringIO()):
+        with patch.dict(os.environ, {'GITHUB_ENV': str(output)}), patch.object(native.os, 'getuid', return_value=uid, create=True), patch.object(native.platform, 'system', return_value='Darwin'), patch.object(native.platform, 'machine', return_value='arm64'), patch.object(native.socket, 'socket'), patch.object(native, 'bounded'), patch.object(native, 'spawn_worker'), patch.object(native, 'ready', side_effect=readiness), patch.object(native, 'cleanup'), patch.object(native, 'verify_loopback_listeners'), patch.object(native, 'publish_public_environment', wraps=native.publish_public_environment) as publish, redirect_stdout(io.StringIO()):
             if fail_ready:
                 with self.assertRaisesRegex(RuntimeError, 'readiness failure'):
                     native.start()
