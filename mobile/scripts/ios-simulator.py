@@ -148,7 +148,9 @@ def selection_inventory(text):
             raise InventoryContractError("TYPE_DUPLICATE")
         type_ids.add(device_type["identifier"])
         if device_type["productFamily"] == "iPhone":
-            if not re.fullmatch(r"com\.apple\.CoreSimulator\.SimDeviceType\.iPhone-[A-Za-z0-9-]+", device_type["identifier"]):
+            identifier = device_type["identifier"]
+            prefix = "com.apple.CoreSimulator.SimDeviceType.iPhone-"
+            if not identifier.startswith(prefix) or len(identifier) <= len(prefix) or len(identifier) > 256 or any(character.isspace() or not character.isprintable() for character in identifier):
                 raise InventoryContractError("TYPE_ID")
             try:
                 minimum = version(device_type.get("minRuntimeVersionString", ""))
@@ -176,7 +178,8 @@ def create():
     # Exact aggregate query measured at30.6s; one query, no separate discovery or warm-up.
     inventory = selection_inventory(command("ios-inventory-json", 65, "xcrun", "simctl", "list", "-j", capture=True))
     runtime, device_type = select(inventory["runtimes"], inventory["devicetypes"], sdk)
-    print(f"owned simulator selection sdk={sdk} runtime={runtime} type={device_type}", flush=True)
+    selected_version = next(r["version"] for r in inventory["runtimes"] if r["identifier"] == runtime)
+    print(f"owned simulator selection sdk={sdk} runtime_version={selected_version} family=iPhone identity=enumerated", flush=True)
     record = {**identity(), "runtime": runtime, "type": device_type, "sdk": sdk}
     if any(d.get("name") == record["name"] for group in inventory["devices"].values() for d in group):
         raise RuntimeError("Attempt simulator name already occupied")

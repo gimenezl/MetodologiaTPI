@@ -190,15 +190,44 @@ class SimulatorOwnership(unittest.TestCase):
         with redirect_stderr(io.StringIO()) as output: ios.report_inventory_failure(private)
         self.assertEqual(output.getvalue(), 'SDK_CHECKCODE=INVENTORY_UNIDENTIFIED\n')
 
-    def test_current_identifier_hypothesis_is_reported_not_silently_relaxed(self):
-        for identifier in ('com.apple.CoreSimulator.SimDeviceType.iPhone-SE-3rd-generation', 'com.apple.CoreSimulator.SimDeviceType.iPhone-SE-(3rd-generation)'):
+    def test_enumerated_iphone_identifier_is_opaque_and_selected_summary_is_private(self):
+        identifier = 'com.apple.CoreSimulator.SimDeviceType.iPhone-opaque(variant);$(literal)-private-secret'
+        fixture = self.selection_fixture()
+        fixture['devicetypes'][0]['identifier'] = identifier
+        self.assertEqual(ios.selection_inventory(json.dumps(fixture))['devicetypes'][0]['identifier'], identifier)
+        self.assertEqual(ios.select(fixture['runtimes'], fixture['devicetypes'], '18.5')[1], identifier)
+        def command(label, _seconds, *args, **kwargs):
+            if label == 'ios-sdk-selection': return '18.5'
+            if label == 'ios-inventory-json': return json.dumps(fixture)
+            if label == 'ios-create':
+                self.assertEqual(args[-2], identifier)
+                return UDID
+            self.fail('Unexpected operation')
+        output = io.StringIO()
+        with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': 'full', 'GITHUB_ENV': str(Path(self.tmp.name) / 'env')}), patch.object(ios, 'command', side_effect=command), patch.object(ios, 'devices', return_value=self.listing), redirect_stdout(output):
+            ios.create()
+        self.assertNotIn(identifier, output.getvalue())
+        self.assertNotIn('private-secret', output.getvalue())
+        self.assertEqual(json.loads(ios.marker_path().read_text(encoding='utf8'))['type'], identifier)
+
+    def test_opaque_type_namespace_empty_bounds_controls_and_duplicates_fail_closed(self):
+        prefix = 'com.apple.CoreSimulator.SimDeviceType.iPhone-'
+        for identifier in ('foreign.iPhone-16', 'com.apple.CoreSimulator.SimDeviceType.iPad-16', prefix, prefix + 'x' * 256, prefix + 'two words', prefix + 'tab\t', prefix + 'line\n', prefix + '\x00', prefix + '\x7f', prefix + '\u200b'):
             fixture = self.selection_fixture()
             fixture['devicetypes'][0]['identifier'] = identifier
-            if '(' in identifier:
-                with self.assertRaises(ios.InventoryContractError) as error: ios.selection_inventory(json.dumps(fixture))
-                self.assertEqual(error.exception.reason_code, 'TYPE_ID')
-            else:
-                self.assertEqual(ios.selection_inventory(json.dumps(fixture))['devicetypes'][0]['identifier'], identifier)
+            with self.assertRaises(ios.InventoryContractError) as error: ios.selection_inventory(json.dumps(fixture))
+            self.assertEqual(error.exception.reason_code, 'TYPE_ID')
+        fixture = self.selection_fixture()
+        fixture['devicetypes'] *= 2
+        with self.assertRaises(ios.InventoryContractError) as error: ios.selection_inventory(json.dumps(fixture))
+        self.assertEqual(error.exception.reason_code, 'TYPE_DUPLICATE')
+
+    def test_shell_like_identifier_is_one_argv_argument_without_shell_execution(self):
+        identifier = 'com.apple.CoreSimulator.SimDeviceType.iPhone-$(literal);not-executed'
+        with patch.object(ios.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout=UDID)) as run:
+            self.assertEqual(ios.command('ios-create', 30, 'xcrun', 'simctl', 'create', 'owned', identifier, RUNTIME, capture=True), UDID)
+        self.assertEqual(run.call_args.args[0][-6:], ['xcrun', 'simctl', 'create', 'owned', identifier, RUNTIME])
+        self.assertFalse(run.call_args.kwargs.get('shell', False))
 
     def test_select_reports_closed_missing_sdk_or_compatible_type(self):
         fixture = self.selection_fixture()
