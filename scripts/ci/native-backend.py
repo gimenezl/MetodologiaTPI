@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import TCPServer
 import importlib.util
 import json
 import os
@@ -189,12 +190,36 @@ def upstream_route(path):
     return None
 
 
-def serve_proxy(config):
+class LoopbackHTTPServer(ThreadingHTTPServer):
+    def server_bind(self):
+        if self.server_address[0] != '127.0.0.1':
+            raise RuntimeError('Proxy bind must be fixed IPv4 loopback')
+        # HTTPServer adds a reverse-DNS getfqdn lookup after TCP bind, before
+        # listen. A fixed loopback proxy needs no DNS-derived server_name.
+        TCPServer.server_bind(self)
+        self.server_name = '127.0.0.1'
+        self.server_port = self.server_address[1]
+
+
+def proxy_error_class(error):
+    if isinstance(error, TimeoutError):
+        return 'timeout'
+    if isinstance(error, ConnectionRefusedError):
+        return 'connection_refused'
+    if isinstance(error, http.client.HTTPException):
+        return 'http_protocol'
+    if isinstance(error, OSError):
+        return 'os_error'
+    return 'internal_error'
+
+
+def serve_proxy(config, announce=lambda _phase: None):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_args):
             pass  # Never persist request paths, headers or bodies.
 
         def forward(self):
+            announce('http-request')
             route = upstream_route(self.path)
             if not route:
                 self.send_error(404)
@@ -213,6 +238,7 @@ def serve_proxy(config):
                 try:
                     upstream.request(self.command, route[1], self.rfile.read(length), headers)
                     response = upstream.getresponse()
+                    announce('upstream-response')
                     body = response.read(4 * 1024 * 1024 + 1)
                     if len(body) > 4 * 1024 * 1024:
                         raise RuntimeError('Upstream response exceeds bound')
@@ -225,14 +251,22 @@ def serve_proxy(config):
                     self.wfile.write(body)
                 finally:
                     upstream.close()
-            except Exception:
+            except Exception as error:
+                announce('upstream-error-' + proxy_error_class(error))
                 self.send_error(502)
 
         do_GET = do_POST = do_PUT = do_PATCH = do_DELETE = do_OPTIONS = do_HEAD = forward
 
-    server = ThreadingHTTPServer(('127.0.0.1', 54321), Handler)
-    server.daemon_threads = True
-    server.serve_forever(poll_interval=.2)
+    announce('server-create')
+    with LoopbackHTTPServer(('127.0.0.1', 54321), Handler, bind_and_activate=False) as server:
+        announce('bind-enter')
+        server.server_bind()
+        announce('bind-complete')
+        server.server_activate()
+        announce('listen-complete')
+        server.daemon_threads = True
+        announce('serve-enter')
+        server.serve_forever(poll_interval=.2)
 
 
 def worker(path, service):
@@ -257,7 +291,19 @@ def worker(path, service):
     log_path = Path(os.environ['EPT_STAGE_LOG_DIR']) / f'native-{service}-redacted.log'
     try:
         if service == 'proxy':
-            serve_proxy(config)
+            started = time.monotonic()
+            last_phase = ['owned-worker-enter']
+            def announce(phase):
+                last_phase[0] = phase
+                with open(log_path, 'a', encoding='utf-8') as log:
+                    log.write(f'native proxy phase={phase}; elapsed_s={time.monotonic() - started:.3f}\n')
+            def heartbeat():
+                while not terminating.wait(2):
+                    with open(log_path, 'a', encoding='utf-8') as log:
+                        log.write(f'native proxy heartbeat; last_phase={last_phase[0]}\n')
+            announce('owned-worker-enter')
+            threading.Thread(target=heartbeat, daemon=True).start()
+            serve_proxy(config, announce)
             code = 0
         else:
             info = config['services'][service]
@@ -270,7 +316,8 @@ def worker(path, service):
     except Exception as error:
         code = 125
         with open(log_path, 'a', encoding='utf-8') as log:
-            log.write(stage.redact(f'Native worker startup/output failure: {error}') + '\n')
+            message = f'Native proxy worker failure: {proxy_error_class(error)}' if service == 'proxy' else stage.redact(f'Native worker startup/output failure: {error}')
+            log.write(message + '\n')
     private_json(path / f'{service}.exit.json', {'code': code})
     # Keep the identity alive even if the service exits before teardown.
     while True:
@@ -310,9 +357,12 @@ def ready(path, service, seconds, check):
             if check():
                 print(f'native {service} ready; seconds={time.monotonic() - started:.1f}', flush=True)
                 return
-        except (OSError, http.client.HTTPException):
-            pass
-        if time.monotonic() - last > 15:
+        except (OSError, http.client.HTTPException) as error:
+            if service == 'proxy':
+                number = getattr(error, 'errno', None)
+                number = number if isinstance(number, int) and 0 <= number <= 4096 else 'unavailable'
+                print(f'native proxy HTTP readiness; error={proxy_error_class(error)}; errno={number}', flush=True)
+        if time.monotonic() - last > (2 if service == 'proxy' else 15):
             print(f'native {service} readiness; elapsed={time.monotonic() - started:.1f}s', flush=True)
             last = time.monotonic()
         time.sleep(.2)
@@ -404,6 +454,20 @@ def verify_loopback_listeners(path, service, expected_port):
     if expected_port not in ports:
         raise RuntimeError(f'Expected owned listener missing: {service}')
     print(f'native {service} owned listeners: loopback verified', flush=True)
+
+
+def proxy_ready(config):
+    # Real GoTrue health through the same SDK prefix/key path; no env proxy/DNS.
+    connection = http.client.HTTPConnection('127.0.0.1', 54321, timeout=1)
+    try:
+        connection.request('GET', '/auth/v1/health', headers={'apikey': config['status']['ANON_KEY']})
+        response = connection.getresponse()
+        response.read(1024)
+        if response.status != 200:
+            print(f'native proxy HTTP readiness; status={response.status}', flush=True)
+        return response.status == 200
+    finally:
+        connection.close()
 
 
 def publish_public_environment(config):
@@ -636,7 +700,7 @@ def start():
         ready(path, 'postgrest', 30, lambda: http_ready(3010, '/'))
         verify_loopback_listeners(path, 'postgrest', 3010)
         spawn_worker(path, config, 'proxy')
-        ready(path, 'proxy', 10, lambda: socket.create_connection(('127.0.0.1', 54321), timeout=1).close() is None)
+        ready(path, 'proxy', 10, lambda: proxy_ready(config))
         verify_loopback_listeners(path, 'proxy', 54321)
         publish_public_environment(config)
         print('native backend healthy; real Auth/REST assertions still required', flush=True)

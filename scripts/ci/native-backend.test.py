@@ -153,6 +153,89 @@ class NativeSafety(unittest.TestCase):
         source = (HERE / 'native-backend.py').read_text(encoding='utf-8')
         self.assertNotIn("headers['authorization'] =", source)
 
+    def test_fixed_loopback_server_binds_and_listens_without_reverse_dns(self):
+        # Actual stdlib HTTPServer demonstrates the unwanted lookup contract.
+        with patch.object(native.socket, 'getfqdn', side_effect=RuntimeError('Synthetic unavailable DNS')) as dns:
+            with self.assertRaisesRegex(RuntimeError, 'unavailable DNS'):
+                HTTPServer(('127.0.0.1', 0), BaseHTTPRequestHandler)
+            dns.assert_called_once_with('127.0.0.1')
+            dns.reset_mock()
+            with native.LoopbackHTTPServer(('127.0.0.1', 0), BaseHTTPRequestHandler) as server:
+                self.assertEqual(server.server_name, '127.0.0.1')
+                self.assertEqual(server.server_port, server.socket.getsockname()[1])
+                with native.socket.create_connection(('127.0.0.1', server.server_port), timeout=1):
+                    pass  # Real TCP bind/listen, no lookup.
+                dns.assert_not_called()
+            with self.assertRaisesRegex(RuntimeError, 'fixed IPv4 loopback'):
+                native.LoopbackHTTPServer(('0.0.0.0', 0), BaseHTTPRequestHandler)
+
+    def test_proxy_worker_exception_records_safe_phase_and_private_exit(self):
+        native.private_json(self.path / 'config.json', {'deadline': time.time() + 10, 'secret_env': {}, 'status': {}})
+        with patch.object(native, 'process_identity', return_value={'uid': 0, 'start': 'synthetic'}), patch.object(native.signal, 'signal'), patch.object(native.threading.Thread, 'start'), patch.object(native, 'serve_proxy', side_effect=ValueError('private-url-secret')), patch.object(native.time, 'sleep', side_effect=StopIteration):
+            with self.assertRaises(StopIteration):
+                native.worker(self.path, 'proxy')
+        self.assertEqual(native.read_private(self.path / 'proxy.exit.json')['code'], 125)
+        log = (self.base / 'native-proxy-redacted.log').read_text(encoding='utf-8')
+        self.assertIn('phase=owned-worker-enter', log)
+        self.assertIn('Native proxy worker failure: internal_error', log)
+        self.assertNotIn('private-url-secret', log)
+
+    @unittest.skipUnless(os.name == 'posix', 'Actual owned proxy startup/readiness/listener/teardown in Linux/macOS before backend downloads')
+    def test_real_owned_proxy_http_ready_headers_listener_and_teardown(self):
+        # Local synthetic upstream is transport proof only, never Auth/RLS acceptance.
+        requests = []
+        class Upstream(BaseHTTPRequestHandler):
+            def do_GET(self):
+                requests.append((self.path, self.headers.get('apikey'), self.headers.get('authorization')))
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'{}')
+            def log_message(self, *_args):
+                pass
+        config = {'deadline': time.time() + 20, 'secret_env': {}, 'services': {}, 'status': {'ANON_KEY': 'synthetic-anon', 'SERVICE_ROLE_KEY': 'synthetic-service'}}
+        native.private_json(self.path / 'config.json', config)
+        handles = []
+        popen = native.subprocess.Popen
+        def retain_handle(*args, **kwargs):
+            handle = popen(*args, **kwargs)
+            if kwargs.get('start_new_session'):
+                handles.append(handle)
+            return handle
+        with native.LoopbackHTTPServer(('127.0.0.1', 8010), Upstream) as upstream:
+            thread = threading.Thread(target=upstream.serve_forever, daemon=True)
+            thread.start()
+            try:
+                with patch.object(native.subprocess, 'Popen', side_effect=retain_handle):
+                    native.spawn_worker(self.path, config, 'proxy')
+                native.ready(self.path, 'proxy', 10, lambda: native.proxy_ready(config))
+                native.verify_loopback_listeners(self.path, 'proxy', 54321)
+                for key, token, status in [('synthetic-anon', 'Bearer synthetic-user', 200), ('foreign', None, 401)]:
+                    connection = http.client.HTTPConnection('127.0.0.1', 54321, timeout=2)
+                    try:
+                        connection.request('GET', '/auth/v1/health', headers={'apikey': key, **({'authorization': token} if token else {})})
+                        response = connection.getresponse()
+                        self.assertEqual(response.status, status)
+                        response.read()
+                    finally:
+                        connection.close()
+                self.assertEqual(requests, [('/health', 'synthetic-anon', None), ('/health', 'synthetic-anon', 'Bearer synthetic-user')])
+                log = (self.base / 'native-proxy-redacted.log').read_text(encoding='utf-8')
+                for phase in ['owned-worker-enter', 'bind-enter', 'bind-complete', 'listen-complete', 'serve-enter', 'http-request', 'upstream-response']:
+                    self.assertIn('phase=' + phase, log)
+                self.assertNotIn('synthetic-', log)
+                native.cleanup(self.path)
+                self.assertFalse(native.stage.group_has_live_members(handles[0].pid))
+            finally:
+                for handle in handles:
+                    if handle.poll() is None:
+                        self.assertEqual(os.getpgid(handle.pid), handle.pid)
+                        native.stage.terminate_group(handle.pid)
+                    handle.wait(timeout=2)
+                    self.assertFalse(native.stage.group_has_live_members(handle.pid))
+                upstream.shutdown()
+                thread.join(timeout=2)
+                self.assertFalse(thread.is_alive())
+
     def test_proxy_forwards_actual_authorization_without_service_elevation(self):
         # Synthetic transport unit only: hosted real Auth/RLS assertions remain mandatory.
         requests = []
@@ -164,18 +247,18 @@ class NativeSafety(unittest.TestCase):
                 self.wfile.write(b'{}')
             def log_message(self, *_args):
                 pass
-        backend = HTTPServer(('127.0.0.1', 0), Upstream)
+        backend = native.LoopbackHTTPServer(('127.0.0.1', 0), Upstream)
         threading.Thread(target=backend.serve_forever, daemon=True).start()
-        real_server = native.ThreadingHTTPServer
+        real_server = native.LoopbackHTTPServer
         proxy = real_server(('127.0.0.1', 0), native.BaseHTTPRequestHandler)
         port = proxy.server_port
         proxy.server_close()
         servers = []
-        def capture_server(address, handler):
-            server = real_server(('127.0.0.1', port), handler)
+        def capture_server(address, handler, **kwargs):
+            server = real_server(('127.0.0.1', port), handler, **kwargs)
             servers.append(server)
             return server
-        with patch.object(native, 'ThreadingHTTPServer', side_effect=capture_server), patch.object(native, 'upstream_route', return_value=(backend.server_port, '/actual')):
+        with patch.object(native, 'LoopbackHTTPServer', side_effect=capture_server), patch.object(native, 'upstream_route', return_value=(backend.server_port, '/actual')):
             thread = threading.Thread(target=native.serve_proxy, args=({'status': {'ANON_KEY': 'synthetic-anon', 'SERVICE_ROLE_KEY': 'synthetic-service'}},), daemon=True)
             thread.start()
             until = time.monotonic() + 3
