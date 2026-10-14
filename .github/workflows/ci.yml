@@ -255,7 +255,7 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
       - name: Presupuesto y progreso nativo
         run: |
-          echo "EPT_NATIVE_DEADLINE=$(( $(date +%s) + 1680 ))" >> "$GITHUB_ENV"
+          echo "EPT_NATIVE_DEADLINE=$(( $(date +%s) + 1630 ))" >> "$GITHUB_ENV"
           echo "EPT_STAGE_LOG_DIR=$RUNNER_TEMP/evidencia-movil-ios/stages" >> "$GITHUB_ENV"
           echo "EPT_IOS_EVIDENCE_DIR=$RUNNER_TEMP/evidencia-movil-ios" >> "$GITHUB_ENV"
       - name: Verificar toolchain iOS seleccionado antes del backend
@@ -270,6 +270,7 @@ jobs:
           node --test mobile/scripts/stack-isolation.test.mjs
           python3 scripts/ci/native-backend.test.py
           python3 mobile/scripts/ios-simulator.test.py
+          python3 mobile/scripts/ios-compiler-cleanup.test.py
           node --test scripts/ci/install-native.test.mjs
       - name: Seleccionar simulador y arquitectura ARM64
         run: bash mobile/scripts/preparar-ios.sh
@@ -290,6 +291,9 @@ jobs:
           python3 scripts/ci/native-backend.py start
       - name: Verificar Auth, roles, expiración y RLS con actores sintéticos
         run: python3 scripts/ci/run-stage.py --stage auth-integration --seconds 210 -- node mobile/scripts/integracion-auth-local.mjs
+      - name: Registrar baseline privado de compiladores antes de prebuild
+        id: compiler-baseline
+        run: python3 scripts/ci/run-stage.py --stage ios-compiler-baseline --seconds 10 -- python3 mobile/scripts/ios-compiler-cleanup.py baseline
       - name: Instalación y proyecto nativo (incluye pods)
         working-directory: mobile
         run: |
@@ -321,6 +325,9 @@ jobs:
             python3 scripts/ci/run-stage.py --stage cleanup-package --seconds 20 -- ditto -c -k --keepParent "${{ steps.app.outputs.ruta }}" "$RUNNER_TEMP/evidencia-movil-ios/aplicacion-ios-simulador.zip"
           fi
           python3 scripts/ci/run-stage.py --sanitize-directory "$RUNNER_TEMP/evidencia-movil-ios"
+      - name: Retirar únicamente compiladores nuevos del job propio
+        if: always() && steps.compiler-baseline.outcome == 'success'
+        run: python3 scripts/ci/run-stage.py --stage cleanup-ios-compiler --seconds 20 -- python3 mobile/scripts/ios-compiler-cleanup.py cleanup
       - name: Cerrar y eliminar únicamente el simulador de este intento
         if: always()
         run: python3 scripts/ci/run-stage.py --stage cleanup-ios-simulator --seconds 55 -- python3 mobile/scripts/ios-simulator.py cleanup
@@ -360,6 +367,7 @@ jobs:
           python3 scripts/ci/run-stage.test.py 2>&1 | tee "$EPT_STAGE_LOG_DIR/process-tests-redacted.log"
       - run: python3 scripts/ci/native-backend.test.py
       - run: python3 mobile/scripts/ios-simulator.test.py
+      - run: python3 mobile/scripts/ios-compiler-cleanup.test.py
       - run: node --test scripts/ci/install-native.test.mjs
       - run: node --test mobile/scripts/stack-isolation.test.mjs
       - run: node --test --test-name-pattern='EPT-102|diagnóstico' scripts/ci/impact.test.mjs
@@ -382,7 +390,7 @@ jobs:
     env:
       CI: '1'
       DEVELOPER_DIR: /Applications/Xcode_26.1.1.app/Contents/Developer
-      EPT_IOS_DIAGNOSTIC_PHASE: runtime
+      EPT_IOS_DIAGNOSTIC_PHASE: full
       EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -391,11 +399,11 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
-      - name: Presupuesto diagnóstico cerrado (runtime 3 minutos; full 28; job 30)
+      - name: Presupuesto diagnóstico cerrado (runtime 3 minutos; full 27m10s; job 30)
         run: |
           case "$EPT_IOS_DIAGNOSTIC_PHASE" in
             runtime) budget=180 ;;
-            full) budget=1680 ;;
+            full) budget=1630 ;;
             *) echo 'Invalid iOS diagnostic phase'; exit 1 ;;
           esac
           echo "EPT_NATIVE_DEADLINE=$(( $(date +%s) + budget ))" >> "$GITHUB_ENV"
@@ -412,6 +420,7 @@ jobs:
           python3 scripts/ci/run-stage.test.py 2>&1 | tee "$EPT_STAGE_LOG_DIR/process-tests-redacted.log"
       - run: python3 scripts/ci/native-backend.test.py
       - run: python3 mobile/scripts/ios-simulator.test.py
+      - run: python3 mobile/scripts/ios-compiler-cleanup.test.py
       - run: node --test scripts/ci/install-native.test.mjs
       - name: Inventario SDK de solo lectura (una consulta; sin backend ni simulador)
         if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'runtime'
@@ -440,6 +449,10 @@ jobs:
             ~/Library/Caches/CocoaPods
             ~/.cocoapods/repos
           key: pods-${{ runner.os }}-${{ runner.arch }}-${{ env.EPT_IOS_TOOLCHAIN }}-Release-${{ hashFiles('mobile/package-lock.json', 'mobile/app.config.*', 'mobile/app.json', 'mobile/plugins/**', 'mobile/ios/Podfile.lock') }}
+      - name: Registrar baseline privado de compiladores antes de prebuild
+        id: compiler-baseline
+        if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
+        run: python3 scripts/ci/run-stage.py --stage ios-compiler-baseline --seconds 10 -- python3 mobile/scripts/ios-compiler-cleanup.py baseline
       - name: Instalación y proyecto nativo (incluye pods)
         if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         working-directory: mobile
@@ -468,6 +481,9 @@ jobs:
         env:
           MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'
         run: bash mobile/scripts/ejecutar-ios.sh "${{ steps.app.outputs.ruta }}"
+      - name: Retirar únicamente compiladores nuevos del job propio
+        if: always() && steps.compiler-baseline.outcome == 'success' && env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
+        run: python3 scripts/ci/run-stage.py --stage cleanup-ios-compiler --seconds 20 -- python3 mobile/scripts/ios-compiler-cleanup.py cleanup
       - name: Cerrar y eliminar únicamente el simulador de este intento
         if: always() && env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         run: python3 scripts/ci/run-stage.py --stage cleanup-ios-simulator --seconds 55 -- python3 mobile/scripts/ios-simulator.py cleanup

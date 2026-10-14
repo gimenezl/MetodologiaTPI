@@ -8,6 +8,7 @@ export const mobileExact = new Set([
   'mobile/app.config.ts', 'mobile/tsconfig.json', 'mobile/eslint.config.js', 'mobile/jest.config.js', 'mobile/jest.setup.ts',
   'mobile/README.md',
   'mobile/scripts/ios-simulator.py', 'mobile/scripts/ios-simulator.test.py',
+  'mobile/scripts/ios-compiler-cleanup.py', 'mobile/scripts/ios-compiler-cleanup.test.py',
 ])
 
 // Familias de archivos: cada patrón es literal y acotado; no hay comodines sobre binarios arbitrarios.

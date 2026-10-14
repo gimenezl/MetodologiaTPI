@@ -75,7 +75,7 @@ test('EPT-102: mobile/ se registra con contrato propio y bloquea lo desconocido'
   assert.equal(profile(['src/proxy.ts']).mobile, undefined)
 })
 test('EPT-102: simulador Python exige registro exacto y plan CLI real por archivo', () => {
-  const files = ['mobile/scripts/ios-simulator.py', 'mobile/scripts/ios-simulator.test.py']
+  const files = ['mobile/scripts/ios-simulator.py', 'mobile/scripts/ios-simulator.test.py', 'mobile/scripts/ios-compiler-cleanup.py', 'mobile/scripts/ios-compiler-cleanup.test.py']
   for (const file of files) assert.deepEqual(profile([file]), { db: false, mutations: false, ui: [], mobile: true })
   assert.throws(() => profile(['mobile/scripts/unregistered.py']), /Ruta mobile sin contrato/u)
   const directory = mkdtempSync(path.join(tmpdir(), 'ept105-impact-python-'))
@@ -181,6 +181,20 @@ test('EPT-102: el paquete móvil no altera dependencias ni lockfile de Next', ()
   assert.match(readFileSync('eslint.config.mjs', 'utf8'), /"mobile\/\*\*"/u)
 })
 
+test('diagnóstico iOS retira solo compiladores registrados con reserva separada', () => {
+  const yml = readFileSync('.github/workflows/ci.yml', 'utf8')
+  for (const section of [yml.slice(yml.indexOf('  mobile-ios:'), yml.indexOf('  diagnostic-smoke:')), yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:'), yml.indexOf('  gate:'))]) {
+    assert.ok(section.indexOf('ios-compiler-cleanup.py baseline') < section.indexOf('npx --no-install expo prebuild'))
+    assert.match(section, /cleanup-ios-compiler --seconds 20/u)
+    assert.match(section, /always\(\) && steps.compiler-baseline.outcome == 'success'/u)
+    assert.ok(section.indexOf('cleanup-ios-compiler') < section.indexOf('cleanup-ios-simulator'))
+    assert.match(section, /1630/u)
+  }
+  const helper = readFileSync('mobile/scripts/ios-compiler-cleanup.py', 'utf8')
+  assert.doesNotMatch(helper, /pkill|killpg|sudo/u)
+  assert.match(helper, /RUNNER_TRACKING_ID/u)
+  assert.match(helper, /cleanup_ownership_unknown/u)
+})
 test('diagnóstico iOS fija toolchain local y verifica compatibilidad antes del backend', () => {
   const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
   for (const job of ['mobile-ios', 'ios-infrastructure-diagnostic']) {
@@ -227,9 +241,9 @@ test('diagnóstico iOS es opt-in, acotado y nunca aprueba entrega', () => {
   const diagnostic = yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:')).split(/\n  [a-z-]+:/u)[0]
   assert.match(diagnostic, /needs: diagnostic-smoke/u)
   assert.match(diagnostic, /timeout-minutes: 30/u)
-  assert.match(diagnostic, /EPT_IOS_DIAGNOSTIC_PHASE: runtime/u)
+  assert.match(diagnostic, /EPT_IOS_DIAGNOSTIC_PHASE: full/u)
   assert.match(diagnostic, /runtime\) budget=180/u)
-  assert.match(diagnostic, /full\) budget=1680/u)
+  assert.match(diagnostic, /full\) budget=1630/u)
   assert.match(diagnostic, /Invalid iOS diagnostic phase'; exit 1/u)
   assert.match(diagnostic, /sdk-inventory --seconds 90/u)
   assert.match(diagnostic, /ios-simulator\.py inventory/u)
