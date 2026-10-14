@@ -211,8 +211,8 @@ class SimulatorOwnership(unittest.TestCase):
         self.assertEqual(json.loads(ios.marker_path().read_text(encoding='utf8'))['type'], identifier)
 
     def test_opaque_type_namespace_empty_bounds_controls_and_duplicates_fail_closed(self):
-        prefix = 'com.apple.CoreSimulator.SimDeviceType.iPhone-'
-        for identifier in ('foreign.iPhone-16', 'com.apple.CoreSimulator.SimDeviceType.iPad-16', prefix, prefix + 'x' * 256, prefix + 'two words', prefix + 'tab\t', prefix + 'line\n', prefix + '\x00', prefix + '\x7f', prefix + '\u200b'):
+        prefix = 'com.apple.CoreSimulator.SimDeviceType.'
+        for identifier in ('foreign.iPhone-16', prefix, prefix + 'x' * 256, prefix + 'two words', prefix + 'tab\t', prefix + 'line\n', prefix + '\x00', prefix + '\x7f', prefix + '\u200b'):
             fixture = self.selection_fixture()
             fixture['devicetypes'][0]['identifier'] = identifier
             with self.assertRaises(ios.InventoryContractError) as error: ios.selection_inventory(json.dumps(fixture))
@@ -229,16 +229,28 @@ class SimulatorOwnership(unittest.TestCase):
         self.assertEqual(run.call_args.args[0][-6:], ['xcrun', 'simctl', 'create', 'owned', identifier, RUNTIME])
         self.assertFalse(run.call_args.kwargs.get('shell', False))
 
-    def test_type_id_flags_are_exact_booleans_with_identical_acceptance_predicate(self):
-        prefix = 'com.apple.CoreSimulator.SimDeviceType.iPhone-'
+    def test_apple_opaque_identifier_family_is_data_not_derived_from_name(self):
+        fixture = self.selection_fixture()
+        identifier = 'com.apple.CoreSimulator.SimDeviceType.opaque-vendor-variant'
+        fixture['devicetypes'][0]['identifier'] = identifier
+        inventory = ios.selection_inventory(json.dumps(fixture))
+        self.assertEqual(ios.select(inventory['runtimes'], inventory['devicetypes'], '18.5')[1], identifier)
+        fixture['devicetypes'][0]['identifier'] = 'com.apple.CoreSimulator.SimDeviceType.iPhone-looking-name'
+        fixture['devicetypes'][0]['productFamily'] = 'iPad'
+        inventory = ios.selection_inventory(json.dumps(fixture))
+        with self.assertRaises(ios.InventoryContractError) as error: ios.select(inventory['runtimes'], inventory['devicetypes'], '18.5')
+        self.assertEqual(error.exception.reason_code, 'NO_COMPATIBLE_IPHONE')
+
+    def test_type_id_flags_are_exact_booleans_with_base_namespace_admission(self):
+        prefix = 'com.apple.CoreSimulator.SimDeviceType.'
         cases = [prefix, 'private-secret', prefix + '16', prefix + 'opaque();$', prefix + 'x' * 256]
         cases += [prefix + left + right for left in ('a', ' ', '\x00', '\n', '\u200b', '(third)') for right in ('', 'b', '\t', '\x7f')]
         for identifier in cases:
-            old = identifier.startswith(prefix) and len(identifier) > len(prefix) and len(identifier) <= 256 and not any(c.isspace() or not c.isprintable() for c in identifier)
+            expected = identifier.startswith(prefix) and len(identifier) > len(prefix) and len(identifier) <= 256 and not any(c.isspace() or not c.isprintable() for c in identifier)
             flags = ios.type_id_conditions(identifier)
             self.assertEqual(set(flags), {'namespace_iPhone', 'nonempty', 'bounded', 'no_control', 'no_whitespace', 'base_apple_namespace'})
             self.assertTrue(all(type(value) is bool for value in flags.values()))
-            self.assertEqual(ios.type_id_accepted(flags), old)
+            self.assertEqual(ios.type_id_accepted(flags), expected)
             self.assertNotIn(identifier, json.dumps(flags))
         self.assertTrue(ios.type_id_conditions(prefix)['base_apple_namespace'])
         self.assertFalse(ios.type_id_conditions(prefix)['nonempty'])
