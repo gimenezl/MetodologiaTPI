@@ -335,12 +335,38 @@ class NativeSafety(unittest.TestCase):
                     with self.assertRaises(native.MigrationFailure):
                         native.apply_cli_migrations('synthetic-cli', self.path, expected_sql_error=True)
 
+    def test_lsof_process_file_sets_accept_mandatory_descriptors_and_multiple_sets(self):
+        # Public source protocol fixture, not a captured private process listing.
+        output = 'p124\ng123\nu5\nf9\nn127.0.0.1:8010\nf10\nn127.0.0.1:8011\np125\ng123\nu5\nf3\nn127.0.0.1:8010\n'
+        with patch.object(native, 'process_identity', return_value={'uid': 5, 'pgid': 123}) as identity:
+            ports = native.parse_owned_listeners(output, {'pid': 123, 'uid': 5}, 'auth')
+            self.assertEqual(ports, {8010, 8011})
+            self.assertEqual([call.args[0] for call in identity.call_args_list], [124, 125])
+
+    def test_lsof_malformed_unknown_and_duplicate_fields_fail_without_private_values(self):
+        prefix = 'p124\ng123\nu5\n'
+        invalid = ['', prefix, prefix + 'n127.0.0.1:8010\n', prefix + 'f9\n', prefix + 'f9\nn127.0.0.1:8010\nn127.0.0.1:8011\n', prefix + 'u5\nf9\nn127.0.0.1:8010\n', prefix + 'f9\nn127.0.0.1:8010\nf9\nn127.0.0.1:8011\n', 'p124\nu5\nf9\nn127.0.0.1:8010\n', prefix + 'fmalformed-private-value\nn127.0.0.1:8010\n', prefix + 'cprivate-command-secret\n', prefix + '\x1bprivate-value\n', prefix + 'f9\nn127.0.0.1:99999\n', prefix + 'f9\nn127.0.0.1:8010', prefix + 'f9\nn127.0.0.1:8010\np124\n']
+        with patch.object(native, 'process_identity', return_value={'uid': 5, 'pgid': 123}):
+            for output in invalid:
+                with self.subTest(output_shape=invalid.index(output)):
+                    with self.assertRaises(RuntimeError) as failure:
+                        native.parse_owned_listeners(output, {'pid': 123, 'uid': 5}, 'auth')
+                    self.assertNotIn('private', str(failure.exception))
+                    self.assertNotIn('124', str(failure.exception))
+                    self.assertRegex(str(failure.exception), r'field_id=(?:[A-Za-z]|invalid)$')
+
+    def test_lsof_process_metadata_foreign_uid_and_group_fail(self):
+        with patch.object(native, 'process_identity', return_value={'uid': 5, 'pgid': 123}):
+            for output in ['p124\ng999\nu5\nf9\nn127.0.0.1:8010\n', 'p124\ng123\nu99\nf9\nn127.0.0.1:8010\n']:
+                with self.assertRaisesRegex(RuntimeError, 'Foreign'):
+                    native.parse_owned_listeners(output, {'pid': 123, 'uid': 5}, 'auth')
+
     def test_owned_listener_readback_rejects_wildcard_foreign_and_missing_port(self):
         native.private_json(self.path / 'auth.pid.json', {'pid': 123, 'uid': 5, 'start': 'synthetic'})
         owned = {'uid': 5, 'pgid': 123}
         with patch.object(native, 'verify_worker'), patch.object(native, 'process_identity', return_value=owned), redirect_stdout(io.StringIO()):
-            for output, code, expected in [('p124\nn127.0.0.1:8010\n', 0, None), ('p124\nn*:8010\n', 0, 'Non-loopback'), ('p124\nn[::]:8010\n', 0, 'Non-loopback'), ('p124\nn127.0.0.1:9999\n', 0, 'missing'), ('', 1, 'unavailable')]:
-                with patch.object(native.subprocess, 'run', return_value=subprocess.CompletedProcess([], code, stdout=output)) as run:
+            for output, code, expected in [('p124\ng123\nu5\nf9\nn127.0.0.1:8010\n', 0, None), ('p124\ng123\nu5\nf9\nn*:8010\n', 0, 'Non-loopback'), ('p124\ng123\nu5\nf9\nn[::]:8010\n', 0, 'Non-loopback'), ('p124\ng123\nu5\nf9\nn127.0.0.1:9999\n', 0, 'missing'), ('', 1, 'unavailable')]:
+                with patch.object(native.subprocess, 'run', return_value=subprocess.CompletedProcess([], code, stdout=output, stderr='revision: 4.91')) as run:
                     if expected:
                         with self.assertRaisesRegex(RuntimeError, expected):
                             native.verify_loopback_listeners(self.path, 'auth', 8010)
@@ -348,7 +374,7 @@ class NativeSafety(unittest.TestCase):
                         native.verify_loopback_listeners(self.path, 'auth', 8010)
                     self.assertIn('-g', run.call_args.args[0])
             for foreign in ({'uid': 6, 'pgid': 123}, {'uid': 5, 'pgid': 999}, None):
-                with patch.object(native, 'process_identity', return_value=foreign), patch.object(native.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, stdout='p124\nn127.0.0.1:8010\n')):
+                with patch.object(native, 'process_identity', return_value=foreign), patch.object(native.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, stdout='p124\ng123\nu5\nf9\nn127.0.0.1:8010\n', stderr='revision: 4.91')):
                     with self.assertRaisesRegex(RuntimeError, 'Foreign'):
                         native.verify_loopback_listeners(self.path, 'auth', 8010)
 

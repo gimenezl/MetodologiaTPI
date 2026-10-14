@@ -324,27 +324,83 @@ def http_ready(port, route):
         return response.status == 200
 
 
-def verify_loopback_listeners(path, service, expected_port):
-    # macOS lsof's AND selection confines readback to the witnessed owned group.
-    record = read_private(path / f'{service}.pid.json')
-    verify_worker(path, service, record, process_identity(record['pid']))
-    result = subprocess.run(['lsof', '-nP', '-a', '-g', str(record['pid']), '-iTCP', '-sTCP:LISTEN', '-Fpn'], capture_output=True, text=True, timeout=3)
-    if result.returncode:
-        raise RuntimeError(f'Owned listener readback unavailable: {service}')
-    ports, pid = set(), None
-    for field in result.stdout.splitlines():
-        if field.startswith('p'):
-            pid = int(field[1:])
+def listener_field_error(service, field):
+    # Identifier only. Never echo field values, PID/UID, addresses or argv.
+    identifier = field[0] if field and re.fullmatch(r'[A-Za-z]', field[0]) else 'invalid'
+    raise RuntimeError(f'Invalid owned listener protocol: {service}; field_id={identifier}')
+
+
+def parse_owned_listeners(output, record, service):
+    # Apple lsof 4.91 emits f even without selecting it. Explicit pgufn makes
+    # process (p,g,u) and file (f,n) sets unambiguous on both old/new lsof.
+    ports, seen_pids = set(), set()
+    pid, fields, descriptors = None, {}, set()
+    descriptor, address_seen = None, False
+
+    def complete_file():
+        if descriptor is not None and not address_seen:
+            listener_field_error(service, 'n')
+
+    def complete_process():
+        complete_file()
+        if pid is not None and (set(fields) != {'g', 'u'} or not descriptors):
+            listener_field_error(service, 'p')
+
+    if not output or not output.endswith('\n'):
+        listener_field_error(service, '')
+    for field in output.splitlines():
+        identifier, value = field[:1], field[1:]
+        if identifier == 'p':
+            complete_process()
+            if not re.fullmatch(r'[1-9][0-9]*', value) or int(value) in seen_pids:
+                listener_field_error(service, field)
+            pid = int(value)
+            seen_pids.add(pid)
             identity = process_identity(pid)
             if identity is None or identity['uid'] != record['uid'] or identity['pgid'] != record['pid']:
                 raise RuntimeError(f'Foreign listener readback: {service}')
-        elif field.startswith('n'):
-            address = field[1:]
-            if pid is None or not re.fullmatch(r'127\.0\.0\.1:[0-9]+', address):
-                raise RuntimeError(f'Non-loopback listener refused: {service}')
-            ports.add(int(address.rsplit(':', 1)[1]))
+            fields, descriptors = {}, set()
+            descriptor, address_seen = None, False
+        elif identifier in ('g', 'u'):
+            if pid is None or descriptor is not None or identifier in fields or not re.fullmatch(r'[0-9]+', value):
+                listener_field_error(service, field)
+            expected = record['pid'] if identifier == 'g' else record['uid']
+            if int(value) != expected:
+                raise RuntimeError(f'Foreign listener readback: {service}')
+            fields[identifier] = int(value)
+        elif identifier == 'f':
+            complete_file()
+            if pid is None or set(fields) != {'g', 'u'} or not re.fullmatch(r'[0-9]+', value) or value in descriptors:
+                listener_field_error(service, field)
+            descriptor, address_seen = value, False
+            descriptors.add(value)
+        elif identifier == 'n':
+            if descriptor is None or address_seen:
+                listener_field_error(service, field)
+            if not re.fullmatch(r'127\.0\.0\.1:[0-9]+', value):
+                raise RuntimeError(f'Non-loopback listener refused: {service}; field_id=n')
+            port = int(value.rsplit(':', 1)[1])
+            if not 1 <= port <= 65535:
+                listener_field_error(service, field)
+            ports.add(port)
+            address_seen = True
         else:
-            raise RuntimeError(f'Unexpected listener readback: {service}')
+            listener_field_error(service, field)
+    complete_process()
+    return ports
+
+
+def verify_loopback_listeners(path, service, expected_port):
+    # AND selection confines readback to the witnessed owned group.
+    record = read_private(path / f'{service}.pid.json')
+    verify_worker(path, service, record, process_identity(record['pid']))
+    version = subprocess.run(['lsof', '-v'], capture_output=True, text=True, timeout=3)
+    revision = re.search(r'\brevision:\s*([0-9]+(?:\.[0-9]+)+)', version.stdout + version.stderr)
+    print(f'native {service} listener protocol; lsof_version={revision[1] if revision else "unknown"}', flush=True)
+    result = subprocess.run(['lsof', '-nP', '-a', '-g', str(record['pid']), '-iTCP', '-sTCP:LISTEN', '-Fpgufn'], capture_output=True, text=True, timeout=3)
+    if result.returncode:
+        raise RuntimeError(f'Owned listener readback unavailable: {service}')
+    ports = parse_owned_listeners(result.stdout, record, service)
     if expected_port not in ports:
         raise RuntimeError(f'Expected owned listener missing: {service}')
     print(f'native {service} owned listeners: loopback verified', flush=True)
