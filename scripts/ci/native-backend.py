@@ -2,6 +2,7 @@
 """Experimental, loopback-only iOS backend from pinned official ARM archives."""
 import base64
 import ctypes
+import errno
 import hashlib
 import hmac
 import http.client
@@ -29,6 +30,7 @@ sys.dont_write_bytecode = True
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 SERVICES = ('postgres', 'auth', 'storage', 'postgrest', 'proxy')
+NATIVE_PORTS = (54321, 54322, 8010, 3010, 5010, 5001)
 spec = importlib.util.spec_from_file_location('stage', HERE / 'run-stage.py')
 stage = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(stage)
@@ -639,12 +641,58 @@ def prove_transaction_contract(path, psql):
     print('native transaction probe: explicit rollback readback passed', flush=True)
 
 
+def existing_tcp_listener(port):
+    # Terse PID output is private; never inspect argv or signal any listener.
+    try:
+        result = subprocess.run(['lsof', '-nP', '-a', f'-iTCP:{port}', '-sTCP:LISTEN', '-t', '+w'], capture_output=True, text=True, timeout=3)
+    except (OSError, subprocess.TimeoutExpired):
+        raise RuntimeError('TCP listener availability readback unavailable') from None
+    rows = result.stdout.splitlines()
+    if (result.stderr or '').strip():
+        raise RuntimeError('TCP listener availability readback unavailable')
+    if result.returncode == 1 and not rows:
+        return False
+    if result.returncode != 0 or not rows or any(not re.fullmatch(r'[1-9][0-9]*', row) for row in rows):
+        raise RuntimeError('TCP listener availability readback unavailable')
+    return True
+
+
+def check_port_available(port):
+    if os.name != 'posix' or not isinstance(port, int) or not 1 <= port <= 65535:
+        raise RuntimeError('Native port probe requires a valid POSIX TCP port')
+    label = str(port) if port in NATIVE_PORTS else 'test'
+    def report(state):
+        message = f'native port availability; port={label}; result={state}'
+        print(message, flush=True)
+        with open(Path(os.environ['EPT_STAGE_LOG_DIR']) / 'native-ports-redacted.log', 'a', encoding='utf-8') as log:
+            log.write(message + '\n')
+    try:
+        occupied = existing_tcp_listener(port)
+    except RuntimeError:
+        report('listener_readback_unavailable')
+        raise RuntimeError(f'Native port listener readback unavailable; port={label}') from None
+    try:
+        if occupied:
+            report('live_listener')
+            raise RuntimeError(f'Native port occupied by live listener; port={label}')
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            # Match POSIX server TIME_WAIT reuse, not duplicate live bindings.
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            probe.bind(('127.0.0.1', port))
+            probe.listen(1)
+    except OSError as error:
+        kind = {errno.EADDRINUSE: 'address_in_use', errno.EACCES: 'permission_denied', errno.EADDRNOTAVAIL: 'address_unavailable'}.get(error.errno, 'socket_error')
+        report(kind)
+        raise RuntimeError(f'Native port availability failed; port={label}; errno_class={kind}') from None
+    report('available')
+
+
 def start():
     if platform.system() != 'Darwin' or platform.machine() != 'arm64':
         raise RuntimeError('Native iOS requires macOS ARM64')
-    for port in (54321, 54322, 8010, 3010, 5010, 5001):
-        with socket.socket() as probe:
-            probe.bind(('127.0.0.1', port))  # Fail closed rather than touching another stack.
+    Path(os.environ['EPT_STAGE_LOG_DIR']).mkdir(parents=True, exist_ok=True)
+    for port in NATIVE_PORTS:
+        check_port_available(port)  # Live foreign listeners fail closed, no signals.
     path = Path(tempfile.mkdtemp(prefix='ept105-native-', dir=os.environ['RUNNER_TEMP'])).resolve()
     private_json(path / 'owner.json', {'run': os.environ['GITHUB_RUN_ID'], 'attempt': os.environ['GITHUB_RUN_ATTEMPT'], 'uid': os.getuid()})
     with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:

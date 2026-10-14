@@ -8,6 +8,7 @@ import io
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 import signal
 import subprocess
 import sys
@@ -152,6 +153,74 @@ class NativeSafety(unittest.TestCase):
             self.assertIsNone(native.upstream_route(path))
         source = (HERE / 'native-backend.py').read_text(encoding='utf-8')
         self.assertNotIn("headers['authorization'] =", source)
+
+    def test_port_probe_uses_only_reuseaddr_and_safe_telemetry(self):
+        with patch.object(native, 'os', SimpleNamespace(name='posix', environ=os.environ)), patch.object(native, 'existing_tcp_listener', return_value=False), patch.object(native.socket, 'socket') as socket, redirect_stdout(io.StringIO()) as trace:
+            native.check_port_available(54321)
+            probe = socket.return_value.__enter__.return_value
+            probe.setsockopt.assert_called_once_with(native.socket.SOL_SOCKET, native.socket.SO_REUSEADDR, 1)
+            probe.bind.assert_called_once_with(('127.0.0.1', 54321))
+            probe.listen.assert_called_once_with(1)
+            self.assertIn('port=54321; result=available', trace.getvalue())
+            probe.bind.side_effect = OSError(native.errno.EADDRINUSE, 'private-url-secret')
+            with self.assertRaisesRegex(RuntimeError, 'errno_class=address_in_use') as failure:
+                native.check_port_available(54321)
+            self.assertNotIn('private-url-secret', str(failure.exception))
+        for code, output, expected in [(1, '', False), (0, '123\n456\n', True), (0, 'private-secret\n', None), (2, '', None), (0, '', None)]:
+            with patch.object(native.subprocess, 'run', return_value=subprocess.CompletedProcess([], code, stdout=output, stderr='')) as run:
+                if expected is None:
+                    with self.assertRaisesRegex(RuntimeError, 'readback unavailable'):
+                        native.existing_tcp_listener(54321)
+                else:
+                    self.assertEqual(native.existing_tcp_listener(54321), expected)
+                self.assertIn('-sTCP:LISTEN', run.call_args.args[0])
+                self.assertIn('-a', run.call_args.args[0])
+                self.assertEqual(run.call_args.args[0][-2:], ['-t', '+w'])  # -t suppresses warnings; restore afterward.
+        with patch.object(native.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, stdout='123\n', stderr='private-permission-warning')):
+            with self.assertRaisesRegex(RuntimeError, 'readback unavailable') as failure:
+                native.existing_tcp_listener(54321)
+            self.assertNotIn('private-permission-warning', str(failure.exception))
+
+    @unittest.skipUnless(os.name == 'posix', 'POSIX TIME_WAIT reuse semantics; Windows SO_REUSEADDR differs')
+    def test_port_probe_reuses_active_close_timewait_without_wait_or_retry(self):
+        with native.socket.socket() as listener:
+            listener.setsockopt(native.socket.SOL_SOCKET, native.socket.SO_REUSEADDR, 1)
+            listener.bind(('127.0.0.1', 0))
+            port = listener.getsockname()[1]
+            listener.listen(1)
+            with native.socket.create_connection(('127.0.0.1', port), timeout=1) as client:
+                accepted, _address = listener.accept()
+                with accepted:
+                    accepted.settimeout(1)
+                    accepted.shutdown(native.socket.SHUT_WR)  # Server active close first.
+                    self.assertEqual(client.recv(1), b'')
+                    client.shutdown(native.socket.SHUT_WR)
+                    self.assertEqual(accepted.recv(1), b'')  # FIN exchange completed.
+        self.assertFalse(native.existing_tcp_listener(port))
+        with native.socket.socket() as old_probe:
+            with self.assertRaises(OSError) as failure:
+                old_probe.bind(('127.0.0.1', port))
+            self.assertEqual(failure.exception.errno, native.errno.EADDRINUSE)
+        native.check_port_available(port)  # No sleeps, retries or foreign signals.
+
+    @unittest.skipUnless(os.name == 'posix', 'POSIX live unrelated loopback/wildcard listener protection')
+    def test_port_probe_rejects_live_unrelated_listener_and_preserves_health(self):
+        for host in ('127.0.0.1', '0.0.0.0'):
+            with native.socket.socket() as foreign:
+                foreign.setsockopt(native.socket.SOL_SOCKET, native.socket.SO_REUSEADDR, 1)
+                foreign.bind((host, 0))
+                port = foreign.getsockname()[1]
+                foreign.listen(1)
+                foreign.settimeout(1)
+                with patch.object(native.os, 'killpg') as signal:
+                    with self.assertRaisesRegex(RuntimeError, 'occupied by live listener'):
+                        native.check_port_available(port)
+                    signal.assert_not_called()
+                with native.socket.create_connection(('127.0.0.1', port), timeout=1) as client:
+                    accepted, _address = foreign.accept()
+                    with accepted:
+                        accepted.sendall(b'ok')
+                        self.assertEqual(client.recv(2), b'ok')
 
     def test_fixed_loopback_server_binds_and_listens_without_reverse_dns(self):
         # Actual stdlib HTTPServer demonstrates the unwanted lookup contract.
@@ -492,7 +561,7 @@ class NativeSafety(unittest.TestCase):
             if fail_ready and service == 'proxy':
                 raise RuntimeError('Synthetic readiness failure')
         uid = getattr(os, 'getuid', lambda: 0)()
-        with patch.dict(os.environ, {'GITHUB_ENV': str(output)}), patch.object(native.os, 'getuid', return_value=uid, create=True), patch.object(native.platform, 'system', return_value='Darwin'), patch.object(native.platform, 'machine', return_value='arm64'), patch.object(native.socket, 'socket'), patch.object(native, 'bounded'), patch.object(native, 'spawn_worker'), patch.object(native, 'ready', side_effect=readiness), patch.object(native, 'cleanup'), patch.object(native, 'verify_loopback_listeners'), patch.object(native, 'publish_public_environment', wraps=native.publish_public_environment) as publish, redirect_stdout(io.StringIO()):
+        with patch.dict(os.environ, {'GITHUB_ENV': str(output)}), patch.object(native.os, 'getuid', return_value=uid, create=True), patch.object(native.platform, 'system', return_value='Darwin'), patch.object(native.platform, 'machine', return_value='arm64'), patch.object(native.socket, 'socket'), patch.object(native, 'check_port_available') as ports, patch.object(native, 'bounded'), patch.object(native, 'spawn_worker'), patch.object(native, 'ready', side_effect=readiness), patch.object(native, 'cleanup'), patch.object(native, 'verify_loopback_listeners'), patch.object(native, 'publish_public_environment', wraps=native.publish_public_environment) as publish, redirect_stdout(io.StringIO()):
             if fail_ready:
                 with self.assertRaisesRegex(RuntimeError, 'readiness failure'):
                     native.start()
@@ -500,6 +569,7 @@ class NativeSafety(unittest.TestCase):
             else:
                 native.start()
                 publish.assert_called_once()
+        self.assertEqual([call.args[0] for call in ports.call_args_list], list(native.NATIVE_PORTS))
         self.assertEqual(events, ['postgres', 'auth', 'storage', 'postgrest', 'proxy'])
         return dict(line.split('=', 1) for line in output.read_text(encoding='utf-8').splitlines())
 
