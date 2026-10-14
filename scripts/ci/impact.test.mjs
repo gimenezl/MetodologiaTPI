@@ -195,6 +195,19 @@ test('diagnóstico iOS retira solo compiladores registrados con reserva separada
   assert.match(helper, /RUNNER_TRACKING_ID/u)
   assert.match(helper, /cleanup_ownership_unknown/u)
 })
+test('diagnóstico iOS mide solo latencia y corre ownership antes de cualquier toolchain', () => {
+  const yml = readFileSync('.github/workflows/ci.yml', 'utf8')
+  for (const section of [yml.slice(yml.indexOf('  mobile-ios:'), yml.indexOf('  diagnostic-smoke:')), yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:'), yml.indexOf('  gate:'))]) {
+    assert.ok(section.indexOf('ios-compiler-cleanup.test.py') < section.indexOf('ios-simulator.py toolchain'))
+    assert.match(section, /compiler-ownership-tests --seconds 20/u)
+  }
+  const diagnostic = yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:'), yml.indexOf('  gate:'))
+  assert.match(diagnostic, /ios-toolchain-diagnostic --seconds 75/u)
+  assert.match(diagnostic, /EPT_IOS_DIAGNOSTIC_PHASE: runtime/u)
+  const helper = readFileSync('mobile/scripts/ios-simulator.py', 'utf8')
+  const inventory = helper.slice(helper.indexOf('def inventory_probe():'))
+  assert.doesNotMatch(inventory, /toolchain_preflight\(\)/u)
+})
 test('diagnóstico iOS fija toolchain local y verifica compatibilidad antes del backend', () => {
   const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
   for (const job of ['mobile-ios', 'ios-infrastructure-diagnostic']) {
@@ -241,7 +254,7 @@ test('diagnóstico iOS es opt-in, acotado y nunca aprueba entrega', () => {
   const diagnostic = yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:')).split(/\n  [a-z-]+:/u)[0]
   assert.match(diagnostic, /needs: diagnostic-smoke/u)
   assert.match(diagnostic, /timeout-minutes: 30/u)
-  assert.match(diagnostic, /EPT_IOS_DIAGNOSTIC_PHASE: full/u)
+  assert.match(diagnostic, /EPT_IOS_DIAGNOSTIC_PHASE: runtime/u)
   assert.match(diagnostic, /runtime\) budget=180/u)
   assert.match(diagnostic, /full\) budget=1630/u)
   assert.match(diagnostic, /Invalid iOS diagnostic phase'; exit 1/u)

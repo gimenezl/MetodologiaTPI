@@ -315,7 +315,7 @@ class SimulatorOwnership(unittest.TestCase):
             output = io.StringIO()
             envfile = Path(self.tmp.name) / 'dry-run-env'
             envfile.write_text('untouched\n', encoding='utf8')
-            with patch.dict(os.environ, {"EPT_IOS_DIAGNOSTIC_PHASE": 'runtime', 'GITHUB_ENV': str(envfile)}), patch.object(ios, 'command', side_effect=command), patch.object(ios, 'toolchain_preflight', return_value={'xcode_version': '26.1.1'}), patch.object(ios.subprocess, 'run', side_effect=run), redirect_stdout(output):
+            with patch.dict(os.environ, {"EPT_IOS_DIAGNOSTIC_PHASE": 'runtime', 'GITHUB_ENV': str(envfile)}), patch.object(ios, 'command', side_effect=command), patch.object(ios, 'toolchain_preflight', side_effect=AssertionError('duplicate preflight query')), patch.object(ios.subprocess, 'run', side_effect=run), redirect_stdout(output):
                 self.assertEqual(ios.inventory_probe(), code)
             self.assertEqual(len(queries), 1)
             self.assertEqual(queries[0][-4:], ['xcrun', 'simctl', 'list', '-j'])
@@ -324,6 +324,21 @@ class SimulatorOwnership(unittest.TestCase):
             self.assertNotIn('password', output.getvalue())
             self.assertFalse(ios.marker_path().exists())
             self.assertEqual(envfile.read_text(encoding="utf8"), "untouched\n")
+
+    def test_toolchain_phase_caps_single_queries_and_fail_before_any_command(self):
+        responses = [str(Path(ios.PINNED_DEVELOPER_DIR) / 'usr/bin/swift'), 'Xcode 26.1.1\nBuild version 17B100', 'Apple Swift version 6.2.1']
+        for phase, seconds in [('full', 5), ('runtime', 20)]:
+            with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': phase, 'DEVELOPER_DIR': ios.PINNED_DEVELOPER_DIR}), patch.object(Path, 'is_dir', return_value=True), patch.object(ios, 'command', side_effect=responses) as command, redirect_stdout(io.StringIO()):
+                ios.toolchain_preflight()
+                self.assertEqual(command.call_count, 3)
+                self.assertEqual([c.args[0] for c in command.call_args_list], ['ios-toolchain-path', 'ios-toolchain-xcode', 'ios-toolchain-swift'])
+                self.assertTrue(all(c.args[1] == seconds and c.kwargs['capture'] for c in command.call_args_list))
+        with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': 'private-invalid'}), patch.object(ios, 'command') as command:
+            with self.assertRaises(RuntimeError): ios.toolchain_preflight()
+            command.assert_not_called()
+        with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': 'runtime', 'DEVELOPER_DIR': ios.PINNED_DEVELOPER_DIR}), patch.object(Path, 'is_dir', return_value=True), patch.object(ios, 'command', side_effect=RuntimeError('private-provider')) as command:
+            with self.assertRaises(RuntimeError): ios.toolchain_preflight()
+            self.assertEqual(command.call_count, 1)
 
     def test_pinned_xcode_and_swift_contract_versions_fail_closed(self):
         xcode = 'Xcode 26.1.1\nBuild version 17B100\n'

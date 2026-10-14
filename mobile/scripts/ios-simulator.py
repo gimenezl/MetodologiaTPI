@@ -327,17 +327,18 @@ def checked_toolchain_versions(xcode_text, swift_text):
 
 
 def toolchain_preflight():
+    seconds = 20 if diagnostic_phase() == "runtime" else 5
     if os.environ.get("DEVELOPER_DIR") != PINNED_DEVELOPER_DIR:
         raise InventoryContractError("TOOLCHAIN_CONFIG")
     developer = Path(PINNED_DEVELOPER_DIR).resolve()
     if not developer.is_dir():
         raise InventoryContractError("TOOLCHAIN_UNAVAILABLE")
     # xcrun honors the job-local override; global xcode-select would be misleading here.
-    swift_path = command("ios-toolchain-path", 5, "xcrun", "--find", "swift", capture=True).strip()
+    swift_path = command("ios-toolchain-path", seconds, "xcrun", "--find", "swift", capture=True).strip()
     if not Path(swift_path).resolve().is_relative_to(developer):
         raise InventoryContractError("TOOLCHAIN_PATH")
-    xcode = command("ios-toolchain-xcode", 5, "xcodebuild", "-version", capture=True)
-    swift = command("ios-toolchain-swift", 5, "xcrun", "swift", "--version", capture=True)
+    xcode = command("ios-toolchain-xcode", seconds, "xcodebuild", "-version", capture=True)
+    swift = command("ios-toolchain-swift", seconds, "xcrun", "swift", "--version", capture=True)
     result = checked_toolchain_versions(xcode, swift)
     print("ios toolchain=" + json.dumps(result, sort_keys=True), flush=True)
     return result
@@ -347,8 +348,6 @@ def inventory_probe():
     if diagnostic_phase() != "runtime":
         raise RuntimeError("SDK inventory requires explicit runtime phase")
     print("sdk inventory architecture=" + ("arm64" if platform.machine() == "arm64" else "OTHER"), flush=True)
-    toolchain = toolchain_preflight()
-    print("sdk selected_xcode_version=" + toolchain["xcode_version"], flush=True)
     sdk = command("sdk-version", 5, "xcrun", "--sdk", "iphonesimulator", "--show-sdk-version", capture=True).strip()
     print("sdk simulator_version=" + (sdk if re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,2}", sdk) else "OTHER"), flush=True)
     stopped = threading.Event()
