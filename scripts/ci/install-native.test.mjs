@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFile, mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { readFile, mkdtemp, writeFile, rm, realpath, mkdir, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -28,7 +28,7 @@ test('manifest rejects incompatible architecture, source, portable flag and OS f
 })
 
 test('streamed SHA256 rejects altered bytes', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'ept105-digest-'))
+  const root = await mkdtemp(join(await realpath(tmpdir()), 'ept105-digest-'))
   try {
     const path = join(root, 'archive')
     await writeFile(path, 'abc')
@@ -40,15 +40,45 @@ test('streamed SHA256 rejects altered bytes', async () => {
   }
 })
 
-test('corrupt immutable cache fails closed before download or extraction', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'ept105-cache-'))
-  const { mkdir } = await import('node:fs/promises')
+test('corrupt immutable cache fails closed before download or extraction', async t => {
+  t.mock.method(globalThis, 'fetch', () => assert.fail('Unexpected download in cache rejection test'))
+  const root = await mkdtemp(join(await realpath(tmpdir()), 'ept105-cache-'))
   try {
     const pin = lock.services.postgres
     const directory = join(root, pin.tag)
     await mkdir(directory)
     await writeFile(join(directory, `${pin.tag}-darwin-arm64.tar.zst`), 'corrupt')
     await assert.rejects(install(root, join(root, 'extracted')), /cached archive digest mismatch/u)
+  } finally {
+    await rm(root, { recursive: true })
+  }
+})
+
+test('symlink ancestor is rejected before reading cache or downloading', async t => {
+  t.mock.method(globalThis, 'fetch', () => assert.fail('Unexpected download in ancestor rejection test'))
+  const root = await mkdtemp(join(await realpath(tmpdir()), 'ept105-ancestor-'))
+  try {
+    const target = join(root, 'target')
+    const alias = join(root, 'alias')
+    await mkdir(target)
+    await symlink(target, alias, process.platform === 'win32' ? 'junction' : 'dir')
+    await assert.rejects(install(join(alias, 'cache'), join(root, 'extracted')), /Symlink in native artifact path/u)
+  } finally {
+    await rm(root, { recursive: true })
+  }
+})
+
+test('symlink cache entry is rejected rather than trusted by digest', async t => {
+  t.mock.method(globalThis, 'fetch', () => assert.fail('Unexpected download in entry rejection test'))
+  const root = await mkdtemp(join(await realpath(tmpdir()), 'ept105-entry-'))
+  try {
+    const pin = lock.services.postgres
+    const directory = join(root, pin.tag)
+    const target = join(root, 'target')
+    await mkdir(directory)
+    await mkdir(target)
+    await symlink(target, join(directory, `${pin.tag}-darwin-arm64.tar.zst`), process.platform === 'win32' ? 'junction' : 'dir')
+    await assert.rejects(install(root, join(root, 'extracted')), /Symlink in binary cache/u)
   } finally {
     await rm(root, { recursive: true })
   }
