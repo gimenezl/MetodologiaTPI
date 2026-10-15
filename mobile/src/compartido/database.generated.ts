@@ -1,5 +1,5 @@
 // GENERADO por mobile/scripts/sync-compartido.mjs desde src/types/database.generated.ts. No editar a mano.
-// sha256 de la fuente: 5d25759dc1ed1978791c2a7e2e1786240e55b352224c7ea34a2ecbfa2b373a7e
+// sha256 de la fuente: d2de334f2b8128fd1393446c4972b4a2ed5cecfb67140560aa71375dfed5de29
 export type Json =
   | string
   | number
@@ -2119,6 +2119,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      detalle_cuotas_items: {
+        Row: {
+          alumno_id: string | null
+          estado_pago: Database["public"]["Enums"]["estado_pago_item"] | null
+          factura_id: string | null
+          importe_centavos: number | null
+          item_id: string | null
+          pagado_centavos: number | null
+          tipo: Database["public"]["Enums"]["concepto_economico"] | null
+        }
+        Relationships: []
+      }
+      estado_cuotas_alumno: {
+        Row: {
+          alumno_id: string | null
+          cantidad_items: number | null
+          estado: string | null
+          fecha_corte: string | null
+          factura_id: string | null
+          generada_en: string | null
+          inconsistente: boolean | null
+          items_en_verificacion: number | null
+          pagado_centavos: number | null
+          periodo: string | null
+          saldo_centavos: number | null
+          total_centavos: number | null
+          vencimiento: string | null
+        }
+        Relationships: []
       }
       inscripciones_deportivas_administracion: {
         Row: {

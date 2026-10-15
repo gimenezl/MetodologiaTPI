@@ -2118,6 +2118,36 @@ export type Database = {
           },
         ]
       }
+      detalle_cuotas_items: {
+        Row: {
+          alumno_id: string | null
+          estado_pago: Database["public"]["Enums"]["estado_pago_item"] | null
+          factura_id: string | null
+          importe_centavos: number | null
+          item_id: string | null
+          pagado_centavos: number | null
+          tipo: Database["public"]["Enums"]["concepto_economico"] | null
+        }
+        Relationships: []
+      }
+      estado_cuotas_alumno: {
+        Row: {
+          alumno_id: string | null
+          cantidad_items: number | null
+          estado: string | null
+          fecha_corte: string | null
+          factura_id: string | null
+          generada_en: string | null
+          inconsistente: boolean | null
+          items_en_verificacion: number | null
+          pagado_centavos: number | null
+          periodo: string | null
+          saldo_centavos: number | null
+          total_centavos: number | null
+          vencimiento: string | null
+        }
+        Relationships: []
+      }
       inscripciones_deportivas_administracion: {
         Row: {
           alumno_apellido: string | null
