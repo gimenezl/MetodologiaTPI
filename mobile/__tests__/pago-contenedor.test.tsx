@@ -180,7 +180,7 @@ describe('PagoContenedor', () => {
     await waitFor(() => expect(rpcs.some(r => r.nombre === 'registrar_pago')).toBe(true))
     expect(rpcs.filter(r => r.nombre === 'registrar_pago')).toHaveLength(1)
     // El intento queda guardado mientras el desenlace es desconocido.
-    expect(await leerIntentoPendiente(almacenamiento, U)).toMatchObject({ claveIntento: CLAVE, alumnoId: A1, totalCentavos: 5000000 })
+    expect(await leerIntentoPendiente(almacenamiento, U, A1)).toMatchObject({ claveIntento: CLAVE, alumnoId: A1, totalCentavos: 5000000 })
 
     const envio = await responder(rpcs, 'registrar_pago', pagoRegistrado([I1], 5000000))
     expect(envio.args).toEqual({ p_clave_intento: CLAVE, p_item_ids: [I1], p_total_esperado_centavos: 5000000 })
@@ -188,7 +188,7 @@ describe('PagoContenedor', () => {
     expect(screen.getByText('Pendiente de verificación')).toBeTruthy()
     expect(screen.getByText('Código del pago: 44444444')).toBeTruthy()
     expect(screen.getByText('El ítem queda en verificación y el saldo no cambia hasta que la institución apruebe el pago.')).toBeTruthy()
-    expect(await leerIntentoPendiente(almacenamiento, U)).toBeNull()
+    expect(await leerIntentoPendiente(almacenamiento, U, A1)).toBeNull()
   })
 
   it('un conflicto confirmado no registra nada y devuelve a una selección actualizada', async () => {
@@ -200,7 +200,7 @@ describe('PagoContenedor', () => {
     await responder(rpcs, 'registrar_pago', null, { code: 'P6853', message: 'x' }, 400)
     expect(screen.getByText('No se registró el pago')).toBeTruthy()
     expect(screen.getByText(/ya fue pagado o tiene un pago en verificación/u)).toBeTruthy()
-    expect(await leerIntentoPendiente(almacenamiento, U)).toBeNull()
+    expect(await leerIntentoPendiente(almacenamiento, U, A1)).toBeNull()
     await fireEvent.press(screen.getByTestId('volver-seleccion'))
     await waitFor(() => expect(screen.getByTestId(`item-${I1}`)).toBeTruthy())
     expect(screen.getByText('Seleccioná al menos un ítem para continuar.')).toBeTruthy()
@@ -216,13 +216,14 @@ describe('PagoContenedor', () => {
 
     expect(screen.getByText('No pudimos confirmar el pago')).toBeTruthy()
     expect(screen.queryByTestId('registrar-pago')).toBeNull()
-    expect(await leerIntentoPendiente(almacenamiento, U)).toMatchObject({ claveIntento: CLAVE })
+    expect(await leerIntentoPendiente(almacenamiento, U, A1)).toMatchObject({ claveIntento: CLAVE })
 
     await fireEvent.press(screen.getByTestId('verificar-intento'))
     await waitFor(() => expect(rpcs.some(r => r.nombre === 'consultar_intento_pago')).toBe(true))
     const consulta = await responder(rpcs, 'consultar_intento_pago', { registrado: false })
     expect(consulta.args).toEqual({ p_clave_intento: CLAVE })
-    expect(screen.getByText('El pago no llegó a registrarse')).toBeTruthy()
+    expect(screen.getByText('El pago todavía no figura registrado')).toBeTruthy()
+    expect(screen.queryByText('Descartar este intento')).toBeNull()
 
     await fireEvent.press(screen.getByTestId('reintentar-intento'))
     await waitFor(() => expect(rpcs.some(r => r.nombre === 'registrar_pago')).toBe(true))
@@ -244,6 +245,21 @@ describe('PagoContenedor', () => {
     expect(screen.getByText('Pago registrado: pendiente de verificación.')).toBeTruthy()
     expect(screen.getByText('Este pago ya estaba registrado: no se duplicó.')).toBeTruthy()
     expect(rpcs.filter(r => r.nombre === 'registrar_pago')).toHaveLength(0)
+  })
+
+  it('al recuperar un intento que la institución ya aprobó no se presenta como pendiente', async () => {
+    const { rpcs } = await abrir()
+    await fireEvent.press(screen.getByTestId(`item-${I1}`))
+    await responder(rpcs, 'cotizar_pago', cotizacion([I1], 5000000))
+    await fireEvent.press(screen.getByTestId('registrar-pago'))
+    await waitFor(() => expect(rpcs.some(r => r.nombre === 'registrar_pago')).toBe(true))
+    await responder(rpcs, 'registrar_pago', null, { code: 'TypeError' }, 0)
+    await fireEvent.press(screen.getByTestId('verificar-intento'))
+    await waitFor(() => expect(rpcs.some(r => r.nombre === 'consultar_intento_pago')).toBe(true))
+    await responder(rpcs, 'consultar_intento_pago', { registrado: true, ...pagoRegistrado([I1], 5000000, true), estado: 'APROBADO' })
+    expect(screen.getByText('Este pago ya fue aprobado.')).toBeTruthy()
+    expect(screen.queryByText('Pago registrado: pendiente de verificación.')).toBeNull()
+    expect(screen.queryByText('Pendiente de verificación')).toBeNull()
   })
 
   it('un fallo al verificar sigue sin permitir un envío nuevo', async () => {
@@ -309,7 +325,7 @@ describe('PagoContenedor', () => {
     await fireEvent.press(screen.getByTestId('volver-cuotas-pago'))
     expect(onVolver).toHaveBeenCalledWith(false)
     expect(rpcs.some(r => r.nombre === 'registrar_pago')).toBe(false)
-    expect(await leerIntentoPendiente(almacenamiento, U)).toBeNull()
+    expect(await leerIntentoPendiente(almacenamiento, U, A1)).toBeNull()
   })
 
   it('al reabrir recupera un intento pendiente de la MISMA cuenta y lo verifica antes de enviar algo', async () => {
@@ -327,7 +343,7 @@ describe('PagoContenedor', () => {
     await waitFor(() => expect(base.rpcs.some(r => r.nombre === 'consultar_intento_pago')).toBe(true))
     await responder(base.rpcs, 'consultar_intento_pago', { registrado: true, ...pagoRegistrado([I1], 5000000, true) })
     expect(screen.getByText('Pago registrado: pendiente de verificación.')).toBeTruthy()
-    expect(await leerIntentoPendiente(almacenamiento, U)).toBeNull()
+    expect(await leerIntentoPendiente(almacenamiento, U, A1)).toBeNull()
   })
 
   it('un intento guardado por otra cuenta no aparece', async () => {
@@ -340,13 +356,14 @@ describe('PagoContenedor', () => {
     expect(screen.getByText('Seleccioná al menos un ítem para continuar.')).toBeTruthy()
   })
 
-  it('un intento pendiente de otro hijo de la misma cuenta se advierte sin bloquear la lectura', async () => {
+  it('un intento pendiente de otro hijo de la misma cuenta no se mezcla con este hijo', async () => {
     const almacenamiento = memoria()
     await guardarIntentoPendiente(almacenamiento, {
       usuarioId: U, alumnoId: A2, claveIntento: CLAVE, itemIds: [I1], totalCentavos: 5000000, creadoEn: 'x',
     })
     await abrir({ almacenamiento })
-    expect(screen.getByText('Hay un pago sin confirmar de otro estudiante.')).toBeTruthy()
+    expect(screen.queryByText('No pudimos confirmar el pago')).toBeNull()
+    expect(await leerIntentoPendiente(almacenamiento, U, A2)).not.toBeNull()
   })
 
   it('error de carga: reintento sin mostrar datos', async () => {

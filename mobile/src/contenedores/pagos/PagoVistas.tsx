@@ -218,7 +218,6 @@ export interface PagoResultadoVistaProps {
   onVolverASeleccion: () => void
   onVerificar: () => void
   onReintentarMismoIntento: () => void
-  onDescartar: () => void
 }
 
 export function PagoResultadoVista(props: PagoResultadoVistaProps): ReactElement {
@@ -231,12 +230,21 @@ export function PagoResultadoVista(props: PagoResultadoVistaProps): ReactElement
         <Text accessibilityRole="header" style={[estiloDeTexto('titulo'), { color: color.neutro800 }]}>
           Pago registrado
         </Text>
-        <Aviso
-          tipo="exito"
-          titulo="Pago registrado: pendiente de verificación."
-          mensaje={`${cantidad === 1 ? 'El ítem queda' : `Los ${cantidad} ítems quedan`} en verificación y el saldo no cambia hasta que la institución apruebe el pago.`}
-          anuncio="estado"
-        />
+        {pago.estado === 'PENDIENTE_VERIFICACION' ? (
+          <Aviso
+            tipo="exito"
+            titulo="Pago registrado: pendiente de verificación."
+            mensaje={`${cantidad === 1 ? 'El ítem queda' : `Los ${cantidad} ítems quedan`} en verificación y el saldo no cambia hasta que la institución apruebe el pago.`}
+            anuncio="estado"
+          />
+        ) : (
+          <Aviso
+            tipo="informativo"
+            titulo={pago.estado === 'APROBADO' ? 'Este pago ya fue aprobado.' : 'Este pago fue rechazado.'}
+            mensaje="El intento ya se había registrado y la institución lo resolvió. Revisá el estado actualizado en tus cuotas."
+            anuncio="estado"
+          />
+        )}
         {pago.repetido ? (
           <Aviso tipo="informativo" mensaje="Este pago ya estaba registrado: no se duplicó." anuncio="estado" />
         ) : null}
@@ -247,7 +255,10 @@ export function PagoResultadoVista(props: PagoResultadoVistaProps): ReactElement
           <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
             Ítems: {cantidad}
           </Text>
-          <InsigniaEstado dominio="pago" estado="pendiente" />
+          <InsigniaEstado
+            dominio="pago"
+            estado={pago.estado === 'APROBADO' ? 'aprobado' : pago.estado === 'RECHAZADO' ? 'rechazado' : 'pendiente'}
+          />
           <Text
             testID="codigo-pago"
             accessibilityLabel={`Código del pago ${pago.pagoId.slice(0, 8).toUpperCase()}`}
@@ -294,15 +305,21 @@ export function PagoResultadoVista(props: PagoResultadoVistaProps): ReactElement
     return (
       <View style={{ gap: espacio.md }}>
         <Text accessibilityRole="header" style={[estiloDeTexto('titulo'), { color: color.neutro800 }]}>
-          El pago no llegó a registrarse
+          El pago todavía no figura registrado
         </Text>
         <Aviso
           tipo="informativo"
-          mensaje="Confirmamos que el intento anterior no quedó registrado. Podés reintentarlo con la misma selección sin riesgo de duplicarlo."
+          mensaje="Todavía no figura como registrado. Podés reintentarlo con la misma selección: si el pedido anterior llegara después, no se duplica."
           anuncio="estado"
         />
         <Boton etiqueta="Reintentar el mismo pago" onPress={props.onReintentarMismoIntento} testID="reintentar-intento" />
-        <Boton etiqueta="Descartar este intento" variante="secundario" onPress={props.onDescartar} testID="descartar-intento" />
+        <Boton
+          etiqueta="Volver a las cuotas"
+          variante="enlace"
+          onPress={props.onVolverACuotas}
+          pistaAccesible="El intento queda guardado para verificarlo después"
+          testID="volver-cuotas-pago"
+        />
       </View>
     )
   }

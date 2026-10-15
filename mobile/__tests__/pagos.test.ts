@@ -80,8 +80,10 @@ describe('analizarCotizacion y analizarPago', () => {
     expect(() => analizarCotizacion({ ...cotizacionCruda(), total_centavos: '5800000' })).toThrow()
   })
 
-  it('rechaza un pago que no está pendiente de verificación o sin ítems', () => {
-    expect(() => analizarPago(pagoCrudo({ estado: 'APROBADO' }))).toThrow()
+  it('acepta los estados reales de un pago recuperado y rechaza otros valores o un pago sin ítems', () => {
+    expect(analizarPago(pagoCrudo({ estado: 'APROBADO' })).estado).toBe('APROBADO')
+    expect(analizarPago(pagoCrudo({ estado: 'RECHAZADO' })).estado).toBe('RECHAZADO')
+    expect(() => analizarPago(pagoCrudo({ estado: 'ANULADO' }))).toThrow()
     expect(() => analizarPago(pagoCrudo({ items: [] }))).toThrow()
     expect(() => analizarPago(pagoCrudo({ pago_id: 'no-es-uuid' }))).toThrow()
   })

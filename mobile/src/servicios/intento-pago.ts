@@ -4,8 +4,8 @@ import { esUuid, seleccionCanonica } from '@/servicios/pagos'
 /**
  * Recuperación de un intento de pago cuyo desenlace quedó incierto (la respuesta no llegó). Se guarda SOLO
  * lo necesario para consultarlo o reintentarlo de forma idempotente: identificadores y el total que el padre
- * vio. No hay credenciales, tokens ni datos personales, y la clave de almacenamiento incluye al usuario para
- * que una cuenta nunca recupere el intento de otra.
+ * vio. No hay credenciales, tokens ni datos personales. La clave de almacenamiento incluye al usuario Y al
+ * estudiante: una cuenta nunca recupera el intento de otra y un hijo nunca pisa ni borra el de otro.
  */
 
 export interface IntentoPendiente {
@@ -19,17 +19,24 @@ export interface IntentoPendiente {
 
 const VERSION = 1
 
-const claveDe = (usuarioId: string): string => `pago.pendiente.${usuarioId}`
+const claveDe = (usuarioId: string, alumnoId: string): string => `pago.pendiente.${usuarioId}.${alumnoId}`
 
 export async function guardarIntentoPendiente(almacen: AlmacenamientoSeguro, intento: IntentoPendiente): Promise<void> {
-  await almacen.setItem(claveDe(intento.usuarioId), JSON.stringify({ v: VERSION, ...intento, itemIds: seleccionCanonica(intento.itemIds) }))
+  await almacen.setItem(
+    claveDe(intento.usuarioId, intento.alumnoId),
+    JSON.stringify({ v: VERSION, ...intento, itemIds: seleccionCanonica(intento.itemIds) }),
+  )
 }
 
-/** `null` si no hay intento, está dañado o pertenece a otro usuario (nunca se devuelve una recuperación ajena). */
-export async function leerIntentoPendiente(almacen: AlmacenamientoSeguro, usuarioId: string): Promise<IntentoPendiente | null> {
+/** `null` si no hay intento, está dañado o no corresponde a esta cuenta y este estudiante. */
+export async function leerIntentoPendiente(
+  almacen: AlmacenamientoSeguro,
+  usuarioId: string,
+  alumnoId: string,
+): Promise<IntentoPendiente | null> {
   let crudo: string | null
   try {
-    crudo = await almacen.getItem(claveDe(usuarioId))
+    crudo = await almacen.getItem(claveDe(usuarioId, alumnoId))
   } catch {
     return null
   }
@@ -39,7 +46,7 @@ export async function leerIntentoPendiente(almacen: AlmacenamientoSeguro, usuari
     if (
       o.v !== VERSION ||
       o.usuarioId !== usuarioId ||
-      !esUuid(o.alumnoId) ||
+      o.alumnoId !== alumnoId ||
       !esUuid(o.claveIntento) ||
       !Array.isArray(o.itemIds) ||
       o.itemIds.length === 0 ||
@@ -53,7 +60,7 @@ export async function leerIntentoPendiente(almacen: AlmacenamientoSeguro, usuari
     }
     return {
       usuarioId,
-      alumnoId: o.alumnoId,
+      alumnoId,
       claveIntento: o.claveIntento,
       itemIds: o.itemIds as string[],
       totalCentavos: o.totalCentavos,
@@ -64,9 +71,22 @@ export async function leerIntentoPendiente(almacen: AlmacenamientoSeguro, usuari
   }
 }
 
-export async function descartarIntentoPendiente(almacen: AlmacenamientoSeguro, usuarioId: string): Promise<void> {
+/**
+ * Elimina el intento SOLO si sigue siendo el indicado: una respuesta tardía de un intento viejo no borra
+ * el recuperable de otro posterior del mismo estudiante.
+ */
+export async function descartarIntentoPendiente(
+  almacen: AlmacenamientoSeguro,
+  usuarioId: string,
+  alumnoId: string,
+  claveIntento?: string,
+): Promise<void> {
   try {
-    await almacen.removeItem(claveDe(usuarioId))
+    if (claveIntento) {
+      const actual = await leerIntentoPendiente(almacen, usuarioId, alumnoId)
+      if (actual && actual.claveIntento !== claveIntento) return
+    }
+    await almacen.removeItem(claveDe(usuarioId, alumnoId))
   } catch {
     // Un fallo de borrado no debe bloquear el flujo: el intento se vuelve a resolver por consulta.
   }

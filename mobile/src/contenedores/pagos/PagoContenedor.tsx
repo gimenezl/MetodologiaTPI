@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 
-import { Aviso, EstadoPantalla } from '@/catalogo'
+import { EstadoPantalla } from '@/catalogo'
 import type { AlmacenamientoSeguro } from '@/servicios/almacenamiento-seguro'
 import {
   descartarIntentoPendiente,
@@ -102,22 +102,19 @@ export function PagoContenedor({
   const [banco, setBanco] = useState<{ contexto: string; recarga: number; datos: DatosBancarios | null } | null>(null)
   const [cotizado, setCotizado] = useState<Cotizado | null>(null)
   const [lectura, setLectura] = useState<'cargando' | 'listo'>('cargando')
-  const [pendienteOtro, setPendienteOtro] = useState(false)
 
   // Recuperación: un intento previo sin resolver de ESTA cuenta (nunca de otra).
   useEffect(() => {
     let vigente = true
-    void leerIntentoPendiente(almacenamiento, usuarioId).then(intento => {
+    void leerIntentoPendiente(almacenamiento, usuarioId, alumnoId).then(intento => {
       if (!vigente) return
-      if (intento && intento.alumnoId === alumnoId) {
+      if (intento) {
         setFase({
           tipo: 'incierto',
           intento: { alumnoId: intento.alumnoId, clave: intento.claveIntento, itemIds: intento.itemIds, totalCentavos: intento.totalCentavos },
           verificando: false,
           fallo: false,
         })
-      } else if (intento) {
-        setPendienteOtro(true)
       }
       setLectura('listo')
     })
@@ -224,7 +221,7 @@ export function PagoContenedor({
       try {
         const resultado = await registrarPago(cliente, intento.clave, intento.itemIds, intento.totalCentavos)
         if (resultado.tipo === 'registrado' || resultado.tipo === 'rechazado') {
-          await descartarIntentoPendiente(almacenamiento, usuarioId)
+          await descartarIntentoPendiente(almacenamiento, usuarioId, intento.alumnoId, intento.clave)
         }
         // Una respuesta de otro contexto no se muestra: la recuperación persiste en el almacenamiento seguro.
         if (contextoRef.current !== dueno) return
@@ -277,7 +274,7 @@ export function PagoContenedor({
     const resultado = await consultarIntentoPago(cliente, intento.clave)
     if (contextoRef.current !== dueno) return
     if (resultado.tipo === 'registrado') {
-      await descartarIntentoPendiente(almacenamiento, usuarioId)
+      await descartarIntentoPendiente(almacenamiento, usuarioId, intento.alumnoId, intento.clave)
       huboRegistroRef.current = true
       setFase({ tipo: 'registrado', pago: resultado.pago })
     } else if (resultado.tipo === 'no_registrado') {
@@ -295,24 +292,11 @@ export function PagoContenedor({
     setRecargaCotizacion(n => n + 1)
   }, [])
 
-  const descartar = useCallback(async () => {
-    await descartarIntentoPendiente(almacenamiento, usuarioId)
-    volverASeleccion()
-  }, [almacenamiento, usuarioId, volverASeleccion])
-
   if (lectura === 'cargando') return <EstadoPantalla tipo="cargando" mensaje="Comprobando pagos pendientes…" />
 
   if (fase.tipo === 'seleccion' || fase.tipo === 'enviando') {
     return (
       <>
-        {pendienteOtro ? (
-          <Aviso
-            tipo="advertencia"
-            titulo="Hay un pago sin confirmar de otro estudiante."
-            mensaje="Abrí «Pagar ítems» desde las cuotas de ese estudiante para verificarlo antes de registrar otro pago."
-            anuncio="estado"
-          />
-        ) : null}
         <PagoSeleccionVista
           etiquetaAlumno={etiquetaAlumno}
           carga={carga}
@@ -349,7 +333,6 @@ export function PagoContenedor({
       onReintentarMismoIntento={() => {
         if (fase.tipo === 'no_registrado') void enviar(fase.intento)
       }}
-      onDescartar={() => void descartar()}
     />
   )
 }

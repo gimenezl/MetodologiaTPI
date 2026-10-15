@@ -61,9 +61,15 @@ export interface Cotizacion {
   banco: DatosBancarios
 }
 
+export type EstadoPagoRegistrado = 'PENDIENTE_VERIFICACION' | 'APROBADO' | 'RECHAZADO'
+
 export interface PagoRegistrado {
   pagoId: string
-  estado: 'PENDIENTE_VERIFICACION'
+  /**
+   * Un pago recién registrado es PENDIENTE_VERIFICACION. Al recuperar un intento antiguo la institución
+   * pudo haberlo resuelto ya: la aplicación lo informa tal cual, sin presentarlo como pendiente.
+   */
+  estado: EstadoPagoRegistrado
   alumnoId: string
   totalCentavos: number
   creadoEn: string
@@ -182,14 +188,15 @@ export function analizarCotizacion(crudo: unknown): Cotizacion {
 
 export function analizarPago(crudo: unknown): PagoRegistrado {
   const o = objeto(crudo, 'pago')
-  if (o.estado !== 'PENDIENTE_VERIFICACION') invalida('estado del pago')
+  const estado = texto(o.estado, 'estado del pago')
+  if (estado !== 'PENDIENTE_VERIFICACION' && estado !== 'APROBADO' && estado !== 'RECHAZADO') invalida('estado del pago')
   if (typeof o.repetido !== 'boolean') invalida('repetido')
   const items = analizarLineas(o.items)
   const total = centavosNoNegativos(o.total_centavos, 'total')
   exigirCierre(total, items)
   return {
     pagoId: uuid(o.pago_id, 'pago'),
-    estado: 'PENDIENTE_VERIFICACION',
+    estado,
     alumnoId: uuid(o.alumno_id, 'alumno'),
     totalCentavos: total,
     creadoEn: texto(o.creado_en, 'fecha de registro'),
