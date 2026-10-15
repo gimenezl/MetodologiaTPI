@@ -1,5 +1,5 @@
 // GENERADO por mobile/scripts/sync-compartido.mjs desde src/types/database.generated.ts. No editar a mano.
-// sha256 de la fuente: 5d25759dc1ed1978791c2a7e2e1786240e55b352224c7ea34a2ecbfa2b373a7e
+// sha256 de la fuente: ad164ba809b248237bac7e3b4681fd9993e0232a3132cbe74197de458c11d5e3
 export type Json =
   | string
   | number
@@ -891,6 +891,13 @@ export type Database = {
             foreignKeyName: "imputaciones_pago_item_alumno_fk"
             columns: ["item_factura_id", "alumno_id"]
             isOneToOne: false
+            referencedRelation: "detalle_cuotas_items"
+            referencedColumns: ["item_id", "alumno_id"]
+          },
+          {
+            foreignKeyName: "imputaciones_pago_item_alumno_fk"
+            columns: ["item_factura_id", "alumno_id"]
+            isOneToOne: false
             referencedRelation: "items_factura"
             referencedColumns: ["id", "alumno_id"]
           },
@@ -1108,6 +1115,13 @@ export type Database = {
           tipo?: Database["public"]["Enums"]["concepto_economico"]
         }
         Relationships: [
+          {
+            foreignKeyName: "items_factura_factura_alumno_fk"
+            columns: ["factura_id", "alumno_id"]
+            isOneToOne: false
+            referencedRelation: "estado_cuotas_alumno"
+            referencedColumns: ["factura_id", "alumno_id"]
+          },
           {
             foreignKeyName: "items_factura_factura_alumno_fk"
             columns: ["factura_id", "alumno_id"]
@@ -2116,6 +2130,66 @@ export type Database = {
             columns: ["id"]
             isOneToOne: true
             referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      detalle_cuotas_items: {
+        Row: {
+          alumno_id: string | null
+          estado_pago: Database["public"]["Enums"]["estado_pago_item"] | null
+          factura_id: string | null
+          importe_centavos: number | null
+          item_id: string | null
+          pagado_centavos: number | null
+          tipo: Database["public"]["Enums"]["concepto_economico"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "items_factura_factura_alumno_fk"
+            columns: ["factura_id", "alumno_id"]
+            isOneToOne: false
+            referencedRelation: "estado_cuotas_alumno"
+            referencedColumns: ["factura_id", "alumno_id"]
+          },
+          {
+            foreignKeyName: "items_factura_factura_alumno_fk"
+            columns: ["factura_id", "alumno_id"]
+            isOneToOne: false
+            referencedRelation: "facturas"
+            referencedColumns: ["id", "alumno_id"]
+          },
+        ]
+      }
+      estado_cuotas_alumno: {
+        Row: {
+          alumno_id: string | null
+          cantidad_items: number | null
+          estado: string | null
+          factura_id: string | null
+          fecha_corte: string | null
+          generada_en: string | null
+          inconsistente: boolean | null
+          items_en_verificacion: number | null
+          pagado_centavos: number | null
+          periodo: string | null
+          saldo_centavos: number | null
+          total_centavos: number | null
+          vencimiento: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facturas_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos"
+            referencedColumns: ["perfil_id"]
+          },
+          {
+            foreignKeyName: "facturas_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos_academicos"
             referencedColumns: ["id"]
           },
         ]

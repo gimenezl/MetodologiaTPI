@@ -33,6 +33,28 @@ name: Acceso real por rol, persistencia y cierre
     timeout: 15000
 - assertVisible:
     text: '.*Legajo:.*'
+# HU6: consulta de cuotas del hijo con datos reales (RLS), estado con texto y detalle por ítems.
+- tapOn: 'Cuotas'
+- assertVisible: '.*Pendientes.*2.*'
+- assertVisible: '.*Pagadas.*1.*'
+- assertVisible: 'Estudiante'
+# La pestaña Pagadas muestra la cuota saldada.
+- tapOn: 'Pagadas.*'
+- assertVisible: '.*Pagada.*'
+- tapOn: 'Pendientes.*'
+# La cuota vencida se destaca con texto; puede estar bajo el pliegue.
+- scrollUntilVisible:
+    element:
+      text: '.*Vencida el.*'
+    direction: DOWN
+    timeout: 15000
+- assertVisible: '.*Vencida el.*'
+- tapOn:
+    text: '.*Ver detalle.*'
+    index: 0
+- assertVisible: 'Conceptos'
+- assertVisible: '.*Cuota.*'
+- tapOn: 'Volver a las cuotas'
 - stopApp
 - launchApp:
     clearState: false
@@ -52,6 +74,17 @@ name: Acceso real por rol, persistencia y cierre
 - assertVisible: 'Mi información académica'
 - assertVisible:
     text: '.*Legajo:.*'
+# HU6: el estudiante ve sus cuotas sin selector de otros alumnos ni acciones de pago.
+- tapOn: 'Cuotas'
+- assertVisible: '.*Pendientes.*2.*'
+- assertNotVisible: 'Estudiante'
+- assertNotVisible: '.*Pagar.*'
+# El listado empuja la acción de cierre bajo el pliegue.
+- scrollUntilVisible:
+    element:
+      text: 'Cerrar sesión'
+    direction: DOWN
+    timeout: 15000
 - tapOn: 'Cerrar sesión'
 - assertVisible: 'Iniciar sesión'
 

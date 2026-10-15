@@ -6,6 +6,7 @@ import { randomBytes } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { contenedorDb, ejecutarCuotas } from './integracion-cuotas.mjs'
 import { esperarBearerExpirado, mensajeFalloEtapaAuth, validarLineaBaseExpiracion } from './integracion-auth-utils.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
@@ -244,6 +245,26 @@ async function ejecutar() {
   assert.equal(await rpc({ ...desconocido, ...sesionDesconocida }, 'rol_actual'), rolDesconocido.nombre)
   assert.deepEqual(await idsVisibles({ ...desconocido, ...sesionDesconocida }), [desconocido.profileId])
   ok('JWT bloqueado, perfil ausente y rol no soportado quedan autenticados pero sin autorización ampliada.')
+
+  etapaActual = 'cuotas'
+  const estudianteC = await crearActor('ESTUDIANTE', { userRole: 'PADRE', legajo: true })
+  await restAdmin('padres_hijos', 'POST', [
+    { padre_id: padreA.profileId, hijo_id: estudianteC.profileId },
+    { padre_id: bloqueada.profileId, hijo_id: estudianteA.profileId },
+  ], 'return=minimal')
+  const sesion = async actor => (actor.access_token_cuotas ??= (await iniciar(actor)).access_token)
+  await ejecutarCuotas({
+    contenedor: contenedorDb(workdir),
+    restAdmin,
+    leer: async (actor, ruta) => respuesta(ruta, { token: await sesion(actor) }),
+    escribir: async (actor, ruta, method, body) => respuesta(ruta, { token: await sesion(actor), method, body }),
+    anonima: async ruta => respuesta(ruta, {}),
+    actores: {
+      padreA, padreB, estudianteA, estudianteB, estudianteC, bloqueada,
+      docente: roleActors.DOCENTE, personal: roleActors.PERSONAL, director: roleActors.DIRECTOR,
+    },
+  })
+  ok('Cuotas: dos familias, padre con varios hijos, estudiante propio, bloqueo, roles no compatibles, anónimo, identificador ajeno y vínculo revocado.')
 
   etapaActual = 'refresh'
   const sesionRefreshable = await iniciar(padreA)
