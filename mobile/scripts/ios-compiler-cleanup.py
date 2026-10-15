@@ -77,29 +77,53 @@ class Darwin:
         self.libc.sysctl.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_uint, ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t), ctypes.c_void_p, ctypes.c_size_t]
         self.libc.sysctl.restype = ctypes.c_int
 
-    def identity(self, pid):
+    def _fresh_bsd(self, pid):
         info = BsdInfo()
+        ctypes.set_errno(0)
         result = self.proc.proc_pidinfo(pid, 3, 0, ctypes.byref(info), ctypes.sizeof(info))
+        error = ctypes.get_errno()
         if result != ctypes.sizeof(info):
-            if ctypes.get_errno() == errno.ESRCH:
+            if result == 0 and error == errno.ESRCH:
                 return None
             raise OwnershipUnknown()
         if info.pid != pid or not info.birth_sec:
             raise OwnershipUnknown()
-        if info.status == 5:  # SZOMB: no living compiler daemon.
+        return None if info.status == 5 else info  # SZOMB: no living daemon.
+
+    @staticmethod
+    def _bsd_identity(info):
+        return info.pid, info.uid, info.birth_sec, info.birth_usec
+
+    def identity(self, pid):
+        before = self._fresh_bsd(pid)
+        if before is None:
             return None
         path = ctypes.create_string_buffer(4096)
-        if self.proc.proc_pidpath(pid, path, len(path)) <= 0:
+        try:
+            ctypes.set_errno(0)
+            if self.proc.proc_pidpath(pid, path, len(path)) <= 0 or not path.value:
+                raise OwnershipUnknown()
+            executable = str(Path(os.fsdecode(path.value)).resolve(strict=True))
+        except (OSError, RuntimeError):
+            # A path read may race exit; only a NEW BSD gone/zombie result retires.
+            if self._fresh_bsd(pid) is None:
+                return None
+            raise OwnershipUnknown() from None
+        after = self._fresh_bsd(pid)
+        if after is None:
+            return None
+        if self._bsd_identity(before) != self._bsd_identity(after):
             raise OwnershipUnknown()
-        executable = str(Path(os.fsdecode(path.value)).resolve(strict=True))
-        return {"pid": pid, "uid": info.uid, "birth": [info.birth_sec, info.birth_usec], "exe": executable}
+        return {"pid": pid, "uid": after.uid, "birth": [after.birth_sec, after.birth_usec], "exe": executable}
 
     def tracking(self, pid):
         mib = (ctypes.c_int * 3)(1, 49, pid)  # CTL_KERN / KERN_PROCARGS2.
         size = ctypes.c_size_t()
+        ctypes.set_errno(0)
         if self.libc.sysctl(mib, 3, None, ctypes.byref(size), None, 0) or not 4 < size.value <= 1048576:
             raise OwnershipUnknown()
         raw = ctypes.create_string_buffer(size.value)
+        ctypes.set_errno(0)
         if self.libc.sysctl(mib, 3, raw, ctypes.byref(size), None, 0):
             raise OwnershipUnknown()
         return tracking_from_args(raw.raw[:size.value])

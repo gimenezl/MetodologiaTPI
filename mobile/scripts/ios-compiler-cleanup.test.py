@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Ownership and privacy contracts; real Darwin kernel proof runs on macOS only."""
+import errno
 import importlib.util
 import io
 import json
@@ -35,6 +36,93 @@ class Ownership(unittest.TestCase):
             def identity(_, pid): return records.get(pid)
             def tracking(_, pid): return self.token if tracking is None else tracking
         return Fake()
+
+    def low_level_api(self, bsd_events, path_result=20, path_error=0):
+        api = compiler.Darwin.__new__(compiler.Darwin)
+        events = iter(bsd_events)
+        calls = []
+        class Proc:
+            def proc_pidinfo(_, pid, flavor, arg, output, size):
+                self.assertEqual(compiler.ctypes.get_errno(), 0)
+                calls.append('bsd')
+                event = next(events)
+                if 'result' in event:
+                    compiler.ctypes.set_errno(event.get('errno', 0))
+                    return event['result']
+                info = compiler.BsdInfo()
+                info.pid, info.uid, info.status = event.get('pid', pid), event.get('uid', 123), event.get('status', 1)
+                info.birth_sec, info.birth_usec = event.get('birth', [100, 2])
+                compiler.ctypes.memmove(output, compiler.ctypes.byref(info), size)
+                return size
+            def proc_pidpath(_, pid, output, size):
+                self.assertEqual(compiler.ctypes.get_errno(), 0)
+                calls.append('path')
+                compiler.ctypes.set_errno(path_error)
+                output.value = b'/private/fixture/ibtoold' if path_result > 0 else b''
+                return path_result
+        api.proc = Proc()
+        return api, calls
+
+    def test_bsd_only_verified_esrch_or_zombie_retire_and_stale_errno_never_does(self):
+        for event in [{'result': 0}, {'result': 8, 'errno': errno.ESRCH}, {'result': 0, 'errno': errno.EPERM}, {'result': -1, 'errno': errno.ESRCH}]:
+            api, calls = self.low_level_api([event])
+            compiler.ctypes.set_errno(errno.ESRCH)
+            with self.assertRaises(compiler.OwnershipUnknown): api.identity(987654)
+            self.assertEqual(calls, ['bsd'])
+        for event in [{'result': 0, 'errno': errno.ESRCH}, {'status': 5}]:
+            api, calls = self.low_level_api([event])
+            self.assertIsNone(api.identity(987654))
+            self.assertEqual(calls, ['bsd'])
+
+    def test_path_failure_fresh_bsd_retired_only_live_reused_or_denied_unknown(self):
+        for event in [{'result': 0, 'errno': errno.ESRCH}, {'status': 5}, {}, {'birth': [101, 1]}, {'uid': 2}, {'result': 0, 'errno': errno.EPERM}, {'result': 0}]:
+            api, calls = self.low_level_api([{}, event], path_result=0, path_error=errno.ESRCH)
+            if event.get('status') == 5 or event.get('errno') == errno.ESRCH:
+                self.assertIsNone(api.identity(987654))
+            else:
+                with self.assertRaises(compiler.OwnershipUnknown): api.identity(987654)
+            self.assertEqual(calls, ['bsd', 'path', 'bsd'])
+
+    def test_successful_path_requires_fresh_same_pid_uid_birth_and_live_kernel(self):
+        for event in [{}, {'pid': 987655}, {'uid': 2}, {'birth': [101, 1]}, {'status': 5}, {'result': 0, 'errno': errno.ESRCH}, {'result': 0, 'errno': errno.EPERM}]:
+            api, calls = self.low_level_api([{}, event], path_error=errno.ESRCH)
+            with patch.object(Path, 'resolve', return_value=Path('/canonical/ibtoold')):
+                if event == {}:
+                    result = api.identity(987654)
+                    self.assertEqual(result['birth'], [100, 2])
+                    self.assertEqual(result['uid'], 123)
+                elif event.get('status') == 5 or event.get('errno') == errno.ESRCH:
+                    self.assertIsNone(api.identity(987654))
+                else:
+                    with self.assertRaises(compiler.OwnershipUnknown): api.identity(987654)
+            self.assertEqual(calls, ['bsd', 'path', 'bsd'])
+
+    def test_canonical_path_failure_requires_fresh_kernel_retirement(self):
+        for event in [{'status': 5}, {'result': 0, 'errno': errno.ESRCH}, {}, {'birth': [101, 1]}, {'result': 0, 'errno': errno.EPERM}]:
+            api, calls = self.low_level_api([{}, event])
+            with patch.object(Path, 'resolve', side_effect=PermissionError('private-unavailable')):
+                if event.get('status') == 5 or event.get('errno') == errno.ESRCH:
+                    self.assertIsNone(api.identity(987654))
+                else:
+                    with self.assertRaises(compiler.OwnershipUnknown): api.identity(987654)
+            self.assertEqual(calls, ['bsd', 'path', 'bsd'])
+
+    def test_both_sysctl_calls_clear_stale_errno_without_exposing_raw_environment(self):
+        api = compiler.Darwin.__new__(compiler.Darwin)
+        raw = struct.pack('=i', 1) + b'/private/executable\0\0argv\0RUNNER_TRACKING_ID=private-fixture\0'
+        calls = []
+        class Libc:
+            def sysctl(_, mib, count, output, size, new, newsize):
+                self.assertEqual(compiler.ctypes.get_errno(), 0)
+                calls.append(output is not None)
+                compiler.ctypes.cast(size, compiler.ctypes.POINTER(compiler.ctypes.c_size_t)).contents.value = len(raw)
+                if output is not None: compiler.ctypes.memmove(output, raw, len(raw))
+                compiler.ctypes.set_errno(errno.ESRCH)
+                return 0
+        api.libc = Libc()
+        compiler.ctypes.set_errno(errno.EPERM)
+        self.assertEqual(api.tracking(987654), b'private-fixture')
+        self.assertEqual(calls, [False, True])
 
     def test_native_argc_environment_framing_and_private_values(self):
         prefix = struct.pack("=i", 2) + b"/private/executable\0\0arg0\0secret-arg\0"

@@ -4,9 +4,19 @@ Cada PR comprueba tipos, lint, pruebas puras, build y cuatro recorridos público
 
 ## Presupuesto nativo EPT-105
 
-**Estado actual:** [Run 38654694394](https://github.com/gimenezl/MetodologiaTPI/actions/runs/38654694394), head `d428676525aa5aeb47a669518a1e1b89064dfeb4`, árbol `955e259a14d0a9890d3fc4e5d2cf417f6059ea0b`, merge `f5befbd2af4b35ac381726b6fba88c85f3d4bf33` (mismo árbol). Linux SUCCESS47s; ARM FAILURE43s. Supervisor12/12, nativo38/38 y simulator30/30 aprobaron; compiler8/9 falló en readback posterior a señal: `live → tracking`, consulta de tamaño `sysctl` o guard de tamaño. Las assertions iniciales reales de kernel identity, env token, UID e inicio estable sí aprobaron en el fixture Darwin. Errno/tamaño exactos no registrados; sin prueba de token/cleanup de ibtoold real. Preflight/SDK/backend/create/build/Maestro omitidos; cero orphans Actions con reap propio del fixture. Gate FAILURE, draft/etiqueta conservados.
+**Estado actual:** [Run 38734897842](https://github.com/gimenezl/MetodologiaTPI/actions/runs/38734897842), head `cc8e673acd64ee70f0939fff74cc3ec95a7abb21`, árbol `485a75be6bdce553e2efa2a35de11b464a3a2592`, merge `3d7109d3a42d55c08de682454f2e909a8fd74a83` (mismo árbol). Linux SUCCESS52s; ARM FAILURE52s. Supervisor12/12, nativo38/38 y simulator30/30 PASS; compiler11/12 (3.088s) falla en readback `identity` L93: `proc_pidpath` después de metadata BSD. Errno exacto no observado; no se declara toda la clase resuelta ni retiro de ibtoold probado. Preflight/backend/Auth/SDK/create/pods/build/Maestro omitidos; cero orphans Actions por reap de fixtures. Gate FAILURE; draft/etiqueta conservados.
 
-### Corrección conservadora del readback y próximo full acotado
+### Corrección acotada: snapshots de kernel consistentes sin errno residual
+
+El probe BSD privado limpia errno antes de cada `proc_pidinfo`: solo retorno0 con ESRCH recién producido, o metadata válida SZOMB, permite None. Retorno corto, error sin errno, EPERM o identidad inválida mantienen `cleanup_ownership_unknown`; un ESRCH residual de otra llamada no demuestra ausencia. También se limpia errno antes de cada `proc_pidpath` y de las dos llamadas `sysctl`.
+
+`identity` toma BSD, consulta/resuelve path canónico y vuelve a BSD; exige mismo PID/UID/inicio antes de usar ese path. Si falla path de kernel o resolución filesystem, hace una sola lectura BSD fresca: solo gone/zombie permite retiro; vivo, reciclado o inaccesible queda unknown, sin loop ni señal adicional. La regla previa de fallo tracking→identidad fresca se conserva y ahora usa este snapshot consistente. No hay fallback a argv/env público ni reducción de negativas.
+
+Checks locales: compiler17 casos,15 PASS/2 skips explícitos Windows Darwin/POSIX (0.012s). Nuevos mocks de libproc/sysctl prueban cada frontera, corto/error sin errno, EPERM, ESRCH residual, gone/zombie, PID/UID/inicio reciclados y fallo de resolución. Se conserva el fixture macOS real con env/kernel y TERM/KILL/readback/reap; su próximo resultado aún está pendiente. Simulator30/30, focal10/10, actionlint1.7.12 semántico exit0, AST/Node/diff/readback PASS. No se atribuye el errno real de38734897842 ni se declara solucionado el cleanup nativo antes de macOS.
+
+Solo helper compiler/test y estos dos documentos cambian. Workflow/fasefull/preflight20×3 exterior75/global1630/job30/build720/driver120000, Android/app/SQL/cache y simulador permanecen intactos. Sin commit/push/CI antes de una revisión; rollback limitado a los cuatro archivos. Artifacts actuales: [ARM11973015552](https://github.com/gimenezl/MetodologiaTPI/actions/runs/38734897842/artifacts/11973015552), [Linux11973495185](https://github.com/gimenezl/MetodologiaTPI/actions/runs/38734897842/artifacts/11973495185).
+
+### Corrección anterior entregada: tracking readback y full acotado
 
 Cuando la lectura de tracking falla, se relee identidad de kernel: **solo None (proceso desaparecido/zombie)** permite considerar retirado al candidato. Una identidad viva, reciclada o inaccesible conserva `cleanup_ownership_unknown`, sin señal adicional. La misma regla se aplica al inventario inicial, comprobaciones previas a señales, readback y scan final, para no convertir una salida entre lecturas en permiso implícito. No se confunde EPERM con proceso retirado ni se reemplaza token por argv. Las negativas de token/UID/ejecutable/baseline/privacidad permanecen.
 
