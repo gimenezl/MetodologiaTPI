@@ -13,7 +13,7 @@ test('cleanup does not touch a foreign stack or another CI run', () => {
       const config = 'project_id = "ept105-123456abcdef"\n'
       writeFileSync(join(directory, 'supabase/config.toml'), config)
       writeFileSync(join(directory, 'owner.json'), JSON.stringify({ run: 'other-run', attempt: '1' }))
-      const result = spawnSync(process.execPath, ['mobile/scripts/supabase-local.mjs', 'stop'], {
+      const result = spawnSync(process.execPath, [join(import.meta.dirname, 'supabase-local.mjs'), 'stop'], {
         encoding: 'utf8', timeout: 5000,
         env: { ...process.env, EPT_MOBILE_SUPABASE_WORKDIR: directory, EPT_SUPABASE_CLI_ENTRY: 'must-not-run', GITHUB_RUN_ID: 'owned-run', GITHUB_RUN_ATTEMPT: '1' },
       })
