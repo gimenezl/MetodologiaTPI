@@ -7,6 +7,7 @@ import { ControladorAutenticacion, type EstadoAutenticacion } from '@/servicios/
 import { obtenerClienteSupabase, vincularCicloDeVida } from '@/servicios/supabase'
 import { color, espacio, estiloDeTexto } from '@/tokens'
 
+import { CuotasContenedor } from '../cuotas/CuotasContenedor'
 import { cargarDatosRol, type DatosRol } from './datos-rol'
 
 const INICIAL: EstadoAutenticacion = { tipo: 'cargando' }
@@ -27,7 +28,7 @@ export function AccesoContenedor(): ReactElement {
     | { estadoAuth: EstadoAutenticacion; error: true }
     | null
   >(null)
-  const [seccion, setSeccion] = useState<{ estadoAuth: EstadoAutenticacion; nombre: 'principal' | 'cuenta' } | null>(null)
+  const [seccion, setSeccion] = useState<{ estadoAuth: EstadoAutenticacion; nombre: 'principal' | 'cuotas' | 'cuenta' } | null>(null)
   const [errorEnlaceWeb, setErrorEnlaceWeb] = useState(false)
   const controlador = useMemo(() => cliente ? new ControladorAutenticacion(cliente, { cambiar: setEstado }) : null, [cliente])
 
@@ -122,6 +123,7 @@ export function AccesoContenedor(): ReactElement {
             <>
               <View accessibilityRole="tablist" style={{ flexDirection: 'row', gap: espacio.sm }}>
                 <Boton etiqueta={estado.rol === 'PADRE' ? 'Hijos vinculados' : 'Mi información'} variante={seccionActual === 'principal' ? 'primario' : 'secundario'} onPress={() => setSeccion({ estadoAuth: estado, nombre: 'principal' })} />
+                <Boton etiqueta="Cuotas" variante={seccionActual === 'cuotas' ? 'primario' : 'secundario'} onPress={() => setSeccion({ estadoAuth: estado, nombre: 'cuotas' })} testID="seccion-cuotas" />
                 <Boton etiqueta="Mi cuenta" variante={seccionActual === 'cuenta' ? 'primario' : 'secundario'} onPress={() => setSeccion({ estadoAuth: estado, nombre: 'cuenta' })} />
               </View>
               {seccionActual === 'cuenta' ? (
@@ -129,6 +131,21 @@ export function AccesoContenedor(): ReactElement {
                   <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>Cuenta verificada</Text>
                   <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Rol institucional: {estado.rol === 'PADRE' ? 'Familia' : 'Estudiante'}.</Text>
                 </Tarjeta>
+              ) : seccionActual === 'cuotas' ? (
+                !resultado ? (
+                  <EstadoPantalla tipo="cargando" mensaje="Cargando información autorizada…" />
+                ) : 'error' in resultado || !datosRol ? (
+                  <EstadoPantalla tipo="error" titulo="No pudimos cargar la información" descripcion="La sesión sigue sin mostrar datos hasta poder validarlos." onReintentar={() => void controlador.revalidar()} />
+                ) : (
+                  <CuotasContenedor
+                    key={estado.usuarioId}
+                    cliente={cliente}
+                    mostrarSelector={datosRol.rol === 'PADRE'}
+                    alumnos={datosRol.rol === 'PADRE'
+                      ? datosRol.hijos.map(hijo => ({ id: hijo.id, etiqueta: [hijo.nombre, hijo.apellido].filter(Boolean).join(' ') || 'Estudiante' }))
+                      : [{ id: datosRol.alumno.id, etiqueta: 'Mis cuotas' }]}
+                  />
+                )
               ) : !resultado ? (
                 <EstadoPantalla tipo="cargando" mensaje="Cargando información autorizada…" />
               ) : 'error' in resultado ? (
