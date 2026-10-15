@@ -7,7 +7,7 @@ import { ControladorAutenticacion, type EstadoAutenticacion } from '@/servicios/
 import { obtenerClienteSupabase, vincularCicloDeVida } from '@/servicios/supabase'
 import { color, espacio, estiloDeTexto } from '@/tokens'
 
-import { CuotasContenedor } from '../cuotas/CuotasContenedor'
+import { CONTEXTO_CUOTAS_VACIO, CuotasContenedor, type ContextoCuotas } from '../cuotas/CuotasContenedor'
 import { cargarDatosRol, type DatosRol } from './datos-rol'
 
 const INICIAL: EstadoAutenticacion = { tipo: 'cargando' }
@@ -24,11 +24,12 @@ export function AccesoContenedor(): ReactElement {
   const [enviando, setEnviando] = useState(false)
   const [mostrarContrasena, setMostrarContrasena] = useState(false)
   const [resultadoDatosRol, setResultadoDatosRol] = useState<
-    | { estadoAuth: EstadoAutenticacion; datos: DatosRol }
-    | { estadoAuth: EstadoAutenticacion; error: true }
+    | { clave: string; datos: DatosRol }
+    | { clave: string; error: true }
     | null
   >(null)
-  const [seccion, setSeccion] = useState<{ estadoAuth: EstadoAutenticacion; nombre: 'principal' | 'cuotas' | 'cuenta' } | null>(null)
+  const [seccion, setSeccion] = useState<{ clave: string; nombre: 'principal' | 'cuotas' | 'cuenta' } | null>(null)
+  const [contextoCuotas, setContextoCuotas] = useState<{ clave: string; contexto: ContextoCuotas } | null>(null)
   const [errorEnlaceWeb, setErrorEnlaceWeb] = useState(false)
   const controlador = useMemo(() => cliente ? new ControladorAutenticacion(cliente, { cambiar: setEstado }) : null, [cliente])
 
@@ -49,10 +50,11 @@ export function AccesoContenedor(): ReactElement {
   useEffect(() => {
     if (estado.tipo !== 'autenticada' || !cliente || (estado.rol !== 'PADRE' && estado.rol !== 'ESTUDIANTE')) return
     let vigente = true
+    const clave = `${estado.usuarioId}:${estado.rol}`
     void cargarDatosRol(cliente, estado.usuarioId, estado.rol).then(datos => {
-      if (vigente) setResultadoDatosRol({ estadoAuth: estado, datos })
+      if (vigente) setResultadoDatosRol({ clave, datos })
     }).catch(() => {
-      if (vigente) setResultadoDatosRol({ estadoAuth: estado, error: true })
+      if (vigente) setResultadoDatosRol({ clave, error: true })
     })
     return () => { vigente = false }
   }, [cliente, estado])
@@ -103,9 +105,13 @@ export function AccesoContenedor(): ReactElement {
   }
   if (estado.tipo === 'autenticada') {
     const soloWeb = estado.rol === 'DIRECTOR' || estado.rol === 'DOCENTE' || estado.rol === 'PERSONAL'
-    const resultado = resultadoDatosRol?.estadoAuth === estado ? resultadoDatosRol : null
+    // La clave (usuario + rol) y no la identidad del estado: una revalidación o un refresh de token
+    // no debe reiniciar la sección ni el contexto de la pantalla, pero otro usuario sí los descarta.
+    const clave = `${estado.usuarioId}:${estado.rol}`
+    const resultado = resultadoDatosRol?.clave === clave ? resultadoDatosRol : null
     const datosRol = resultado && 'datos' in resultado ? resultado.datos : null
-    const seccionActual = seccion?.estadoAuth === estado ? seccion.nombre : 'principal'
+    const seccionActual = seccion?.clave === clave ? seccion.nombre : 'principal'
+    const contextoActual = contextoCuotas?.clave === clave ? contextoCuotas.contexto : CONTEXTO_CUOTAS_VACIO
     return (
       <MarcoPantalla>
         <Formulario titulo={soloWeb ? 'Continuá desde el sistema web' : 'Tu cuenta móvil'} accionPrincipal={{ etiqueta: 'Cerrar sesión', onPress: () => void controlador.salir() }}>
@@ -122,9 +128,9 @@ export function AccesoContenedor(): ReactElement {
           ) : (
             <>
               <View accessibilityRole="tablist" style={{ flexDirection: 'row', gap: espacio.sm }}>
-                <Boton etiqueta={estado.rol === 'PADRE' ? 'Hijos vinculados' : 'Mi información'} variante={seccionActual === 'principal' ? 'primario' : 'secundario'} onPress={() => setSeccion({ estadoAuth: estado, nombre: 'principal' })} />
-                <Boton etiqueta="Cuotas" variante={seccionActual === 'cuotas' ? 'primario' : 'secundario'} onPress={() => setSeccion({ estadoAuth: estado, nombre: 'cuotas' })} testID="seccion-cuotas" />
-                <Boton etiqueta="Mi cuenta" variante={seccionActual === 'cuenta' ? 'primario' : 'secundario'} onPress={() => setSeccion({ estadoAuth: estado, nombre: 'cuenta' })} />
+                <Boton etiqueta={estado.rol === 'PADRE' ? 'Hijos vinculados' : 'Mi información'} variante={seccionActual === 'principal' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'principal' })} />
+                <Boton etiqueta="Cuotas" variante={seccionActual === 'cuotas' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'cuotas' })} testID="seccion-cuotas" />
+                <Boton etiqueta="Mi cuenta" variante={seccionActual === 'cuenta' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'cuenta' })} />
               </View>
               {seccionActual === 'cuenta' ? (
                 <Tarjeta>
@@ -139,6 +145,8 @@ export function AccesoContenedor(): ReactElement {
                 ) : (
                   <CuotasContenedor
                     key={estado.usuarioId}
+                    contexto={contextoActual}
+                    onContexto={contexto => setContextoCuotas({ clave, contexto })}
                     cliente={cliente}
                     mostrarSelector={datosRol.rol === 'PADRE'}
                     alumnos={datosRol.rol === 'PADRE'

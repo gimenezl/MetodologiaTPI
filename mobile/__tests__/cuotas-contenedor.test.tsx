@@ -1,6 +1,7 @@
+import { useState } from 'react'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native'
 
-import { CuotasContenedor } from '@/contenedores/cuotas/CuotasContenedor'
+import { CONTEXTO_CUOTAS_VACIO, CuotasContenedor, type ContextoCuotas } from '@/contenedores/cuotas/CuotasContenedor'
 import type { ClienteEPT } from '@/servicios/supabase'
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -55,7 +56,7 @@ const HIJOS = [
 ]
 
 async function resolver(pendientes: Pendiente[], tabla: string, alumno: string, filas: Fila[], error: unknown = null): Promise<void> {
-  const i = pendientes.findIndex(p => p.tabla === tabla && p.filtros.alumno_id === alumno)
+  const i = pendientes.findLastIndex(p => p.tabla === tabla && p.filtros.alumno_id === alumno && !p.senal?.aborted)
   if (i < 0) throw new Error(`No hay lectura pendiente de ${tabla} para ${alumno}`)
   const [p] = pendientes.splice(i, 1)
   await act(async () => { p?.resolver({ data: error ? null : filas, error }) })
@@ -178,6 +179,22 @@ describe('CuotasContenedor', () => {
     const lectura = pendientes[0]
     await unmount()
     expect(lectura?.senal?.aborted).toBe(true)
+  })
+
+  it('conserva hijo y pestaña cuando la sesión se revalida y la pantalla se remonta', async () => {
+    const { cliente, pendientes } = clienteControlado()
+    function Anfitrion({ visible }: { visible: boolean }) {
+      const [contexto, setContexto] = useState<ContextoCuotas>(CONTEXTO_CUOTAS_VACIO)
+      return visible ? <CuotasContenedor cliente={cliente} alumnos={HIJOS} mostrarSelector contexto={contexto} onContexto={setContexto} /> : <></>
+    }
+    const { rerender } = await render(<Anfitrion visible />)
+    await fireEvent.press(screen.getByTestId('hijo-a2'))
+    await fireEvent.press(screen.getByTestId('pestana-pagadas'))
+    await rerender(<Anfitrion visible={false} />)
+    await rerender(<Anfitrion visible />)
+    await waitFor(() => expect(pendientes.some(p => p.filtros.alumno_id === 'a2')).toBe(true))
+    await resolver(pendientes, 'estado_cuotas_alumno', 'a2', [cuota('f9', 'a2', 'PAGADA')])
+    expect(screen.getByTestId('cuota-f9')).toBeTruthy()
   })
 
   it('un importe largo se muestra completo y exacto', async () => {

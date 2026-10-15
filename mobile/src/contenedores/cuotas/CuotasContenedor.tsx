@@ -11,12 +11,24 @@ import type { ClienteEPT } from '@/servicios/supabase'
 import { DetalleCuotaVista, type ResultadoDetalle } from './DetalleCuotaVista'
 import { CuotasVista, type AlumnoSelector, type PestanaCuotas, type ResultadoListado } from './CuotasVista'
 
+/** Contexto de navegación de la pantalla; el padre puede elevarlo para sobrevivir a una revalidación de sesión. */
+export interface ContextoCuotas {
+  elegido: string | null
+  pestana: PestanaCuotas
+  abierta: { alumnoId: string; facturaId: string } | null
+}
+
+export const CONTEXTO_CUOTAS_VACIO: ContextoCuotas = { elegido: null, pestana: 'pendientes', abierta: null }
+
 export interface CuotasContenedorProps {
   cliente: ClienteEPT
   /** Alumnos que el actor puede consultar. RLS vuelve a decidirlo en cada lectura. */
   alumnos: AlumnoSelector[]
   /** Solo el padre ve el selector de hijos. */
   mostrarSelector: boolean
+  /** Si se informa, el contexto es controlado desde afuera (se conserva entre revalidaciones). */
+  contexto?: ContextoCuotas
+  onContexto?: (contexto: ContextoCuotas) => void
 }
 
 type Listado = { alumnoId: string; recarga: number; resultado: Exclude<ResultadoListado, { tipo: 'cargando' }> }
@@ -27,10 +39,17 @@ type Detalle = { alumnoId: string; facturaId: string; recarga: number; resultado
  * volver o reanudar, una respuesta tardía nunca se muestra bajo otro contexto. Las lecturas en vuelo
  * se cancelan al cambiar el contexto o al desmontar (cierre de sesión o cambio de usuario).
  */
-export function CuotasContenedor({ cliente, alumnos, mostrarSelector }: CuotasContenedorProps): ReactElement {
-  const [elegido, setElegido] = useState<string | null>(null)
-  const [pestana, setPestana] = useState<PestanaCuotas>('pendientes')
-  const [abierta, setAbierta] = useState<{ alumnoId: string; facturaId: string } | null>(null)
+export function CuotasContenedor({ cliente, alumnos, mostrarSelector, contexto, onContexto }: CuotasContenedorProps): ReactElement {
+  const [interno, setInterno] = useState<ContextoCuotas>(CONTEXTO_CUOTAS_VACIO)
+  const actual = contexto ?? interno
+  const { elegido, pestana, abierta } = actual
+  const cambiar = (parcial: Partial<ContextoCuotas>) => {
+    const siguiente = { ...actual, ...parcial }
+    if (onContexto) onContexto(siguiente)
+    else setInterno(siguiente)
+  }
+  const setAbierta = (valor: ContextoCuotas['abierta']) => cambiar({ abierta: valor })
+  const setPestana = (valor: PestanaCuotas) => cambiar({ pestana: valor })
   const [recarga, setRecarga] = useState(0)
   const [listado, setListado] = useState<Listado | null>(null)
   const [detalle, setDetalle] = useState<Detalle | null>(null)
@@ -122,8 +141,7 @@ export function CuotasContenedor({ cliente, alumnos, mostrarSelector }: CuotasCo
       pestana={pestana}
       resultado={resultadoListado}
       onSeleccionarAlumno={id => {
-        setAbierta(null)
-        setElegido(id)
+        cambiar({ abierta: null, elegido: id })
       }}
       onCambiarPestana={setPestana}
       onAbrirDetalle={facturaId => { if (alumnoId) setAbierta({ alumnoId, facturaId }) }}
