@@ -100,12 +100,14 @@ export function analizarCuota(fila: Fila): Cuota {
   }
 }
 
-export function analizarItem(fila: Fila): ItemCuota {
+export function analizarItem(fila: Fila): ItemCuota & { alumnoId: string; facturaId: string } {
   const tipo = texto(fila.tipo, 'concepto')
   const estadoPago = texto(fila.estado_pago, 'estado del ítem')
   if (!CONCEPTOS.has(tipo) || !ESTADOS_ITEM.has(estadoPago)) throw new ErrorConsultaCuotas('Respuesta inválida: ítem.')
   return {
     itemId: texto(fila.item_id, 'ítem'),
+    alumnoId: texto(fila.alumno_id, 'alumno del ítem'),
+    facturaId: texto(fila.factura_id, 'factura del ítem'),
     tipo: tipo as ConceptoItem,
     importeCentavos: centavosExactos(fila.importe_centavos, 'del ítem'),
     pagadoCentavos: centavosExactos(fila.pagado_centavos, 'imputado'),
@@ -164,7 +166,11 @@ export async function consultarDetalleCuota(
     throw new ErrorConsultaCuotas('La respuesta no corresponde a la cuota consultada.')
   }
   const filas = (rItems.data ?? []) as Fila[]
-  const detalle = filas.map(analizarItem)
+  const analizados = filas.map(analizarItem)
+  if (analizados.some(i => i.alumnoId !== alumnoId || i.facturaId !== facturaId)) {
+    throw new ErrorConsultaCuotas('Los ítems no corresponden a la cuota consultada.')
+  }
+  const detalle: ItemCuota[] = analizados.map(({ alumnoId: _a, facturaId: _f, ...item }) => item)
   const orden: Record<ConceptoItem, number> = { CUOTA: 0, DEPORTE: 1, TRANSPORTE: 2, COMEDOR: 3 }
   detalle.sort((a, b) => orden[a.tipo] - orden[b.tipo])
   return { cuota, items: detalle }

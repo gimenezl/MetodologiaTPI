@@ -30,7 +30,7 @@ type Detalle = { alumnoId: string; facturaId: string; recarga: number; resultado
 export function CuotasContenedor({ cliente, alumnos, mostrarSelector }: CuotasContenedorProps): ReactElement {
   const [elegido, setElegido] = useState<string | null>(null)
   const [pestana, setPestana] = useState<PestanaCuotas>('pendientes')
-  const [facturaAbierta, setFacturaAbierta] = useState<string | null>(null)
+  const [abierta, setAbierta] = useState<{ alumnoId: string; facturaId: string } | null>(null)
   const [recarga, setRecarga] = useState(0)
   const [listado, setListado] = useState<Listado | null>(null)
   const [detalle, setDetalle] = useState<Detalle | null>(null)
@@ -40,6 +40,9 @@ export function CuotasContenedor({ cliente, alumnos, mostrarSelector }: CuotasCo
     if (alumnos.length === 0) return null
     return alumnos.find(a => a.id === elegido)?.id ?? alumnos[0]?.id ?? null
   }, [alumnos, elegido])
+
+  // Un cambio de alumno efectivo (selección o vínculo revocado) deja sin efecto el detalle abierto.
+  const facturaAbierta = abierta && abierta.alumnoId === alumnoId ? abierta.facturaId : null
 
   useEffect(() => {
     const suscripcion = AppState.addEventListener('change', siguiente => {
@@ -105,7 +108,7 @@ export function CuotasContenedor({ cliente, alumnos, mostrarSelector }: CuotasCo
     return (
       <DetalleCuotaVista
         resultado={resultadoDetalle}
-        onVolver={() => setFacturaAbierta(null)}
+        onVolver={() => setAbierta(null)}
         onReintentar={() => setRecarga(n => n + 1)}
       />
     )
@@ -119,11 +122,11 @@ export function CuotasContenedor({ cliente, alumnos, mostrarSelector }: CuotasCo
       pestana={pestana}
       resultado={resultadoListado}
       onSeleccionarAlumno={id => {
-        setFacturaAbierta(null)
+        setAbierta(null)
         setElegido(id)
       }}
       onCambiarPestana={setPestana}
-      onAbrirDetalle={setFacturaAbierta}
+      onAbrirDetalle={facturaId => { if (alumnoId) setAbierta({ alumnoId, facturaId }) }}
       onReintentar={() => setRecarga(n => n + 1)}
     />
   )

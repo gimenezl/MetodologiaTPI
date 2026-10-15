@@ -164,12 +164,12 @@ COMMENT ON VIEW public.detalle_cuotas_items IS
 -- ================================================================
 -- 3. PRIVILEGIOS MÍNIMOS
 -- ================================================================
--- service_role conserva solo lectura: las vistas no admiten escritura para nadie.
+-- Solo `authenticated` lee, con la RLS de su sesión. service_role no recibe nada: la
+-- lectura económica de servidor usa las tablas, no estas vistas del actor.
 REVOKE ALL ON public.estado_cuotas_alumno FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON public.detalle_cuotas_items FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT ON public.estado_cuotas_alumno TO authenticated;
 GRANT SELECT ON public.detalle_cuotas_items TO authenticated;
-GRANT SELECT ON public.estado_cuotas_alumno, public.detalle_cuotas_items TO service_role;
 
 DO $$
 DECLARE

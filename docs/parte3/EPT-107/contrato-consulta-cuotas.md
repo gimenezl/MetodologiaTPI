@@ -56,7 +56,7 @@ Dos vistas `security_invoker = true` (RLS del invocador; ninguna función `SECUR
 | `anon` | Sin privilegio (42501) |
 | Vínculo revocado | Sin acceso en la siguiente lectura |
 
-Las vistas no admiten escritura para ningún rol. `service_role` conserva solo `SELECT`.
+Las vistas no admiten escritura para ningún rol y solo `authenticated` puede leerlas; `service_role` no recibe privilegios sobre ellas.
 
 ## 4. Pantallas móviles
 

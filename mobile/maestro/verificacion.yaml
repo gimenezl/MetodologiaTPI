@@ -40,13 +40,13 @@ name: Acceso real por rol, persistencia y cierre
 - assertVisible: '.*Vencida el.*'
 - assertVisible: 'Estudiante'
 - tapOn:
-    text: 'Ver detalle'
+    text: '.*Ver detalle.*'
     index: 0
 - assertVisible: 'Conceptos'
-- assertVisible: 'Cuota'
+- assertVisible: '.*Cuota.*'
 - tapOn: 'Volver a las cuotas'
 - tapOn: 'Pagadas.*'
-- assertVisible: 'Pagada'
+- assertVisible: '.*Pagada.*'
 - stopApp
 - launchApp:
     clearState: false

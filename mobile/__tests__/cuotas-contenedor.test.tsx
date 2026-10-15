@@ -138,9 +138,9 @@ describe('CuotasContenedor', () => {
     expect(lectura).toHaveLength(2)
     await resolver(pendientes, 'estado_cuotas_alumno', 'a1', [cuota('f1', 'a1', 'PENDIENTE')])
     await resolver(pendientes, 'detalle_cuotas_items', 'a1', [
-      { item_id: 'i1', tipo: 'CUOTA', importe_centavos: 5000000, pagado_centavos: 0, estado_pago: 'PENDIENTE' },
-      { item_id: 'i2', tipo: 'DEPORTE', importe_centavos: 800000, pagado_centavos: 0, estado_pago: 'EN_VERIFICACION' },
-      { item_id: 'i3', tipo: 'TRANSPORTE', importe_centavos: 0, pagado_centavos: 0, estado_pago: 'PENDIENTE' },
+      { item_id: 'i1', alumno_id: 'a1', factura_id: 'f1', tipo: 'CUOTA', importe_centavos: 5000000, pagado_centavos: 0, estado_pago: 'PENDIENTE' },
+      { item_id: 'i2', alumno_id: 'a1', factura_id: 'f1', tipo: 'DEPORTE', importe_centavos: 800000, pagado_centavos: 0, estado_pago: 'EN_VERIFICACION' },
+      { item_id: 'i3', alumno_id: 'a1', factura_id: 'f1', tipo: 'TRANSPORTE', importe_centavos: 0, pagado_centavos: 0, estado_pago: 'PENDIENTE' },
     ])
     expect(screen.getByText('Cuota')).toBeTruthy()
     expect(screen.getByText('Deportes')).toBeTruthy()

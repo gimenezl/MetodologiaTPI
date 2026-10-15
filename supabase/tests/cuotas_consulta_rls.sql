@@ -388,7 +388,8 @@ SELECT pg_temp.afirmar(
         IN ('E42501', 'E55000')
     AND NOT pg_catalog.has_table_privilege('authenticated', 'public.estado_cuotas_alumno', 'UPDATE')
     AND NOT pg_catalog.has_table_privilege('authenticated', 'public.detalle_cuotas_items', 'INSERT')
-    AND NOT pg_catalog.has_table_privilege('service_role', 'public.estado_cuotas_alumno', 'UPDATE'),
+    AND NOT pg_catalog.has_table_privilege('service_role', 'public.estado_cuotas_alumno', 'UPDATE')
+    AND NOT pg_catalog.has_table_privilege('service_role', 'public.estado_cuotas_alumno', 'SELECT'),
     'E1: ningún rol de aplicación ni service_role escribe a través de las vistas');
 SELECT pg_temp.afirmar(
     (SELECT pg_catalog.count(*) FROM pg_catalog.pg_class c

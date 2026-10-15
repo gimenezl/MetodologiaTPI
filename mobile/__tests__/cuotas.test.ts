@@ -74,7 +74,7 @@ describe('análisis de filas', () => {
 
   it('rechaza estados y conceptos desconocidos en lugar de inventarlos', () => {
     expect(() => analizarCuota({ ...FILA, estado: 'APROBADO' })).toThrow(ErrorConsultaCuotas)
-    expect(() => analizarItem({ item_id: 'i', tipo: 'MORA', importe_centavos: 1, pagado_centavos: 0, estado_pago: 'PENDIENTE' })).toThrow(ErrorConsultaCuotas)
+    expect(() => analizarItem({ item_id: 'i', alumno_id: 'a1', factura_id: 'f1', tipo: 'MORA', importe_centavos: 1, pagado_centavos: 0, estado_pago: 'PENDIENTE' })).toThrow(ErrorConsultaCuotas)
     expect(() => analizarCuota({ ...FILA, periodo: '01/11/2026' })).toThrow(ErrorConsultaCuotas)
   })
 
@@ -129,9 +129,9 @@ describe('consulta contra el servidor', () => {
   it('detalle: ordena conceptos y consulta por alumno y factura', async () => {
     const llamadas: Llamada[] = []
     const items = [
-      { item_id: 'i2', tipo: 'COMEDOR', importe_centavos: 100, pagado_centavos: 0, estado_pago: 'PENDIENTE' },
-      { item_id: 'i1', tipo: 'CUOTA', importe_centavos: 5000000, pagado_centavos: 5000000, estado_pago: 'PAGADO' },
-      { item_id: 'i3', tipo: 'DEPORTE', importe_centavos: 800000, pagado_centavos: 0, estado_pago: 'EN_VERIFICACION' },
+      { item_id: 'i2', alumno_id: 'a1', factura_id: 'f1', tipo: 'COMEDOR', importe_centavos: 100, pagado_centavos: 0, estado_pago: 'PENDIENTE' },
+      { item_id: 'i1', alumno_id: 'a1', factura_id: 'f1', tipo: 'CUOTA', importe_centavos: 5000000, pagado_centavos: 5000000, estado_pago: 'PAGADO' },
+      { item_id: 'i3', alumno_id: 'a1', factura_id: 'f1', tipo: 'DEPORTE', importe_centavos: 800000, pagado_centavos: 0, estado_pago: 'EN_VERIFICACION' },
     ]
     const cliente = clienteFalso({ estado_cuotas_alumno: { data: [FILA] }, detalle_cuotas_items: { data: items } }, llamadas)
     const detalle = await consultarDetalleCuota(cliente, 'a1', 'f1')
