@@ -79,6 +79,12 @@ name: Acceso real por rol, persistencia y cierre
 - assertVisible: '.*Pendientes.*2.*'
 - assertNotVisible: 'Estudiante'
 - assertNotVisible: '.*Pagar.*'
+# El listado empuja la acción de cierre bajo el pliegue.
+- scrollUntilVisible:
+    element:
+      text: 'Cerrar sesión'
+    direction: DOWN
+    timeout: 15000
 - tapOn: 'Cerrar sesión'
 - assertVisible: 'Iniciar sesión'
 
