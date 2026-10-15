@@ -74,6 +74,30 @@ test('EPT-102: mobile/ se registra con contrato propio y bloquea lo desconocido'
   // Un cambio web sin relación con la app no activa los gates móviles.
   assert.equal(profile(['src/proxy.ts']).mobile, undefined)
 })
+test('EPT-108: la selección de pagos tiene suites registradas, plan focal y etapa de integración Android', () => {
+  // Las dos suites nuevas están registradas con su perfil: un cambio en ellas selecciona la base, no la matriz completa.
+  assert.ok(sqlSuites.includes('pagos_seleccion_rls.sql'))
+  assert.ok(dbScripts.includes('pagos_seleccion_concurrencia.mjs'))
+  assert.equal(sqlRole('pagos_seleccion_rls.sql'), 'postgres')
+  for (const file of ['supabase/tests/pagos_seleccion_rls.sql', 'supabase/tests/pagos_seleccion_concurrencia.mjs']) {
+    assert.deepEqual(profile([file]), { db: true, mutations: false, ui: [] }, file)
+  }
+  // La migración dispara el contrato de base y de la web; los archivos móviles nuevos, solo los gates móviles.
+  assert.deepEqual(profile(['supabase/migrations/20261015180000_ept_108_seleccion_registro_pago.sql']),
+    { db: true, mutations: false, ui: ['core'] })
+  for (const file of ['mobile/src/servicios/pagos.ts', 'mobile/src/servicios/intento-pago.ts', 'mobile/src/catalogo/Seleccion.tsx',
+    'mobile/src/contenedores/pagos/PagoContenedor.tsx', 'mobile/src/contenedores/pagos/PagoVistas.tsx',
+    'mobile/__tests__/pagos.test.ts', 'mobile/__tests__/pago-contenedor.test.tsx', 'mobile/__tests__/intento-pago.test.ts',
+    'mobile/scripts/integracion-pagos.mjs']) {
+    assert.deepEqual(profile([file]), { db: false, mutations: false, ui: [], mobile: true }, file)
+  }
+  // El registro real de pagos solo se prueba con Supabase local: la integración Android lo ejecuta y iOS (sin backend) no.
+  const integracion = readFileSync('mobile/scripts/integracion-auth-local.mjs', 'utf8')
+  assert.match(integracion, /ejecutarPagos\(/u)
+  const maestro = readFileSync('mobile/maestro/verificacion.yaml', 'utf8')
+  assert.match(maestro, /Registrar pago/u)
+  assert.doesNotMatch(readFileSync('mobile/maestro/smoke-ios.yaml', 'utf8'), /Registrar pago|Pagar ítems/u)
+})
 test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
   assert.equal(validateMobileWorkflow(yml), true)

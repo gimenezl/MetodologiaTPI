@@ -55,6 +55,44 @@ name: Acceso real por rol, persistencia y cierre
 - assertVisible: 'Conceptos'
 - assertVisible: '.*Cuota.*'
 - tapOn: 'Volver a las cuotas'
+# HU8: selección de ítems, total calculado por el servidor y registro del pago pendiente de verificación
+# con RPC y RLS reales (Android). El saldo y las pestañas no cambian hasta que se apruebe el pago.
+- scrollUntilVisible:
+    element:
+      text: 'Pagar ítems'
+    direction: UP
+    timeout: 15000
+- tapOn: 'Pagar ítems'
+- assertVisible: 'Elegí los ítems a pagar'
+- assertVisible: '.*Los ítems pagados o en verificación no se pueden seleccionar.*'
+- assertVisible: 'Seleccioná al menos un ítem para continuar.'
+- tapOn:
+    text: 'Cuota, Pendiente.*'
+    index: 0
+- assertVisible: '.*1 ítem seleccionado.*calculado por el sistema.*'
+- assertVisible: '.*50\.000,00.*'
+- scrollUntilVisible:
+    element:
+      text: 'Registrar pago'
+    direction: DOWN
+    timeout: 15000
+- assertVisible: '.*Datos de prueba.*'
+- assertVisible: 'No se acepta pago en efectivo.'
+- tapOn: 'Registrar pago'
+- assertVisible: '.*Pago registrado: pendiente de verificación.*'
+- assertVisible: '.*Código del pago.*'
+- scrollUntilVisible:
+    element:
+      text: 'Volver a las cuotas'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Volver a las cuotas'
+- assertVisible: '.*Pendientes.*2.*'
+- scrollUntilVisible:
+    element:
+      text: '.*pago en verificación.*'
+    direction: DOWN
+    timeout: 15000
 - stopApp
 - launchApp:
     clearState: false
