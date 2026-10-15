@@ -37,14 +37,17 @@ export async function ejecutarPagos(ctx) {
     { padre_id: padreOtro.profileId, hijo_id: hijoOtro.profileId },
   ], 'return=minimal')
 
+  const nivel = `Nivel EPT-108 CI ${randomUUID().slice(0, 8)}`
   const id = Object.fromEntries(
     ['curso', 'matP', 'matQ', 'matO', 'tarifa', 'fP1', 'fP2', 'fP3', 'fP4', 'fP5', 'fPag', 'fVer', 'fCero', 'fQ', 'fO',
       'iP1', 'iP2', 'iP3', 'iP4', 'iP5', 'iPag', 'iVer', 'iCero', 'iQ', 'iO', 'pagoAprobado', 'pagoPendiente'].map(k => [k, randomUUID()]),
   )
   sql(contenedor, `
 BEGIN;
+-- Nivel propio: las tarifas de un nivel no pueden solaparse y la etapa de cuotas ya creó la de PRIMARIO.
+INSERT INTO public.niveles (nombre, activo, orden) VALUES ('${nivel}', TRUE, 9108);
 INSERT INTO public.cursos (id, nivel_id, denominacion, division, activo)
-VALUES ('${id.curso}', (SELECT id FROM public.niveles WHERE nombre = 'PRIMARIO'), 'Curso EPT-108 CI', 'A', TRUE);
+VALUES ('${id.curso}', (SELECT id FROM public.niveles WHERE nombre = '${nivel}'), 'Curso EPT-108 CI', 'A', TRUE);
 INSERT INTO public.matriculas (id, alumno_id, curso_id) VALUES
  ('${id.matP}', '${hijoP.profileId}', '${id.curso}'),
  ('${id.matQ}', '${hijoQ.profileId}', '${id.curso}'),
@@ -54,7 +57,7 @@ WHERE perfil_id IN ('${hijoP.profileId}', '${hijoQ.profileId}', '${hijoOtro.prof
 SET CONSTRAINTS ALL IMMEDIATE;
 SET CONSTRAINTS ALL DEFERRED;
 INSERT INTO public.tarifas (id, concepto, nivel_id, importe, desde)
-VALUES ('${id.tarifa}', 'CUOTA', (SELECT id FROM public.niveles WHERE nombre = 'PRIMARIO'), 50000.00, '2020-01-01');
+VALUES ('${id.tarifa}', 'CUOTA', (SELECT id FROM public.niveles WHERE nombre = '${nivel}'), 50000.00, '2020-01-01');
 INSERT INTO public.facturas (id, alumno_id, periodo, vencimiento, total) VALUES
  ('${id.fP1}', '${hijoP.profileId}', ${periodo(1)}, ${periodo(1)} + 9, 50000.00),
  ('${id.fP2}', '${hijoP.profileId}', ${periodo(2)}, ${periodo(2)} + 9, 50000.00),
