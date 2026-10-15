@@ -159,6 +159,11 @@ AS $$
     );
 $$;
 
+-- Solo la invocan las operaciones DEFINER de abajo (como propietario): ningún rol de aplicación
+-- necesita ni conserva EXECUTE (el privilegio por defecto de PUBLIC no aplica).
+REVOKE ALL ON FUNCTION app_private.datos_bancarios_institucion()
+    FROM PUBLIC, anon, authenticated, service_role;
+
 COMMENT ON FUNCTION app_private.datos_bancarios_institucion() IS
     'EPT-143. Datos bancarios institucionales FICTICIOS, fijos y precargados (EPT-84, punto 8). Sin edición desde la web.';
 
@@ -446,8 +451,17 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE = 'P6850',
             MESSAGE = 'Faltan la clave del intento o el total cotizado.';
     END IF;
-    IF p_item_ids IS NULL OR pg_catalog.cardinality(p_item_ids) = 0 THEN
+    -- La selección se valida ANTES de reconocer un intento previo: un reintento con ids vacíos,
+    -- nulos o duplicados es un error del cliente (P6850), no un conflicto de clave.
+    IF p_item_ids IS NULL OR pg_catalog.cardinality(p_item_ids) = 0
+       OR pg_catalog.array_ndims(p_item_ids) <> 1 THEN
         RAISE EXCEPTION USING ERRCODE = 'P6850', MESSAGE = 'Elegí al menos un ítem para pagar.';
+    END IF;
+    IF pg_catalog.cardinality(p_item_ids) > 100
+       OR EXISTS (SELECT 1 FROM pg_catalog.unnest(p_item_ids) AS x(id) WHERE x.id IS NULL)
+       OR (SELECT pg_catalog.count(DISTINCT x.id) FROM pg_catalog.unnest(p_item_ids) AS x(id))
+          <> pg_catalog.cardinality(p_item_ids) THEN
+        RAISE EXCEPTION USING ERRCODE = 'P6850', MESSAGE = 'La selección tiene ítems repetidos, vacíos o excede el máximo.';
     END IF;
 
     -- 2. Serializa los reintentos del mismo intento: el segundo espera y ve el
@@ -461,8 +475,7 @@ BEGIN
     WHERE p.padre_id = v_padre AND p.clave_intento = p_clave_intento;
 
     IF FOUND THEN
-        IF EXISTS (SELECT 1 FROM pg_catalog.unnest(p_item_ids) AS x(id) WHERE x.id IS NULL)
-           OR v_previo.huella_seleccion IS DISTINCT FROM app_private.huella_seleccion_pago(p_item_ids) THEN
+        IF v_previo.huella_seleccion IS DISTINCT FROM app_private.huella_seleccion_pago(p_item_ids) THEN
             RAISE EXCEPTION USING ERRCODE = 'P6856',
                 MESSAGE = 'Este intento ya se registró con otra selección. Generá un intento nuevo.';
         END IF;
@@ -517,6 +530,12 @@ BEGIN
     IF p_clave_intento IS NULL THEN
         RAISE EXCEPTION USING ERRCODE = 'P6850', MESSAGE = 'Falta la clave del intento.';
     END IF;
+    -- Si el mismo intento está registrándose en otra transacción, esta consulta espera su desenlace
+    -- (mismo consultivo que `registrar_pago`): nunca afirma «no registrado» sobre un intento en vuelo
+    -- que ya tomó la guarda. No retiene ninguna otra espera, así que no puede formar un ciclo.
+    PERFORM pg_catalog.pg_advisory_xact_lock(
+        pg_catalog.hashtext('ept108_intento'),
+        pg_catalog.hashtext(v_padre::TEXT || ':' || p_clave_intento::TEXT));
     SELECT p.id INTO v_pago
     FROM public.pagos p
     WHERE p.padre_id = v_padre AND p.clave_intento = p_clave_intento;
@@ -642,7 +661,8 @@ BEGIN
         'app_private.padre_para_pagos(boolean)'::pg_catalog.regprocedure,
         'app_private.analizar_seleccion_pago(uuid,uuid[],boolean)'::pg_catalog.regprocedure,
         'app_private.huella_seleccion_pago(uuid[])'::pg_catalog.regprocedure,
-        'app_private.pago_a_json(uuid,boolean)'::pg_catalog.regprocedure
+        'app_private.pago_a_json(uuid,boolean)'::pg_catalog.regprocedure,
+        'app_private.datos_bancarios_institucion()'::pg_catalog.regprocedure
     ] LOOP
         IF pg_catalog.has_function_privilege('authenticated', v_firma, 'EXECUTE')
            OR pg_catalog.has_function_privilege('anon', v_firma, 'EXECUTE')

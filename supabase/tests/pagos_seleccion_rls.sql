@@ -385,6 +385,16 @@ SELECT pg_temp.afirmar(
         pg_temp.registrar(pg_temp.u(9001), pg_temp.arr(8011), 5000000)) = 'EP6856',
     'D3: un subconjunto de la selección original tampoco reutiliza la clave');
 
+SELECT pg_temp.afirmar(
+    pg_temp.como(pg_temp.u(5), 'authenticated',
+        pg_temp.registrar(pg_temp.u(9001), pg_temp.arr(8011, 8011), 5000000)) = 'EP6850'
+    AND pg_temp.como(pg_temp.u(5), 'authenticated',
+        'SELECT public.registrar_pago(''' || pg_temp.u(9001) || '''::UUID, ARRAY[''' || pg_temp.u(8011) ||
+        ''', NULL]::UUID[], 5000000::BIGINT)::TEXT') = 'EP6850'
+    AND pg_temp.como(pg_temp.u(5), 'authenticated',
+        'SELECT public.registrar_pago(''' || pg_temp.u(9001) || '''::UUID, ARRAY[]::UUID[], 5000000::BIGINT)::TEXT') = 'EP6850',
+    'D3b: un reintento con ids repetidos, nulos o vacíos es P6850, no un conflicto de clave');
+
 -- La clave está acotada al padre: el copadre puede usar el mismo UUID en su espacio.
 SELECT pg_temp.guardar('r2', pg_temp.como(pg_temp.u(6), 'authenticated',
     pg_temp.registrar(pg_temp.u(9001), pg_temp.arr(8021), 5000000)));
@@ -544,6 +554,10 @@ SELECT pg_temp.afirmar(
         'app_private.analizar_seleccion_pago(uuid,uuid[],boolean)', 'EXECUTE')
     AND NOT pg_catalog.has_function_privilege('authenticated',
         'app_private.padre_para_pagos(boolean)', 'EXECUTE')
+    AND NOT pg_catalog.has_function_privilege('authenticated',
+        'app_private.datos_bancarios_institucion()', 'EXECUTE')
+    AND NOT pg_catalog.has_function_privilege('anon',
+        'app_private.datos_bancarios_institucion()', 'EXECUTE')
     AND NOT pg_catalog.has_function_privilege('service_role',
         'public.registrar_pago(uuid,uuid[],bigint)', 'EXECUTE')
     AND NOT pg_catalog.has_function_privilege('anon',

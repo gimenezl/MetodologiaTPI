@@ -257,6 +257,30 @@ async function respuestaPerdidaAntesDelCommit() {
   await exigirResultado(a, 'reintento posterior', 'OK')
 }
 
+/**
+ * La consulta de un intento que todavía se está registrando espera su desenlace: nunca afirma
+ * «no registrado» sobre un intento en vuelo (un 504 del gateway deja al cliente en esa situación).
+ */
+async function consultaEsperaAlRegistroEnCurso() {
+  await restaurar()
+  // B es el mismo padre en otra conexión: consulta lo que A está registrando.
+  await b.ejecutar(`RESET ROLE; ${como(PADRE_A)}`, 'b_como_a')
+  await c.ejecutar(`BEGIN; SELECT 1 FROM public.items_factura WHERE id = '${I1}' FOR UPDATE;`, 'c_retiene_item')
+  const registro = seguir(a.ejecutar(registrar(CLAVE(1), [I1], CENTAVOS_ITEM), 'a_registrar_en_curso'))
+  await exigirBloqueo('c', 'a', 'el registro debía esperar el ítem retenido')
+  const consulta = seguir(b.ejecutar(consultar(CLAVE(1)), 'b_consulta'))
+  await exigirBloqueo('a', 'b', 'la consulta debía esperar al registro en curso')
+  exigir(!consulta.marca.terminada && !registro.marca.terminada, 'algo terminó antes de liberar al bloqueador')
+  await c.ejecutar('ROLLBACK;', 'c_libera')
+  await registro.promesa
+  await exigirResultado(a, 'registro liberado', 'OK')
+  await consulta.promesa
+  const visto = await resultadoJson(b, 'consulta tras el registro')
+  exigir(visto.registrado === true, 'la consulta afirmó «no registrado» sobre un intento que terminó registrándose')
+  exigir((await cuentaPagos()) === '1', 'pagos distintos de 1')
+  await b.ejecutar(`RESET ROLE; ${como(PADRE_B)}`, 'b_restituido')
+}
+
 async function cotizacionDesactualizada() {
   await restaurar()
   await a.ejecutar(cotizar([I1, I2]), 'a_cotizar')
@@ -477,6 +501,7 @@ try {
   await caso('mismo intento concurrente (doble clic): un solo pago', mismoIntentoConcurrente)
   await caso('respuesta perdida DESPUÉS del COMMIT: la consulta y el reintento recuperan el pago', respuestaPerdidaTrasCommit)
   await caso('respuesta perdida ANTES del COMMIT: el intento no existe y puede reintentarse', respuestaPerdidaAntesDelCommit)
+  await caso('consulta del intento durante un registro en curso: espera y ve el resultado', consultaEsperaAlRegistroEnCurso)
   await caso('cotización desactualizada: otro padre reservó parte de la selección', cotizacionDesactualizada)
 
   for (const nombre of Object.keys(REVOCACIONES)) {
