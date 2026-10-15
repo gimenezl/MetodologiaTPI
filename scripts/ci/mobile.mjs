@@ -7,8 +7,6 @@ export const mobileExact = new Set([
   'mobile/package.json', 'mobile/package-lock.json', 'mobile/.npmrc', 'mobile/.gitignore', 'mobile/.env.example',
   'mobile/app.config.ts', 'mobile/tsconfig.json', 'mobile/eslint.config.js', 'mobile/jest.config.js', 'mobile/jest.setup.ts',
   'mobile/README.md',
-  'mobile/scripts/ios-simulator.py', 'mobile/scripts/ios-simulator.test.py',
-  'mobile/scripts/ios-compiler-cleanup.py', 'mobile/scripts/ios-compiler-cleanup.test.py',
 ])
 
 // Familias de archivos: cada patrón es literal y acotado; no hay comodines sobre binarios arbitrarios.
@@ -57,18 +55,6 @@ export function validateMobileWorkflow(yml) {
   // Cada job nativo debe ejecutar la app, no solo compilarla.
   if (!yml.includes('mobile/scripts/ejecutar-android.sh') || !yml.includes('mobile/scripts/ejecutar-ios.sh')) {
     throw new Error('Los jobs Android e iOS deben ejecutar la aplicación (ejecutar-android.sh / ejecutar-ios.sh)')
-  }
-  if (yml.includes('ci:ios-infrastructure-diagnostic')) {
-    if (!yml.includes('          if [ "$DIAGNOSTIC" = true ]; then\n') ||
-      !yml.includes('            exit 1\n          fi\n          test "$FAST" = success')) {
-      throw new Error('El diagnóstico parcial debe impedir explícitamente CI / gate')
-    }
-    for (const job of ['fast', 'database', 'ui', 'plan', ...JOBS]) {
-      const block = yml.slice(yml.search(new RegExp(`^  ${job}:`, 'mu'))).split(/\n  [a-z-]+:/u)[0]
-      if (!block.includes("!(github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:ios-infrastructure-diagnostic'))")) {
-        throw new Error(`El job ${job} debe omitir trabajo completo en diagnóstico`)
-      }
-    }
   }
   return true
 }

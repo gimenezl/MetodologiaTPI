@@ -1,24 +1,35 @@
 #!/usr/bin/env bash
+# Inicia un simulador de iPhone, instala la aplicación y recorre el smoke de Maestro (sin backend).
+# El E2E con Auth/RLS reales corre en Android; aquí se prueba que la app nativa iOS arranca y muestra el acceso.
+# Uso: bash mobile/scripts/ejecutar-ios.sh <ruta-a-la-app>
 set -euo pipefail
+
 APP="$1"
-SALIDA="${EPT_IOS_EVIDENCE_DIR:-${RUNNER_TEMP:?}/evidencia-movil-ios}"
+SALIDA="${RUNNER_TEMP:?RUNNER_TEMP requerido}/evidencia-movil-ios"
 mkdir -p "$SALIDA"
-capture() { python3 scripts/ci/run-stage.py --capture --stage "$1" --seconds "$2" -- "${@:3}"; }
-stage() { printf 'ios_stage=%s remaining_s=%s\n' "$1" "$(( ${EPT_NATIVE_DEADLINE:?} - $(date +%s) ))"; python3 scripts/ci/run-stage.py --stage "$1" --seconds "$2" -- "${@:3}"; }
-UDID="${EPT_IOS_UDID:?}"
-printf 'simulador=%s arquitectura=%s\n' "$UDID" "${EPT_IOS_ARCH:?}" > "$SALIDA/ios-simulador.txt"
-python3 mobile/scripts/ios-simulator.py require-booted
-binary="$APP/$(capture ios-bundle-name 15 /usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$APP/Info.plist")"
-capture ios-artifact-arch 15 lipo -archs "$binary" | tee "$SALIDA/ios-architecture.txt" | grep -Fx "${EPT_IOS_ARCH}"
-stage ios-install 60 xcrun simctl install "$UDID" "$APP"
-capture ios-installed 15 xcrun simctl listapps "$UDID" | grep -F 'org.educarparatransformar.app'
-stage ios-app-launch 30 xcrun simctl launch "$UDID" org.educarparatransformar.app
-stage maestro-version 15 maestro --version
-capture maestro-test-help 15 maestro test --help | grep -F -- --debug-output
-python3 mobile/scripts/ios-simulator.py driver-preflight
-status=0
-stage ios-maestro 240 maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-ios.xml" \
-  --debug-output "$SALIDA/maestro-ios" --flatten-debug-output --test-output-dir "$SALIDA/maestro-ios" mobile/maestro/verificacion.yaml || status=$?
-# Source-pinned XCTest logs are retained in the explicit debug directory even on failure.
-python3 mobile/scripts/ios-simulator.py status || true
-exit "$status"
+
+xcrun simctl list runtimes | tee "$SALIDA/ios-runtimes.txt"
+UDID="$(xcrun simctl list devices available -j | node -e '
+  let t = ""; process.stdin.on("data", d => t += d).on("end", () => {
+    const dispositivos = Object.entries(JSON.parse(t).devices)
+      .filter(([runtime]) => runtime.includes("iOS"))
+      .flatMap(([, lista]) => lista)
+      .filter(d => /^iPhone/.test(d.name) && d.isAvailable);
+    if (!dispositivos.length) { console.error("Sin simuladores de iPhone disponibles"); process.exit(1); }
+    console.log(dispositivos[dispositivos.length - 1].udid);
+  });')"
+echo "Simulador: $UDID" | tee "$SALIDA/ios-simulador.txt"
+
+xcrun simctl boot "$UDID" || true
+xcrun simctl bootstatus "$UDID" -b
+xcrun simctl install "$UDID" "$APP"
+xcrun simctl listapps "$UDID" | grep -F 'org.educarparatransformar.app'
+
+set +e
+maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-ios.xml" \
+  --test-output-dir "$SALIDA/maestro-ios" mobile/maestro/smoke-ios.yaml
+estado=$?
+set -e
+
+xcrun simctl io "$UDID" screenshot "$SALIDA/ios-final.png" || true
+exit "$estado"

@@ -11,8 +11,8 @@ export const pureTests = ['tarifas-lib', 'asistencias-lib', 'reportes-lib', 'pag
   'paginacion-paralela', 'inscripciones-legadas-lib', 'accesos-qr-cripto',
   'credenciales-qr-cripto', 'semantica-estatica', 'accesos-qr-servicio', 'redireccion-login']
 // Infraestructura que decide cómo se prueba la app móvil: su cambio exige recorrer los gates móviles completos.
-const MOBILE_INFRA = new Set(['scripts/ci/native-backend.py', 'scripts/ci/native-backend.test.py', 'scripts/ci/native-services.lock.json', 'scripts/ci/install-native.mjs', 'scripts/ci/install-native.test.mjs', 'scripts/ci/run-stage.py', 'scripts/ci/run-stage.test.py', 'scripts/ci/install-cli.sh', 'scripts/ci/mobile.mjs', 'scripts/ci/impact.mjs', 'scripts/ci/impact.test.mjs', '.github/workflows/ci.yml'])
-const CI_TESTS = new Set(['scripts/ci/impact.test.mjs', 'scripts/ci/install-native.test.mjs'])
+const MOBILE_INFRA = new Set(['scripts/ci/run-stage.py', 'scripts/ci/run-stage.test.py', 'scripts/ci/install-cli.sh', 'scripts/ci/mobile.mjs', 'scripts/ci/impact.mjs', 'scripts/ci/impact.test.mjs', '.github/workflows/ci.yml'])
+const CI_TESTS = new Set(['scripts/ci/impact.test.mjs'])
 // Cambios de infraestructura que pueden alterar el prototipo o su verificación: obligan a ejecutar su navegación real.
 const PROTOTIPO_INFRA = new Set(['scripts/ci/ept96-assets.mjs', 'scripts/ci/impact.mjs', 'scripts/ci/impact.test.mjs', '.github/workflows/ci.yml', 'package.json', 'package-lock.json'])
 export function changedPaths(raw) {

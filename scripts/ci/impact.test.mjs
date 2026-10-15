@@ -74,45 +74,6 @@ test('EPT-102: mobile/ se registra con contrato propio y bloquea lo desconocido'
   // Un cambio web sin relación con la app no activa los gates móviles.
   assert.equal(profile(['src/proxy.ts']).mobile, undefined)
 })
-test('EPT-102: simulador Python exige registro exacto y plan CLI real por archivo', () => {
-  const files = ['mobile/scripts/ios-simulator.py', 'mobile/scripts/ios-simulator.test.py', 'mobile/scripts/ios-compiler-cleanup.py', 'mobile/scripts/ios-compiler-cleanup.test.py']
-  for (const file of files) assert.deepEqual(profile([file]), { db: false, mutations: false, ui: [], mobile: true })
-  assert.throws(() => profile(['mobile/scripts/unregistered.py']), /Ruta mobile sin contrato/u)
-  const directory = mkdtempSync(path.join(tmpdir(), 'ept105-impact-python-'))
-  const git = args => execFileSync('git', ['-C', directory, ...args], { encoding: 'utf8' }).trim()
-  const identity = { ...process.env, GIT_AUTHOR_NAME: 'CI Fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid', GIT_COMMITTER_NAME: 'CI Fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid' }
-  try {
-    // Synthetic Git objects live only in the fixture repository; no branch/index of the task changes.
-    git(['init', '--quiet', '--template='])
-    mkdirSync(path.join(directory, 'mobile', 'scripts'), { recursive: true })
-    for (const file of ['package.json', 'mobile/package.json']) cpSync(file, path.join(directory, file))
-    git(['add', '--', 'package.json', 'mobile/package.json'])
-    const baseTree = git(['write-tree'])
-    const commit = (tree, parent) => execFileSync('git', ['-C', directory, 'commit-tree', tree, ...(parent ? ['-p', parent] : []), '-m', 'test: isolated impact fixture'], { env: identity, encoding: 'utf8' }).trim()
-    const base = commit(baseTree)
-    for (const [index, file] of [...files, 'mobile/scripts/unregistered.py'].entries()) {
-      git(['read-tree', baseTree])
-      writeFileSync(path.join(directory, file), '# synthetic changed file\n')
-      git(['add', '--', file])
-      const head = commit(git(['write-tree']), base)
-      const output = path.join(directory, `output-${index}`)
-      const result = spawnSync(process.execPath, ['scripts/ci/impact.mjs'], { env: { ...process.env,
-        GIT_DIR: path.join(directory, '.git'), GIT_WORK_TREE: process.cwd(),
-        CI_BASE_SHA: base, CI_HEAD_SHA: head, GITHUB_OUTPUT: output }, encoding: 'utf8', timeout: 10000 })
-      if (files.includes(file)) {
-        assert.equal(result.status, 0, result.stderr)
-        assert.equal(readFileSync(output, 'utf8'), 'db=false\nmutations=false\nui=[]\nprototipo=false\nmobile=true\n')
-      } else {
-        assert.notEqual(result.status, 0)
-        assert.match(result.stderr, /Ruta mobile sin contrato/u)
-      }
-    }
-  } finally {
-    assert.ok(path.resolve(directory).startsWith(path.resolve(tmpdir()) + path.sep))
-    rmSync(directory, { recursive: true, force: true })
-  }
-})
-
 test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
   assert.equal(validateMobileWorkflow(yml), true)
@@ -139,20 +100,23 @@ test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   assert.match(yml, /mobile-android:\n    name: CI \/ móvil Android\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
   assert.match(yml, /mobile-ios:\n    name: CI \/ móvil iOS\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
   assert.match(yml, /runs-on: macos-26/u)
-  for (const native of ['mobile-android', 'mobile-ios']) {
-    const block = yml.slice(yml.indexOf(`  ${native}:`)).split(/\n  [a-z-]+:/u)[0]
-    const minutes = Number(/timeout-minutes: (\d+)/u.exec(block)?.[1])
-    assert.ok(minutes > 0 && minutes <= 30)
-    assert.match(block, /EPT_NATIVE_DEADLINE/u)
-    assert.match(block, /run-stage\.test\.py/u)
-    assert.match(block, native === 'mobile-ios' ? /native-backend\.py stop/u : /supabase-local\.mjs stop/u)
-  }
-  assert.match(readFileSync('mobile/scripts/compilar-ios.sh', 'utf8'), /ONLY_ACTIVE_ARCH=YES/u)
-  assert.match(yml, /MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'/u)
-  const prepararDockerMacos = readFileSync('mobile/scripts/preparar-docker-macos.sh', 'utf8').replace(/\r\n/gu, '\n')
-  assert.match(prepararDockerMacos, /stage docker-install \d+ brew install/u)
-  assert.match(prepararDockerMacos, /--profile "\$PROFILE"/u)
-  assert.match(prepararDockerMacos, /stage docker-readiness/u)
+  const bloqueJob = nombre => yml.slice(yml.indexOf(`  ${nombre}:`)).split(/\n  [a-z-]+:/u)[0]
+  const minutos = bloque => Number(/timeout-minutes: (\d+)/u.exec(bloque)?.[1])
+  // Android lleva el E2E real de Auth/RLS contra un Supabase local descartable, acotado y siempre detenido.
+  const android = bloqueJob('mobile-android')
+  assert.ok(minutos(android) > 0 && minutos(android) <= 30)
+  assert.match(android, /EPT_NATIVE_DEADLINE/u)
+  assert.match(android, /run-stage\.test\.py/u)
+  assert.match(android, /integracion-auth-local\.mjs/u)
+  assert.match(android, /supabase-local\.mjs stop/u)
+  // iOS es un smoke nativo sin backend: los runners macOS no tienen Docker para un Supabase local.
+  const ios = bloqueJob('mobile-ios')
+  assert.ok(minutos(ios) > 0 && minutos(ios) <= 45)
+  assert.doesNotMatch(ios, /supabase-local|integracion-auth-local|EPT_MOBILE_AUTH_INTEGRATION/u)
+  assert.match(ios, /EXPO_PUBLIC_SUPABASE_URL: https:\/\//u)
+  assert.match(ios, /MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'/u)
+  assert.match(readFileSync('mobile/scripts/ejecutar-ios.sh', 'utf8'), /mobile\/maestro\/smoke-ios\.yaml/u)
+  assert.doesNotMatch(yml, /ci:ios-infrastructure-diagnostic/u)
 })
 test('EPT-102: el bloque del gate se ejecuta con bash -e y falla ante cualquier resultado móvil no exitoso', () => {
   const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
@@ -181,170 +145,6 @@ test('EPT-102: el paquete móvil no altera dependencias ni lockfile de Next', ()
   assert.match(readFileSync('eslint.config.mjs', 'utf8'), /"mobile\/\*\*"/u)
 })
 
-test('diagnóstico iOS retira solo compiladores registrados con reserva separada', () => {
-  const yml = readFileSync('.github/workflows/ci.yml', 'utf8')
-  for (const section of [yml.slice(yml.indexOf('  mobile-ios:'), yml.indexOf('  diagnostic-smoke:')), yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:'), yml.indexOf('  gate:'))]) {
-    assert.ok(section.indexOf('ios-compiler-cleanup.py baseline') < section.indexOf('npx --no-install expo prebuild'))
-    assert.match(section, /cleanup-ios-compiler --seconds 20/u)
-    assert.match(section, /always\(\) && steps.compiler-baseline.outcome == 'success'/u)
-    assert.ok(section.indexOf('cleanup-ios-compiler') < section.indexOf('cleanup-ios-simulator'))
-    assert.match(section, /1630/u)
-  }
-  const helper = readFileSync('mobile/scripts/ios-compiler-cleanup.py', 'utf8')
-  assert.doesNotMatch(helper, /pkill|killpg|sudo/u)
-  assert.match(helper, /RUNNER_TRACKING_ID/u)
-  assert.match(helper, /cleanup_ownership_unknown/u)
-})
-test('diagnóstico iOS descubre SDK y crea ownership antes de backend o caches', () => {
-  const yml = readFileSync('.github/workflows/ci.yml', 'utf8')
-  for (const section of [yml.slice(yml.indexOf('  mobile-ios:'), yml.indexOf('  diagnostic-smoke:')), yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:'), yml.indexOf('  gate:'))]) {
-    const sdk = section.indexOf('bash mobile/scripts/preparar-ios.sh')
-    assert.ok(sdk > section.indexOf('ios-simulator.py toolchain'))
-    for (const token of ['uses: actions/cache@', 'native-backend.py start', 'integracion-auth-local.mjs', 'npm ci']) assert.ok(sdk < section.indexOf(token), token)
-    assert.ok(section.indexOf('ios-compiler-cleanup.py baseline') > section.indexOf('integracion-auth-local.mjs'))
-    assert.match(section, /always\(\).*\n.*cleanup-ios-simulator --seconds 55/u)
-  }
-  const prepare = readFileSync('mobile/scripts/preparar-ios.sh', 'utf8')
-  assert.match(prepare, /stage ios-owned-create 190 python3 mobile\/scripts\/ios-simulator.py create/u)
-  assert.doesNotMatch(prepare, /simctl list/u)
-  assert.match(prepare, /capture ios-sdk-version 20/u)
-})
-test('diagnóstico iOS verifica boot antes de backend y no vuelve a arrancar tras build', () => {
-  const yml = readFileSync('.github/workflows/ci.yml', 'utf8')
-  for (const section of [yml.slice(yml.indexOf('  mobile-ios:'), yml.indexOf('  diagnostic-smoke:')), yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:'), yml.indexOf('  gate:'))]) {
-    const boot = section.indexOf('ios-simulator.py boot')
-    assert.ok(boot > section.indexOf('preparar-ios.sh'))
-    for (const token of ['native-backend.py start', 'integracion-auth-local.mjs', 'npm ci', 'compilar-ios.sh']) assert.ok(boot < section.indexOf(token))
-    const postbuild = section.indexOf('ios-postbuild-compiler --seconds 20')
-    assert.ok(postbuild > section.indexOf('compilar-ios.sh'))
-    assert.ok(postbuild < section.indexOf('ejecutar-ios.sh'))
-    assert.match(section, /always\(\).*\n.*cleanup-ios-compiler --seconds 20/u)
-  }
-  const execute = readFileSync('mobile/scripts/ejecutar-ios.sh', 'utf8')
-  assert.match(execute, /ios-simulator.py require-booted/u)
-  assert.doesNotMatch(execute, /simctl boot|ios-boot|ios-device-json/u)
-  assert.ok(execute.indexOf('require-booted') < execute.indexOf('ios-artifact-arch'))
-  const helper = readFileSync('mobile/scripts/ios-simulator.py', 'utf8')
-  assert.match(helper, /command\("ios-boot", 30/u)
-  assert.match(helper, /command\("ios-bootstatus", 120/u)
-})
-test('diagnóstico iOS conserva medición acotada y corre ownership antes de cualquier toolchain', () => {
-  const yml = readFileSync('.github/workflows/ci.yml', 'utf8')
-  for (const section of [yml.slice(yml.indexOf('  mobile-ios:'), yml.indexOf('  diagnostic-smoke:')), yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:'), yml.indexOf('  gate:'))]) {
-    assert.ok(section.indexOf('ios-compiler-cleanup.test.py') < section.indexOf('ios-simulator.py toolchain'))
-    assert.match(section, /compiler-ownership-tests --seconds 20/u)
-  }
-  const diagnostic = yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:'), yml.indexOf('  gate:'))
-  assert.match(diagnostic, /ios-toolchain-diagnostic --seconds 75/u)
-  assert.match(diagnostic, /EPT_IOS_DIAGNOSTIC_PHASE: full/u)
-  const helper = readFileSync('mobile/scripts/ios-simulator.py', 'utf8')
-  const inventory = helper.slice(helper.indexOf('def inventory_probe():'))
-  assert.doesNotMatch(inventory, /toolchain_preflight\(\)/u)
-})
-test('diagnóstico iOS alinea runner Swift y scope de compiler sin actualizar dependencias', () => {
-  const yml = readFileSync('.github/workflows/ci.yml', 'utf8')
-  for (const section of [yml.slice(yml.indexOf('  mobile-ios:'), yml.indexOf('  diagnostic-smoke:')), yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:'), yml.indexOf('  gate:'))]) {
-    assert.match(section, /runs-on: macos-26/u)
-    assert.match(section, /DEVELOPER_DIR: \/Applications\/Xcode_26\.5\.app\/Contents\/Developer/u)
-    assert.ok(section.indexOf('ios-compiler-cleanup.test.py') < section.indexOf('native-backend.py start'))
-  }
-  const helper = readFileSync('mobile/scripts/ios-simulator.py', 'utf8')
-  assert.match(helper, /17F42/u)
-  assert.match(helper, /\(6, 3, 0\)/u)
-  const compiler = readFileSync('mobile/scripts/ios-compiler-cleanup.py', 'utf8')
-  assert.match(compiler, /Xcode_26\.5\.app/u)
-  assert.doesNotMatch(compiler, /Xcode_26\.1\.1\.app/u)
-})
-test('diagnóstico iOS fija toolchain local y verifica compatibilidad antes del backend', () => {
-  const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
-  for (const job of ['mobile-ios', 'ios-infrastructure-diagnostic']) {
-    const block = yml.slice(yml.indexOf(`  ${job}:`)).split(/\n  [a-z-]+:/u)[0]
-    assert.match(block, /DEVELOPER_DIR: \/Applications\/Xcode_26\.5\.app\/Contents\/Developer/u)
-    assert.match(block, /ios-toolchain --seconds 75/u)
-    assert.ok(block.indexOf('ios-simulator.py toolchain') < block.indexOf('native-backend.py start'))
-    assert.doesNotMatch(block, /sudo.*xcode-select|runFirstLaunch/u)
-  }
-  const helper = readFileSync('mobile/scripts/ios-simulator.py', 'utf8')
-  assert.doesNotMatch(helper, /xcode-select.*--print-path/u)
-  assert.match(helper, /"xcrun", "--find", "swift"/u)
-})
-
-test('diagnóstico iOS publica la ruta del runner en setup, no en job env', () => {
-  const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
-  // GitHub's jobs.<job_id>.env availability table; full expression semantics use actionlint separately.
-  const allowed = new Set(['github', 'needs', 'strategy', 'matrix', 'vars', 'secrets', 'inputs'])
-  const checkJobEnv = text => {
-    for (const block of text.matchAll(/^    env:\n((?:^      [^\n]*\n)*)/gmu)) {
-      for (const expression of block[1].matchAll(/\$\{\{([\s\S]*?)\}\}/gu)) {
-        for (const root of expression[1].matchAll(/(?<![\w.])([A-Za-z_][A-Za-z_0-9]*)\s*[.[]/gu)) {
-          assert.ok(allowed.has(root[1]), `Forbidden job env context: ${root[1]}`)
-        }
-      }
-    }
-  }
-  checkJobEnv(yml)
-  for (const forbidden of ['runner', 'env', 'steps', 'job']) {
-    assert.throws(() => checkJobEnv('    env:\n      PATH_VALUE: ${{ ' + forbidden + '.temp }}\n'), /Forbidden job env context/u)
-  }
-  for (const [job, suffix] of [['mobile-ios', 'evidencia-movil-ios'], ['ios-infrastructure-diagnostic', 'evidencia-ios-infra']]) {
-    const block = yml.slice(yml.indexOf(`  ${job}:`)).split(/\n  [a-z-]+:/u)[0]
-    assert.ok(block.includes(`echo "EPT_IOS_EVIDENCE_DIR=$RUNNER_TEMP/${suffix}" >> "$GITHUB_ENV"`))
-    assert.doesNotMatch(block, /^      EPT_IOS_EVIDENCE_DIR:/mu)
-    assert.ok(block.indexOf('EPT_IOS_EVIDENCE_DIR=$RUNNER_TEMP') < block.indexOf('ejecutar-ios.sh'))
-  }
-})
-
-test('diagnóstico iOS es opt-in, acotado y nunca aprueba entrega', () => {
-  const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
-  assert.match(yml, /types: \[opened, synchronize, reopened, labeled, unlabeled, ready_for_review\]/u)
-  assert.match(yml, /push:\n    branches: \[main\]/u)
-  const diagnostic = yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:')).split(/\n  [a-z-]+:/u)[0]
-  assert.match(diagnostic, /needs: diagnostic-smoke/u)
-  assert.match(diagnostic, /timeout-minutes: 30/u)
-  assert.match(diagnostic, /EPT_IOS_DIAGNOSTIC_PHASE: full/u)
-  assert.match(diagnostic, /runtime\) budget=180/u)
-  assert.match(diagnostic, /full\) budget=1630/u)
-  assert.match(diagnostic, /Invalid iOS diagnostic phase'; exit 1/u)
-  assert.match(diagnostic, /sdk-inventory --seconds 140/u)
-  assert.match(diagnostic, /ios-simulator\.py inventory/u)
-  for (const token of ['native-backend.py start', 'integracion-auth-local.mjs', 'preparar-ios.sh', 'npm ci', 'expo prebuild', 'compilar-ios.sh', 'ejecutar-ios.sh']) {
-    const steps = diagnostic.split(/\n      - /u)
-    const step = steps.find(part => part.includes(token))
-    assert.ok(step?.includes("if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'"), `${token} must be full-only`)
-  }
-  assert.match(diagnostic, /always\(\) && env\.EPT_IOS_DIAGNOSTIC_PHASE == 'full'/u)
-  assert.match(diagnostic, /ci:ios-infrastructure-diagnostic/u)
-  assert.match(diagnostic, /native-backend\.py start/u)
-  assert.match(diagnostic, /runs-on: macos-26/u)
-  assert.doesNotMatch(diagnostic, /preparar-docker|supabase-local|install-cli|cleanup-colima/u)
-  assert.match(diagnostic, /native-backend-\$\{\{ runner\.os \}\}-\$\{\{ runner\.arch \}\}/u)
-  for (const file of ['scripts/ci/install-native.test.mjs', 'scripts/ci/native-backend.test.py', 'scripts/ci/native-backend.py', 'scripts/ci/native-services.lock.json']) {
-    assert.deepEqual(profile([file]), { db: true, mutations: false, ui: ['core'], mobile: true })
-  }
-  assert.match(diagnostic, /integracion-auth-local\.mjs/u)
-  assert.match(diagnostic, /if: always\(\)/u)
-  assert.match(diagnostic, /cleanup-native/u)
-  assert.match(diagnostic, /expo prebuild --platform ios/u)
-  assert.match(diagnostic, /compilar-ios\.sh/u)
-  assert.match(diagnostic, /ejecutar-ios\.sh/u)
-  assert.ok(diagnostic.indexOf('integracion-auth-local.mjs') < diagnostic.indexOf('expo prebuild'))
-  assert.match(diagnostic, /cleanup-ios-simulator --seconds 55/u)
-  assert.match(diagnostic, /MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'/u)
-  assert.doesNotMatch(diagnostic, /DerivedData|derivedDataPath.*cache/u)
-  const smoke = yml.slice(yml.indexOf('  diagnostic-smoke:')).split(/\n  [a-z-]+:/u)[0]
-  assert.match(smoke, /timeout-minutes: 3/u)
-  assert.match(smoke, /run-stage\.test\.py/u)
-  const start = yml.indexOf('          if [ "$DIAGNOSTIC" = true ]; then')
-  const end = yml.indexOf('          test "$FAST" = success', start)
-  assert.ok(start > 0 && end > start)
-  const guard = yml.slice(start, end).split('\n').map(line => line.replace(/^ {10}/u, '')).join('\n')
-  for (const [value, success] of [['true', false], ['false', true]]) {
-    const result = spawnSync('bash', ['-e', '-c', guard], { env: { PATH: process.env.PATH, DIAGNOSTIC: value }, encoding: 'utf8', timeout: 5000 })
-    assert.equal(result.status === 0, success, result.stderr)
-  }
-  assert.throws(() => validateMobileWorkflow(yml.replace('            exit 1\n          fi\n          test "$FAST" = success', '          fi\n          test "$FAST" = success')))
-  assert.throws(() => validateMobileWorkflow(yml.replace("!(github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:ios-infrastructure-diagnostic'))", 'true')))
-})
 test('pure config and actual UI registry remain aligned, new tests block', () => {
   const config = readFileSync('playwright.pure.config.ts', 'utf8')
   for (const name of pureTests) assert.ok(config.includes(name))

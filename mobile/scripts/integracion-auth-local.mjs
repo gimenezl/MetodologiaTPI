@@ -9,21 +9,11 @@ import { resolve } from 'node:path'
 import { esperarBearerExpirado, mensajeFalloEtapaAuth, validarLineaBaseExpiracion } from './integracion-auth-utils.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
-const nativeBackend = process.env.EPT_MOBILE_NATIVE_BACKEND === '1'
-const workdir = nativeBackend ? process.env.EPT_MOBILE_NATIVE_WORKDIR : process.env.EPT_MOBILE_SUPABASE_WORKDIR
+const workdir = process.env.EPT_MOBILE_SUPABASE_WORKDIR
 const safeTimeout = 15_000
 const localOnly = new Set(['127.0.0.1', 'localhost'])
 
 function runStatus() {
-  if (nativeBackend) {
-    const stdout = execFileSync('python3', [resolve(root, 'scripts/ci/native-backend.py'), 'status'], {
-      cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, timeout: 15_000,
-    })
-    const env = JSON.parse(stdout)
-    assert.equal(env.API_URL, 'http://127.0.0.1:54321', 'El backend nativo debe usar el endpoint loopback fijado.')
-    assert.ok(env.ANON_KEY && env.SERVICE_ROLE_KEY, 'Faltan claves efímeras del backend nativo.')
-    return { api: env.API_URL, anon: env.ANON_KEY, service: env.SERVICE_ROLE_KEY }
-  }
   assert.ok(process.env.EPT_SUPABASE_CLI_ENTRY, 'Falta la CLI Supabase aislada.')
   const stdout = execFileSync('python3', [resolve(root, 'scripts/ci/run-stage.py'), '--stage', 'auth-status', '--seconds', '30', '--capture', '--', process.execPath, process.env.EPT_SUPABASE_CLI_ENTRY, 'status', '-o', 'env', '--workdir', workdir], {
     cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
@@ -42,35 +32,12 @@ function runStatus() {
 }
 
 function requireWorkdir() {
-  assert.ok(workdir, nativeBackend ? 'Falta el identificador del backend nativo efímero local.' : 'Falta el identificador del Supabase efímero local.')
+  assert.ok(workdir, 'Falta el identificador del Supabase efímero local.')
 }
 
 let local
 let etapaActual = 'estadoStack'
 
-// Native-only diagnostics: closed identifiers/scalars, never error/provider objects.
-const nativeCheckCodes = new Set(['UNIDENTIFIED', 'AUTH_LOGIN_HTTP', 'AUTH_TOKEN_PAIR', 'AUTH_DATABASE_JWT_ROLE', 'AUTH_USER_HTTP', 'AUTH_USER_IDENTITY', 'AUTH_USER_METADATA', 'AUTH_ACCESS_STATE_HTTP', 'AUTH_ACCESS_STATE_VALUE', 'AUTH_APPLICATION_ROLE_HTTP', 'AUTH_APPLICATION_ROLE_VALUE', 'AUTH_EDITABLE_METADATA', 'AUTH_EDITABLE_METADATA_NOT_AUTHORITY'])
-const nativeOperations = new Set(['UNKNOWN', 'AUTH_LOGIN', 'AUTH_USER', 'REST_RPC'])
-const nativeScalars = new Set(['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE', 'PERSONAL', 'authenticated', 'anon', 'service_role', 'HABILITADO', 'BLOQUEADO', 'SIN_PERFIL'])
-const nativeScalar = value => value == null ? 'MISSING' : value === '' ? 'EMPTY' : typeof value === 'string' && nativeScalars.has(value) ? value : 'OTHER'
-let nativeDiagnostic = Object.freeze({ code: 'UNIDENTIFIED', operation: 'UNKNOWN', status: null, role: 'MISSING', actual: 'MISSING', expected: 'MISSING', matches: null })
-function setNativeCheck(code, operation, { role, actual, expected, matches } = {}) {
-  if (!nativeBackend) return
-  const safeCode = nativeCheckCodes.has(code) ? code : 'UNIDENTIFIED'
-  nativeDiagnostic = Object.freeze({
-    code: safeCode,
-    operation: nativeOperations.has(operation) ? operation : 'UNKNOWN',
-    status: safeCode.endsWith('_HTTP') ? null : nativeDiagnostic.status,
-    role: nativeScalar(role), actual: nativeScalar(actual), expected: nativeScalar(expected),
-    matches: typeof matches === 'boolean' ? matches : null,
-  })
-}
-function setNativeStatus(status) {
-  if (nativeBackend) nativeDiagnostic = Object.freeze({ ...nativeDiagnostic, status: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null })
-}
-function nativeAuthDiagnostic() {
-  return `CHECKCODE ${JSON.stringify(nativeDiagnostic)}`
-}
 const timeoutSignal = timeoutMs => AbortSignal.timeout(timeoutMs)
 
 async function respuesta(path, { key = local.anon, token, method = 'GET', body, prefer, timeoutMs = safeTimeout } = {}) {
@@ -93,7 +60,6 @@ async function respuesta(path, { key = local.anon, token, method = 'GET', body, 
 }
 
 function exigirStatus(result, allowed, label) {
-  setNativeStatus(result.status)
   assert.ok(allowed.includes(result.status), `${label}: estado HTTP inesperado (${result.status}).`)
   return result.data
 }
@@ -141,18 +107,15 @@ async function crearActor(rol, { nombre = 'Prueba', userRole = 'PERSONAL', legaj
 }
 
 async function iniciar(actor) {
-  setNativeCheck('AUTH_LOGIN_HTTP', 'AUTH_LOGIN', { role: actor.rol })
   const result = exigirStatus(await respuesta('/auth/v1/token?grant_type=password', {
     method: 'POST', body: { email: actor.email, password: actor.password },
   }), [200], 'Inicio de sesión local')
-  setNativeCheck('AUTH_TOKEN_PAIR', 'AUTH_LOGIN', { role: actor.rol, matches: Boolean(result?.access_token && result?.refresh_token) })
   assert.ok(result.access_token && result.refresh_token, 'Auth no devolvió tokens de sesión.')
   return result
 }
 
 async function rpc(actor, nombre) {
   const session = actor.access_token ? actor : await iniciar(actor)
-  setNativeCheck(nombre === 'mi_estado_acceso' ? 'AUTH_ACCESS_STATE_HTTP' : nombre === 'rol_actual' ? 'AUTH_APPLICATION_ROLE_HTTP' : 'UNIDENTIFIED', 'REST_RPC', { role: actor.rol })
   const result = exigirStatus(await respuesta(`/rest/v1/rpc/${nombre}`, {
     method: 'POST', token: session.access_token, body: {},
   }), [200], `RPC ${nombre}`)
@@ -168,24 +131,12 @@ async function idsVisibles(actor, tabla = 'perfiles', columna = 'id') {
 
 async function comprobarAuthUsuario(actor, expectedUserRole = actor.rol) {
   const session = await iniciar(actor)
-  if (nativeBackend) {
-    // Database role is not an application role and not editable user_metadata.
-    let databaseRole
-    try { databaseRole = JSON.parse(Buffer.from(session.access_token.split('.')[1], 'base64url').toString('utf8')).role } catch { /* Never print JWT payloads. */ }
-    setNativeCheck('AUTH_DATABASE_JWT_ROLE', 'AUTH_LOGIN', { role: actor.rol, actual: databaseRole, expected: 'authenticated', matches: databaseRole === 'authenticated' })
-    assert.equal(databaseRole, 'authenticated', 'El JWT nativo debe usar el rol de base authenticated.')
-  }
-  setNativeCheck('AUTH_USER_HTTP', 'AUTH_USER', { role: actor.rol })
   const user = exigirStatus(await respuesta('/auth/v1/user', { token: session.access_token }), [200], 'Validación remota de identidad')
-  setNativeCheck('AUTH_USER_IDENTITY', 'AUTH_USER', { role: actor.rol, matches: user?.id === actor.id })
   assert.equal(user.id, actor.id)
-  setNativeCheck('AUTH_USER_METADATA', 'AUTH_USER', { role: actor.rol, actual: user.user_metadata?.role, expected: expectedUserRole, matches: user.user_metadata?.role === expectedUserRole })
   assert.equal(user.user_metadata?.role, expectedUserRole)
   const state = await rpc({ ...actor, ...session }, 'mi_estado_acceso')
-  setNativeCheck('AUTH_ACCESS_STATE_VALUE', 'REST_RPC', { role: actor.rol, actual: state, expected: 'HABILITADO', matches: state === 'HABILITADO' })
   assert.equal(state, 'HABILITADO')
   const role = await rpc({ ...actor, ...session }, 'rol_actual')
-  setNativeCheck('AUTH_APPLICATION_ROLE_VALUE', 'REST_RPC', { role: actor.rol, actual: role, expected: actor.rol, matches: role === actor.rol })
   assert.equal(role, actor.rol)
   actor.access_token = session.access_token
   return session
@@ -232,12 +183,9 @@ async function ejecutar() {
     assert.ok(session.access_token)
   }
   const sesionManipulada = await iniciar(padreA)
-  setNativeCheck('AUTH_USER_HTTP', 'AUTH_USER', { role: 'PADRE' })
   const usuarioManipulado = exigirStatus(await respuesta('/auth/v1/user', { token: sesionManipulada.access_token }), [200], 'Lectura de metadata manipulada')
-  setNativeCheck('AUTH_EDITABLE_METADATA', 'AUTH_USER', { role: 'PADRE', actual: usuarioManipulado.user_metadata?.role, expected: 'DIRECTOR', matches: usuarioManipulado.user_metadata?.role === 'DIRECTOR' })
   assert.equal(usuarioManipulado.user_metadata?.role, 'DIRECTOR')
   const manipulatedRole = await rpc({ ...padreA, ...sesionManipulada }, 'rol_actual')
-  setNativeCheck('AUTH_EDITABLE_METADATA_NOT_AUTHORITY', 'REST_RPC', { role: 'PADRE', actual: manipulatedRole, expected: 'PADRE', matches: manipulatedRole === 'PADRE' })
   assert.equal(manipulatedRole, 'PADRE')
   ok('Auth remoto, perfil, estado y rol de los cinco roles; user_metadata editable no altera el rol vigente.')
 
@@ -365,7 +313,6 @@ try {
   await ejecutar()
 } catch (_error) {
   // No imprimir objetos de proveedor ni trazas: pueden incluir credenciales o material JWT.
-  if (nativeBackend) console.error(nativeAuthDiagnostic())
   console.error(mensajeFalloEtapaAuth(etapaActual))
   process.exitCode = 1
 }
