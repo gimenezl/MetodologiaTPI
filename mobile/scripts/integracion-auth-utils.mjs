@@ -5,6 +5,7 @@ export const ETAPAS_INTEGRACION_AUTH = Object.freeze({
   rlsPadres: 'aislamiento RLS de familias',
   rlsEstudiante: 'aislamiento RLS de estudiante',
   estadosAcceso: 'estados de acceso y autorización',
+  cuotas: 'consulta de cuotas bajo RLS',
   refresh: 'renovación de sesión',
   expiracion: 'expiración y renovación de access token',
   identidadInicial: 'identidad inicial del access token',
