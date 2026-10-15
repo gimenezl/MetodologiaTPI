@@ -9,6 +9,7 @@ import {
 import type { ClienteEPT } from '@/servicios/supabase'
 
 import type { AlmacenamientoSeguro } from '@/servicios/almacenamiento-seguro'
+import type { PagoRegistrado } from '@/servicios/pagos'
 
 import { PagoContenedor } from '../pagos/PagoContenedor'
 import { DetalleCuotaVista, type ResultadoDetalle } from './DetalleCuotaVista'
@@ -20,7 +21,7 @@ export interface ContextoCuotas {
   pestana: PestanaCuotas
   abierta: { alumnoId: string; facturaId: string } | null
   /** Pantalla «Pagar ítems» abierta para un hijo (solo padre). Un cambio de hijo la descarta. */
-  pago?: { alumnoId: string } | null
+  pago?: { alumnoId: string; registrado?: PagoRegistrado } | null
 }
 
 export const CONTEXTO_CUOTAS_VACIO: ContextoCuotas = { elegido: null, pestana: 'pendientes', abierta: null, pago: null }
@@ -144,6 +145,10 @@ export function CuotasContenedor({ cliente, alumnos, mostrarSelector, contexto, 
         alumnoId={pagoAbierto}
         alumnos={alumnos}
         almacenamiento={pagos.almacenamiento}
+        // El resultado vive en el contexto de la pantalla: una revalidación de la sesión remonta el
+        // contenedor y no debe devolver al padre a la selección después de haber registrado.
+        registradoInicial={pago?.registrado}
+        onRegistrado={registrado => cambiar({ pago: { alumnoId: pagoAbierto, registrado } })}
         onVolver={huboCambios => {
           cambiar({ pago: null })
           if (huboCambios) setRecarga(n => n + 1)

@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native'
 
 import { PagoContenedor } from '@/contenedores/pagos/PagoContenedor'
-import { CuotasContenedor } from '@/contenedores/cuotas/CuotasContenedor'
+import { CONTEXTO_CUOTAS_VACIO, CuotasContenedor, type ContextoCuotas } from '@/contenedores/cuotas/CuotasContenedor'
 import type { AlmacenamientoSeguro } from '@/servicios/almacenamiento-seguro'
 import { guardarIntentoPendiente, leerIntentoPendiente } from '@/servicios/intento-pago'
 import type { ClienteEPT } from '@/servicios/supabase'
@@ -414,6 +415,40 @@ describe('CuotasContenedor con pagos', () => {
     await waitFor(() => expect(screen.getByTestId('pagar-items')).toBeTruthy())
     await fireEvent.press(screen.getByTestId('pagar-items'))
     await waitFor(() => expect(screen.getByTestId(`item-${I1}`)).toBeTruthy())
+    await fireEvent.press(screen.getByTestId('volver-cuotas-pago'))
+    await waitFor(() => expect(screen.getByTestId('pagar-items')).toBeTruthy())
+  })
+
+  it('el pago registrado sobrevive a un remontaje de la pantalla (revalidación de la sesión)', async () => {
+    const base = clienteControlado()
+    function Anfitrion({ visible }: { visible: boolean }) {
+      const [contexto, setContexto] = useState<ContextoCuotas>(CONTEXTO_CUOTAS_VACIO)
+      return visible ? (
+        <CuotasContenedor
+          cliente={base.cliente}
+          alumnos={[HIJOS[0]!]}
+          mostrarSelector
+          pagos={{ usuarioId: U, almacenamiento }}
+          contexto={contexto}
+          onContexto={setContexto}
+        />
+      ) : <></>
+    }
+    const { rerender } = await render(<Anfitrion visible />)
+    await waitFor(() => expect(screen.getByTestId('pagar-items')).toBeTruthy())
+    await fireEvent.press(screen.getByTestId('pagar-items'))
+    await waitFor(() => expect(screen.getByTestId(`item-${I1}`)).toBeTruthy())
+    await fireEvent.press(screen.getByTestId(`item-${I1}`))
+    await responder(base.rpcs, 'cotizar_pago', cotizacion([I1], 5000000))
+    await fireEvent.press(screen.getByTestId('registrar-pago'))
+    await waitFor(() => expect(base.rpcs.some(r => r.nombre === 'registrar_pago')).toBe(true))
+    await responder(base.rpcs, 'registrar_pago', pagoRegistrado([I1], 5000000))
+    expect(screen.getByText('Pago registrado: pendiente de verificación.')).toBeTruthy()
+    // La sesión se revalida: la pantalla se desmonta y vuelve a montarse.
+    await rerender(<Anfitrion visible={false} />)
+    await rerender(<Anfitrion visible />)
+    await waitFor(() => expect(screen.getByText('Pago registrado: pendiente de verificación.')).toBeTruthy())
+    expect(screen.queryByTestId('registrar-pago')).toBeNull()
     await fireEvent.press(screen.getByTestId('volver-cuotas-pago'))
     await waitFor(() => expect(screen.getByTestId('pagar-items')).toBeTruthy())
   })

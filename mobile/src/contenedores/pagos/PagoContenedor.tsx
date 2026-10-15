@@ -46,6 +46,9 @@ export interface PagoContenedorProps {
   almacenamiento: AlmacenamientoSeguro
   /** Vuelve a las cuotas. `huboCambios` indica que el listado debe recargarse. */
   onVolver: (huboCambios: boolean) => void
+  /** Pago ya registrado en esta pantalla: sobrevive a un remontaje (revalidación de la sesión). */
+  registradoInicial?: PagoRegistrado
+  onRegistrado?: (pago: PagoRegistrado) => void
   /** Solo para pruebas: generador de la clave del intento. */
   generarClave?: () => string
 }
@@ -82,6 +85,8 @@ export function PagoContenedor({
   alumnos,
   almacenamiento,
   onVolver,
+  registradoInicial,
+  onRegistrado,
   generarClave = generarClaveIntento,
 }: PagoContenedorProps): ReactElement {
   const etiquetaAlumno = alumnos.find(a => a.id === alumnoId)?.etiqueta ?? 'Estudiante'
@@ -91,9 +96,15 @@ export function PagoContenedor({
     contextoRef.current = contexto
   }, [contexto])
   const enviandoRef = useRef(false)
-  const huboRegistroRef = useRef(false)
+  const huboRegistroRef = useRef(registradoInicial !== undefined)
+  const onRegistradoRef = useRef(onRegistrado)
+  useEffect(() => {
+    onRegistradoRef.current = onRegistrado
+  }, [onRegistrado])
 
-  const [fase, setFase] = useState<Fase>({ tipo: 'seleccion' })
+  const [fase, setFase] = useState<Fase>(
+    registradoInicial ? { tipo: 'registrado', pago: registradoInicial } : { tipo: 'seleccion' },
+  )
   const [seleccion, setSeleccion] = useState<string[]>([])
   const [recarga, setRecarga] = useState(0)
   const [recargaBanco, setRecargaBanco] = useState(0)
@@ -227,6 +238,7 @@ export function PagoContenedor({
         if (contextoRef.current !== dueno) return
         if (resultado.tipo === 'registrado') {
           huboRegistroRef.current = true
+          onRegistradoRef.current?.(resultado.pago)
           setFase({ tipo: 'registrado', pago: resultado.pago })
         } else if (resultado.tipo === 'rechazado') {
           setFase({ tipo: 'rechazado', codigo: resultado.codigo })
@@ -276,6 +288,7 @@ export function PagoContenedor({
     if (resultado.tipo === 'registrado') {
       await descartarIntentoPendiente(almacenamiento, usuarioId, intento.alumnoId, intento.clave)
       huboRegistroRef.current = true
+      onRegistradoRef.current?.(resultado.pago)
       setFase({ tipo: 'registrado', pago: resultado.pago })
     } else if (resultado.tipo === 'no_registrado') {
       setFase({ tipo: 'no_registrado', intento })
