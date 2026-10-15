@@ -7,10 +7,7 @@ capture() { python3 scripts/ci/run-stage.py --capture --stage "$1" --seconds "$2
 stage() { printf 'ios_stage=%s remaining_s=%s\n' "$1" "$(( ${EPT_NATIVE_DEADLINE:?} - $(date +%s) ))"; python3 scripts/ci/run-stage.py --stage "$1" --seconds "$2" -- "${@:3}"; }
 UDID="${EPT_IOS_UDID:?}"
 printf 'simulador=%s arquitectura=%s\n' "$UDID" "${EPT_IOS_ARCH:?}" > "$SALIDA/ios-simulador.txt"
-python3 mobile/scripts/ios-simulator.py status
-state=$(capture ios-device-json 15 xcrun simctl list devices available -j | node -e 'let t="";process.stdin.on("data",d=>t+=d).on("end",()=>{const d=Object.values(JSON.parse(t).devices).flat().find(d=>d.udid===process.env.EPT_IOS_UDID);if(!d)process.exit(1);console.log(d.state)})')
-if [ "$state" != Booted ]; then stage ios-boot 30 xcrun simctl boot "$UDID"; fi
-stage ios-bootstatus 120 xcrun simctl bootstatus "$UDID" -b
+python3 mobile/scripts/ios-simulator.py require-booted
 binary="$APP/$(capture ios-bundle-name 15 /usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$APP/Info.plist")"
 capture ios-artifact-arch 15 lipo -archs "$binary" | tee "$SALIDA/ios-architecture.txt" | grep -Fx "${EPT_IOS_ARCH}"
 stage ios-install 60 xcrun simctl install "$UDID" "$APP"

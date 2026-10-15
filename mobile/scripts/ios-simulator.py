@@ -218,6 +218,30 @@ def create():
     print("owned simulator created; architecture=arm64", flush=True)
 
 
+def require_booted(expected_record=None):
+    record = load()
+    if expected_record is not None and record != expected_record:
+        raise RuntimeError("Owned simulator marker changed during boot")
+    device = owned_device(record, devices())
+    if device.get("state") != "Booted":
+        raise RuntimeError("Owned simulator is not Booted")
+    print("owned simulator same_identity=True state=Booted", flush=True)
+
+
+def boot():
+    if diagnostic_phase() != "full":
+        raise RuntimeError("Simulator boot requires full phase")
+    record = load()
+    device = owned_device(record, devices())
+    if device.get("state") == "Shutdown":
+        command("ios-boot", 30, "xcrun", "simctl", "boot", device["udid"], capture=True)
+    elif device.get("state") != "Booted":
+        raise RuntimeError("Owned simulator boot state rejected")
+    command("ios-bootstatus", 120, "xcrun", "simctl", "bootstatus", device["udid"], "-b", capture=False)
+    require_booted(record)
+    print("owned simulator boot_readiness=True", flush=True)
+
+
 def driver_preflight():
     load()
     result = subprocess.run(["lsof", "-nP", "-a", "-iTCP:22087", "-sTCP:LISTEN", "-t", "+w"], capture_output=True, text=True, timeout=5)
@@ -398,10 +422,10 @@ def inventory_probe():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("create", "status", "driver-preflight", "cleanup", "inventory", "toolchain"))
+    parser.add_argument("action", choices=("create", "status", "driver-preflight", "cleanup", "inventory", "toolchain", "boot", "require-booted"))
     action = parser.parse_args().action
     try:
-        result = {"create": create, "status": status, "driver-preflight": driver_preflight, "cleanup": cleanup, "inventory": inventory_probe, "toolchain": toolchain_preflight}[action]()
+        result = {"create": create, "status": status, "driver-preflight": driver_preflight, "cleanup": cleanup, "inventory": inventory_probe, "toolchain": toolchain_preflight, "boot": boot, "require-booted": require_booted}[action]()
         sys.exit(result if isinstance(result, int) else 0)
     except InventoryContractError as error:
         report_inventory_failure(error)

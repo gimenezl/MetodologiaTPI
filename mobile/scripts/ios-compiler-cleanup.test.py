@@ -242,6 +242,24 @@ class Ownership(unittest.TestCase):
         with patch.object(compiler, 'context', return_value=(self.owner, self.token)), patch.object(compiler, 'secure_read', return_value={'owner': {'uid': 2}, 'baseline': []}):
             with self.assertRaises(compiler.OwnershipUnknown): compiler.cleanup(self.api({}))
 
+    def test_postbuild_then_final_cleanup_rechecks_without_repeating_retired_signals(self):
+        records = {987654: self.record}
+        api = self.api(records)
+        baseline = []
+        with patch.object(compiler.os, 'kill', side_effect=lambda pid, _: records.pop(pid, None)) as kill, redirect_stdout(io.StringIO()):
+            first = compiler.cleanup_records(api, self.owner, self.token, baseline, lambda _: True)
+            second = compiler.cleanup_records(api, self.owner, self.token, baseline, lambda _: True)
+            self.assertEqual(first['retired'], 1)
+            self.assertEqual(second['eligible'], 0)
+            self.assertEqual(second['term'], 0)
+            kill.assert_called_once_with(987654, signal.SIGTERM)
+            # New tracked daemons after build are still subject to the final ownership scan.
+            records[987654] = self.record
+            third = compiler.cleanup_records(api, self.owner, self.token, baseline, lambda _: True)
+            self.assertEqual(third['retired'], 1)
+            self.assertEqual(kill.call_count, 2)
+        self.assertEqual(baseline, [])
+
     def test_owned_signals_recheck_tracking_and_safe_aggregate_readback(self):
         records = {987654: self.record}
         api = self.api(records)

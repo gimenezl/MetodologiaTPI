@@ -430,6 +430,48 @@ class SimulatorOwnership(unittest.TestCase):
             self.assertEqual(error.exception.reason_code, 'TOOLCHAIN_PATH')
             self.assertEqual(command.call_count, 1)
 
+    def test_early_owned_boot_keeps_existing_caps_and_requires_postboot_identity(self):
+        before = {RUNTIME: [{**self.listing[RUNTIME][0], 'state': 'Shutdown'}]}
+        with patch.object(ios, 'load', return_value=self.record), patch.object(ios, 'devices', side_effect=[before, self.listing]), patch.object(ios, 'command', return_value='') as command, redirect_stdout(io.StringIO()):
+            ios.boot()
+        self.assertEqual([(c.args[0], c.args[1]) for c in command.call_args_list], [('ios-boot', 30), ('ios-bootstatus', 120)])
+        self.assertEqual([c.kwargs['capture'] for c in command.call_args_list], [True, False])
+        self.assertTrue(all(UDID in c.args for c in command.call_args_list))
+        self.assertTrue(all(c.args[-1] != 'all' for c in command.call_args_list))
+        for after in [before, {RUNTIME: [{**self.listing[RUNTIME][0], 'udid': 'foreign'}]}]:
+            with patch.object(ios, 'load', return_value=self.record), patch.object(ios, 'devices', side_effect=[before, after]), patch.object(ios, 'command', return_value=''):
+                with self.assertRaises(RuntimeError): ios.boot()
+
+        with patch.object(ios, 'load', side_effect=[self.record, {**self.record, 'runtime': 'foreign'}]), patch.object(ios, 'devices', return_value=before), patch.object(ios, 'command', return_value=''):
+            with self.assertRaises(RuntimeError): ios.boot()
+
+    def test_boot_missing_foreign_runtime_and_unbooted_execution_fail_closed(self):
+        with self.assertRaises(FileNotFoundError): ios.require_booted()
+        with patch.object(ios, 'command') as command:
+            with self.assertRaises(FileNotFoundError): ios.boot()
+            command.assert_not_called()
+        for listing in [{'foreign-runtime': self.listing[RUNTIME]}, {RUNTIME: [{**self.listing[RUNTIME][0], 'name': 'foreign'}]}, {RUNTIME: [{**self.listing[RUNTIME][0], 'udid': 'foreign'}]}, {RUNTIME: [{**self.listing[RUNTIME][0], 'state': 'Creating'}]}]:
+            with patch.object(ios, 'load', return_value=self.record), patch.object(ios, 'devices', return_value=listing), patch.object(ios, 'command') as command:
+                with self.assertRaises(RuntimeError): ios.boot()
+                command.assert_not_called()
+        with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': 'runtime'}), patch.object(ios, 'load') as load, patch.object(ios, 'command') as command:
+            with self.assertRaises(RuntimeError): ios.boot()
+            load.assert_not_called()
+            command.assert_not_called()
+        with patch.object(ios, 'load', return_value=self.record), patch.object(ios, 'devices', return_value={RUNTIME: [{**self.listing[RUNTIME][0], 'state': 'Shutdown'}]}), patch.object(ios, 'command') as command:
+            with self.assertRaises(RuntimeError): ios.require_booted()
+            command.assert_not_called()
+
+    def test_boot_readiness_failure_never_admits_execution_or_retries(self):
+        before = {RUNTIME: [{**self.listing[RUNTIME][0], 'state': 'Shutdown'}]}
+        with patch.object(ios, 'load', return_value=self.record), patch.object(ios, 'devices', return_value=before) as listing, patch.object(ios, 'command', side_effect=['', RuntimeError('readiness deadline')]) as command:
+            with self.assertRaises(RuntimeError): ios.boot()
+            self.assertEqual(command.call_count, 2)
+            self.assertEqual(listing.call_count, 1)
+        with patch.object(ios, 'load', return_value=self.record), patch.object(ios, 'devices', return_value=self.listing), patch.object(ios, 'command') as command, redirect_stdout(io.StringIO()):
+            ios.require_booted()
+            command.assert_not_called()
+
     def test_status_body_never_logged_and_endpoint_pinned(self):
         with patch.object(ios, "load", return_value=self.record), patch.object(ios, "devices", return_value=self.listing), patch.object(ios, "command", return_value=""), patch.object(ios.http.client, "HTTPConnection") as http:
             response = http.return_value.getresponse.return_value

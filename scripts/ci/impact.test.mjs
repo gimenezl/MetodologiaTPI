@@ -209,6 +209,25 @@ test('diagnóstico iOS descubre SDK y crea ownership antes de backend o caches',
   assert.doesNotMatch(prepare, /simctl list/u)
   assert.match(prepare, /capture ios-sdk-version 20/u)
 })
+test('diagnóstico iOS verifica boot antes de backend y no vuelve a arrancar tras build', () => {
+  const yml = readFileSync('.github/workflows/ci.yml', 'utf8')
+  for (const section of [yml.slice(yml.indexOf('  mobile-ios:'), yml.indexOf('  diagnostic-smoke:')), yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:'), yml.indexOf('  gate:'))]) {
+    const boot = section.indexOf('ios-simulator.py boot')
+    assert.ok(boot > section.indexOf('preparar-ios.sh'))
+    for (const token of ['native-backend.py start', 'integracion-auth-local.mjs', 'npm ci', 'compilar-ios.sh']) assert.ok(boot < section.indexOf(token))
+    const postbuild = section.indexOf('ios-postbuild-compiler --seconds 20')
+    assert.ok(postbuild > section.indexOf('compilar-ios.sh'))
+    assert.ok(postbuild < section.indexOf('ejecutar-ios.sh'))
+    assert.match(section, /always\(\).*\n.*cleanup-ios-compiler --seconds 20/u)
+  }
+  const execute = readFileSync('mobile/scripts/ejecutar-ios.sh', 'utf8')
+  assert.match(execute, /ios-simulator.py require-booted/u)
+  assert.doesNotMatch(execute, /simctl boot|ios-boot|ios-device-json/u)
+  assert.ok(execute.indexOf('require-booted') < execute.indexOf('ios-artifact-arch'))
+  const helper = readFileSync('mobile/scripts/ios-simulator.py', 'utf8')
+  assert.match(helper, /command\("ios-boot", 30/u)
+  assert.match(helper, /command\("ios-bootstatus", 120/u)
+})
 test('diagnóstico iOS conserva medición acotada y corre ownership antes de cualquier toolchain', () => {
   const yml = readFileSync('.github/workflows/ci.yml', 'utf8')
   for (const section of [yml.slice(yml.indexOf('  mobile-ios:'), yml.indexOf('  diagnostic-smoke:')), yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:'), yml.indexOf('  gate:'))]) {
