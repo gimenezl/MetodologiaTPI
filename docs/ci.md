@@ -26,10 +26,10 @@ Una ruta, suite o paquete mobile/Expo/React Native sin contrato bloquea el plan:
 |---|---|---|
 | `CI / plan móvil` | Evalúa el plan sin esperar al job `fast` | 5 min |
 | `CI / móvil` | `npm ci`, copia compartida sin deriva, importaciones prohibidas y secretos, `expo install --check`, `expo-doctor`, tipos, lint, Jest y `node:test`, bundles Android e iOS y su escaneo | 20 min |
-| `CI / móvil Android` | `prebuild`, `assembleRelease` (x86_64), instalación en emulador API 34 y flujo Maestro | 50 min |
-| `CI / móvil iOS` | `prebuild` con pods, `xcodebuild` Release para simulador, instalación en simulador y flujo Maestro (`macos-26`) | 60 min |
+| `CI / móvil Android` | Supabase local descartable, integración real de Auth/roles/expiración/RLS (EPT-105), `prebuild`, `assembleRelease` (x86_64), instalación en emulador API 34 y flujo Maestro con login real | 30 min |
+| `CI / móvil iOS` | `prebuild` con pods, `xcodebuild` Release arm64 para simulador (Xcode 26.5; Expo SDK 57 exige 26.4+), instalación en simulador y smoke Maestro sin backend (`macos-26`) | 40 min |
 
-Exportar bundles, Expo web o compilar TypeScript no demuestra un APK ni una aplicación iOS: por eso los builds y la ejecución son parte del gate. Los artefactos (`movil-android-<sha>`, `movil-ios-<sha>`) se conservan 14 días con logs, capturas y resultados JUnit. No se ejecutan los E2E web ni la matriz completa por cambios móviles.
+Exportar bundles, Expo web o compilar TypeScript no demuestra un APK ni una aplicación iOS: por eso los builds y la ejecución son parte del gate. El E2E con backend real corre solo en Android: los runners macOS ARM no tienen Docker y levantar Supabase allí no entra en presupuesto (EPT-105), así que iOS prueba build y arranque. Los artefactos (`movil-android-<sha>`, `movil-ios-<sha>`) se conservan 14 días con logs, capturas y resultados JUnit. No se ejecutan los E2E web ni la matriz completa por cambios móviles.
 
 ## Omisiones de aplicabilidad
 

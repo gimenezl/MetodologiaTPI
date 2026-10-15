@@ -1,0 +1,14 @@
+appId: org.educarparatransformar.app
+name: Smoke iOS del acceso móvil (sin backend)
+---
+# Sin sesión previa la app debe mostrar el formulario nativo de acceso. No se envían credenciales:
+# el login real, los roles y RLS se verifican en Android contra Supabase local.
+- launchApp:
+    clearState: true
+- assertVisible: 'Iniciar sesión'
+- assertVisible:
+    id: 'correo'
+- assertVisible:
+    id: 'contrasena'
+- assertVisible: 'Ingresar'
+- takeScreenshot: 01-acceso

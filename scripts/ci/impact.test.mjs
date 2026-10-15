@@ -55,13 +55,15 @@ test('mobile cannot pass web-only checks', () => {
 test('EPT-102: mobile/ se registra con contrato propio y bloquea lo desconocido', () => {
   for (const file of ['mobile/package.json', 'mobile/package-lock.json', 'mobile/app/index.tsx', 'mobile/app/_layout.tsx',
     'mobile/src/servicios/supabase.ts', 'mobile/src/catalogo/Boton.tsx', 'mobile/__tests__/componentes.test.tsx',
+    'mobile/plugins/with-auth-integration-network-security.js', 'mobile/plugins/network/android/permitir-loopback.ts',
     'mobile/scripts/verificar-importaciones.mjs', 'mobile/scripts/ejecutar-android.sh', 'mobile/maestro/verificacion.yaml',
     'mobile/assets/fonts/Outfit_400Regular.ttf']) {
     assert.deepEqual(profile([file]), { db: false, mutations: false, ui: [], mobile: true }, file)
   }
   // Un cambio móvil nunca pasa con el plan web vacío: `mobile` lo exige el gate.
   assert.equal(profile(['mobile/src/tokens/index.ts']).mobile, true)
-  for (const file of ['mobile/otro.bin', 'mobile/android/app/build.gradle', 'mobile/ios/Podfile', 'mobile/dist/android/index.js',
+  for (const file of ['mobile/otro.bin', 'mobile/plugins/payload.json', 'mobile/plugins/binary.bin', 'mobile/plugins/package.json',
+    'mobile/android/app/build.gradle', 'mobile/ios/Podfile', 'mobile/dist/android/index.js',
     'mobile/node_modules/x/index.js', 'mobile/.env', 'mobile/.env.local', 'mobile/src/a b.ts', 'mobile/scripts/instalar.exe',
     'mobile/assets/imagen.png', 'mobile/maestro/otro.json', 'mobile/package-lock.json.bak', 'mobile/../package.json']) {
     assert.throws(() => profile([file]), /sin contrato|\.\.|Invalid/u, file)
@@ -98,6 +100,23 @@ test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   assert.match(yml, /mobile-android:\n    name: CI \/ móvil Android\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
   assert.match(yml, /mobile-ios:\n    name: CI \/ móvil iOS\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
   assert.match(yml, /runs-on: macos-26/u)
+  const bloqueJob = nombre => yml.slice(yml.indexOf(`  ${nombre}:`)).split(/\n  [a-z-]+:/u)[0]
+  const minutos = bloque => Number(/timeout-minutes: (\d+)/u.exec(bloque)?.[1])
+  // Android lleva el E2E real de Auth/RLS contra un Supabase local descartable, acotado y siempre detenido.
+  const android = bloqueJob('mobile-android')
+  assert.ok(minutos(android) > 0 && minutos(android) <= 30)
+  assert.match(android, /EPT_NATIVE_DEADLINE/u)
+  assert.match(android, /run-stage\.test\.py/u)
+  assert.match(android, /integracion-auth-local\.mjs/u)
+  assert.match(android, /supabase-local\.mjs stop/u)
+  // iOS es un smoke nativo sin backend: los runners macOS no tienen Docker para un Supabase local.
+  const ios = bloqueJob('mobile-ios')
+  assert.ok(minutos(ios) > 0 && minutos(ios) <= 45)
+  assert.doesNotMatch(ios, /supabase-local|integracion-auth-local|EPT_MOBILE_AUTH_INTEGRATION/u)
+  assert.match(ios, /EXPO_PUBLIC_SUPABASE_URL: https:\/\//u)
+  assert.match(ios, /MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'/u)
+  assert.match(readFileSync('mobile/scripts/ejecutar-ios.sh', 'utf8'), /mobile\/maestro\/smoke-ios\.yaml/u)
+  assert.doesNotMatch(yml, /ci:ios-infrastructure-diagnostic/u)
 })
 test('EPT-102: el bloque del gate se ejecuta con bash -e y falla ante cualquier resultado móvil no exitoso', () => {
   const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
@@ -106,7 +125,7 @@ test('EPT-102: el bloque del gate se ejecuta con bash -e y falla ante cualquier 
   assert.ok(inicio > 0 && fin > inicio)
   const bloque = yml.slice(inicio, fin).split('\n').map(l => l.replace(/^ {10}/u, '')).join('\n')
   const correr = env => spawnSync('bash', ['-e', '-c', bloque], { env: { PATH: process.env.PATH, ...env }, encoding: 'utf8' }).status
-  const ok = { PLAN_MOBILE: 'true', MOBILE: 'success', ANDROID: 'success', IOS: 'success' }
+  const ok = { PLAN: 'success', PLAN_MOBILE: 'true', MOBILE: 'success', ANDROID: 'success', IOS: 'success' }
   assert.equal(correr(ok), 0)
   for (const clave of ['MOBILE', 'ANDROID', 'IOS']) {
     for (const valor of ['failure', 'cancelled', 'skipped']) assert.notEqual(correr({ ...ok, [clave]: valor }), 0, `${clave}=${valor} debe fallar`)
@@ -125,6 +144,7 @@ test('EPT-102: el paquete móvil no altera dependencias ni lockfile de Next', ()
   assert.ok(JSON.parse(readFileSync('tsconfig.json', 'utf8')).exclude.includes('mobile'))
   assert.match(readFileSync('eslint.config.mjs', 'utf8'), /"mobile\/\*\*"/u)
 })
+
 test('pure config and actual UI registry remain aligned, new tests block', () => {
   const config = readFileSync('playwright.pure.config.ts', 'utf8')
   for (const name of pureTests) assert.ok(config.includes(name))

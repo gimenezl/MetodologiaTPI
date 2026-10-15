@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Inicia un simulador de iPhone, instala la aplicación y recorre el flujo de verificación con Maestro.
+# Inicia un simulador de iPhone, instala la aplicación y recorre el smoke de Maestro (sin backend).
+# El E2E con Auth/RLS reales corre en Android; aquí se prueba que la app nativa iOS arranca y muestra el acceso.
 # Uso: bash mobile/scripts/ejecutar-ios.sh <ruta-a-la-app>
 set -euo pipefail
 
 APP="$1"
-SALIDA="evidencia-movil"
+SALIDA="${RUNNER_TEMP:?RUNNER_TEMP requerido}/evidencia-movil-ios"
 mkdir -p "$SALIDA"
 
 xcrun simctl list runtimes | tee "$SALIDA/ios-runtimes.txt"
@@ -26,7 +27,7 @@ xcrun simctl listapps "$UDID" | grep -F 'org.educarparatransformar.app'
 
 set +e
 maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-ios.xml" \
-  --test-output-dir "$SALIDA/maestro-ios" mobile/maestro/verificacion.yaml
+  --test-output-dir "$SALIDA/maestro-ios" mobile/maestro/smoke-ios.yaml
 estado=$?
 set -e
 
