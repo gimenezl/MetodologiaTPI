@@ -15,7 +15,7 @@ import subprocess
 import sys
 import time
 
-DEVELOPER = Path("/Applications/Xcode_26.1.1.app/Contents/Developer")
+DEVELOPER = Path("/Applications/Xcode_26.5.app/Contents/Developer")
 KEY = b"RUNNER_TRACKING_ID"
 
 

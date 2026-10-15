@@ -238,11 +238,11 @@ jobs:
     name: CI / móvil iOS
     needs: plan
     if: needs.plan.outputs.mobile == 'true' && !(github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:ios-infrastructure-diagnostic'))
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     env:
       CI: '1'
-      DEVELOPER_DIR: /Applications/Xcode_26.1.1.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
       EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -385,11 +385,11 @@ jobs:
     name: CI / diagnóstico iOS build y Maestro
     needs: diagnostic-smoke
     if: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:ios-infrastructure-diagnostic') }}
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     env:
       CI: '1'
-      DEVELOPER_DIR: /Applications/Xcode_26.1.1.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
       EPT_IOS_DIAGNOSTIC_PHASE: full
       EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
     steps:

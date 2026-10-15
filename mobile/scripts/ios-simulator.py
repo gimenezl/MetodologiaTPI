@@ -18,7 +18,7 @@ import math
 ROOT = Path(__file__).resolve().parents[2]
 APP = "org.educarparatransformar.app"
 DRIVER = "dev.mobile.maestro-driver-iosUITests.xctrunner"
-PINNED_DEVELOPER_DIR = "/Applications/Xcode_26.1.1.app/Contents/Developer"
+PINNED_DEVELOPER_DIR = "/Applications/Xcode_26.5.app/Contents/Developer"
 
 
 INVENTORY_CODES = frozenset({"INVENTORY_JSON", "INVENTORY_SHAPE", "RUNTIME_FIELDS", "RUNTIME_DUPLICATE", "RUNTIME_ID", "RUNTIME_AVAILABILITY", "RUNTIME_VERSION", "RUNTIME_VERSION_ID", "TYPE_FIELDS", "TYPE_DUPLICATE", "TYPE_ID", "TYPE_RANGE_VERSION", "TYPE_RANGE_ORDER", "DEVICE_GROUPS", "SDK_VERSION", "NO_SDK_RUNTIME", "NO_COMPATIBLE_IPHONE", "INVENTORY_UNIDENTIFIED", "TOOLCHAIN_CONFIG", "TOOLCHAIN_UNAVAILABLE", "TOOLCHAIN_PATH", "TOOLCHAIN_XCODE", "TOOLCHAIN_SWIFT"})
@@ -321,12 +321,12 @@ def resource_summary(text):
 
 def checked_toolchain_versions(xcode_text, swift_text):
     xcode = re.fullmatch(r"Xcode ([0-9.]+)\s+Build version ([A-Za-z0-9]+)\s*", xcode_text.strip())
-    if not xcode or xcode.groups() != ("26.1.1", "17B100"):
+    if not xcode or xcode.groups() != ("26.5", "17F42"):
         raise InventoryContractError("TOOLCHAIN_XCODE")
     swift = re.search(r"^Apple Swift version ([0-9]+(?:\.[0-9]+){1,2})(?:\s|$)", swift_text)
-    if not swift or version(swift.group(1)) < (6, 2, 0):
+    if not swift or version(swift.group(1)) < (6, 3, 0):
         raise InventoryContractError("TOOLCHAIN_SWIFT")
-    return {"xcode_version": xcode.group(1), "xcode_build": xcode.group(2), "swift_version": swift.group(1), "swift_minimum": "6.2", "selected": True}
+    return {"xcode_version": xcode.group(1), "xcode_build": xcode.group(2), "swift_version": swift.group(1), "swift_minimum": "6.3", "selected": True}
 
 
 def toolchain_preflight():

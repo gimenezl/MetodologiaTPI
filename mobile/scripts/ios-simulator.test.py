@@ -330,7 +330,7 @@ class SimulatorOwnership(unittest.TestCase):
             self.assertEqual(envfile.read_text(encoding="utf8"), "untouched\n")
 
     def test_toolchain_phase_caps_single_queries_and_fail_before_any_command(self):
-        responses = [str(Path(ios.PINNED_DEVELOPER_DIR) / 'usr/bin/swift'), 'Xcode 26.1.1\nBuild version 17B100', 'Apple Swift version 6.2.1']
+        responses = [str(Path(ios.PINNED_DEVELOPER_DIR) / 'usr/bin/swift'), 'Xcode 26.5\nBuild version 17F42', 'Apple Swift version 6.3']
         for phase, seconds in [('full', 20), ('runtime', 20)]:
             with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': phase, 'DEVELOPER_DIR': ios.PINNED_DEVELOPER_DIR}), patch.object(Path, 'is_dir', return_value=True), patch.object(ios, 'command', side_effect=responses) as command, redirect_stdout(io.StringIO()):
                 ios.toolchain_preflight()
@@ -381,15 +381,24 @@ class SimulatorOwnership(unittest.TestCase):
         for phase in ('before', 'during', 'after'): self.assertIn('process_sample=' + phase, output.getvalue())
         for private in ('/private', 'secret', 'password', 'foreign'): self.assertNotIn(private, output.getvalue())
 
+    def test_selected_sdk_26_5_requires_exact_installed_runtime_without_fallback(self):
+        fixture = self.selection_fixture()
+        runtime = 'com.apple.CoreSimulator.SimRuntime.iOS-26-5'
+        fixture['runtimes'][0].update(identifier=runtime, version='26.5')
+        fixture['devices'] = {runtime: []}
+        parsed = ios.selection_inventory(json.dumps(fixture))
+        self.assertEqual(ios.select(parsed['runtimes'], parsed['devicetypes'], '26.5')[0], runtime)
+        with self.assertRaises(ios.InventoryContractError): ios.select(parsed['runtimes'], parsed['devicetypes'], '26.1')
+
     def test_pinned_xcode_and_swift_contract_versions_fail_closed(self):
-        xcode = 'Xcode 26.1.1\nBuild version 17B100\n'
-        result = ios.checked_toolchain_versions(xcode, 'Apple Swift version 6.2.1 (swiftlang-public)\nTarget: arm64-apple-macosx\n')
-        self.assertEqual(result['xcode_version'], '26.1.1')
-        self.assertEqual(result['swift_version'], '6.2.1')
-        for bad in ('Xcode 16.4\nBuild version 16F6', xcode + 'private-secret', 'private-provider-object'):
-            with self.assertRaises(ios.InventoryContractError) as error: ios.checked_toolchain_versions(bad, 'Apple Swift version 6.2.1')
+        xcode = 'Xcode 26.5\nBuild version 17F42\n'
+        result = ios.checked_toolchain_versions(xcode, 'Apple Swift version 6.3 (swiftlang-public)\nTarget: arm64-apple-macosx\n')
+        self.assertEqual(result['xcode_version'], '26.5')
+        self.assertEqual(result['swift_version'], '6.3')
+        for bad in ('Xcode 26.1.1\nBuild version 17B100', 'Xcode 26.5\nBuild version 17B100', 'Xcode 16.4\nBuild version 16F6', xcode + 'private-secret', 'private-provider-object'):
+            with self.assertRaises(ios.InventoryContractError) as error: ios.checked_toolchain_versions(bad, 'Apple Swift version 6.3')
             self.assertEqual(error.exception.reason_code, 'TOOLCHAIN_XCODE')
-        for bad in ('Apple Swift version 6.1.0', 'private-secret', 'Apple Swift version unknown'):
+        for bad in ('Apple Swift version 6.2.1', 'Apple Swift version 6.1.0', 'private-secret', 'Apple Swift version unknown'):
             with self.assertRaises(ios.InventoryContractError) as error: ios.checked_toolchain_versions(xcode, bad)
             self.assertEqual(error.exception.reason_code, 'TOOLCHAIN_SWIFT')
 
@@ -408,7 +417,7 @@ class SimulatorOwnership(unittest.TestCase):
         calls = []
         def command(label, seconds, *args, **kwargs):
             calls.append((label, seconds, args, kwargs))
-            return {'ios-toolchain-path': swift_path, 'ios-toolchain-xcode': 'Xcode 26.1.1\nBuild version 17B100', 'ios-toolchain-swift': 'Apple Swift version 6.2.1 (private-provider-text)'}[label]
+            return {'ios-toolchain-path': swift_path, 'ios-toolchain-xcode': 'Xcode 26.5\nBuild version 17F42', 'ios-toolchain-swift': 'Apple Swift version 6.3 (private-provider-text)'}[label]
         output = io.StringIO()
         with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': 'full', 'DEVELOPER_DIR': ios.PINNED_DEVELOPER_DIR}), patch.object(Path, 'is_dir', return_value=True), patch.object(ios, 'command', side_effect=command), redirect_stdout(output):
             self.assertTrue(ios.toolchain_preflight()['selected'])

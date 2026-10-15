@@ -124,6 +124,20 @@ class Ownership(unittest.TestCase):
         self.assertEqual(api.tracking(987654), b'private-fixture')
         self.assertEqual(calls, [False, True])
 
+    def test_darwin_25_bsd_layout_matches_verified_primary_abi(self):
+        self.assertEqual(compiler.ctypes.sizeof(compiler.BsdInfo), 136)
+        self.assertEqual(compiler.BsdInfo.pid.offset, 12)
+        self.assertEqual(compiler.BsdInfo.uid.offset, 20)
+        self.assertEqual(compiler.BsdInfo.birth_sec.offset, 120)
+        self.assertEqual(compiler.BsdInfo.birth_usec.offset, 128)
+
+    def test_compiler_scope_is_only_new_selected_developer_not_old_or_similar_paths(self):
+        self.assertEqual(str(compiler.DEVELOPER).replace('\\', '/'), '/Applications/Xcode_26.5.app/Contents/Developer')
+        with patch.object(Path, 'resolve', return_value=compiler.DEVELOPER):
+            self.assertTrue(compiler.compiler_executable(str(compiler.DEVELOPER / 'usr/bin/ibtoold')))
+            for foreign in ['/Applications/Xcode_26.1.1.app/Contents/Developer/usr/bin/ibtoold', '/Applications/Xcode_26.5.app/Contents/Developer-foreign/usr/bin/ibtoold', '/Applications/Xcode_26.5.app/Contents/Developer/usr/bin/not-ibtoold']:
+                self.assertFalse(compiler.compiler_executable(foreign))
+
     def test_native_argc_environment_framing_and_private_values(self):
         prefix = struct.pack("=i", 2) + b"/private/executable\0\0arg0\0secret-arg\0"
         self.assertEqual(compiler.tracking_from_args(prefix + b"SECRET=private-password\0RUNNER_TRACKING_ID=job-token\0"), b"job-token")

@@ -138,7 +138,7 @@ test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   // Los jobs nativos no heredan el plan web: usan el plan móvil y corren sobre el SHA del PR.
   assert.match(yml, /mobile-android:\n    name: CI \/ móvil Android\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
   assert.match(yml, /mobile-ios:\n    name: CI \/ móvil iOS\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
-  assert.match(yml, /runs-on: macos-15/u)
+  assert.match(yml, /runs-on: macos-26/u)
   for (const native of ['mobile-android', 'mobile-ios']) {
     const block = yml.slice(yml.indexOf(`  ${native}:`)).split(/\n  [a-z-]+:/u)[0]
     const minutes = Number(/timeout-minutes: (\d+)/u.exec(block)?.[1])
@@ -222,11 +222,25 @@ test('diagnóstico iOS conserva medición acotada y corre ownership antes de cua
   const inventory = helper.slice(helper.indexOf('def inventory_probe():'))
   assert.doesNotMatch(inventory, /toolchain_preflight\(\)/u)
 })
+test('diagnóstico iOS alinea runner Swift y scope de compiler sin actualizar dependencias', () => {
+  const yml = readFileSync('.github/workflows/ci.yml', 'utf8')
+  for (const section of [yml.slice(yml.indexOf('  mobile-ios:'), yml.indexOf('  diagnostic-smoke:')), yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:'), yml.indexOf('  gate:'))]) {
+    assert.match(section, /runs-on: macos-26/u)
+    assert.match(section, /DEVELOPER_DIR: \/Applications\/Xcode_26\.5\.app\/Contents\/Developer/u)
+    assert.ok(section.indexOf('ios-compiler-cleanup.test.py') < section.indexOf('native-backend.py start'))
+  }
+  const helper = readFileSync('mobile/scripts/ios-simulator.py', 'utf8')
+  assert.match(helper, /17F42/u)
+  assert.match(helper, /\(6, 3, 0\)/u)
+  const compiler = readFileSync('mobile/scripts/ios-compiler-cleanup.py', 'utf8')
+  assert.match(compiler, /Xcode_26\.5\.app/u)
+  assert.doesNotMatch(compiler, /Xcode_26\.1\.1\.app/u)
+})
 test('diagnóstico iOS fija toolchain local y verifica compatibilidad antes del backend', () => {
   const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
   for (const job of ['mobile-ios', 'ios-infrastructure-diagnostic']) {
     const block = yml.slice(yml.indexOf(`  ${job}:`)).split(/\n  [a-z-]+:/u)[0]
-    assert.match(block, /DEVELOPER_DIR: \/Applications\/Xcode_26\.1\.1\.app\/Contents\/Developer/u)
+    assert.match(block, /DEVELOPER_DIR: \/Applications\/Xcode_26\.5\.app\/Contents\/Developer/u)
     assert.match(block, /ios-toolchain --seconds 75/u)
     assert.ok(block.indexOf('ios-simulator.py toolchain') < block.indexOf('native-backend.py start'))
     assert.doesNotMatch(block, /sudo.*xcode-select|runFirstLaunch/u)
@@ -282,7 +296,7 @@ test('diagnóstico iOS es opt-in, acotado y nunca aprueba entrega', () => {
   assert.match(diagnostic, /always\(\) && env\.EPT_IOS_DIAGNOSTIC_PHASE == 'full'/u)
   assert.match(diagnostic, /ci:ios-infrastructure-diagnostic/u)
   assert.match(diagnostic, /native-backend\.py start/u)
-  assert.match(diagnostic, /runs-on: macos-15/u)
+  assert.match(diagnostic, /runs-on: macos-26/u)
   assert.doesNotMatch(diagnostic, /preparar-docker|supabase-local|install-cli|cleanup-colima/u)
   assert.match(diagnostic, /native-backend-\$\{\{ runner\.os \}\}-\$\{\{ runner\.arch \}\}/u)
   for (const file of ['scripts/ci/install-native.test.mjs', 'scripts/ci/native-backend.test.py', 'scripts/ci/native-backend.py', 'scripts/ci/native-services.lock.json']) {
