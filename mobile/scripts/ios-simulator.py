@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Create and retire only this Actions attempt's disposable iOS simulator."""
 import argparse
+from contextlib import contextmanager
 import http.client
 import json
 import os
@@ -191,13 +192,15 @@ def create():
         raise RuntimeError("Simulator creation requires full phase")
     if marker_path().exists() or marker_path().is_symlink():
         raise RuntimeError("Simulator marker already exists")
-    sdk = command("ios-sdk-selection", 5, "xcrun", "--sdk", "iphonesimulator", "--show-sdk-version", capture=True).strip()
+    sdk = command("ios-sdk-selection", 20, "xcrun", "--sdk", "iphonesimulator", "--show-sdk-version", capture=True).strip()
     try:
         version(sdk)
     except RuntimeError:
         raise InventoryContractError("SDK_VERSION") from None
-    # Exact aggregate query measured at30.6s; one query, no separate discovery or warm-up.
-    inventory = selection_inventory(command("ios-inventory-json", 65, "xcrun", "simctl", "list", "-j", capture=True))
+    print("ios sdk_version=" + sdk, flush=True)
+    # One aggregate query; calibrated after a65.1s timeout, not a cause diagnosis.
+    with inventory_monitor():
+        inventory = selection_inventory(command("ios-inventory-json", 120, "xcrun", "simctl", "list", "-j", capture=True))
     runtime, device_type = select(inventory["runtimes"], inventory["devicetypes"], sdk)
     selected_version = next(r["version"] for r in inventory["runtimes"] if r["identifier"] == runtime)
     print(f"owned simulator selection sdk={sdk} runtime_version={selected_version} family=iPhone identity=enumerated", flush=True)
@@ -345,12 +348,8 @@ def toolchain_preflight():
     return result
 
 
-def inventory_probe():
-    if diagnostic_phase() != "runtime":
-        raise RuntimeError("SDK inventory requires explicit runtime phase")
-    print("sdk inventory architecture=" + ("arm64" if platform.machine() == "arm64" else "OTHER"), flush=True)
-    sdk = command("sdk-version", 5, "xcrun", "--sdk", "iphonesimulator", "--show-sdk-version", capture=True).strip()
-    print("sdk simulator_version=" + (sdk if re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,2}", sdk) else "OTHER"), flush=True)
+@contextmanager
+def inventory_monitor():
     stopped = threading.Event()
     def sample(phase):
         try:
@@ -366,10 +365,24 @@ def inventory_probe():
     sample("before")
     monitor = threading.Thread(target=heartbeat, daemon=True)
     monitor.start()
-    started = time.monotonic()
     try:
+        yield
+    finally:
+        stopped.set()
+        monitor.join(timeout=2)
+        sample("after")
+
+
+def inventory_probe():
+    if diagnostic_phase() != "runtime":
+        raise RuntimeError("SDK inventory requires explicit runtime phase")
+    print("sdk inventory architecture=" + ("arm64" if platform.machine() == "arm64" else "OTHER"), flush=True)
+    sdk = command("sdk-version", 20, "xcrun", "--sdk", "iphonesimulator", "--show-sdk-version", capture=True).strip()
+    print("sdk simulator_version=" + (sdk if re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,2}", sdk) else "OTHER"), flush=True)
+    started = time.monotonic()
+    with inventory_monitor():
         # One read-only query. Pinned Maestro LocalSimulatorUtils uses this exact list -j command.
-        result = subprocess.run([sys.executable, str(ROOT / "scripts/ci/run-stage.py"), "--capture", "--stage", "sdk-inventory-query", "--seconds", "65", "--", "xcrun", "simctl", "list", "-j"], capture_output=True, text=True, timeout=75)
+        result = subprocess.run([sys.executable, str(ROOT / "scripts/ci/run-stage.py"), "--capture", "--stage", "sdk-inventory-query", "--seconds", "120", "--", "xcrun", "simctl", "list", "-j"], capture_output=True, text=True, timeout=132)
         # Inner supervisor retains redacted stderr in its own artifact; never reprint provider data.
         print(f"sdk query elapsed_s={time.monotonic()-started:.1f} exit={result.returncode}", flush=True)
         if result.returncode:
@@ -380,10 +393,7 @@ def inventory_probe():
         runtime_version = next(r["version"] for r in inventory["runtimes"] if r["identifier"] == runtime)
         print("sdk dry_run_selection=" + json.dumps({"sdk_version": sdk, "runtime_version": runtime_version, "family": "iPhone", "passed": True}, sort_keys=True), flush=True)
         return 0
-    finally:
-        stopped.set()
-        monitor.join(timeout=2)
-        sample("after")
+
 
 
 if __name__ == "__main__":

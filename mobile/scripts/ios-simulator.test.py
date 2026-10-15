@@ -31,6 +31,10 @@ class SimulatorOwnership(unittest.TestCase):
         self.uid = patch.object(ios.os, "getuid", return_value=42, create=True)
         self.uid.start()
         self.addCleanup(self.uid.stop)
+        self.monitor_impl = ios.inventory_monitor
+        monitor = patch.object(ios, "inventory_monitor")
+        monitor.start()
+        self.addCleanup(monitor.stop)
         self.record = {**ios.identity(), "runtime": RUNTIME, "udid": UDID}
         self.listing = {RUNTIME: [{"name": self.record["name"], "udid": UDID, "state": "Booted"}]}
 
@@ -116,7 +120,7 @@ class SimulatorOwnership(unittest.TestCase):
         envfile = Path(self.tmp.name) / 'github-env'
         with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': 'full', 'GITHUB_ENV': str(envfile)}), patch.object(ios, 'command', side_effect=command), patch.object(ios, 'devices', return_value=self.listing):
             ios.create()
-        self.assertEqual([c for c in calls if c[2][:3] == ('xcrun', 'simctl', 'list')], [('ios-inventory-json', 65, ('xcrun', 'simctl', 'list', '-j'))])
+        self.assertEqual([c for c in calls if c[2][:3] == ('xcrun', 'simctl', 'list')], [('ios-inventory-json', 120, ('xcrun', 'simctl', 'list', '-j'))])
         self.assertEqual(calls[-1][2][-2:], (fixture['devicetypes'][0]['identifier'], RUNTIME))
         record = json.loads(ios.marker_path().read_text(encoding='utf8'))
         self.assertEqual((record['sdk'], record['runtime'], record['udid']), ('18.5', RUNTIME, UDID))
@@ -319,7 +323,7 @@ class SimulatorOwnership(unittest.TestCase):
                 self.assertEqual(ios.inventory_probe(), code)
             self.assertEqual(len(queries), 1)
             self.assertEqual(queries[0][-4:], ['xcrun', 'simctl', 'list', '-j'])
-            self.assertEqual(queries[0][queries[0].index('--seconds') + 1], '65')
+            self.assertEqual(queries[0][queries[0].index('--seconds') + 1], '120')
             self.assertNotIn('private', output.getvalue())
             self.assertNotIn('password', output.getvalue())
             self.assertFalse(ios.marker_path().exists())
@@ -339,6 +343,43 @@ class SimulatorOwnership(unittest.TestCase):
         with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': 'runtime', 'DEVELOPER_DIR': ios.PINNED_DEVELOPER_DIR}), patch.object(Path, 'is_dir', return_value=True), patch.object(ios, 'command', side_effect=RuntimeError('private-provider')) as command:
             with self.assertRaises(RuntimeError): ios.toolchain_preflight()
             self.assertEqual(command.call_count, 1)
+
+    def test_full_inventory_deadline_leaves_no_marker_and_cleanup_noop(self):
+        calls = []
+        def command(label, seconds, *args, **kwargs):
+            calls.append((label, seconds))
+            if label == 'ios-sdk-selection': return '26.1'
+            if label == 'ios-inventory-json': raise RuntimeError('deadline; exit=124')
+            self.fail('Unexpected mutation or repeated query')
+        with patch.object(ios, 'command', side_effect=command), redirect_stdout(io.StringIO()):
+            with self.assertRaises(RuntimeError): ios.create()
+            self.assertFalse(ios.marker_path().exists())
+            ios.cleanup()
+        self.assertEqual(calls, [('ios-sdk-selection', 20), ('ios-inventory-json', 120)])
+        self.assertFalse(ios.marker_path().exists())
+
+    def test_shared_inventory_monitor_samples_every_ten_seconds_and_always_stops_private(self):
+        waits, joins = [], []
+        class Event:
+            def wait(_, seconds):
+                waits.append(seconds)
+                return len(waits) > 1
+            def set(_): waits.append('stop')
+        class Thread:
+            def __init__(_, target, daemon): self.assertTrue(daemon); _.target = target
+            def start(_): _.target()
+            def join(_, timeout): joins.append(timeout)
+        output = io.StringIO()
+        sample = SimpleNamespace(returncode=0, stdout='2.0 100 S /private/secret/CoreSimulatorService\n99 999 S private-password-foreign')
+        with patch.object(ios.threading, 'Event', Event), patch.object(ios.threading, 'Thread', Thread), patch.object(ios.subprocess, 'run', return_value=sample) as run, redirect_stdout(output):
+            with self.assertRaises(RuntimeError):
+                with self.monitor_impl(): raise RuntimeError('query deadline')
+        self.assertEqual(waits, [10, 10, 'stop'])
+        self.assertEqual(joins, [2])
+        self.assertEqual(run.call_count, 3)
+        self.assertTrue(all(c.kwargs['timeout'] == 2 for c in run.call_args_list))
+        for phase in ('before', 'during', 'after'): self.assertIn('process_sample=' + phase, output.getvalue())
+        for private in ('/private', 'secret', 'password', 'foreign'): self.assertNotIn(private, output.getvalue())
 
     def test_pinned_xcode_and_swift_contract_versions_fail_closed(self):
         xcode = 'Xcode 26.1.1\nBuild version 17B100\n'

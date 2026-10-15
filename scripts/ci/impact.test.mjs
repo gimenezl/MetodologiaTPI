@@ -195,6 +195,20 @@ test('diagnóstico iOS retira solo compiladores registrados con reserva separada
   assert.match(helper, /RUNNER_TRACKING_ID/u)
   assert.match(helper, /cleanup_ownership_unknown/u)
 })
+test('diagnóstico iOS descubre SDK y crea ownership antes de backend o caches', () => {
+  const yml = readFileSync('.github/workflows/ci.yml', 'utf8')
+  for (const section of [yml.slice(yml.indexOf('  mobile-ios:'), yml.indexOf('  diagnostic-smoke:')), yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:'), yml.indexOf('  gate:'))]) {
+    const sdk = section.indexOf('bash mobile/scripts/preparar-ios.sh')
+    assert.ok(sdk > section.indexOf('ios-simulator.py toolchain'))
+    for (const token of ['uses: actions/cache@', 'native-backend.py start', 'integracion-auth-local.mjs', 'npm ci']) assert.ok(sdk < section.indexOf(token), token)
+    assert.ok(section.indexOf('ios-compiler-cleanup.py baseline') > section.indexOf('integracion-auth-local.mjs'))
+    assert.match(section, /always\(\).*\n.*cleanup-ios-simulator --seconds 55/u)
+  }
+  const prepare = readFileSync('mobile/scripts/preparar-ios.sh', 'utf8')
+  assert.match(prepare, /stage ios-owned-create 190 python3 mobile\/scripts\/ios-simulator.py create/u)
+  assert.doesNotMatch(prepare, /simctl list/u)
+  assert.match(prepare, /capture ios-sdk-version 20/u)
+})
 test('diagnóstico iOS conserva medición acotada y corre ownership antes de cualquier toolchain', () => {
   const yml = readFileSync('.github/workflows/ci.yml', 'utf8')
   for (const section of [yml.slice(yml.indexOf('  mobile-ios:'), yml.indexOf('  diagnostic-smoke:')), yml.slice(yml.indexOf('  ios-infrastructure-diagnostic:'), yml.indexOf('  gate:'))]) {
@@ -258,7 +272,7 @@ test('diagnóstico iOS es opt-in, acotado y nunca aprueba entrega', () => {
   assert.match(diagnostic, /runtime\) budget=180/u)
   assert.match(diagnostic, /full\) budget=1630/u)
   assert.match(diagnostic, /Invalid iOS diagnostic phase'; exit 1/u)
-  assert.match(diagnostic, /sdk-inventory --seconds 90/u)
+  assert.match(diagnostic, /sdk-inventory --seconds 140/u)
   assert.match(diagnostic, /ios-simulator\.py inventory/u)
   for (const token of ['native-backend.py start', 'integracion-auth-local.mjs', 'preparar-ios.sh', 'npm ci', 'expo prebuild', 'compilar-ios.sh', 'ejecutar-ios.sh']) {
     const steps = diagnostic.split(/\n      - /u)

@@ -268,12 +268,12 @@ jobs:
           node --test scripts/ci/install-native.test.mjs
       - name: Verificar toolchain iOS seleccionado antes del backend
         run: python3 scripts/ci/run-stage.py --stage ios-toolchain --seconds 75 -- python3 mobile/scripts/ios-simulator.py toolchain
+      - name: Seleccionar simulador y arquitectura ARM64
+        run: bash mobile/scripts/preparar-ios.sh
       - name: Versiones de herramientas
         run: |
           python3 scripts/ci/run-stage.py --stage ios-version --seconds 15 -- xcodebuild -version
           node --version
-      - name: Seleccionar simulador y arquitectura ARM64
-        run: bash mobile/scripts/preparar-ios.sh
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
@@ -427,7 +427,10 @@ jobs:
         run: python3 scripts/ci/run-stage.py --stage ios-toolchain-diagnostic --seconds 75 -- python3 mobile/scripts/ios-simulator.py toolchain
       - name: Inventario SDK de solo lectura (una consulta; sin backend ni simulador)
         if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'runtime'
-        run: python3 scripts/ci/run-stage.py --stage sdk-inventory --seconds 90 -- python3 mobile/scripts/ios-simulator.py inventory
+        run: python3 scripts/ci/run-stage.py --stage sdk-inventory --seconds 140 -- python3 mobile/scripts/ios-simulator.py inventory
+      - name: Seleccionar simulador y arquitectura ARM64
+        if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
+        run: bash mobile/scripts/preparar-ios.sh
       - name: Caché de archivos oficiales inmutables (sin datos ni sesiones)
         if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -442,9 +445,6 @@ jobs:
       - name: Contratos Auth reales y fixtures
         if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         run: python3 scripts/ci/run-stage.py --stage auth-integration --seconds 210 -- node mobile/scripts/integracion-auth-local.mjs
-      - name: Seleccionar simulador y arquitectura ARM64
-        if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
-        run: bash mobile/scripts/preparar-ios.sh
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
         with:

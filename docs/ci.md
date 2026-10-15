@@ -4,9 +4,21 @@ Cada PR comprueba tipos, lint, pruebas puras, build y cuatro recorridos público
 
 ## Presupuesto nativo EPT-105
 
-**Estado actual:** [Run 38734897842](https://github.com/gimenezl/MetodologiaTPI/actions/runs/38734897842), head `cc8e673acd64ee70f0939fff74cc3ec95a7abb21`, árbol `485a75be6bdce553e2efa2a35de11b464a3a2592`, merge `3d7109d3a42d55c08de682454f2e909a8fd74a83` (mismo árbol). Linux SUCCESS52s; ARM FAILURE52s. Supervisor12/12, nativo38/38 y simulator30/30 PASS; compiler11/12 (3.088s) falla en readback `identity` L93: `proc_pidpath` después de metadata BSD. Errno exacto no observado; no se declara toda la clase resuelta ni retiro de ibtoold probado. Preflight/backend/Auth/SDK/create/pods/build/Maestro omitidos; cero orphans Actions por reap de fixtures. Gate FAILURE; draft/etiqueta conservados.
+**Estado actual:** [Run 38735875937](https://github.com/gimenezl/MetodologiaTPI/actions/runs/38735875937), head `11e8b822237a9d84c3591535380478038145d94d`, árbol `ce31f917af8374b2e394dad09dd55c29e502ca87`, merge `3c7fac1c300db9d7fda1f5e81894d0fa3af0bd6c` (mismo árbol). Linux SUCCESS47s; ARM FAILURE331s. Compiler Darwin17/17 (3.249s) probó token/kernel/UID/inicio y TERM/KILL/readback de fixtures propios, con extranjero intacto; no prueba de ibtoold productivo. Preflight11.3s: path6.9/Xcode1.7/Swift1.7, Xcode26.1.1/build17B100/Swift6.2.1. Backend44s,37 migraciones9.5s y Auth/RLS/refresh/expiry/logout125.8s PASS. SDK-version5.0s PASS seguido de consulta agregada única65.1s timeout124; sin JSON/parser/create/marcador. Baseline compiler/pods/build/lipo/install/Maestro omitidos. Simcleanup0.4s no-op, backend3.8s cinco grupos retirados/readback, cero orphans Actions. Causa del timeout desconocida; gate FAILURE, draft/etiqueta conservados.
 
-### Corrección acotada: snapshots de kernel consistentes sin errno residual
+### Candidato fail-fast: SDK antes del backend, sin nuevos retries
+
+En ambos jobs iOS se mueve el mismo paso de preparación/creación después de tests y preflight, **antes de caches/backend/Auth/npm**. El baseline compiler permanece inmediatamente antes de prebuild; cleanups always siguen activos si luego falla el backend. Un fallo de discovery sin marcador no provoca señales al simulador; si create llegó a persistir intención, el cleanup conserva los controles de ownership existentes.
+
+La única consulta agregada recibe120s, calibración explícita tras65.1s timeout, no diagnóstico de causa ni promesa de resolverlo. Create tiene supervisor exterior190s: metadata SDK20 + inventario120 + create30 + owner readback10 + margen10. Se conserva el deadline global1630/job30/reserva170; build720/driver120000 no cambian. Toda lectura `xcrun --show-sdk-version` pasa a20s; SDK validado, latencias/exit y conteos cerrados quedan públicos sin JSON/IDs/paths/argv/env privados.
+
+El monitor agregado ya existente se comparte entre full y dry-run: muestras before/during10s/after, procesos por clase y recursos normalizados, consultas ps limitadas2s; su fallo imprime unavailable, nunca afirma ausencia. No agrega simctl, warmup ni retry. Se elimina la consulta redundante posterior `simctl list runtimes`; se conserva exactamente el fingerprint/cache Xcode+SDK+ARM64+Release/locks/plugins, sin DerivedData ni nuevos datos cacheados. Runtime conserva180global, probe140 y una query120; outer/global pueden cortar la etapa restante, no se garantiza agotar consecutivamente todos los caps.
+
+Checks locales: simulator32/32 PASS; nuevas regresiones deadline→sin marcador→cleanup no-op, monitor10s/cancelación/privacidad y orden fail-fast; se mantienen identidad/familia/SDK negativos y una sola consulta. Focal11/11, actionlint1.7.12 semántico exit0, AST/Node/Bash/diff/readback PASS. Compiler helper, Android, app/SQL y configuración de caches intactos. La nueva creación, build/UI y cleanup compiler productivo siguen pendientes de una revisión y autorización de una única corrida full; sin commit/push/CI del candidato. Rollback limitado al orden/caps/monitor y pruebas/documentación de esta unidad.
+
+Artifacts de la última corrida: [ARM11974116841](https://github.com/gimenezl/MetodologiaTPI/actions/runs/38735875937/artifacts/11974116841), [Linux11974520559](https://github.com/gimenezl/MetodologiaTPI/actions/runs/38735875937/artifacts/11974520559).
+
+### Corrección anterior entregada y probada en fixtures Darwin: snapshots de kernel
 
 El probe BSD privado limpia errno antes de cada `proc_pidinfo`: solo retorno0 con ESRCH recién producido, o metadata válida SZOMB, permite None. Retorno corto, error sin errno, EPERM o identidad inválida mantienen `cleanup_ownership_unknown`; un ESRCH residual de otra llamada no demuestra ausencia. También se limpia errno antes de cada `proc_pidpath` y de las dos llamadas `sysctl`.
 
