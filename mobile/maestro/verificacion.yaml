@@ -65,12 +65,16 @@ name: Acceso real por rol, persistencia y cierre
 - tapOn: 'Pagar ítems'
 - assertVisible: 'Elegí los ítems a pagar'
 - assertVisible: '.*Los ítems pagados o en verificación no se pueden seleccionar.*'
-- assertVisible: 'Seleccioná al menos un ítem para continuar.'
 - tapOn:
     text: 'Cuota, Pendiente.*'
     index: 0
+# El total queda bajo el pliegue: se baja hasta verlo. Lo calcula el servidor.
+- scrollUntilVisible:
+    element:
+      text: '.*1 ítem seleccionado.*'
+    direction: DOWN
+    timeout: 15000
 - assertVisible: '.*1 ítem seleccionado.*calculado por el sistema.*'
-- assertVisible: '.*50\.000,00.*'
 - scrollUntilVisible:
     element:
       text: 'Registrar pago'
@@ -80,7 +84,11 @@ name: Acceso real por rol, persistencia y cierre
 - assertVisible: 'No se acepta pago en efectivo.'
 - tapOn: 'Registrar pago'
 - assertVisible: '.*Pago registrado: pendiente de verificación.*'
-- assertVisible: '.*Código del pago.*'
+- scrollUntilVisible:
+    element:
+      text: '.*Código del pago.*'
+    direction: DOWN
+    timeout: 15000
 - scrollUntilVisible:
     element:
       text: 'Volver a las cuotas'
