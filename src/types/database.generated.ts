@@ -889,6 +889,13 @@ export type Database = {
             foreignKeyName: "imputaciones_pago_item_alumno_fk"
             columns: ["item_factura_id", "alumno_id"]
             isOneToOne: false
+            referencedRelation: "detalle_cuotas_items"
+            referencedColumns: ["item_id", "alumno_id"]
+          },
+          {
+            foreignKeyName: "imputaciones_pago_item_alumno_fk"
+            columns: ["item_factura_id", "alumno_id"]
+            isOneToOne: false
             referencedRelation: "items_factura"
             referencedColumns: ["id", "alumno_id"]
           },
@@ -1106,6 +1113,13 @@ export type Database = {
           tipo?: Database["public"]["Enums"]["concepto_economico"]
         }
         Relationships: [
+          {
+            foreignKeyName: "items_factura_factura_alumno_fk"
+            columns: ["factura_id", "alumno_id"]
+            isOneToOne: false
+            referencedRelation: "estado_cuotas_alumno"
+            referencedColumns: ["factura_id", "alumno_id"]
+          },
           {
             foreignKeyName: "items_factura_factura_alumno_fk"
             columns: ["factura_id", "alumno_id"]
@@ -2128,15 +2142,30 @@ export type Database = {
           pagado_centavos: number | null
           tipo: Database["public"]["Enums"]["concepto_economico"] | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "items_factura_factura_alumno_fk"
+            columns: ["factura_id", "alumno_id"]
+            isOneToOne: false
+            referencedRelation: "estado_cuotas_alumno"
+            referencedColumns: ["factura_id", "alumno_id"]
+          },
+          {
+            foreignKeyName: "items_factura_factura_alumno_fk"
+            columns: ["factura_id", "alumno_id"]
+            isOneToOne: false
+            referencedRelation: "facturas"
+            referencedColumns: ["id", "alumno_id"]
+          },
+        ]
       }
       estado_cuotas_alumno: {
         Row: {
           alumno_id: string | null
           cantidad_items: number | null
           estado: string | null
-          fecha_corte: string | null
           factura_id: string | null
+          fecha_corte: string | null
           generada_en: string | null
           inconsistente: boolean | null
           items_en_verificacion: number | null
@@ -2146,7 +2175,22 @@ export type Database = {
           total_centavos: number | null
           vencimiento: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "facturas_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos"
+            referencedColumns: ["perfil_id"]
+          },
+          {
+            foreignKeyName: "facturas_alumno_id_fkey"
+            columns: ["alumno_id"]
+            isOneToOne: false
+            referencedRelation: "alumnos_academicos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       inscripciones_deportivas_administracion: {
         Row: {
