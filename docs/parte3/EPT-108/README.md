@@ -59,12 +59,16 @@ Solo hay dos órdenes seriales válidos entre un registro y la revocación del p
 * Distinción en el cliente: **registrado**, **rechazado con certeza** (4xx con código de la función; la
   transacción se revirtió) e **incierto** (sin respuesta, 5xx o ilegible). Ante la incertidumbre no se
   reenvía hasta consultar el intento.
+* `consultar_intento_pago` toma el mismo consultivo del intento: si el registro original sigue en vuelo
+  (esperando bloqueos), la consulta espera su desenlace y nunca afirma «no registrado» sobre él. Un
+  pedido todavía en tránsito por la red no queda cubierto: por eso la pantalla dice «todavía no figura
+  registrado» y ofrece reintentar con la **misma clave** (idempotente), no descartar.
 
 ### Códigos propios
 
 | SQLSTATE | Significado |
 |---|---|
-| P6850 | Selección inválida (vacía, nula, duplicada, > 100) o argumentos ausentes |
+| P6850 | Selección inválida (vacía, nula, duplicada, > 100) o argumentos ausentes; se valida también en el reintento |
 | P6851 | Ítem inexistente, ajeno o de un hijo sin vínculo vigente (mismo error: no confirma existencia) |
 | P6852 | Ítems de hijos distintos |
 | P6853 | Ítem pagado, en verificación o reservado |
@@ -112,11 +116,15 @@ Reglas del contenedor:
 
 * el total mostrado es el del servidor y está atado a la selección exacta que lo originó;
 * un solo envío en vuelo (el doble toque no duplica);
-* un resultado incierto no permite otro envío hasta verificar; el reintento usa la **misma clave**;
+* un resultado incierto no permite otro envío hasta verificar; el reintento usa la **misma clave** y no
+  hay «descartar»: el intento termina registrado, rechazado con certeza o queda guardado;
 * volver o cancelar antes de confirmar no escribe; después de confirmar, no libera nada;
 * una respuesta atrasada no se aplica a otro hijo, a otra selección ni a otra cuenta (el contenedor se
   remonta por `usuario:hijo`, las lecturas se cancelan y cada resultado queda atado a su contexto);
-* lo guardado para recuperación contiene solo identificadores y el total visto, acotado por usuario.
+* lo guardado para recuperación contiene solo identificadores y el total visto, acotado por **usuario y
+  estudiante** (un hijo no pisa ni borra el intento de otro; el borrado exige coincidir la clave);
+* un intento recuperado que la institución ya resolvió se informa como aprobado o rechazado, no como
+  pendiente.
 
 ## Matriz de trazabilidad
 
