@@ -3,6 +3,7 @@ import { AppState, Linking, Text, View } from 'react-native'
 
 import { Aviso, Boton, CampoTexto, EstadoPantalla, Formulario, MarcoPantalla, Tarjeta } from '@/catalogo'
 import { entornoDelBundle } from '@/configuracion/entorno'
+import { crearAlmacenamientoSeguro } from '@/servicios/almacenamiento-seguro'
 import { ControladorAutenticacion, type EstadoAutenticacion } from '@/servicios/autenticacion'
 import { obtenerClienteSupabase, vincularCicloDeVida } from '@/servicios/supabase'
 import { color, espacio, estiloDeTexto } from '@/tokens'
@@ -32,6 +33,8 @@ export function AccesoContenedor(): ReactElement {
   const [contextoCuotas, setContextoCuotas] = useState<{ clave: string; contexto: ContextoCuotas } | null>(null)
   const [errorEnlaceWeb, setErrorEnlaceWeb] = useState(false)
   const controlador = useMemo(() => cliente ? new ControladorAutenticacion(cliente, { cambiar: setEstado }) : null, [cliente])
+  // Recuperación de un intento de pago incierto: almacenamiento cifrado del dispositivo, acotado por usuario.
+  const almacenamientoPagos = useMemo(() => crearAlmacenamientoSeguro(), [])
 
   useEffect(() => {
     if (!cliente || !controlador) return
@@ -148,6 +151,7 @@ export function AccesoContenedor(): ReactElement {
                     contexto={contextoActual}
                     onContexto={contexto => setContextoCuotas({ clave, contexto })}
                     cliente={cliente}
+                    pagos={datosRol.rol === 'PADRE' ? { usuarioId: estado.usuarioId, almacenamiento: almacenamientoPagos } : undefined}
                     mostrarSelector={datosRol.rol === 'PADRE'}
                     alumnos={datosRol.rol === 'PADRE'
                       ? datosRol.hijos.map(hijo => ({ id: hijo.id, etiqueta: [hijo.nombre, hijo.apellido].filter(Boolean).join(' ') || 'Estudiante' }))

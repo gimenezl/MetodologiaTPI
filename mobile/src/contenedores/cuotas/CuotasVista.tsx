@@ -34,6 +34,9 @@ export interface CuotasVistaProps {
   onCambiarPestana: (pestana: PestanaCuotas) => void
   onAbrirDetalle: (facturaId: string) => void
   onReintentar: () => void
+  /** Solo el padre registra pagos: el estudiante nunca ve la acción. */
+  permitirPago?: boolean
+  onPagar?: () => void
 }
 
 function FilaDato({ rotulo, children }: { rotulo: string; children: ReactElement | string }): ReactElement {
@@ -152,6 +155,15 @@ export function CuotasVista(props: CuotasVistaProps): ReactElement {
           testID="pestana-pagadas"
         />
       </View>
+
+      {props.permitirPago && props.onPagar && resultado.tipo === 'ok' && resultado.pendientes.length > 0 ? (
+        <Boton
+          etiqueta="Pagar ítems"
+          onPress={props.onPagar}
+          pistaAccesible="Elegí los ítems a pagar y registrá el pago por transferencia"
+          testID="pagar-items"
+        />
+      ) : null}
 
       {resultado.tipo === 'cargando' ? <EstadoPantalla tipo="cargando" mensaje="Consultando cuotas…" /> : null}
       {resultado.tipo === 'error' ? (
