@@ -72,6 +72,56 @@ class Ownership(unittest.TestCase):
         with patch.dict(os.environ, {"RUNNER_TRACKING_ID": ""}):
             with self.assertRaises(compiler.OwnershipUnknown): compiler.context()
 
+    def test_death_between_kernel_and_tracking_read_retires_without_more_signals(self):
+        records = {987654: self.record}
+        api = self.api(records)
+        sent = []
+        def tracking(pid):
+            if sent:
+                records.pop(pid, None)
+                raise compiler.OwnershipUnknown()
+            return self.token
+        api.tracking = tracking
+        with patch.object(compiler.os, 'kill', side_effect=lambda pid, sig: sent.append((pid, sig))) as kill, redirect_stdout(io.StringIO()):
+            result = compiler.cleanup_records(api, self.owner, self.token, [], lambda _: True)
+            kill.assert_called_once_with(987654, signal.SIGTERM)
+        self.assertEqual(result['retired'], 1)
+        self.assertEqual(result['kill'], 0)
+
+    def test_native_sysctl_permission_denied_stays_unknown_while_kernel_is_live(self):
+        api = compiler.Darwin.__new__(compiler.Darwin)
+        class Denied:
+            def sysctl(self, *args):
+                compiler.ctypes.set_errno(1)  # Darwin EPERM; no output or fallback.
+                return -1
+        api.libc = Denied()
+        api.candidates = lambda: [self.record['pid']]
+        api.identity = lambda _: self.record
+        with patch.object(compiler.os, 'kill') as kill:
+            with self.assertRaises(compiler.OwnershipUnknown): compiler.cleanup_records(api, self.owner, self.token, [], lambda _: True)
+            kill.assert_not_called()
+
+    def test_tracking_error_live_permission_reused_and_inaccessible_never_retire(self):
+        for fresh in [self.record, {**self.record, 'birth': [101, 1]}, compiler.OwnershipUnknown()]:
+            api = self.api({987654: self.record})
+            signaled = []
+            identity_reads_after_signal = []
+            def identity(pid):
+                if signaled:
+                    identity_reads_after_signal.append(pid)
+                    if len(identity_reads_after_signal) > 1:
+                        if isinstance(fresh, Exception): raise fresh
+                        return fresh
+                return self.record
+            def tracking(pid):
+                if signaled: raise compiler.OwnershipUnknown()
+                return self.token
+            api.identity, api.tracking = identity, tracking
+            with patch.object(compiler.os, 'kill', side_effect=lambda pid, sig: signaled.append((pid, sig))) as kill:
+                with self.assertRaises(compiler.OwnershipUnknown): compiler.cleanup_records(api, self.owner, self.token, [], lambda _: True)
+                kill.assert_called_once_with(987654, signal.SIGTERM)
+            self.assertEqual(len(identity_reads_after_signal), 2)
+
     def test_gone_process_safe_and_readback_requires_retired(self):
         with patch.object(compiler.os, "kill") as kill, redirect_stdout(io.StringIO()):
             result = compiler.cleanup_records(self.api({987654: None}), self.owner, self.token, [], lambda _: True)

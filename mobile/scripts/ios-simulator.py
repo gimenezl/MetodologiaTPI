@@ -327,7 +327,8 @@ def checked_toolchain_versions(xcode_text, swift_text):
 
 
 def toolchain_preflight():
-    seconds = 20 if diagnostic_phase() == "runtime" else 5
+    diagnostic_phase()  # Reject unknown phases before any provider command.
+    seconds = 20
     if os.environ.get("DEVELOPER_DIR") != PINNED_DEVELOPER_DIR:
         raise InventoryContractError("TOOLCHAIN_CONFIG")
     developer = Path(PINNED_DEVELOPER_DIR).resolve()

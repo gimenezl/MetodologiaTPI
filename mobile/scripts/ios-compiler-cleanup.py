@@ -184,11 +184,25 @@ def cleanup_records(api, owner, token, baseline_records, executable_allowed=comp
     deadline = time.monotonic() + seconds
     candidates = []
     counts = {"eligible": 0, "baseline": 0, "foreign": 0, "term": 0, "kill": 0, "retired": 0}
+    def tracking_or_retired(record):
+        try:
+            return api.tracking(record["pid"])
+        except OwnershipUnknown:
+            # A process can exit between kernel identity and environment reads.
+            # Only a fresh kernel gone/zombie result is retirement, never an access error.
+            if api.identity(record["pid"]) is None:
+                return None
+            raise OwnershipUnknown() from None
     def live(record):
         current = api.identity(record["pid"])
         if current is None:
             return False
-        if current != record or not eligible(current, owner, executable_allowed) or api.tracking(record["pid"]) != token:
+        if current != record or not eligible(current, owner, executable_allowed):
+            raise OwnershipUnknown()
+        tracking = tracking_or_retired(record)
+        if tracking is None:
+            return False
+        if tracking != token:
             raise OwnershipUnknown()
         return True
     for pid in api.candidates():
@@ -203,7 +217,10 @@ def cleanup_records(api, owner, token, baseline_records, executable_allowed=comp
         if record["uid"] != owner["uid"]:
             counts["foreign"] += 1
             continue
-        if api.tracking(pid) != token:
+        tracking = tracking_or_retired(record)
+        if tracking is None:
+            continue
+        if tracking != token:
             counts["foreign"] += 1
             continue
         if not executable_allowed(record["exe"]):
@@ -234,7 +251,7 @@ def cleanup_records(api, owner, token, baseline_records, executable_allowed=comp
         if time.monotonic() >= deadline:
             raise OwnershipUnknown()
         record = api.identity(pid)
-        if record is not None and record not in baseline_records and record["uid"] == owner["uid"] and api.tracking(pid) == token:
+        if record is not None and record not in baseline_records and record["uid"] == owner["uid"] and tracking_or_retired(record) == token:
             raise OwnershipUnknown()
     counts["retired"] = len(candidates)
     print("compiler cleanup=" + json.dumps(counts, sort_keys=True), flush=True)

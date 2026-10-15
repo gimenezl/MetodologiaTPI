@@ -267,7 +267,7 @@ jobs:
           python3 scripts/ci/run-stage.py --stage compiler-ownership-tests --seconds 20 -- python3 mobile/scripts/ios-compiler-cleanup.test.py
           node --test scripts/ci/install-native.test.mjs
       - name: Verificar toolchain iOS seleccionado antes del backend
-        run: python3 scripts/ci/run-stage.py --stage ios-toolchain --seconds 20 -- python3 mobile/scripts/ios-simulator.py toolchain
+        run: python3 scripts/ci/run-stage.py --stage ios-toolchain --seconds 75 -- python3 mobile/scripts/ios-simulator.py toolchain
       - name: Versiones de herramientas
         run: |
           python3 scripts/ci/run-stage.py --stage ios-version --seconds 15 -- xcodebuild -version
@@ -390,7 +390,7 @@ jobs:
     env:
       CI: '1'
       DEVELOPER_DIR: /Applications/Xcode_26.1.1.app/Contents/Developer
-      EPT_IOS_DIAGNOSTIC_PHASE: runtime
+      EPT_IOS_DIAGNOSTIC_PHASE: full
       EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -421,7 +421,7 @@ jobs:
       - run: node --test scripts/ci/install-native.test.mjs
       - name: Verificar toolchain iOS seleccionado antes del backend
         if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'full'
-        run: python3 scripts/ci/run-stage.py --stage ios-toolchain --seconds 20 -- python3 mobile/scripts/ios-simulator.py toolchain
+        run: python3 scripts/ci/run-stage.py --stage ios-toolchain --seconds 75 -- python3 mobile/scripts/ios-simulator.py toolchain
       - name: Medir preflight toolchain (sin retry; cap diagnóstico por consulta)
         if: env.EPT_IOS_DIAGNOSTIC_PHASE == 'runtime'
         run: python3 scripts/ci/run-stage.py --stage ios-toolchain-diagnostic --seconds 75 -- python3 mobile/scripts/ios-simulator.py toolchain

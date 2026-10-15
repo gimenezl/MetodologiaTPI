@@ -327,7 +327,7 @@ class SimulatorOwnership(unittest.TestCase):
 
     def test_toolchain_phase_caps_single_queries_and_fail_before_any_command(self):
         responses = [str(Path(ios.PINNED_DEVELOPER_DIR) / 'usr/bin/swift'), 'Xcode 26.1.1\nBuild version 17B100', 'Apple Swift version 6.2.1']
-        for phase, seconds in [('full', 5), ('runtime', 20)]:
+        for phase, seconds in [('full', 20), ('runtime', 20)]:
             with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': phase, 'DEVELOPER_DIR': ios.PINNED_DEVELOPER_DIR}), patch.object(Path, 'is_dir', return_value=True), patch.object(ios, 'command', side_effect=responses) as command, redirect_stdout(io.StringIO()):
                 ios.toolchain_preflight()
                 self.assertEqual(command.call_count, 3)
@@ -372,7 +372,7 @@ class SimulatorOwnership(unittest.TestCase):
         with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': 'full', 'DEVELOPER_DIR': ios.PINNED_DEVELOPER_DIR}), patch.object(Path, 'is_dir', return_value=True), patch.object(ios, 'command', side_effect=command), redirect_stdout(output):
             self.assertTrue(ios.toolchain_preflight()['selected'])
         self.assertEqual(calls[0][2], ('xcrun', '--find', 'swift'))
-        self.assertTrue(all(c[1] == 5 and c[3]['capture'] is True for c in calls))
+        self.assertTrue(all(c[1] == 20 and c[3]['capture'] is True for c in calls))
         for private in ('/Applications', 'private', 'Toolchains'):
             self.assertNotIn(private, output.getvalue())
         with patch.dict(os.environ, {'EPT_IOS_DIAGNOSTIC_PHASE': 'full', 'DEVELOPER_DIR': ios.PINNED_DEVELOPER_DIR}), patch.object(Path, 'is_dir', return_value=True), patch.object(ios, 'command', return_value='/private/foreign/swift') as command:
