@@ -1587,9 +1587,11 @@ export type Database = {
       pagos: {
         Row: {
           alumno_id: string
+          clave_intento: string | null
           creado_en: string
           estado: Database["public"]["Enums"]["estado_pago"]
           fecha_transferencia: string | null
+          huella_seleccion: string | null
           id: string
           importe_informado: number | null
           motivo_rechazo: string | null
@@ -1601,9 +1603,11 @@ export type Database = {
         }
         Insert: {
           alumno_id: string
+          clave_intento?: string | null
           creado_en?: string
           estado?: Database["public"]["Enums"]["estado_pago"]
           fecha_transferencia?: string | null
+          huella_seleccion?: string | null
           id?: string
           importe_informado?: number | null
           motivo_rechazo?: string | null
@@ -1615,9 +1619,11 @@ export type Database = {
         }
         Update: {
           alumno_id?: string
+          clave_intento?: string | null
           creado_en?: string
           estado?: Database["public"]["Enums"]["estado_pago"]
           fecha_transferencia?: string | null
+          huella_seleccion?: string | null
           id?: string
           importe_informado?: number | null
           motivo_rechazo?: string | null
@@ -3119,6 +3125,10 @@ export type Database = {
           telefono: string
         }[]
       }
+      consultar_intento_pago: {
+        Args: { p_clave_intento: string }
+        Returns: Json
+      }
       consultar_usuario: {
         Args: { p_perfil_id: string }
         Returns: {
@@ -3180,6 +3190,7 @@ export type Database = {
         Args: { p_alumno_id: string; p_dni: string; p_legajo_nro?: string }
         Returns: string
       }
+      cotizar_pago: { Args: { p_item_ids: string[] }; Returns: Json }
       crear_alumno: {
         Args: {
           p_apellido: string
@@ -3299,6 +3310,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      datos_bancarios_transferencia: { Args: never; Returns: Json }
       datos_para_enlace: {
         Args: { p_director_perfil_id: string; p_operacion_id: string }
         Returns: {
@@ -3705,6 +3717,14 @@ export type Database = {
           bloqueado: boolean
           reintentar_en_segundos: number
         }[]
+      }
+      registrar_pago: {
+        Args: {
+          p_clave_intento: string
+          p_item_ids: string[]
+          p_total_esperado_centavos: number
+        }
+        Returns: Json
       }
       renombrar_deporte: {
         Args: { p_deporte_id: string; p_nombre: string }

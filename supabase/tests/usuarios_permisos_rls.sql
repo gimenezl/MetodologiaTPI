@@ -602,6 +602,13 @@ BEGIN
     PERFORM pg_temp.rpc('public.crear_tarifa', 'x', pg_catalog.format('public.crear_tarifa(''DEPORTE'', NULL, %L, NULL, ''1'', DATE ''2099-01-01'', DATE ''2099-01-01'')', f));
     PERFORM pg_temp.rpc('public.cambiar_tarifa', 'x', pg_catalog.format('public.cambiar_tarifa(''DEPORTE'', NULL, %L, NULL, ''1'', DATE ''2099-01-01'', NULL)', f));
     PERFORM pg_temp.rpc('public.actualizar_tarifa', 'x', pg_catalog.format('public.actualizar_tarifa(%L, ''1'', DATE ''2099-01-01'', NULL, ''1'', DATE ''2099-01-01'', NULL)', pg_temp.u('01')));
+    -- EPT-108: selección y registro de pagos (solo PADRE habilitado). La batería apunta a un ítem
+    -- inexistente: el padre recibe P6851 y el resto 42501, así que ningún intento escribe. La matriz
+    -- sobre ítems reales, la idempotencia y la atomicidad están en `pagos_seleccion_rls.sql`.
+    PERFORM pg_temp.rpc('public.cotizar_pago', 'x', pg_catalog.format('public.cotizar_pago(ARRAY[%L]::UUID[])', pg_temp.u('01')));
+    PERFORM pg_temp.rpc('public.registrar_pago', 'x', pg_catalog.format('public.registrar_pago(%L::UUID, ARRAY[%L]::UUID[], 1::BIGINT)', pg_temp.u('02'), pg_temp.u('01')));
+    PERFORM pg_temp.rpc('public.consultar_intento_pago', 'x', pg_catalog.format('public.consultar_intento_pago(%L::UUID)', pg_temp.u('02')));
+    PERFORM pg_temp.rpc('public.datos_bancarios_transferencia', 'x', 'public.datos_bancarios_transferencia()');
     PERFORM pg_temp.rpc('public.configurar_horario_materia', 'x', pg_catalog.format('public.configurar_horario_materia(%L, 2::smallint, %L, %L, NULL)', ASIG, '09:00', '10:00'));
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria', 'n', 'public.consultar_compatibilidad_horaria()');
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria_alumno', 'n', pg_catalog.format('public.consultar_compatibilidad_horaria_alumno(%L)', EST));

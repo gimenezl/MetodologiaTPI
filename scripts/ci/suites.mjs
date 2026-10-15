@@ -9,7 +9,7 @@ export const sqlSuites = [
   'economico_rls.sql', 'horarios_academicos_rls.sql', 'horarios_rls.sql',
   'inscripcion_hijos_rls.sql', 'inscripciones_administracion_rls.sql',
   'inscripciones_legadas_contraccion_rls.sql', 'materias_rls.sql', 'niveles_rls.sql',
-  'perfiles_privacidad_rls.sql', 'profesores_rls.sql', 'reportes_oficiales_rls.sql',
+  'pagos_seleccion_rls.sql', 'perfiles_privacidad_rls.sql', 'profesores_rls.sql', 'reportes_oficiales_rls.sql',
   'tarifas_administracion_rls.sql', 'transporte_rls.sql',
   'usuarios_alta_atomica.sql', 'usuarios_permisos_rls.sql',
 ]
@@ -21,7 +21,7 @@ export const dbScripts = [
   'facturacion.mjs', 'facturacion-concurrencia.mjs', 'facturacion-api.mjs', 'facturacion-progreso.mjs',
   'horarios_academicos_concurrencia.mjs', 'horarios_concurrencia.mjs', 'horarios_paridad.mjs',
   'inscripciones_administracion_concurrencia.mjs', 'inscripciones_legadas_concurrencia.mjs',
-  'niveles_concurrencia.mjs', 'profesores_concurrencia.mjs', 'profesores_paridad.mjs',
+  'niveles_concurrencia.mjs', 'pagos_seleccion_concurrencia.mjs', 'profesores_concurrencia.mjs', 'profesores_paridad.mjs',
   'profesores_postgrest.mjs', 'tarifas_administracion_concurrencia.mjs',
   'tarifas_autorizacion_concurrencia.mjs', 'tarifas_postgrest.mjs',
   'transporte_concurrencia.mjs', 'usuarios_bloqueo_auth.mjs',
