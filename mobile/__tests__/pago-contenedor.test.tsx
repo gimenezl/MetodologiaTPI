@@ -453,6 +453,39 @@ describe('CuotasContenedor con pagos', () => {
     await waitFor(() => expect(screen.getByTestId('pagar-items')).toBeTruthy())
   })
 
+  it('un registro en vuelo cuando se remonta la pantalla termina mostrando el resultado en la instancia nueva', async () => {
+    const base = clienteControlado()
+    function Anfitrion({ visible }: { visible: boolean }) {
+      const [contexto, setContexto] = useState<ContextoCuotas>(CONTEXTO_CUOTAS_VACIO)
+      return visible ? (
+        <CuotasContenedor
+          cliente={base.cliente}
+          alumnos={[HIJOS[0]!]}
+          mostrarSelector
+          pagos={{ usuarioId: U, almacenamiento }}
+          contexto={contexto}
+          onContexto={setContexto}
+        />
+      ) : <></>
+    }
+    const { rerender } = await render(<Anfitrion visible />)
+    await waitFor(() => expect(screen.getByTestId('pagar-items')).toBeTruthy())
+    await fireEvent.press(screen.getByTestId('pagar-items'))
+    await waitFor(() => expect(screen.getByTestId(`item-${I1}`)).toBeTruthy())
+    await fireEvent.press(screen.getByTestId(`item-${I1}`))
+    await responder(base.rpcs, 'cotizar_pago', cotizacion([I1], 5000000))
+    await fireEvent.press(screen.getByTestId('registrar-pago'))
+    await waitFor(() => expect(base.rpcs.some(r => r.nombre === 'registrar_pago')).toBe(true))
+    // La sesión se revalida con el registro todavía en vuelo.
+    await rerender(<Anfitrion visible={false} />)
+    await rerender(<Anfitrion visible />)
+    // La instancia nueva recupera el intento guardado y no reenvía; luego llega el resultado en vuelo.
+    await waitFor(() => expect(screen.getByText('No pudimos confirmar el pago')).toBeTruthy())
+    expect(base.rpcs.filter(r => r.nombre === 'registrar_pago')).toHaveLength(1)
+    await responder(base.rpcs, 'registrar_pago', pagoRegistrado([I1], 5000000))
+    await waitFor(() => expect(screen.getByText('Pago registrado: pendiente de verificación.')).toBeTruthy())
+  })
+
   it('sin habilitación de pagos (estudiante) no existe la acción ni la pantalla', async () => {
     const base = clienteControlado()
     await render(<CuotasContenedor cliente={base.cliente} alumnos={[HIJOS[0]!]} mostrarSelector={false} />)

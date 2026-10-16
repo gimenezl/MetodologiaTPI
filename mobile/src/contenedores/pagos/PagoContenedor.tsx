@@ -305,9 +305,16 @@ export function PagoContenedor({
     setRecargaCotizacion(n => n + 1)
   }, [])
 
-  if (lectura === 'cargando') return <EstadoPantalla tipo="cargando" mensaje="Comprobando pagos pendientes…" />
+  // Un registro en vuelo cuya pantalla se remontó (revalidación de la sesión) termina en la instancia
+  // anterior y llega por el contexto: la instancia vigente muestra el resultado cuando aparece.
+  const registradoPorContexto = registradoInicial !== undefined && fase.tipo !== 'registrado'
+  const faseVigente: Fase = registradoPorContexto ? { tipo: 'registrado', pago: registradoInicial } : fase
 
-  if (fase.tipo === 'seleccion' || fase.tipo === 'enviando') {
+  if (lectura === 'cargando' && !registradoPorContexto) {
+    return <EstadoPantalla tipo="cargando" mensaje="Comprobando pagos pendientes…" />
+  }
+
+  if (faseVigente.tipo === 'seleccion' || faseVigente.tipo === 'enviando') {
     return (
       <>
         <PagoSeleccionVista
@@ -316,10 +323,10 @@ export function PagoContenedor({
           seleccion={new Set(idsVigentes)}
           cotizacion={estadoCotizacion}
           banco={estadoBanco}
-          registrando={fase.tipo === 'enviando'}
+          registrando={faseVigente.tipo === 'enviando'}
           onToggle={alternar}
           onRegistrar={() => void registrar()}
-          onVolver={() => onVolver(huboRegistroRef.current)}
+          onVolver={() => onVolver(huboRegistroRef.current || registradoInicial !== undefined)}
           onReintentarCarga={() => setRecarga(n => n + 1)}
           onReintentarCotizacion={() => setRecargaCotizacion(n => n + 1)}
           onReintentarBanco={() => setRecargaBanco(n => n + 1)}
@@ -332,19 +339,19 @@ export function PagoContenedor({
     <PagoResultadoVista
       etiquetaAlumno={etiquetaAlumno}
       resultado={
-        fase.tipo === 'registrado'
-          ? { tipo: 'registrado', pago: fase.pago }
-          : fase.tipo === 'rechazado'
-            ? { tipo: 'rechazado', codigo: fase.codigo }
-            : fase.tipo === 'no_registrado'
+        faseVigente.tipo === 'registrado'
+          ? { tipo: 'registrado', pago: faseVigente.pago }
+          : faseVigente.tipo === 'rechazado'
+            ? { tipo: 'rechazado', codigo: faseVigente.codigo }
+            : faseVigente.tipo === 'no_registrado'
               ? { tipo: 'no_registrado' }
-              : { tipo: 'incierto', verificando: fase.verificando, fallo: fase.fallo }
+              : { tipo: 'incierto', verificando: faseVigente.verificando, fallo: faseVigente.fallo }
       }
-      onVolverACuotas={() => onVolver(huboRegistroRef.current)}
+      onVolverACuotas={() => onVolver(huboRegistroRef.current || registradoInicial !== undefined)}
       onVolverASeleccion={volverASeleccion}
       onVerificar={() => void verificar()}
       onReintentarMismoIntento={() => {
-        if (fase.tipo === 'no_registrado') void enviar(fase.intento)
+        if (faseVigente.tipo === 'no_registrado') void enviar(faseVigente.intento)
       }}
     />
   )
