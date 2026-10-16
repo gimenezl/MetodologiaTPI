@@ -1,0 +1,137 @@
+appId: org.educarparatransformar.app
+name: Carga de comprobante de transferencia contra backend real
+---
+# EPT-109. Un padre con un pago PENDIENTE_VERIFICACION y SIN comprobantes adjunta primero un PDF y luego
+# una imagen del almacenamiento del dispositivo. La subida, la validación del contenido, la finalización
+# con Bearer y la confirmación en la base son reales (Storage + Next + PostgreSQL del runner). La cámara no
+# se ejercita: el emulador de CI no tiene cámara (se cubre con pruebas de componente y de adaptador).
+- launchApp:
+    clearState: true
+- tapOn:
+    id: 'correo'
+- inputText: ${MAESTRO_COMPROBANTE_EMAIL}
+- tapOn:
+    id: 'contrasena'
+- inputText: ${MAESTRO_COMPROBANTE_PASSWORD}
+- tapOn: 'Ingresar'
+- assertVisible: 'Hijos vinculados'
+- tapOn: 'Cuotas'
+- scrollUntilVisible:
+    element:
+      text: 'Comprobantes de mis pagos'
+    direction: DOWN
+    timeout: 20000
+- tapOn: 'Comprobantes de mis pagos'
+- assertVisible: 'Comprobantes de transferencia'
+- assertVisible: '.*Sin comprobantes cargados.*'
+- tapOn: 'Adjuntar comprobante'
+- assertVisible: 'Datos de la transferencia'
+- assertVisible: '.*no aprueba el pago ni cambia tu saldo.*'
+
+# Sin archivo no hay envío posible.
+- scrollUntilVisible:
+    element:
+      text: 'Enviar comprobante'
+    direction: DOWN
+    timeout: 15000
+- assertVisible: 'Enviar comprobante'
+
+# Datos de la transferencia: el importe puede diferir del total calculado.
+- scrollUntilVisible:
+    element:
+      id: 'campo-fecha'
+    direction: UP
+    timeout: 15000
+- tapOn:
+    id: 'campo-fecha'
+- inputText: '14/10/2026'
+- tapOn:
+    id: 'campo-importe'
+- inputText: '49000,50'
+- tapOn:
+    id: 'campo-numero'
+- inputText: 'OP-MAESTRO-109'
+- hideKeyboard
+
+# Selector real del sistema: el archivo se prepara con adb push en ejecutar-android.sh.
+- scrollUntilVisible:
+    element:
+      text: 'Elegir un PDF o archivo'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Elegir un PDF o archivo'
+- runFlow:
+    when:
+      notVisible: 'comprobante-ci.pdf'
+    commands:
+      - tapOn:
+          text: 'Show roots'
+          optional: true
+      - tapOn:
+          text: 'Downloads'
+          optional: true
+- tapOn: 'comprobante-ci.pdf'
+- assertVisible: '.*comprobante-ci.pdf.*'
+- assertVisible: 'Documento PDF'
+- scrollUntilVisible:
+    element:
+      text: 'Enviar comprobante'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Enviar comprobante'
+- assertVisible:
+    text: 'Comprobante recibido: pendiente de verificación.'
+    timeout: 60000
+- assertVisible: '.*Comprobantes del pago: 1.*'
+- assertVisible: '.*OP-MAESTRO-109.*'
+
+# Un segundo archivo del mismo pago: los datos ya informados no se piden ni se modifican.
+- scrollUntilVisible:
+    element:
+      text: 'Adjuntar otro comprobante'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Adjuntar otro comprobante'
+- assertVisible: '.*Ya están informados.*'
+- assertNotVisible:
+    id: 'campo-numero'
+- scrollUntilVisible:
+    element:
+      text: 'Elegir un PDF o archivo'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Elegir un PDF o archivo'
+- runFlow:
+    when:
+      notVisible: 'comprobante-ci.png'
+    commands:
+      - tapOn:
+          text: 'Show roots'
+          optional: true
+      - tapOn:
+          text: 'Downloads'
+          optional: true
+- tapOn: 'comprobante-ci.png'
+- assertVisible: '.*comprobante-ci.png.*'
+- scrollUntilVisible:
+    element:
+      text: 'Enviar comprobante'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Enviar comprobante'
+- assertVisible:
+    text: 'Comprobante recibido: pendiente de verificación.'
+    timeout: 60000
+- assertVisible: '.*Comprobantes del pago: 2.*'
+
+# Persistencia: tras relanzar sin borrar el estado, el pago sigue pendiente con sus dos comprobantes.
+- stopApp
+- launchApp
+- tapOn: 'Cuotas'
+- scrollUntilVisible:
+    element:
+      text: 'Comprobantes de mis pagos'
+    direction: DOWN
+    timeout: 20000
+- tapOn: 'Comprobantes de mis pagos'
+- assertVisible: '.*2 comprobantes cargados.*'

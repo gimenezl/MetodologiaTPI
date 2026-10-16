@@ -8,6 +8,7 @@ import { appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { contenedorDb, ejecutarCuotas } from './integracion-cuotas.mjs'
 import { ejecutarPagos } from './integracion-pagos.mjs'
+import { ejecutarComprobantes } from './integracion-comprobantes.mjs'
 import { esperarBearerExpirado, mensajeFalloEtapaAuth, validarLineaBaseExpiracion } from './integracion-auth-utils.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
@@ -285,6 +286,32 @@ async function ejecutar() {
   })
   ok('Pagos: cotización sin efectos, selección inválida, roles no autorizados, total manipulado, registro pendiente con saldo intacto, idempotencia, concurrencia, escritura directa denegada y vínculo revocado.')
 
+  // HU9 (EPT-109): carga de comprobantes contra Storage, PostgREST y el servidor Next REALES con Bearer.
+  // El JWT efímero dura 120 s: la sesión de la etapa se renueva antes de cada tramo largo.
+  etapaActual = 'comprobantes'
+  const tokenComprobantes = async actor => {
+    const vigente = actor.sesion_comprobantes
+    if (vigente && Date.now() - vigente.en < 45_000) return vigente.token
+    const token = (await iniciar(actor)).access_token
+    actor.sesion_comprobantes = { token, en: Date.now() }
+    return token
+  }
+  const maestroComprobante = await ejecutarComprobantes({
+    contenedor: contenedorDb(workdir),
+    urlWeb: process.env.EPT_MOBILE_WEB_URL,
+    urlApi: local.api,
+    claveAnon: local.anon,
+    claveServicio: local.service,
+    restAdmin,
+    token: tokenComprobantes,
+    leer: async (actor, ruta) => respuesta(ruta, { token: await tokenComprobantes(actor) }),
+    escribir: async (actor, ruta, method, body) => respuesta(ruta, { token: await tokenComprobantes(actor), method, body }),
+    rpc: async (actor, nombre, body) => respuesta(`/rest/v1/rpc/${nombre}`, { token: await tokenComprobantes(actor), method: 'POST', body }),
+    crearActor: (rol, opciones) => crearActor(rol, { userRole: 'PERSONAL', ...opciones }),
+    actores: { docente: roleActors.DOCENTE, personal: roleActors.PERSONAL, director: roleActors.DIRECTOR },
+  })
+  ok('Comprobantes: preparar solo para el padre del pago, subida sin reemplazo, finalización con Bearer, varios archivos por pago, datos que no se sobrescriben, saldo intacto, contenido inválido rechazado y original visible solo para el cargador y Dirección.')
+
   etapaActual = 'refresh'
   const sesionRefreshable = await iniciar(padreA)
   const refrescada = exigirStatus(await respuesta('/auth/v1/token?grant_type=refresh_token', {
@@ -337,6 +364,7 @@ async function ejecutar() {
     ['MAESTRO_PADRE', padreA],
     ['MAESTRO_ESTUDIANTE', roleActors.ESTUDIANTE],
     ['MAESTRO_DOCENTE', roleActors.DOCENTE],
+    ['MAESTRO_COMPROBANTE', maestroComprobante],
   ]
   const invalid = { email: `ept105-invalid-${idSuffix()}@ept105.invalid`, password: `${randomBytes(30).toString('base64url')}A1!` }
   for (const [prefix, actor] of [...actorMaestro, ['MAESTRO_INVALIDO', invalid]]) {
