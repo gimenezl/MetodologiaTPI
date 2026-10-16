@@ -79,8 +79,8 @@ name: Carga de comprobante de transferencia contra backend real
     direction: DOWN
     timeout: 15000
 - tapOn: 'Enviar comprobante'
-- assertVisible:
-    text: 'Comprobante recibido: pendiente de verificación.'
+- extendedWaitUntil:
+    visible: 'Comprobante recibido: pendiente de verificación.'
     timeout: 60000
 - assertVisible: '.*Comprobantes del pago: 1.*'
 - assertVisible: '.*OP-MAESTRO-109.*'
@@ -119,8 +119,8 @@ name: Carga de comprobante de transferencia contra backend real
     direction: DOWN
     timeout: 15000
 - tapOn: 'Enviar comprobante'
-- assertVisible:
-    text: 'Comprobante recibido: pendiente de verificación.'
+- extendedWaitUntil:
+    visible: 'Comprobante recibido: pendiente de verificación.'
     timeout: 60000
 - assertVisible: '.*Comprobantes del pago: 2.*'
 
