@@ -4,7 +4,7 @@ import { AppState, Linking, Text, View } from 'react-native'
 import { Aviso, Boton, CampoTexto, EstadoPantalla, Formulario, MarcoPantalla, Tarjeta } from '@/catalogo'
 import { entornoDelBundle } from '@/configuracion/entorno'
 import { crearAlmacenamientoSeguro } from '@/servicios/almacenamiento-seguro'
-import { ControladorAutenticacion, type EstadoAutenticacion } from '@/servicios/autenticacion'
+import { ControladorAutenticacion, estadoVisible, type EstadoAutenticacion } from '@/servicios/autenticacion'
 import { obtenerClienteSupabase, vincularCicloDeVida } from '@/servicios/supabase'
 import { color, espacio, estiloDeTexto } from '@/tokens'
 
@@ -16,7 +16,10 @@ const INICIAL: EstadoAutenticacion = { tipo: 'cargando' }
 export function AccesoContenedor(): ReactElement {
   const entorno = useMemo(() => entornoDelBundle(), [])
   const cliente = useMemo(() => entorno.ok ? obtenerClienteSupabase() : null, [entorno])
-  const [estado, setEstado] = useState<EstadoAutenticacion>(INICIAL)
+  const [estadoReal, setEstadoReal] = useState<EstadoAutenticacion>(INICIAL)
+  const [ultimaAutenticada, setUltimaAutenticada] = useState<Extract<EstadoAutenticacion, { tipo: 'autenticada' }> | null>(null)
+  // Un refresco de token del mismo usuario no desmonta la pantalla: ver `estadoVisible`.
+  const estado = estadoVisible(estadoReal, ultimaAutenticada)
   const [correo, setCorreo] = useState('')
   const [contrasena, setContrasena] = useState('')
   const [errorIngreso, setErrorIngreso] = useState<string>()
@@ -32,7 +35,13 @@ export function AccesoContenedor(): ReactElement {
   const [seccion, setSeccion] = useState<{ clave: string; nombre: 'principal' | 'cuotas' | 'cuenta' } | null>(null)
   const [contextoCuotas, setContextoCuotas] = useState<{ clave: string; contexto: ContextoCuotas } | null>(null)
   const [errorEnlaceWeb, setErrorEnlaceWeb] = useState(false)
-  const controlador = useMemo(() => cliente ? new ControladorAutenticacion(cliente, { cambiar: setEstado }) : null, [cliente])
+  const controlador = useMemo(() => cliente ? new ControladorAutenticacion(cliente, {
+    cambiar: siguiente => {
+      if (siguiente.tipo === 'autenticada') setUltimaAutenticada(siguiente)
+      else if (siguiente.tipo !== 'revalidando') setUltimaAutenticada(null)
+      setEstadoReal(siguiente)
+    },
+  }) : null, [cliente])
   // Recuperación de un intento de pago incierto: almacenamiento cifrado del dispositivo, acotado por usuario.
   const almacenamientoPagos = useMemo(() => crearAlmacenamientoSeguro(), [])
 
