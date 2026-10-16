@@ -98,6 +98,11 @@ name: Carga de comprobante de transferencia contra backend real
     direction: DOWN
     timeout: 15000
 - tapOn: 'Adjuntar otro comprobante'
+- scrollUntilVisible:
+    element:
+      text: '.*Ya están informados.*'
+    direction: DOWN
+    timeout: 15000
 - assertVisible: '.*Ya están informados.*'
 - assertNotVisible:
     id: 'campo-numero'
