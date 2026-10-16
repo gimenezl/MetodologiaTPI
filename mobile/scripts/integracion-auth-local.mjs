@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { contenedorDb, ejecutarCuotas } from './integracion-cuotas.mjs'
+import { ejecutarPagos } from './integracion-pagos.mjs'
 import { esperarBearerExpirado, mensajeFalloEtapaAuth, validarLineaBaseExpiracion } from './integracion-auth-utils.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
@@ -265,6 +266,24 @@ async function ejecutar() {
     },
   })
   ok('Cuotas: dos familias, padre con varios hijos, estudiante propio, bloqueo, roles no compatibles, anónimo, identificador ajeno y vínculo revocado.')
+
+  // HU8 (EPT-108): selección, total del servidor y registro del pago pendiente con JWT/RLS/RPC reales.
+  // Sesión propia de la etapa: el JWT efímero dura 120 s y no se reutiliza el de la etapa anterior.
+  etapaActual = 'pagos'
+  const sesionPagos = async actor => (actor.access_token_pagos ??= (await iniciar(actor)).access_token)
+  await ejecutarPagos({
+    contenedor: contenedorDb(workdir),
+    restAdmin,
+    leer: async (actor, ruta) => respuesta(ruta, { token: await sesionPagos(actor) }),
+    escribir: async (actor, ruta, method, body) => respuesta(ruta, { token: await sesionPagos(actor), method, body }),
+    rpc: async (actor, nombre, body) => respuesta(`/rest/v1/rpc/${nombre}`, { token: await sesionPagos(actor), method: 'POST', body }),
+    anonima: async (ruta, method, body) => respuesta(ruta, { method, body }),
+    crearActor: (rol, opciones) => crearActor(rol, { userRole: 'PERSONAL', ...opciones }),
+    actores: {
+      estudianteA, bloqueada, docente: roleActors.DOCENTE, personal: roleActors.PERSONAL, director: roleActors.DIRECTOR,
+    },
+  })
+  ok('Pagos: cotización sin efectos, selección inválida, roles no autorizados, total manipulado, registro pendiente con saldo intacto, idempotencia, concurrencia, escritura directa denegada y vínculo revocado.')
 
   etapaActual = 'refresh'
   const sesionRefreshable = await iniciar(padreA)

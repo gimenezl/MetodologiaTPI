@@ -14,6 +14,21 @@ export type EstadoAutenticacion =
 const ROLES = new Set<RolAplicacion>(['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE', 'PERSONAL'])
 const MENSAJE_CREDENCIALES = 'No se pudo iniciar sesión. Revisá el correo y la contraseña.'
 
+type EstadoAutenticada = Extract<EstadoAutenticacion, { tipo: 'autenticada' }>
+
+/**
+ * Estado que la interfaz debe mostrar. Cada evento de sesión (por ejemplo, la renovación del token) vuelve a
+ * validar al usuario y publica `revalidando`; si ese usuario ya estaba autenticado se conserva su vista mientras
+ * la validación termina, para no desmontar la pantalla y perder un flujo de varios pasos. El servidor sigue
+ * autorizando cada lectura (RLS) y cualquier resultado distinto de `autenticada` reemplaza la vista de inmediato.
+ */
+export function estadoVisible(real: EstadoAutenticacion, ultimaAutenticada: EstadoAutenticada | null): EstadoAutenticacion {
+  if (real.tipo === 'revalidando' && ultimaAutenticada && ultimaAutenticada.usuarioId === real.usuarioId) {
+    return ultimaAutenticada
+  }
+  return real
+}
+
 export interface ObservadorAutenticacion {
   cambiar(estado: EstadoAutenticacion): void
 }

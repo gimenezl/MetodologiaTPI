@@ -55,6 +55,68 @@ name: Acceso real por rol, persistencia y cierre
 - assertVisible: 'Conceptos'
 - assertVisible: '.*Cuota.*'
 - tapOn: 'Volver a las cuotas'
+# HU8: selección de ítems, total calculado por el servidor y registro del pago pendiente de verificación
+# con RPC y RLS reales (Android). El saldo y las pestañas no cambian hasta que se apruebe el pago.
+- scrollUntilVisible:
+    element:
+      text: 'Pagar ítems'
+    direction: UP
+    timeout: 15000
+- tapOn: 'Pagar ítems'
+- assertVisible: 'Elegí los ítems a pagar'
+- assertVisible: '.*Los ítems pagados o en verificación no se pueden seleccionar.*'
+- tapOn:
+    text: 'Cuota, Pendiente.*'
+    index: 0
+# El total queda bajo el pliegue: se baja hasta verlo. Lo calcula el servidor.
+- scrollUntilVisible:
+    element:
+      text: '.*1 ítem seleccionado.*'
+    direction: DOWN
+    timeout: 15000
+- assertVisible: '.*1 ítem seleccionado.*calculado por el sistema.*'
+# Los datos bancarios cargan de forma asíncrona y agrandan la pantalla: primero se espera a que
+# existan y recién después se baja hasta el botón, para que el diseño ya no cambie.
+- scrollUntilVisible:
+    element:
+      text: '.*Datos de prueba.*'
+    direction: DOWN
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: 'No se acepta pago en efectivo.'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: 'Registrar pago'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Registrar pago'
+# La confirmación reemplaza el contenido de la misma pantalla con el scroll al final: se sube hasta el aviso.
+- scrollUntilVisible:
+    element:
+      text: '.*Pago registrado: pendiente de verificación.*'
+    direction: UP
+    timeout: 20000
+- assertVisible: '.*Pago registrado: pendiente de verificación.*'
+- scrollUntilVisible:
+    element:
+      text: '.*Código del pago.*'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: 'Volver a las cuotas'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Volver a las cuotas'
+- assertVisible: '.*Pendientes.*2.*'
+- scrollUntilVisible:
+    element:
+      text: '.*pago en verificación.*'
+    direction: DOWN
+    timeout: 15000
 - stopApp
 - launchApp:
     clearState: false
