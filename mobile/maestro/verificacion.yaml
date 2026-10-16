@@ -93,6 +93,12 @@ name: Acceso real por rol, persistencia y cierre
     direction: DOWN
     timeout: 15000
 - tapOn: 'Registrar pago'
+# La confirmación reemplaza el contenido de la misma pantalla con el scroll al final: se sube hasta el aviso.
+- scrollUntilVisible:
+    element:
+      text: '.*Pago registrado: pendiente de verificación.*'
+    direction: UP
+    timeout: 20000
 - assertVisible: '.*Pago registrado: pendiente de verificación.*'
 - scrollUntilVisible:
     element:
