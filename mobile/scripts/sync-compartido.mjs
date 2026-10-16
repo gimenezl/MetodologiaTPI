@@ -12,6 +12,7 @@ const destino = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'c
 export const FUENTES = [
   { origen: 'src/lib/errores.ts', salida: 'errores.ts' },
   { origen: 'src/types/database.generated.ts', salida: 'database.generated.ts' },
+  { origen: 'src/lib/comprobantes-contrato.ts', salida: 'comprobantes-contrato.ts' },
 ]
 
 const IMPORTACION = /^\s*(?:import|export)\s[^'"]*?from\s+['"]([^'"]+)['"]|^\s*import\s+['"]([^'"]+)['"]|require\(\s*['"]([^'"]+)['"]\s*\)/gmu

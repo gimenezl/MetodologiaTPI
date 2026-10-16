@@ -17,6 +17,7 @@ export const families = {
   asistencias: ['asistencias-vinculos-ui', 'asistencias-vinculos-auth'],
   tarifas: ['tarifas-ui', 'tarifas-auth'],
   usuarios: ['usuarios-auth', 'usuarios-permisos-auth'],
+  comprobantes: ['comprobantes-auth'],
 }
 export const aliases = { 'asignaciones-materias': 'materias', 'mis-asignaciones': 'profesores',
   'horarios-academicos': 'horarios', cupos: 'inscripciones', legajos: 'usuarios',
@@ -27,6 +28,10 @@ Object.assign(aliases, { 'accesos-qr': 'accesos', 'asistencias-vinculos': 'asist
   'inscripciones-administracion': 'inscripciones', 'gestion-usuarios': 'usuarios',
   'usuarios-admin': 'usuarios', 'usuarios-permisos': 'usuarios', 'vinculo-cuenta': 'usuarios',
   actividades: 'horarios' })
+// EPT-109: carga de comprobantes (contrato compartido, validación binaria, finalización, lectura de Dirección).
+Object.assign(aliases, { 'comprobantes-contrato': 'comprobantes', 'comprobantes-validacion': 'comprobantes',
+  'comprobantes-finalizacion': 'comprobantes', 'comprobantes-conciliacion': 'comprobantes',
+  'comprobantes-lectura': 'comprobantes', 'autenticacion-bearer': 'comprobantes' })
 export const coreTitles = {
   chromium: 'muestra el catálogo ordenado con estados y protección institucional',
   'chromium-directora': 'sin sesión, cada endpoint nuevo responde 401',

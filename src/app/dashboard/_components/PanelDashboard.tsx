@@ -8,7 +8,7 @@ import {
   SignOut, List, X, Briefcase, ChatCenteredText, UserPlus, Lock,
   Newspaper, UserCircle, Chalkboard, GraduationCap, Student, IdentificationCard,
   BookOpen, ForkKnife, SoccerBall, Clock, ChalkboardTeacher, ListChecks, Bus, ChartBar, QrCode,
-  Scan, ClipboardText, Coins
+  Scan, ClipboardText, Coins, Receipt
 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
@@ -50,6 +50,8 @@ const navItems: NavItem[] = [
   { href: '/dashboard/transporte', label: 'Transporte', icon: Bus, roles: ['DIRECTOR', 'ESTUDIANTE'] },
   // Tarifas mensuales (EPT-103): administración exclusiva de Dirección.
   { href: '/dashboard/tarifas', label: 'Tarifas', icon: Coins, roles: ['DIRECTOR'] },
+  // Pagos pendientes con sus comprobantes (EPT-109): lectura de Dirección.
+  { href: '/dashboard/comprobantes', label: 'Comprobantes', icon: Receipt, roles: ['DIRECTOR'] },
   { href: '/dashboard/reportes', label: 'Reportes', icon: ChartBar, roles: ['DIRECTOR'] },
   { href: '/dashboard/asistencias', label: 'Asistencias', icon: CalendarCheck, roles: ['DIRECTOR', 'DOCENTE', 'PADRE', 'ESTUDIANTE'] },
   { href: '/dashboard/cupos', label: 'Actividades', icon: Pulse, roles: ['DIRECTOR', 'DOCENTE', 'ESTUDIANTE', 'PADRE'] },

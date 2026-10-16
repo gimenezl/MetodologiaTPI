@@ -21,7 +21,8 @@ export const mobilePatterns = [
 ]
 
 // Módulos de la web que la app copia (mobile/scripts/sync-compartido.mjs): su cambio exige comprobar la copia móvil.
-export const mobileCompartido = new Set(['src/lib/errores.ts', 'src/types/database.generated.ts'])
+export const mobileCompartido = new Set(['src/lib/errores.ts', 'src/types/database.generated.ts',
+  'src/lib/comprobantes-contrato.ts'])
 
 export function isMobilePath(file) {
   return mobileExact.has(file) || mobilePatterns.some(pattern => pattern.test(file))

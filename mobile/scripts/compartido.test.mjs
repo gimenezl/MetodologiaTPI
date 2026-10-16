@@ -19,7 +19,7 @@ test('no hay deriva entre las fuentes web y la copia móvil', { skip: !hayRepo }
 })
 
 test('la copia declara su origen y es autocontenida', () => {
-  for (const nombre of ['errores.ts', 'database.generated.ts']) {
+  for (const nombre of ['errores.ts', 'database.generated.ts', 'comprobantes-contrato.ts']) {
     const texto = readFileSync(resolve(RAIZ_MOBILE, 'src/compartido', nombre), 'utf8')
     assert.ok(texto.startsWith('// GENERADO por mobile/scripts/sync-compartido.mjs'))
     assert.deepEqual(importacionesDe(texto), [])
@@ -29,9 +29,10 @@ test('la copia declara su origen y es autocontenida', () => {
 test('rechaza una fuente que deja de ser pura', () => {
   const base = mkdtempSync(join(tmpdir(), 'ept-compartido-'))
   try {
-    for (const origen of ['src/lib/errores.ts', 'src/types/database.generated.ts']) {
+    for (const origen of ['src/lib/errores.ts', 'src/types/database.generated.ts', 'src/lib/comprobantes-contrato.ts']) {
       mkdirSync(join(base, dirname(origen)), { recursive: true })
     }
+    writeFileSync(join(base, 'src/lib/comprobantes-contrato.ts'), 'export const x = 1\n')
     writeFileSync(join(base, 'src/lib/errores.ts'), "import { cookies } from 'next/headers'\nexport const x = 1\n")
     writeFileSync(join(base, 'src/types/database.generated.ts'), 'export type Json = string\n')
     assert.throws(() => generar({ base }), /no puros/u)
