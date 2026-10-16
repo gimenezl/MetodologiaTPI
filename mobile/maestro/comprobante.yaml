@@ -71,6 +71,12 @@ name: Carga de comprobante de transferencia contra backend real
           text: 'Downloads'
           optional: true
 - tapOn: 'comprobante-ci.pdf'
+# Al volver del selector el formulario queda arriba: la tarjeta del archivo está más abajo.
+- scrollUntilVisible:
+    element:
+      text: '.*comprobante-ci.pdf.*'
+    direction: DOWN
+    timeout: 15000
 - assertVisible: '.*comprobante-ci.pdf.*'
 - assertVisible: 'Documento PDF'
 - scrollUntilVisible:
@@ -112,6 +118,12 @@ name: Carga de comprobante de transferencia contra backend real
           text: 'Downloads'
           optional: true
 - tapOn: 'comprobante-ci.png'
+# Al volver del selector el formulario queda arriba: la tarjeta del archivo está más abajo.
+- scrollUntilVisible:
+    element:
+      text: '.*comprobante-ci.png.*'
+    direction: DOWN
+    timeout: 15000
 - assertVisible: '.*comprobante-ci.png.*'
 - scrollUntilVisible:
     element:
