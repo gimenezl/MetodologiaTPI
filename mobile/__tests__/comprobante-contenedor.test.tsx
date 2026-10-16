@@ -490,6 +490,37 @@ describe('ComprobanteContenedor', () => {
     await waitFor(() => expect(screen.getByText('Comprobante recibido: pendiente de verificación.')).toBeTruthy())
   })
 
+  it('el aviso de una selección fallida sobrevive a un remontaje de la pantalla', async () => {
+    const m = crearMundo()
+    function Anfitrion({ visible }: { visible: boolean }) {
+      const [estado, setEstado] = useState<EstadoComprobante>({ ...COMPROBANTE_VACIO, pagoId: PAGO })
+      return visible ? (
+        <ComprobanteContenedor
+          cliente={m.cliente}
+          usuarioId={U}
+          alumnoId={A1}
+          etiquetaAlumno="Ana Pérez"
+          almacenamiento={m.almacenamiento}
+          transporte={m.transporte}
+          selector={m.selector}
+          subir={m.subir}
+          estado={estado}
+          onEstado={setEstado}
+          onVolver={jest.fn()}
+          generarClave={() => CLAVE}
+        />
+      ) : null
+    }
+    const { rerender } = await render(<Anfitrion visible />)
+    await waitFor(() => expect(screen.getByTestId('elegir-archivo')).toBeTruthy())
+    m.seleccion.siguiente = { tipo: 'invalido', mensaje: 'El archivo no es una imagen JPG o PNG ni un PDF. Elegí otro archivo.' }
+    await fireEvent.press(screen.getByTestId('elegir-archivo'))
+    await waitFor(() => expect(screen.getByText(/no es una imagen JPG o PNG ni un PDF/u)).toBeTruthy())
+    await rerender(<Anfitrion visible={false} />)
+    await rerender(<Anfitrion visible />)
+    await waitFor(() => expect(screen.getByText(/no es una imagen JPG o PNG ni un PDF/u)).toBeTruthy())
+  })
+
   it('elegir otro pago no hereda archivo, datos ni clave del anterior', async () => {
     const m = crearMundo({ pagos: [FILA_PAGO(PAGO), FILA_PAGO(PAGO_B)] })
     await render(

@@ -3,6 +3,7 @@ import { File } from 'expo-file-system'
 import * as ImagePicker from 'expo-image-picker'
 
 import {
+  MENSAJE_ARCHIVO,
   TAMANO_MAXIMO_BYTES,
   tipoDesdeNombre,
   validarArchivoDeclarado,
@@ -17,8 +18,8 @@ import {
  * rechaza lo evidentemente inválido (tipo, vacío, más de 5 MiB, contenido que no es lo que dice ser) para
  * dar un mensaje claro antes de gastar datos.
  *
- * Privacidad: la cámara y la galería se piden sin metadatos EXIF (ubicación incluida). El archivo vive en
- * el directorio de caché de la aplicación; nunca se persiste la ruta ni el contenido.
+ * Privacidad: el archivo vive en el directorio de caché de la aplicación; nunca se persiste la ruta ni el
+ * contenido. La imagen se sube tal como la entrega el sistema: puede conservar metadatos EXIF (ver el README).
  */
 
 export interface ArchivoElegido {
@@ -82,8 +83,13 @@ async function aceptar(a: ActivoCrudo): Promise<ResultadoSeleccion> {
   try {
     if (!archivo.exists) return { tipo: 'error' }
     tamano = archivo.size ?? tamano
-    const primeros = new Uint8Array(await archivo.slice(0, 16).arrayBuffer())
-    firma = tipoPorFirma(primeros)
+    // Sin leer el archivo entero: un tamaño fuera de rango ya se rechaza y evita cargar un archivo enorme.
+    if (tamano === 0) return { tipo: 'invalido', mensaje: MENSAJE_ARCHIVO.ARCHIVO_VACIO }
+    if ((tamano ?? 0) > TAMANO_MAXIMO_BYTES) {
+      return { tipo: 'invalido', mensaje: MENSAJE_ARCHIVO.ARCHIVO_DEMASIADO_GRANDE }
+    }
+    // Hasta 5 MiB: se lee con `File.arrayBuffer()` y se mira la firma (los primeros bytes).
+    firma = tipoPorFirma(new Uint8Array(await archivo.arrayBuffer()).subarray(0, 16))
   } catch {
     return { tipo: 'error' }
   }
@@ -129,7 +135,7 @@ const OPCIONES_IMAGEN: ImagePicker.ImagePickerOptions = {
   mediaTypes: ['images'],
   allowsEditing: false,
   allowsMultipleSelection: false,
-  // Sin EXIF: ni ubicación ni datos del dispositivo en un comprobante bancario.
+  // No devolver EXIF a la aplicación. No lo quita del archivo: eso exigiría recodificar la imagen.
   exif: false,
   // Un `quality` menor a 1 hace que iOS convierta HEIC a JPEG.
   quality: 0.85,

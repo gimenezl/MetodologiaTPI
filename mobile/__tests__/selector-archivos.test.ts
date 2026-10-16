@@ -22,8 +22,8 @@ jest.mock('expo-file-system', () => ({
     get size() {
       return mockArchivo.size
     }
-    slice() {
-      return { arrayBuffer: async () => new Uint8Array(mockArchivo.cabecera).buffer }
+    async arrayBuffer() {
+      return new Uint8Array(mockArchivo.cabecera).buffer
     }
   },
 }))

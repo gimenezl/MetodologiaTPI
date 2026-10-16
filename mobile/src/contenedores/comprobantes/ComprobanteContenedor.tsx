@@ -57,6 +57,8 @@ export interface EstadoComprobante {
   progreso: number
   carga: CargaComprobante | null
   mensaje: string | null
+  /** Aviso de la última selección de archivo; vive acá para no perderse si la pantalla se remonta. */
+  aviso: { tipo: 'advertencia' | 'error'; mensaje: string } | null
 }
 
 export const COMPROBANTE_VACIO: EstadoComprobante = {
@@ -71,6 +73,7 @@ export const COMPROBANTE_VACIO: EstadoComprobante = {
   progreso: 0,
   carga: null,
   mensaje: null,
+  aviso: null,
 }
 
 export interface ComprobanteContenedorProps {
@@ -176,7 +179,8 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
   }, [publicar])
 
   const [errores, setErrores] = useState<ErroresCampos>({})
-  const [avisoSeleccion, setAvisoSeleccion] = useState<{ tipo: 'advertencia' | 'error'; mensaje: string } | null>(null)
+  const avisoSeleccion = estado.aviso
+  const setAvisoSeleccion = useCallback((aviso: EstadoComprobante['aviso']) => publicar({ aviso }), [publicar])
   const [recarga, setRecarga] = useState(0)
   const [pagos, setPagos] = useState<
     { contexto: string; recarga: number; datos: PagoPendienteDelPadre[] | null } | null
@@ -243,7 +247,7 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
           setAvisoSeleccion({ tipo: 'error', mensaje: 'No pudimos leer el archivo. Probá con otro.' })
       }
     },
-    [publicar],
+    [publicar, setAvisoSeleccion],
   )
 
   // ---- Envío -----------------------------------------------------------------------------------------
