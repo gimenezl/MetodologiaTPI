@@ -212,3 +212,22 @@ describe('solicitudes', () => {
     expect(error.message).not.toContain('TOKEN-SECRETO-XYZ')
   })
 })
+
+describe('cuerpo de un error HTTP (EPT-109)', () => {
+  it('conserva el cuerpo JSON de una respuesta no exitosa para que el llamador lea código y mensaje', async () => {
+    const cuerpo = { codigo: 'ARCHIVO_CORRUPTO', mensaje: 'El archivo está dañado.' }
+    const f = jest.fn().mockResolvedValue(respuesta(cuerpo, { status: 422 }))
+    const error = await crear(f).solicitar('/api/x', { metodo: 'POST' }).catch(e => e)
+    expect(error).toBeInstanceOf(ErrorTransporte)
+    expect(error.tipo).toBe('HTTP')
+    expect(error.estado).toBe(422)
+    expect(error.cuerpo).toEqual(cuerpo)
+  })
+
+  it('admite http solo hacia los hosts adicionales indicados de forma explícita', () => {
+    expect(validarBaseUrl('http://10.0.2.2:3000', true, ['10.0.2.2']).hostname).toBe('10.0.2.2')
+    expect(() => validarBaseUrl('http://10.0.2.2:3000', true, [])).toThrow(ErrorTransporte)
+    expect(() => validarBaseUrl('http://10.0.2.3:3000', true, ['10.0.2.2'])).toThrow(ErrorTransporte)
+    expect(() => validarBaseUrl('http://10.0.2.2:3000', false, ['10.0.2.2'])).toThrow(ErrorTransporte)
+  })
+})

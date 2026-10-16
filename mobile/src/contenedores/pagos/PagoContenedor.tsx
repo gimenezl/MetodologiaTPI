@@ -49,6 +49,8 @@ export interface PagoContenedorProps {
   /** Pago ya registrado en esta pantalla: sobrevive a un remontaje (revalidación de la sesión). */
   registradoInicial?: PagoRegistrado
   onRegistrado?: (pago: PagoRegistrado) => void
+  /** Abre la carga del comprobante del pago registrado (EPT-109). Si falta, la acción no se ofrece. */
+  onAdjuntarComprobante?: (pagoId: string) => void
   /** Solo para pruebas: generador de la clave del intento. */
   generarClave?: () => string
 }
@@ -87,6 +89,7 @@ export function PagoContenedor({
   onVolver,
   registradoInicial,
   onRegistrado,
+  onAdjuntarComprobante,
   generarClave = generarClaveIntento,
 }: PagoContenedorProps): ReactElement {
   const etiquetaAlumno = alumnos.find(a => a.id === alumnoId)?.etiqueta ?? 'Estudiante'
@@ -353,6 +356,11 @@ export function PagoContenedor({
       onReintentarMismoIntento={() => {
         if (faseVigente.tipo === 'no_registrado') void enviar(faseVigente.intento)
       }}
+      onAdjuntarComprobante={
+        onAdjuntarComprobante && faseVigente.tipo === 'registrado'
+          ? () => onAdjuntarComprobante(faseVigente.pago.pagoId)
+          : undefined
+      }
     />
   )
 }

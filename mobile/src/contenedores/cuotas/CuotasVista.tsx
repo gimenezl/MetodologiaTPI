@@ -37,6 +37,9 @@ export interface CuotasVistaProps {
   /** Solo el padre registra pagos: el estudiante nunca ve la acción. */
   permitirPago?: boolean
   onPagar?: () => void
+  /** Solo el padre adjunta comprobantes (EPT-109). */
+  permitirComprobantes?: boolean
+  onComprobantes?: () => void
 }
 
 function FilaDato({ rotulo, children }: { rotulo: string; children: ReactElement | string }): ReactElement {
@@ -162,6 +165,16 @@ export function CuotasVista(props: CuotasVistaProps): ReactElement {
           onPress={props.onPagar}
           pistaAccesible="Elegí los ítems a pagar y registrá el pago por transferencia"
           testID="pagar-items"
+        />
+      ) : null}
+
+      {props.permitirComprobantes && props.onComprobantes && resultado.tipo === 'ok' ? (
+        <Boton
+          etiqueta="Comprobantes de mis pagos"
+          variante="secundario"
+          onPress={props.onComprobantes}
+          pistaAccesible="Adjuntá el comprobante de un pago pendiente de verificación"
+          testID="comprobantes-pagos"
         />
       ) : null}
 

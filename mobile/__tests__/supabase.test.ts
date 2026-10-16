@@ -65,3 +65,27 @@ describe('configuración pública', () => {
     expect(JSON.stringify(r)).not.toContain(clave)
   })
 })
+
+describe('servidor web local de integración (EPT-109)', () => {
+  const LOCAL = {
+    ...VALIDAS,
+    EXPO_PUBLIC_SUPABASE_URL: 'http://10.0.2.2:54321',
+    EXPO_PUBLIC_API_BASE_URL: 'http://10.0.2.2:3000',
+  }
+
+  it('solo con la opt-in de integración y el host y puerto exactos', () => {
+    expect(leerEntorno(LOCAL, { authIntegracionLocal: true, plataforma: 'android' })).toMatchObject({ ok: true })
+    expect(leerEntorno(LOCAL).ok).toBe(false)
+    for (const url of ['http://10.0.2.2:3001', 'http://localhost:3000', 'http://10.0.2.2:3000/api', 'http://u@10.0.2.2:3000']) {
+      expect(leerEntorno({ ...LOCAL, EXPO_PUBLIC_API_BASE_URL: url }, {
+        authIntegracionLocal: true, plataforma: 'android',
+      }).ok).toBe(false)
+    }
+  })
+
+  it('un servidor remoto sigue exigiendo https aun con la opt-in', () => {
+    expect(leerEntorno({ ...LOCAL, EXPO_PUBLIC_API_BASE_URL: 'http://app.example.org' }, {
+      authIntegracionLocal: true, plataforma: 'android',
+    }).ok).toBe(false)
+  })
+})

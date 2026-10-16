@@ -3,7 +3,11 @@ import { AppState, Linking, Text, View } from 'react-native'
 
 import { Aviso, Boton, CampoTexto, EstadoPantalla, Formulario, MarcoPantalla, Tarjeta } from '@/catalogo'
 import { entornoDelBundle } from '@/configuracion/entorno'
+import { obtenerTransporteApi } from '@/servicios/api'
 import { crearAlmacenamientoSeguro } from '@/servicios/almacenamiento-seguro'
+import { crearSelectorArchivos } from '@/servicios/selector-archivos'
+import { crearSubidaExpo } from '@/servicios/subida-archivo'
+import type { TransporteHttp } from '@/servicios/transporte-http'
 import { ControladorAutenticacion, estadoVisible, type EstadoAutenticacion } from '@/servicios/autenticacion'
 import { obtenerClienteSupabase, vincularCicloDeVida } from '@/servicios/supabase'
 import { color, espacio, estiloDeTexto } from '@/tokens'
@@ -44,6 +48,14 @@ export function AccesoContenedor(): ReactElement {
   }) : null, [cliente])
   // Recuperación de un intento de pago incierto: almacenamiento cifrado del dispositivo, acotado por usuario.
   const almacenamientoPagos = useMemo(() => crearAlmacenamientoSeguro(), [])
+  // Carga de comprobantes (EPT-109): el transporte se resuelve al usarlo, no al montar (la finalización
+  // lee, valida y publica un archivo y tiene un límite de tiempo propio).
+  const comprobantes = useMemo(() => {
+    const transporte: TransporteHttp = {
+      solicitar: (ruta, solicitud) => obtenerTransporteApi(60_000).solicitar(ruta, solicitud),
+    }
+    return { transporte, selector: crearSelectorArchivos(), subir: crearSubidaExpo() }
+  }, [])
 
   useEffect(() => {
     if (!cliente || !controlador) return
@@ -161,6 +173,7 @@ export function AccesoContenedor(): ReactElement {
                     onContexto={contexto => setContextoCuotas({ clave, contexto })}
                     cliente={cliente}
                     pagos={datosRol.rol === 'PADRE' ? { usuarioId: estado.usuarioId, almacenamiento: almacenamientoPagos } : undefined}
+                    comprobantes={datosRol.rol === 'PADRE' ? comprobantes : undefined}
                     mostrarSelector={datosRol.rol === 'PADRE'}
                     alumnos={datosRol.rol === 'PADRE'
                       ? datosRol.hijos.map(hijo => ({ id: hijo.id, etiqueta: [hijo.nombre, hijo.apellido].filter(Boolean).join(' ') || 'Estudiante' }))

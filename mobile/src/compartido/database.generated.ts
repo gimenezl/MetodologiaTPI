@@ -1,5 +1,5 @@
 // GENERADO por mobile/scripts/sync-compartido.mjs desde src/types/database.generated.ts. No editar a mano.
-// sha256 de la fuente: fef32ae790a90d2ec76879cd29168ab607f6b9e448b9bad23819d22549e949a6
+// sha256 de la fuente: c60de472a52fa2d423f70d31ba5a6a4cfa7e07884f6746dfd9b001128fa7554b
 export type Json =
   | string
   | number
@@ -296,6 +296,74 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "perfiles"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      cargas_comprobante: {
+        Row: {
+          clave_carga: string
+          creado_en: string
+          estado: string
+          fecha_transferencia: string
+          huella_solicitud: string
+          id: string
+          importe_informado: number
+          motivo_descarte: string | null
+          numero_operacion: string
+          padre_id: string
+          pago_id: string
+          resuelto_en: string | null
+          ruta_temporal: string
+          sha256_contenido: string | null
+          tamano_declarado: number
+          temporal_eliminado_en: string | null
+          tipo_mime_declarado: string
+        }
+        Insert: {
+          clave_carga: string
+          creado_en?: string
+          estado?: string
+          fecha_transferencia: string
+          huella_solicitud: string
+          id?: string
+          importe_informado: number
+          motivo_descarte?: string | null
+          numero_operacion: string
+          padre_id: string
+          pago_id: string
+          resuelto_en?: string | null
+          ruta_temporal: string
+          sha256_contenido?: string | null
+          tamano_declarado: number
+          temporal_eliminado_en?: string | null
+          tipo_mime_declarado: string
+        }
+        Update: {
+          clave_carga?: string
+          creado_en?: string
+          estado?: string
+          fecha_transferencia?: string
+          huella_solicitud?: string
+          id?: string
+          importe_informado?: number
+          motivo_descarte?: string | null
+          numero_operacion?: string
+          padre_id?: string
+          pago_id?: string
+          resuelto_en?: string | null
+          ruta_temporal?: string
+          sha256_contenido?: string | null
+          tamano_declarado?: number
+          temporal_eliminado_en?: string | null
+          tipo_mime_declarado?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cargas_comprobante_pago_padre_fk"
+            columns: ["pago_id", "padre_id"]
+            isOneToOne: false
+            referencedRelation: "pagos"
+            referencedColumns: ["id", "padre_id"]
           },
         ]
       }
@@ -3040,6 +3108,15 @@ export type Database = {
           vinculado: boolean
         }[]
       }
+      cargas_comprobante_a_conciliar: {
+        Args: { p_antiguedad: string; p_limite: number }
+        Returns: {
+          carga_id: string
+          estado: string
+          ruta_final_huerfana: string
+          ruta_temporal: string
+        }[]
+      }
       catalogos_reportes: { Args: never; Returns: Json }
       configurar_horario_materia: {
         Args: {
@@ -3064,6 +3141,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      confirmar_carga_comprobante: {
+        Args: {
+          p_carga_id: string
+          p_sha256: string
+          p_tamano: number
+          p_tipo_mime: string
+          p_usuario_id: string
+        }
+        Returns: Json
+      }
       confirmar_inscripcion_deportiva: {
         Args: { p_inscripcion_id: string }
         Returns: Json
@@ -3076,6 +3163,10 @@ export type Database = {
         Returns: Json
       }
       confirmar_matricula: { Args: { p_matricula_id: string }; Returns: Json }
+      consultar_carga_comprobante: {
+        Args: { p_clave_carga: string }
+        Returns: Json
+      }
       consultar_compatibilidad_horaria: {
         Args: never
         Returns: {
@@ -3322,6 +3413,10 @@ export type Database = {
           perfil_id: string
           vinculado: boolean
         }[]
+      }
+      descartar_carga_comprobante: {
+        Args: { p_carga_id: string; p_motivo: string; p_usuario_id: string }
+        Returns: Json
       }
       editar_grupo_deportivo: {
         Args: {
@@ -3676,11 +3771,31 @@ export type Database = {
           total: number
         }[]
       }
+      marcar_temporal_eliminado: {
+        Args: { p_carga_id: string }
+        Returns: undefined
+      }
       matricular_hijo: {
         Args: { p_curso_id: string; p_hijo_id: string }
         Returns: string
       }
       mi_estado_acceso: { Args: never; Returns: string }
+      obtener_carga_para_finalizar: {
+        Args: { p_carga_id: string; p_usuario_id: string }
+        Returns: Json
+      }
+      preparar_carga_comprobante: {
+        Args: {
+          p_clave_carga: string
+          p_fecha: string
+          p_importe: string
+          p_numero: string
+          p_pago_id: string
+          p_tamano: number
+          p_tipo_mime: string
+        }
+        Returns: Json
+      }
       reactivar_alumno: {
         Args: { p_alumno_id: string; p_curso_id: string }
         Returns: string

@@ -15,10 +15,24 @@ capture android-device-status 15 adb shell getprop ro.product.cpu.abi >> "$SALID
 stage android-install 60 adb install -r "$APK"
 capture android-installed 15 adb shell pm list packages | grep -F 'org.educarparatransformar.app'
 
+# Archivos sintéticos para el selector real del sistema (EPT-109): se generan y se copian a Descargas.
+ARCHIVOS="$(mktemp -d)"
+node mobile/scripts/archivos-prueba.mjs "$ARCHIVOS"
+stage android-push-archivos 60 adb push "$ARCHIVOS/comprobante-ci.pdf" /sdcard/Download/comprobante-ci.pdf
+stage android-push-archivos 60 adb push "$ARCHIVOS/comprobante-ci.png" /sdcard/Download/comprobante-ci.png
+# Indexa los archivos para que el selector los liste (el escaneo manual es inofensivo si ya figuran).
+adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Download/comprobante-ci.pdf > /dev/null || true
+adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Download/comprobante-ci.png > /dev/null || true
+
 # Maestro conserva sus capturas en el directorio indicado; el resultado queda en JUnit.
 set +e
 stage android-maestro 240 maestro test --format junit --output "$SALIDA/maestro-android.xml" \
   --test-output-dir "$SALIDA/maestro-android" mobile/maestro/verificacion.yaml
 estado=$?
+if [ "$estado" -eq 0 ]; then
+  stage android-maestro-comprobante 240 maestro test --format junit --output "$SALIDA/maestro-comprobante.xml" \
+    --test-output-dir "$SALIDA/maestro-comprobante" mobile/maestro/comprobante.yaml
+  estado=$?
+fi
 set -e
 exit "$estado"

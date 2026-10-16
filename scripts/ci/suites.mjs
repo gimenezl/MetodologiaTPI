@@ -16,6 +16,7 @@ export const sqlSuites = [
 export const dbScripts = [
   'accesos_servicios_concurrencia.mjs', 'alumnos_academicos_concurrencia.mjs',
   'asistencias_revocaciones_concurrencia.mjs', 'comedor_concurrencia.mjs',
+  'comprobantes_carga.mjs', 'comprobantes_concurrencia.mjs',
   'credenciales_qr_concurrencia.mjs', 'deportes_administracion_concurrencia.mjs',
   'deportes_concurrencia.mjs', 'economico_concurrencia.mjs', 'economico_storage.mjs',
   'facturacion.mjs', 'facturacion-concurrencia.mjs', 'facturacion-api.mjs', 'facturacion-progreso.mjs',

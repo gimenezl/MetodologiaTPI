@@ -9,7 +9,8 @@ import { requireMobileContract, touchesMobile, validateMobileWorkflowFile } from
 
 export const pureTests = ['tarifas-lib', 'asistencias-lib', 'reportes-lib', 'paginacion',
   'paginacion-paralela', 'inscripciones-legadas-lib', 'accesos-qr-cripto',
-  'credenciales-qr-cripto', 'semantica-estatica', 'accesos-qr-servicio', 'redireccion-login']
+  'credenciales-qr-cripto', 'semantica-estatica', 'accesos-qr-servicio', 'redireccion-login',
+  'comprobantes-lib', 'comprobantes-servicio']
 // Infraestructura que decide cómo se prueba la app móvil: su cambio exige recorrer los gates móviles completos.
 const MOBILE_INFRA = new Set(['scripts/ci/run-stage.py', 'scripts/ci/run-stage.test.py', 'scripts/ci/install-cli.sh', 'scripts/ci/mobile.mjs', 'scripts/ci/impact.mjs', 'scripts/ci/impact.test.mjs', '.github/workflows/ci.yml'])
 const CI_TESTS = new Set(['scripts/ci/impact.test.mjs'])

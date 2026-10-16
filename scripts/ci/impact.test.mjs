@@ -700,3 +700,45 @@ test('EPT-96 valida la evidencia PNG, el inventario, la bitácora y la receta', 
     try { assert.throws(() => validateEpt96Assets(p.root)) } finally { p.cleanup() }
   }
 })
+
+test('EPT-109: la carga de comprobantes tiene suites, familia UI y etapa de integración Android registradas', () => {
+  // Las suites con Storage y Next reales corren en el job de base; no seleccionan la matriz completa.
+  for (const file of ['comprobantes_carga.mjs', 'comprobantes_concurrencia.mjs']) {
+    assert.ok(dbScripts.includes(file), file)
+    assert.deepEqual(profile([`supabase/tests/${file}`]), { db: true, mutations: false, ui: [] }, file)
+  }
+  // El contrato compartido dispara además los gates móviles (la app copia ese módulo).
+  assert.deepEqual(profile(['src/lib/comprobantes-contrato.ts']),
+    { db: true, mutations: false, ui: ['comprobantes'], mobile: true })
+  for (const file of ['src/services/comprobantes-validacion.ts', 'src/services/comprobantes-finalizacion.ts',
+    'src/services/comprobantes-conciliacion.ts', 'src/services/comprobantes-lectura.service.ts',
+    'src/services/autenticacion-bearer.ts', 'src/app/api/comprobantes/conciliacion/route.ts',
+    'src/app/dashboard/comprobantes/page.tsx', 'tests/comprobantes-auth.spec.ts']) {
+    assert.deepEqual(profile([file]), { db: true, mutations: false, ui: ['comprobantes'] }, file)
+  }
+  // Las pruebas puras no necesitan base.
+  for (const file of ['tests/comprobantes-lib.spec.ts', 'tests/comprobantes-servicio.spec.ts']) {
+    assert.deepEqual(profile([file]), { db: false, mutations: false, ui: [] }, file)
+  }
+  assert.deepEqual(profile(['supabase/migrations/20261016120000_ept_109_carga_comprobantes.sql']),
+    { db: true, mutations: false, ui: ['core'] })
+  for (const file of ['mobile/src/servicios/comprobantes.ts', 'mobile/src/servicios/selector-archivos.ts',
+    'mobile/src/servicios/subida-archivo.ts', 'mobile/src/servicios/carga-pendiente.ts',
+    'mobile/src/contenedores/comprobantes/ComprobanteContenedor.tsx',
+    'mobile/src/contenedores/comprobantes/ComprobanteVistas.tsx',
+    'mobile/__tests__/comprobante-contenedor.test.tsx', 'mobile/__tests__/selector-archivos.test.ts',
+    'mobile/scripts/integracion-comprobantes.mjs', 'mobile/scripts/servidor-web-local.mjs',
+    'mobile/scripts/archivos-prueba.mjs', 'mobile/maestro/comprobante.yaml']) {
+    assert.deepEqual(profile([file]), { db: false, mutations: false, ui: [], mobile: true }, file)
+  }
+  // La carga real solo se prueba con Supabase, Storage y Next locales: Android lo ejecuta; iOS (sin backend) no.
+  const integracion = readFileSync('mobile/scripts/integracion-auth-local.mjs', 'utf8')
+  assert.match(integracion, /ejecutarComprobantes\(/u)
+  const workflow = readFileSync('.github/workflows/ci.yml', 'utf8')
+  assert.match(workflow, /servidor-web-local\.mjs start/u)
+  assert.match(workflow, /servidor-web-local\.mjs stop/u)
+  assert.match(readFileSync('mobile/scripts/ejecutar-android.sh', 'utf8'), /maestro\/comprobante\.yaml/u)
+  assert.doesNotMatch(readFileSync('mobile/maestro/smoke-ios.yaml', 'utf8'), /comprobante/iu)
+  // El stack del runner ya incluye Storage: sin él no hay carga que probar.
+  assert.doesNotMatch(readFileSync('mobile/scripts/supabase-local.mjs', 'utf8'), /--exclude'?,?\s*'[^']*storage-api/u)
+})

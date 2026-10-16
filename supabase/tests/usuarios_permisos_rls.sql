@@ -609,6 +609,11 @@ BEGIN
     PERFORM pg_temp.rpc('public.registrar_pago', 'x', pg_catalog.format('public.registrar_pago(%L::UUID, ARRAY[%L]::UUID[], 1::BIGINT)', pg_temp.u('02'), pg_temp.u('01')));
     PERFORM pg_temp.rpc('public.consultar_intento_pago', 'x', pg_catalog.format('public.consultar_intento_pago(%L::UUID)', pg_temp.u('02')));
     PERFORM pg_temp.rpc('public.datos_bancarios_transferencia', 'x', 'public.datos_bancarios_transferencia()');
+    -- EPT-109: preparar y consultar una carga de comprobante. Sobre un pago inexistente el padre recibe P6861 y
+    -- el resto 42501, así que ningún intento escribe. La matriz real (Storage, finalización, concurrencia) está en
+    -- `comprobantes_carga.mjs` y `comprobantes_concurrencia.mjs`; las operaciones de servidor no son de `authenticated`.
+    PERFORM pg_temp.rpc('public.preparar_carga_comprobante', 'x', pg_catalog.format('public.preparar_carga_comprobante(%L::UUID, %L::UUID, %L, %L, %L, %L, 1::BIGINT)', pg_temp.u('02'), pg_temp.u('01'), '2026-10-14', '1.00', 'OP-BAT-EPT109', 'image/png'));
+    PERFORM pg_temp.rpc('public.consultar_carga_comprobante', 'x', pg_catalog.format('public.consultar_carga_comprobante(%L::UUID)', pg_temp.u('02')));
     PERFORM pg_temp.rpc('public.configurar_horario_materia', 'x', pg_catalog.format('public.configurar_horario_materia(%L, 2::smallint, %L, %L, NULL)', ASIG, '09:00', '10:00'));
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria', 'n', 'public.consultar_compatibilidad_horaria()');
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria_alumno', 'n', pg_catalog.format('public.consultar_compatibilidad_horaria_alumno(%L)', EST));

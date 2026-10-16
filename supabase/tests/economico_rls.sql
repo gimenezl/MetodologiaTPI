@@ -872,32 +872,57 @@ BEGIN
                 AND pg_catalog.cardinality(b.allowed_mime_types) = 3
          FROM storage.buckets b WHERE b.id = 'comprobantes-pago'),
         'I1: bucket comprobantes-pago privado, 5242880 bytes y exactamente JPEG, PNG y PDF');
+    -- EPT-109 agrega UN bucket privado temporal para la carga; ningún otro.
     PERFORM pg_temp.afirmar(
-        (SELECT pg_catalog.count(*) FROM storage.buckets) = 1,
-        'I1: es el único bucket (no se tocan otros)');
+        (SELECT pg_catalog.count(*) FROM storage.buckets) = 2
+        AND (SELECT b.public = FALSE AND b.file_size_limit = 5242880
+                    AND b.allowed_mime_types @> ARRAY['image/jpeg', 'image/png', 'application/pdf']::TEXT[]
+                    AND pg_catalog.cardinality(b.allowed_mime_types) = 3
+             FROM storage.buckets b WHERE b.id = 'comprobantes-pago-temporal'),
+        'I1: los únicos buckets son el final y el temporal (privado, 5 MiB, JPEG/PNG/PDF)');
 
     SELECT pg_catalog.count(*) INTO v_n FROM pg_catalog.pg_policies p
     WHERE p.schemaname = 'storage' AND p.tablename = 'objects';
-    PERFORM pg_temp.afirmar(v_n = 2, 'I2: storage.objects tiene exactamente dos políticas (' || v_n || ')');
+    PERFORM pg_temp.afirmar(v_n = 4, 'I2: storage.objects tiene exactamente cuatro políticas (' || v_n || ')');
     PERFORM pg_temp.afirmar(
         EXISTS (SELECT 1 FROM pg_catalog.pg_policies p
                 WHERE p.schemaname = 'storage' AND p.tablename = 'objects'
                   AND p.permissive = 'PERMISSIVE' AND p.cmd = 'SELECT'
                   AND p.roles = ARRAY['authenticated']::NAME[]
-                  AND p.qual LIKE '%comprobantes-pago%' AND p.qual LIKE '%comprobantes_pago%'),
-        'I2: una permisiva de SELECT para authenticated, limitada al bucket y atada a comprobantes_pago');
+                  AND p.qual LIKE '%comprobantes-pago%' AND p.qual LIKE '%comprobantes_pago%'
+                  AND p.qual NOT LIKE '%temporal%'),
+        'I2: una permisiva de SELECT para authenticated, limitada al bucket FINAL y atada a comprobantes_pago');
     PERFORM pg_temp.afirmar(
         EXISTS (SELECT 1 FROM pg_catalog.pg_policies p
                 WHERE p.schemaname = 'storage' AND p.tablename = 'objects'
                   AND p.permissive = 'RESTRICTIVE' AND p.cmd = 'ALL'
                   AND p.roles = ARRAY['authenticated']::NAME[]
-                  AND p.qual LIKE '%acceso_bloqueado%' AND p.qual LIKE '%comprobantes-pago%'),
-        'I2: una restrictiva de bloqueo limitada al bucket (no altera otros buckets)');
+                  AND p.qual LIKE '%acceso_bloqueado%' AND p.qual LIKE '%''comprobantes-pago''%'),
+        'I2: una restrictiva de bloqueo limitada al bucket final (no altera otros buckets)');
+    PERFORM pg_temp.afirmar(
+        EXISTS (SELECT 1 FROM pg_catalog.pg_policies p
+                WHERE p.schemaname = 'storage' AND p.tablename = 'objects'
+                  AND p.permissive = 'RESTRICTIVE' AND p.cmd = 'ALL'
+                  AND p.roles = ARRAY['authenticated']::NAME[]
+                  AND p.qual LIKE '%acceso_bloqueado%' AND p.qual LIKE '%comprobantes-pago-temporal%'),
+        'I2: una restrictiva de bloqueo limitada al bucket temporal');
+    PERFORM pg_temp.afirmar(
+        (SELECT pg_catalog.count(*) FROM pg_catalog.pg_policies p
+         WHERE p.schemaname = 'storage' AND p.tablename = 'objects'
+           AND p.permissive = 'PERMISSIVE' AND p.cmd <> 'SELECT') = 1
+        AND EXISTS (SELECT 1 FROM pg_catalog.pg_policies p
+                    WHERE p.schemaname = 'storage' AND p.tablename = 'objects'
+                      AND p.permissive = 'PERMISSIVE' AND p.cmd = 'INSERT'
+                      AND p.roles = ARRAY['authenticated']::NAME[]
+                      AND p.with_check LIKE '%comprobantes-pago-temporal%'
+                      AND p.with_check LIKE '%carga_subible%'),
+        'I2: la única permisiva de escritura es un INSERT del bucket temporal atado a una carga PREPARADA propia (sin UPDATE ni DELETE; el bucket final sigue cerrado)');
     PERFORM pg_temp.afirmar(
         NOT EXISTS (SELECT 1 FROM pg_catalog.pg_policies p
                     WHERE p.schemaname = 'storage' AND p.tablename = 'objects'
-                      AND p.permissive = 'PERMISSIVE' AND p.cmd <> 'SELECT'),
-        'I2: ninguna política permisiva de INSERT, UPDATE ni DELETE (escritura de cliente cerrada)');
+                      AND p.permissive = 'PERMISSIVE' AND p.cmd = 'SELECT'
+                      AND p.qual LIKE '%comprobantes-pago-temporal%'),
+        'I2: el bucket temporal no tiene política de lectura (nadie lo lee, listado ni firma)');
     PERFORM pg_temp.afirmar(
         NOT EXISTS (SELECT 1 FROM pg_catalog.pg_policies p
                     WHERE p.schemaname = 'storage' AND p.tablename = 'objects'

@@ -95,7 +95,7 @@ function preparar(plataformaObjetivo) {
 
   const migrationNames = readdirSync(join(destino, 'migrations')).filter(file => file.endsWith('.sql')).length
   exigir(Number(migrationNames) > 0, 'El stack efímero no tiene migraciones.')
-  cli(['start', '--workdir', workdir, '--exclude', 'studio,logflare,vector,imgproxy,storage-api,realtime,edge-runtime,postgres-meta,mailpit,supavisor'], {
+  cli(['start', '--workdir', workdir, '--exclude', 'studio,logflare,vector,imgproxy,realtime,edge-runtime,postgres-meta,mailpit,supavisor'], {
     timeout: 240_000,
     diagnosticFile: plataformaObjetivo === 'ios' ? process.env.EPT_MOBILE_SUPABASE_DIAGNOSTICS_FILE : undefined,
   })
