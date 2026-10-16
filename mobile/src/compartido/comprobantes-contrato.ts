@@ -1,5 +1,5 @@
 // GENERADO por mobile/scripts/sync-compartido.mjs desde src/lib/comprobantes-contrato.ts. No editar a mano.
-// sha256 de la fuente: 14391164e7275a5a950610ea8b8c641c4521bc4af9c5257f9ac7b6be15a2fee9
+// sha256 de la fuente: 55b114b67bb1ac3c5206f9986066af7fa9f725e19a8729d89d94166d7e76e6b5
 /**
  * Contrato de la carga de comprobantes de transferencia (EPT-109).
  *
@@ -201,7 +201,7 @@ export const MENSAJE_PREPARACION: Readonly<Record<CodigoPreparacion, string>> = 
   P6864: 'Esta carga ya se registró con otros datos. Iniciá una carga nueva.',
   P6865: 'Los datos difieren de los ya informados para este pago. No se modifican.',
   P6866: 'La carga no existe o venció. Iniciá una nueva.',
-  P6868: 'Tenés demasiadas cargas sin completar. Terminalas o esperá a que venzan.',
+  P6868: 'Tenés demasiadas cargas sin completar. Terminalas o volvé a intentar en una hora.',
   DENEGADO: 'Tu cuenta no está habilitada para cargar comprobantes.',
   OTRO: 'No se pudo preparar la carga. Volvé a intentarlo.',
 }

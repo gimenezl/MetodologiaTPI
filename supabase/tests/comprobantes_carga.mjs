@@ -732,6 +732,19 @@ async function main() {
   afirmar(codigoTope === 'P6868' && creadas >= 1 && creadas <= 10,
     `el tope técnico de cargas sin completar se aplica (${creadas} creadas, luego ${codigoTope})`)
 
+  // Salida del tope: las cargas propias abandonadas hace más de una hora se vencen en el acto, para que una
+  // app cerrada no deje al padre bloqueado hasta que alguien corra la conciliación.
+  const recientes = contar(`FROM public.cargas_comprobante WHERE pago_id = '${pagoTope}' AND estado = 'PREPARADA'`)
+  const sinVencer = await prepararCarga(actores.copadre, { pago: pagoTope, numero: `OP-TOPE-X-${Date.now()}`, tamano: 10 })
+  afirmar(recientes >= 10 && sinVencer.datos?.code === 'P6868',
+    'con el tope alcanzado y cargas recientes, sigue rechazando (no se vencen antes de una hora)')
+  sql(`UPDATE public.cargas_comprobante SET creado_en = NOW() - INTERVAL '2 hours' WHERE pago_id = '${pagoTope}' AND estado = 'PREPARADA';`)
+  const trasVencer = await prepararCarga(actores.copadre, { pago: pagoTope, numero: `OP-TOPE-Y-${Date.now()}`, tamano: 10 })
+  afirmar(trasVencer.estado === 200 &&
+    contar(`FROM public.cargas_comprobante WHERE pago_id = '${pagoTope}' AND estado = 'EXPIRADA' AND motivo_descarte = 'EXPIRADA'`) >= 10 &&
+    contar(`FROM public.cargas_comprobante WHERE pago_id = '${pagoTope}' AND estado = 'PREPARADA'`) === 1,
+  'al alcanzar el tope, las cargas propias abandonadas hace más de una hora vencen y se admite una nueva')
+
   // ==============================================================
   // 5. Lectura
   // ==============================================================

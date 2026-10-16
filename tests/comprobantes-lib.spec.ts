@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { deflateSync } from 'node:zlib'
 import { expect, test } from '@playwright/test'
 import sharp from 'sharp'
 import {
@@ -53,6 +54,39 @@ function pdf(extraCatalogo = '', cuerpoExtra = ''): Buffer {
   for (const o of offsets) salida += `${String(o).padStart(10, '0')} 00000 n \n`
   salida += `trailer\n<< /Size ${objetos.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
   return Buffer.from(salida, 'latin1')
+}
+
+/** PDF válido con un objeto de flujo Flate extra (offsets calculados). `contenido` es lo que va comprimido. */
+function pdfConFlujo(contenido: Buffer): Buffer {
+  const comprimido = deflateSync(contenido)
+  const cabeceras = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>',
+  ]
+  const partes: Buffer[] = []
+  const offsets: number[] = []
+  let largo = 0
+  const agregar = (b: Buffer | string) => {
+    const buf = typeof b === 'string' ? Buffer.from(b, 'latin1') : b
+    partes.push(buf)
+    largo += buf.length
+  }
+  agregar('%PDF-1.5\n')
+  cabeceras.forEach((o, i) => {
+    offsets.push(largo)
+    agregar(`${i + 1} 0 obj\n${o}\nendobj\n`)
+  })
+  offsets.push(largo)
+  agregar(`4 0 obj\n<< /Length ${comprimido.length} /Filter /FlateDecode >>\nstream\n`)
+  agregar(comprimido)
+  agregar('\nendstream\nendobj\n')
+  const xref = largo
+  let tabla = 'xref\n0 5\n0000000000 65535 f \n'
+  for (const o of offsets) tabla += `${String(o).padStart(10, '0')} 00000 n \n`
+  tabla += `trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  agregar(tabla)
+  return Buffer.concat(partes)
 }
 
 const sha = (b: Uint8Array) => createHash('sha256').update(b).digest('hex')
@@ -245,6 +279,35 @@ test.describe('validación del contenido', () => {
     expect(await validarComprobante(conLanzamiento, 'application/pdf')).toMatchObject({
       ok: false,
       codigo: 'CONTENIDO_ACTIVO',
+    })
+  })
+
+  test('PDF: contenido activo con el nombre ofuscado o dentro de un flujo comprimido', async () => {
+    // `/#4Aava#53cript` es `/JavaScript` para un lector PDF, pero no aparece en claro.
+    const ofuscado = pdf(' /OpenAction << /S /#4Aava#53cript /JS (app.alert(1)) >>')
+    expect(ofuscado.toString('latin1')).not.toContain('/JavaScript')
+    expect(await validarComprobante(ofuscado, 'application/pdf')).toMatchObject({
+      ok: false,
+      codigo: 'CONTENIDO_ACTIVO',
+    })
+    // Un diccionario con la acción dentro de un flujo Flate (como un object stream de PDF 1.5).
+    const enFlujo = pdfConFlujo(Buffer.from('<< /Type /Annot /A << /S /JavaScript /JS (x) >> >>'))
+    expect(enFlujo.toString('latin1')).not.toContain('/JavaScript')
+    expect(await validarComprobante(enFlujo, 'application/pdf')).toMatchObject({
+      ok: false,
+      codigo: 'CONTENIDO_ACTIVO',
+    })
+    // Y el mismo PDF sin acción activa es válido: el flujo comprimido no se rechaza por serlo.
+    const limpio = pdfConFlujo(Buffer.from('BT /F1 12 Tf (comprobante) Tj ET'))
+    expect((await validarComprobante(limpio, 'application/pdf')).ok).toBe(true)
+  })
+
+  test('PDF: un flujo que se expande de forma desmedida es una bomba y se rechaza', async () => {
+    const bomba = pdfConFlujo(Buffer.alloc(20 * 1024 * 1024, 0))
+    expect(bomba.length).toBeLessThan(TAMANO_MAXIMO_BYTES)
+    expect(await validarComprobante(bomba, 'application/pdf')).toMatchObject({
+      ok: false,
+      codigo: 'ARCHIVO_CORRUPTO',
     })
   })
 

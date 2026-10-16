@@ -509,11 +509,24 @@ BEGIN
         END IF;
     END IF;
 
-    -- 6. Tope técnico de cargas sin completar por padre.
+    -- 6. Tope técnico de cargas sin completar por padre. El conteo se serializa por padre (sin esto, N
+    --    preparaciones paralelas con claves distintas lo superarían). Si se alcanza, las cargas PROPIAS
+    --    abandonadas hace más de una hora se vencen en el acto: una app cerrada o un archivo cambiado dejan
+    --    cargas sin finalizar y el padre no puede quedar bloqueado hasta que alguien corra la conciliación.
+    --    El objeto temporal de una carga vencida lo retira la conciliación.
+    PERFORM pg_catalog.pg_advisory_xact_lock(
+        pg_catalog.hashtext('ept109_cuota'), pg_catalog.hashtext(v_padre::TEXT));
     IF (SELECT pg_catalog.count(*) FROM public.cargas_comprobante c
         WHERE c.padre_id = v_padre AND c.estado = 'PREPARADA') >= 10 THEN
-        RAISE EXCEPTION USING ERRCODE = 'P6868',
-            MESSAGE = 'Tenés demasiadas cargas sin completar. Terminá o esperá a que venzan.';
+        UPDATE public.cargas_comprobante c
+        SET estado = 'EXPIRADA', motivo_descarte = 'EXPIRADA', resuelto_en = NOW()
+        WHERE c.padre_id = v_padre AND c.estado = 'PREPARADA'
+          AND c.creado_en < NOW() - INTERVAL '1 hour';
+        IF (SELECT pg_catalog.count(*) FROM public.cargas_comprobante c
+            WHERE c.padre_id = v_padre AND c.estado = 'PREPARADA') >= 10 THEN
+            RAISE EXCEPTION USING ERRCODE = 'P6868',
+                MESSAGE = 'Tenés demasiadas cargas sin completar. Terminalas o volvé a intentar en una hora.';
+        END IF;
     END IF;
 
     v_id := pg_catalog.gen_random_uuid();
@@ -805,9 +818,11 @@ BEGIN
                      END
            END
     FROM public.cargas_comprobante c
+    -- Además de lo pendiente, se re-barre lo cerrado en los últimos 3 días: un token de subida firmado
+    -- antes del cierre puede escribir el objeto después de marcarlo como retirado.
     WHERE c.estado <> 'PREPARADA'
-      AND c.temporal_eliminado_en IS NULL
-    ORDER BY c.creado_en
+      AND (c.temporal_eliminado_en IS NULL OR c.resuelto_en > NOW() - INTERVAL '3 days')
+    ORDER BY c.temporal_eliminado_en NULLS FIRST, c.resuelto_en
     LIMIT p_limite;
 END;
 $$;
@@ -821,7 +836,7 @@ SET search_path = ''
 AS $$
     UPDATE public.cargas_comprobante
     SET temporal_eliminado_en = NOW()
-    WHERE id = p_carga_id AND estado <> 'PREPARADA' AND temporal_eliminado_en IS NULL;
+    WHERE id = p_carga_id AND estado <> 'PREPARADA';
 $$;
 
 -- Privilegios de las operaciones DEFINER.
@@ -970,6 +985,10 @@ CREATE POLICY "Comprobantes temporales: bloqueo de acceso"
 -- objeto desde un cliente, y los temporales no se pueden leer ni listar. La
 -- lectura del bucket FINAL (EPT-101) exige una fila de comprobantes_pago, que un
 -- temporal nunca tiene.
+-- LÍMITE: la política se evalúa cuando se escribe. Un token de subida firmado
+-- (`createSignedUploadUrl`) emitido mientras la carga estaba PREPARADA puede usarse
+-- después de cerrarla y dejar un objeto temporal que nadie referencia: nunca se
+-- publica (finalizar exige PREPARADA) y la conciliación lo retira.
 CREATE POLICY "Comprobantes temporales: carga del padre autorizado"
     ON storage.objects
     FOR INSERT TO authenticated

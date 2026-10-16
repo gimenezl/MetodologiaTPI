@@ -199,7 +199,7 @@ export const MENSAJE_PREPARACION: Readonly<Record<CodigoPreparacion, string>> = 
   P6864: 'Esta carga ya se registró con otros datos. Iniciá una carga nueva.',
   P6865: 'Los datos difieren de los ya informados para este pago. No se modifican.',
   P6866: 'La carga no existe o venció. Iniciá una nueva.',
-  P6868: 'Tenés demasiadas cargas sin completar. Terminalas o esperá a que venzan.',
+  P6868: 'Tenés demasiadas cargas sin completar. Terminalas o volvé a intentar en una hora.',
   DENEGADO: 'Tu cuenta no está habilitada para cargar comprobantes.',
   OTRO: 'No se pudo preparar la carga. Volvé a intentarlo.',
 }

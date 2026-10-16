@@ -8,7 +8,7 @@ import {
 } from '@/contenedores/comprobantes/ComprobanteContenedor'
 import type { AlmacenamientoSeguro } from '@/servicios/almacenamiento-seguro'
 import { leerCargaPendiente } from '@/servicios/carga-pendiente'
-import type { ResultadoSubida, SolicitudSubida } from '@/servicios/comprobantes'
+import { analizarCarga, type ResultadoSubida, type SolicitudSubida } from '@/servicios/comprobantes'
 import type { ArchivoElegido, ResultadoSeleccion, SelectorArchivos } from '@/servicios/selector-archivos'
 import type { ClienteEPT } from '@/servicios/supabase'
 import { ErrorTransporte, type TransporteHttp } from '@/servicios/transporte-http'
@@ -515,5 +515,101 @@ describe('ComprobanteContenedor', () => {
     await waitFor(() => expect(screen.getByTestId('campo-fecha')).toBeTruthy())
     expect(screen.queryByTestId('archivo-elegido')).toBeNull()
     expect(screen.getByTestId('campo-numero').props.value).toBe('')
+  })
+
+  it('la fecha se escribe con teclado numérico y se arma DD/MM/AAAA sola', async () => {
+    const m = crearMundo()
+    await abrirFormulario(m)
+    await fireEvent.changeText(screen.getByTestId('campo-fecha'), '14102026')
+    expect(screen.getByTestId('campo-fecha').props.value).toBe('14/10/2026')
+    await fireEvent.changeText(screen.getByTestId('campo-fecha'), '1410')
+    expect(screen.getByTestId('campo-fecha').props.value).toBe('14/10')
+    await fireEvent.changeText(screen.getByTestId('campo-fecha'), '14a10b20269999')
+    expect(screen.getByTestId('campo-fecha').props.value).toBe('14/10/2026')
+  })
+
+  it('una subida rechazada sin ser de sesión no se da por fallida: el servidor decide si el objeto está', async () => {
+    const m = crearMundo()
+    await abrirFormulario(m)
+    await elegirArchivo()
+    await completar()
+    await fireEvent.press(screen.getByTestId('enviar-comprobante'))
+    await waitFor(() => expect(m.rpcs.length).toBe(1))
+    await responder(m, 'preparar_carga_comprobante', cargaJson())
+    await waitFor(() => expect(m.subidas).toHaveLength(1))
+    // Un intento anterior sí había subido el objeto: el almacenamiento responde «ya existe» como rechazo.
+    await act(async () => {
+      m.subidas[0].resolver({ tipo: 'rechazada', estado: 409 } as ResultadoSubida)
+    })
+    await waitFor(() => expect(m.llamadasHttp).toHaveLength(1))
+    await act(async () => {
+      m.llamadasHttp[0].resolver({ estado: 200, datos: { carga: cargaJson('CONFIRMADA') } })
+    })
+    await waitFor(() => expect(screen.getByText('Comprobante recibido: pendiente de verificación.')).toBeTruthy())
+  })
+
+  it('una subida rechazada por sesión vencida informa la sesión y no intenta finalizar', async () => {
+    const m = crearMundo()
+    await abrirFormulario(m)
+    await elegirArchivo()
+    await completar()
+    await fireEvent.press(screen.getByTestId('enviar-comprobante'))
+    await waitFor(() => expect(m.rpcs.length).toBe(1))
+    await responder(m, 'preparar_carga_comprobante', cargaJson())
+    await waitFor(() => expect(m.subidas).toHaveLength(1))
+    await act(async () => {
+      m.subidas[0].resolver({ tipo: 'rechazada', estado: 401 } as ResultadoSubida)
+    })
+    await waitFor(() =>
+      expect(screen.getByText('Tu sesión venció. Volvé a iniciar sesión e intentá nuevamente.')).toBeTruthy(),
+    )
+    expect(m.llamadasHttp).toHaveLength(0)
+  })
+
+  it('editar un dato tras un intento fallido usa una clave nueva (la anterior ya no corresponde)', async () => {
+    const CLAVE_2 = '55555555-5555-4555-8555-555555555556'
+    const claves = [CLAVE, CLAVE_2]
+    const m = crearMundo()
+    await abrirFormulario(m, { generarClave: () => claves.shift() ?? CLAVE_2 })
+    await elegirArchivo()
+    await completar()
+    await fireEvent.press(screen.getByTestId('enviar-comprobante'))
+    await waitFor(() => expect(m.rpcs.length).toBe(1))
+    await responder(m, 'preparar_carga_comprobante', cargaJson())
+    await waitFor(() => expect(m.subidas).toHaveLength(1))
+    await act(async () => {
+      m.subidas[0].resolver({ tipo: 'rechazada', estado: 401 } as ResultadoSubida)
+    })
+    await waitFor(() => expect(screen.getByTestId('reintentar-comprobante')).toBeTruthy())
+    await fireEvent.press(screen.getByTestId('reintentar-comprobante'))
+
+    await fireEvent.changeText(screen.getByTestId('campo-importe'), '15000,75')
+    expect(await leerCargaPendiente(m.almacenamiento, U, PAGO)).toBeNull()
+    await fireEvent.press(screen.getByTestId('enviar-comprobante'))
+    await waitFor(() => expect(m.rpcs.some(r => r.nombre === 'preparar_carga_comprobante')).toBe(true))
+    expect(m.rpcs[0].args).toMatchObject({ p_clave_carga: CLAVE_2, p_importe: '15000.75' })
+  })
+
+  it('tras un remontaje con el comprobante ya confirmado, volver a las cuotas pide recargar el listado', async () => {
+    const m = crearMundo()
+    const alVolver = jest.fn()
+    await render(
+      <ComprobanteContenedor
+        cliente={m.cliente}
+        usuarioId={U}
+        alumnoId={A1}
+        etiquetaAlumno="Ana Pérez"
+        almacenamiento={m.almacenamiento}
+        transporte={m.transporte}
+        selector={m.selector}
+        subir={m.subir}
+        estado={{ ...COMPROBANTE_VACIO, pagoId: PAGO, fase: 'confirmado', carga: analizarCarga(cargaJson('CONFIRMADA')) }}
+        onEstado={jest.fn()}
+        onVolver={alVolver}
+      />,
+    )
+    await waitFor(() => expect(screen.getByTestId('volver-cuotas-comprobante')).toBeTruthy())
+    await fireEvent.press(screen.getByTestId('volver-cuotas-comprobante'))
+    expect(alVolver).toHaveBeenCalledWith(true)
   })
 })

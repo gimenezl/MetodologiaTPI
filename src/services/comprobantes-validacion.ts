@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { inflateSync } from 'node:zlib'
 import {
   TAMANO_MAXIMO_BYTES,
   type TipoComprobante,
@@ -142,6 +143,49 @@ async function imagenDecodificable(bytes: Uint8Array, formato: 'jpeg' | 'png'): 
 // ---------------------------------------------------------------------------
 const PDF_CABECERA = /^%PDF-(?:1\.[0-7]|2\.0)(?:[\r\n]|$)/u
 const PDF_ACTIVO = /\/(?:JavaScript|Launch|EmbeddedFile|RichMedia)\b/u
+/** Total de bytes que se aceptan descomprimir al buscar contenido activo (corta las bombas). */
+const DESCOMPRESION_MAXIMA = 48 * 1024 * 1024
+const POR_FLUJO_MAXIMO = 16 * 1024 * 1024
+
+/** Los nombres PDF admiten `#XX`: `/#4AavaScript` es `/JavaScript`. Se decodifican antes de buscar. */
+function decodificarNombres(texto: string): string {
+  return texto.replace(/#([0-9A-Fa-f]{2})/gu, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)))
+}
+
+/**
+ * Busca acciones activas en el texto del PDF Y en el contenido de sus flujos Flate (los PDF 1.5 guardan
+ * los diccionarios en object streams comprimidos, donde `/JavaScript` no aparece en claro). Es una
+ * búsqueda conservadora sobre el archivo completo: no distingue objetos alcanzables de huérfanos.
+ * No cubre otros filtros (ASCIIHex, LZW, flujos cifrados): es un límite documentado, no un antivirus.
+ * Devuelve `'bomba'` si la descompresión supera el techo.
+ */
+export function contenidoActivoPdf(bytes: Uint8Array): boolean | 'bomba' {
+  const crudo = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('latin1')
+  if (PDF_ACTIVO.test(decodificarNombres(crudo))) return true
+  let total = 0
+  const inicio = /stream\r?\n/gu
+  let m: RegExpExecArray | null
+  while ((m = inicio.exec(crudo)) !== null) {
+    const desde = m.index + m[0].length
+    const hasta = crudo.indexOf('endstream', desde)
+    if (hasta < 0) break
+    inicio.lastIndex = hasta
+    let descomprimido: Buffer
+    try {
+      descomprimido = inflateSync(Buffer.from(bytes.subarray(desde, hasta)), {
+        maxOutputLength: POR_FLUJO_MAXIMO,
+      })
+    } catch (error) {
+      // Un flujo que no es Flate (o está truncado) no aporta texto; uno que excede el techo es una bomba.
+      if ((error as { code?: string }).code === 'ERR_BUFFER_TOO_LARGE') return 'bomba'
+      continue
+    }
+    total += descomprimido.length
+    if (total > DESCOMPRESION_MAXIMA) return 'bomba'
+    if (PDF_ACTIVO.test(decodificarNombres(descomprimido.toString('latin1')))) return true
+  }
+  return false
+}
 
 /** `startxref` + `%%EOF` al final, y el offset apunta a una tabla `xref` o a un objeto de flujo. */
 export function colaPdfValida(bytes: Uint8Array): boolean {
@@ -157,10 +201,13 @@ export function colaPdfValida(bytes: Uint8Array): boolean {
 async function pdfValido(bytes: Uint8Array): Promise<CodigoRechazoBinario | null> {
   if (!PDF_CABECERA.test(Buffer.from(bytes.subarray(0, 16)).toString('latin1'))) return 'ARCHIVO_CORRUPTO'
   if (!colaPdfValida(bytes)) return 'ARCHIVO_CORRUPTO'
-  if (PDF_ACTIVO.test(Buffer.from(bytes).toString('latin1'))) return 'CONTENIDO_ACTIVO'
+  const activo = contenidoActivoPdf(bytes)
+  if (activo === 'bomba') return 'ARCHIVO_CORRUPTO'
+  if (activo) return 'CONTENIDO_ACTIVO'
 
   const { getDocumentProxy } = await import('unpdf')
   let temporizador: ReturnType<typeof setTimeout> | undefined
+  const abierto: { loadingTask?: { destroy?: () => Promise<void> } } = {}
   try {
     const trabajo = (async (): Promise<CodigoRechazoBinario | null> => {
       // pdf.js transfiere (desacopla) el buffer: se le entrega una copia.
@@ -172,6 +219,7 @@ async function pdfValido(bytes: Uint8Array): Promise<CodigoRechazoBinario | null
         verbosity: 0,
       }
       const pdf = await getDocumentProxy(new Uint8Array(bytes), opciones)
+      abierto.loadingTask = (pdf as unknown as typeof abierto).loadingTask
       if (!Number.isInteger(pdf.numPages) || pdf.numPages < 1) return 'ARCHIVO_CORRUPTO'
       await pdf.getPage(1)
       const js = await pdf.getJSActions()
@@ -190,6 +238,12 @@ async function pdfValido(bytes: Uint8Array): Promise<CodigoRechazoBinario | null
     return 'ARCHIVO_CORRUPTO'
   } finally {
     if (temporizador) clearTimeout(temporizador)
+    // Libera el buffer y el estado del lector; un fallo al destruir no cambia el resultado.
+    try {
+      await abierto.loadingTask?.destroy?.()
+    } catch {
+      // idem
+    }
   }
 }
 

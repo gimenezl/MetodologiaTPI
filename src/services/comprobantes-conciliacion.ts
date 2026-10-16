@@ -23,6 +23,11 @@ import { BUCKET_FINAL, BUCKET_TEMPORAL } from '@/lib/comprobantes-contrato'
  * programada: la dispara quien opera el sistema.
  */
 
+/** Objetos que Storage realmente quitó (`remove` no falla si el objeto ya no estaba: devuelve una lista vacía). */
+function quitados(respuesta: { data: unknown }): number {
+  return Array.isArray(respuesta.data) ? respuesta.data.length : 1
+}
+
 export interface ResultadoConciliacion {
   examinadas: number
   temporalesRetirados: number
@@ -62,12 +67,12 @@ export async function conciliarCargasComprobante(
 
     const temporal = await admin.storage.from(BUCKET_TEMPORAL).remove([fila.ruta_temporal])
     if (temporal.error) completo = false
-    else resultado.temporalesRetirados += 1
+    else resultado.temporalesRetirados += quitados(temporal)
 
     if (fila.ruta_final_huerfana) {
       const final = await admin.storage.from(BUCKET_FINAL).remove([fila.ruta_final_huerfana])
       if (final.error) completo = false
-      else resultado.finalesHuerfanosRetirados += 1
+      else resultado.finalesHuerfanosRetirados += quitados(final)
     }
 
     if (completo) {

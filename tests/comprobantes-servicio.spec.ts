@@ -54,7 +54,9 @@ function crearMundo(plan: Plan = {}) {
           error: null,
         })
       }
-      if (nombre === 'descartar_carga_comprobante') return plan.descartar ?? { data: {}, error: null }
+      if (nombre === 'descartar_carga_comprobante') {
+        return plan.descartar ?? { data: { estado: 'DESCARTADA' }, error: null }
+      }
       return { data: null, error: null }
     },
     storage: {
@@ -76,8 +78,9 @@ function crearMundo(plan: Plan = {}) {
         },
         remove: async (rutas: string[]) => {
           llamadas.push(`borrado:${bucket}`)
-          for (const r of rutas) objetos.delete(clave(bucket, r))
-          return { data: [], error: null }
+          // Como Storage: devuelve solo los objetos que existían (borrar uno ausente no es un error).
+          const quitados = rutas.filter(r => objetos.delete(clave(bucket, r))).map(name => ({ name }))
+          return { data: quitados, error: null }
         },
       }),
     },
@@ -234,6 +237,22 @@ test.describe('finalización de una carga', () => {
     expect(m.llamadas).toContain('rpc:descartar_carga_comprobante:"CUENTA_NO_HABILITADA"')
   })
 
+  test('si la carga ya estaba CONFIRMADA, un descarte sin efecto NO autoriza a borrar el objeto final', async () => {
+    const png = await pngReal()
+    const m = crearMundo({
+      obtener: () => ({ data: m.carga('PREPARADA', { tamano_bytes: png.length }), error: null }),
+      confirmar: { data: null, error: { code: '42501', message: 'denegado' } },
+      // Otra finalización del mismo intento la confirmó entre el 42501 y el descarte: es un no-op.
+      descartar: { data: { estado: 'CONFIRMADA' }, error: null },
+    })
+    m.poner(BUCKET_TEMPORAL, RUTA_TEMPORAL, png)
+
+    await finalizarCargaComprobante(m.admin, USUARIO, CARGA)
+
+    expect(m.existe(BUCKET_FINAL, RUTA_FINAL)).toBe(true)
+    expect(m.llamadas.some(l => l === `borrado:${BUCKET_FINAL}`)).toBe(false)
+  })
+
   test('un objeto final previo con OTRO contenido no se acepta ni se borra', async () => {
     const png = await pngReal()
     const otro = await sharp({ create: { width: 21, height: 21, channels: 3, background: '#000' } }).png().toBuffer()
@@ -291,5 +310,14 @@ test.describe('conciliación', () => {
       pendientes: 0,
     })
     expect(m.existe(BUCKET_FINAL, RUTA_FINAL)).toBe(false)
+
+    // Repetirla (o re-barrer una carga cerrada hace poco) no cuenta como retirado lo que ya no estaba.
+    const otra2 = await conciliarCargasComprobante(admin)
+    expect(otra2).toMatchObject({
+      examinadas: 2,
+      temporalesRetirados: 0,
+      finalesHuerfanosRetirados: 0,
+      pendientes: 0,
+    })
   })
 })

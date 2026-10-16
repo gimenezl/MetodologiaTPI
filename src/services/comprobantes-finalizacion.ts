@@ -87,18 +87,25 @@ async function borrar(admin: SupabaseClient, bucket: string, ruta: string): Prom
   }
 }
 
+/**
+ * Cierra la carga y devuelve `true` SOLO si quedó DESCARTADA o EXPIRADA. `descartar_carga_comprobante`
+ * es un no-op si la carga ya no estaba PREPARADA (p. ej. otra finalización la confirmó): en ese caso no
+ * se puede asumir que el objeto final es huérfano y NO se debe borrar.
+ */
 async function descartar(
   admin: SupabaseClient,
   usuarioId: string,
   cargaId: string,
   motivo: 'ARCHIVO_INVALIDO' | 'CONTENIDO_NO_COINCIDE' | 'CUENTA_NO_HABILITADA'
 ): Promise<boolean> {
-  const { error } = await admin.rpc('descartar_carga_comprobante', {
+  const { data, error } = await admin.rpc('descartar_carga_comprobante', {
     p_usuario_id: usuarioId,
     p_carga_id: cargaId,
     p_motivo: motivo,
   })
-  return !error
+  if (error) return false
+  const estado = (data as { estado?: unknown } | null)?.estado
+  return estado === 'DESCARTADA' || estado === 'EXPIRADA'
 }
 
 function motivoDe(codigo: CodigoRechazoBinario): 'ARCHIVO_INVALIDO' | 'CONTENIDO_NO_COINCIDE' {

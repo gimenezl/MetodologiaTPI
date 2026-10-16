@@ -108,7 +108,7 @@ veces la misma carga devuelve el mismo comprobante; confirmarla con otro hash es
 | P6864 | la clave de carga ya se usó con otros datos |
 | P6865 | los datos difieren de los ya informados para el pago |
 | P6866 | la carga no existe, venció o fue descartada |
-| P6868 | demasiadas cargas sin completar (tope técnico de 10 por padre) |
+| P6868 | demasiadas cargas sin completar (tope técnico de 10 por padre; las propias abandonadas hace más de una hora se vencen en el acto al alcanzarlo) |
 | 42501 / P5505 | identidad no habilitada / sin identidad |
 
 Los códigos de base no salen por la API de Next: allí se traducen a códigos de dominio.
@@ -126,9 +126,11 @@ Los códigos de base no salen por la API de Next: allí se traducen a códigos d
 Se rechaza además: archivo vacío, un byte sobre 5 MiB, contenido que no es ninguno de los tres (HTML, SVG,
 GIF, ZIP…), tipo declarado contradictorio con el contenido y tamaño declarado distinto del real.
 
-**Límites honestos.** No es un antivirus. Un PDF con contenido activo oculto en estructuras que pdf.js no
-interpreta no se puede descartar por completo. El control de CPU se limita al tope de píxeles y a 10 s para
-abrir un PDF; no hay aislamiento de proceso.
+**Límites honestos.** No es un antivirus. La búsqueda de contenido activo en un PDF recorre el texto del
+archivo y el contenido de sus flujos Flate (los PDF 1.5 guardan diccionarios en flujos comprimidos), con los
+nombres `#XX` decodificados, y rechaza una expansión desmedida (16 MiB por flujo, 48 MiB en total). No cubre
+otros filtros (ASCIIHex, LZW), flujos cifrados ni acciones fuera de esos cuatro nombres. El control de CPU se
+limita al tope de píxeles y a 10 s para abrir un PDF; no hay aislamiento de proceso.
 
 ## Consistencia SQL ↔ Storage y recuperación
 
@@ -177,8 +179,10 @@ Reglas del contenedor: un solo envío en vuelo (doble toque); un desenlace incie
 hasta consultar la carga; un archivo distinto invalida la clave anterior; el estado vive en el contexto de la
 pantalla y sobrevive a la revalidación de la sesión (garantía de EPT-108); una respuesta atrasada nunca se
 aplica a otro hijo ni a otra cuenta; no se persisten binarios ni rutas, y el archivo elegido es una copia en
-la caché de la aplicación (el original del usuario no se toca ni se borra). La cámara y la galería se piden
-sin metadatos EXIF.
+la caché de la aplicación (el original del usuario no se toca ni se borra). La imagen se sube **tal como la
+entrega la cámara o la galería**: la aplicación no vuelve a codificarla, así que puede conservar metadatos
+EXIF (por ejemplo, la ubicación). Solo la ven el padre que la subió y Dirección; quitar esos metadatos
+exigiría recodificar la imagen y queda fuera de esta unidad.
 
 ## Lectura web para Dirección
 
@@ -191,7 +195,9 @@ original por URL firmada. **No aprueba ni rechaza.**
 No están en las decisiones aprobadas; se tomaron como mínimo técnico y deben ratificarse o corregirse:
 
 1. **Tope técnico de 10 cargas sin completar por padre.** No limita comprobantes confirmados (no hay máximo
-   de archivos por pago); evita acumular objetos temporales de 5 MiB sin límite.
+   de archivos por pago); evita acumular objetos temporales de 5 MiB sin límite. El conteo se serializa por
+   padre y, al alcanzarlo, las cargas propias abandonadas hace más de una hora se vencen en el acto: una app
+   cerrada no deja al padre bloqueado hasta la próxima conciliación.
 2. **Vencimiento de 24 h de una carga sin finalizar** (solo del intento y su objeto temporal; no de pagos).
 3. **Tope técnico de 2000 bytes del número de operación**, derivado del límite de las entradas del índice
    único. No es una regla comercial.

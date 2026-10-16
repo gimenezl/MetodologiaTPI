@@ -4,6 +4,7 @@
 // entran por SQL (service_role no tiene INSERT sobre ellas desde EPT-104). Archivos sintéticos, sin datos
 // personales.
 import assert from 'node:assert/strict'
+import { Buffer } from 'node:buffer'
 import { execFileSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 

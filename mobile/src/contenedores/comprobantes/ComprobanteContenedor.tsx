@@ -93,6 +93,14 @@ export interface ComprobanteContenedorProps {
   generarClave?: () => string
 }
 
+/** Teclado numérico: deja solo dígitos y arma `DD/MM/AAAA` mientras se escribe (máximo 8 dígitos). */
+export function mascaraFecha(texto: string): string {
+  const d = texto.replace(/\D/gu, '').slice(0, 8)
+  if (d.length <= 2) return d
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`
+}
+
 /** `DD/MM/AAAA` (o ya `AAAA-MM-DD`) → `AAAA-MM-DD` validado. */
 function fechaIso(texto: string): { ok: true; valor: string } | { ok: false; mensaje: string } {
   const t = texto.trim()
@@ -146,7 +154,26 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
     contextoRef.current = contexto
   }, [contexto])
   const enviandoRef = useRef(false)
-  const huboConfirmacionRef = useRef(false)
+  // Un remontaje (revalidación de sesión) no debe perder que ya se confirmó un comprobante.
+  const huboConfirmacionRef = useRef(estado.fase === 'confirmado')
+  /**
+   * Token del intento vigente. Se invalida al volver atrás o al cambiar de cuenta/hijo: una operación en
+   * vuelo termina su trabajo (servidor, almacenamiento) pero ya no escribe en la pantalla.
+   */
+  const intentoRef = useRef(0)
+  useEffect(() => {
+    intentoRef.current += 1
+  }, [contexto])
+  const publicarSi = useCallback(
+    (token: number, parcial: Partial<EstadoComprobante>) => {
+      if (intentoRef.current === token) publicar(parcial)
+    },
+    [publicar],
+  )
+  const reiniciar = useCallback(() => {
+    intentoRef.current += 1
+    publicar({ ...COMPROBANTE_VACIO })
+  }, [publicar])
 
   const [errores, setErrores] = useState<ErroresCampos>({})
   const [avisoSeleccion, setAvisoSeleccion] = useState<{ tipo: 'advertencia' | 'error'; mensaje: string } | null>(null)
@@ -221,7 +248,8 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
 
   // ---- Envío -----------------------------------------------------------------------------------------
   const resolverCarga = useCallback(
-    async (carga: CargaComprobante): Promise<void> => {
+    async (carga: CargaComprobante, token: number): Promise<void> => {
+      const publicar = (parcial: Partial<EstadoComprobante>) => publicarSi(token, parcial)
       const actual = estadoRef.current
       const archivo = actual.archivo
       const olvidar = () => descartarCargaPendiente(almacenamiento, usuarioId, carga.pagoId, carga.claveCarga)
@@ -269,11 +297,12 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
             }
           },
         })
-        if (subida.tipo === 'rechazada') {
-          const sinSesion = subida.estado === 401 || subida.estado === 403
-          publicar({ fase: 'rechazado', etapa: null, mensaje: sinSesion ? MENSAJE_SIN_SESION : MENSAJE_SUBIDA })
+        if (subida.tipo === 'rechazada' && (subida.estado === 401 || subida.estado === 403)) {
+          publicar({ fase: 'rechazado', etapa: null, mensaje: MENSAJE_SIN_SESION })
           return
         }
+        // Otro rechazo (p. ej. «ya existe» por un intento anterior que sí subió el objeto, que no se
+        // reemplaza): no se declara fallo desde acá; el servidor es quien sabe si el objeto está.
         publicar({ etapa: 'verificando', progreso: 1 })
         const fin = await finalizarCarga(transporte, carga.cargaId)
         if (fin.tipo === 'confirmada') {
@@ -295,7 +324,7 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
       }
       publicar({ fase: 'rechazado', etapa: null, mensaje: MENSAJE_SUBIDA })
     },
-    [almacenamiento, publicar, subir, transporte, usuarioId],
+    [almacenamiento, publicarSi, subir, transporte, usuarioId],
   )
 
   const enviar = useCallback(async () => {
@@ -321,6 +350,8 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
 
     enviandoRef.current = true // bloquea el doble toque antes de que React publique el estado
     const clave = actual.claveCarga ?? generarClave()
+    const token = intentoRef.current
+    const publicar = (parcial: Partial<EstadoComprobante>) => publicarSi(token, parcial)
     try {
       publicar({ fase: 'enviando', etapa: 'preparando', progreso: 0, claveCarga: clave, mensaje: null })
       try {
@@ -374,11 +405,11 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
       } catch {
         // idem
       }
-      await resolverCarga(carga)
+      await resolverCarga(carga, token)
     } finally {
       enviandoRef.current = false
     }
-  }, [almacenamiento, cliente, generarClave, pagoElegido, publicar, resolverCarga, usuarioId])
+  }, [almacenamiento, cliente, generarClave, pagoElegido, publicarSi, resolverCarga, usuarioId])
 
   const verificar = useCallback(async () => {
     if (enviandoRef.current || estadoRef.current.fase !== 'incierto') return
@@ -386,13 +417,16 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
     if (!clave) return
     enviandoRef.current = true
     const dueno = contextoRef.current
+    const token = intentoRef.current
+    const publicar = (parcial: Partial<EstadoComprobante>) => publicarSi(token, parcial)
     try {
       publicar({ fase: 'incierto', mensaje: 'verificando' })
       const c = await consultarCarga(cliente, clave)
       if (contextoRef.current !== dueno) return
       if (c.tipo === 'registrada') {
-        publicar({ mensaje: null })
-        await resolverCarga(c.carga)
+        // Si hay que terminar la subida, la pantalla vuelve a mostrar el progreso y bloquea el formulario.
+        publicar({ fase: 'enviando', etapa: 'preparando', progreso: 0, mensaje: null })
+        await resolverCarga(c.carga, token)
       } else if (c.tipo === 'no_registrada') {
         // El servidor no la conoce: nada quedó registrado. Se puede reenviar con la misma clave.
         publicar({
@@ -406,7 +440,7 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
     } finally {
       enviandoRef.current = false
     }
-  }, [cliente, publicar, resolverCarga])
+  }, [cliente, publicarSi, resolverCarga])
 
   // Recuperación de una carga incierta de una sesión anterior de ESTA cuenta.
   useEffect(() => {
@@ -423,6 +457,23 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
     // Solo al elegir el pago.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [almacenamiento, usuarioId, estado.pagoId])
+
+  /**
+   * Un dato distinto es otro contenido: la clave del intento anterior ya no le corresponde (el servidor
+   * respondería «clave usada con otros datos»). El intento previo queda para vencer solo.
+   */
+  const editarCampo = useCallback(
+    (parcial: Partial<Pick<EstadoComprobante, 'fecha' | 'importe' | 'numero'>>) => {
+      const actual = estadoRef.current
+      if (actual.claveCarga && actual.fase === 'edicion' && actual.pagoId) {
+        void descartarCargaPendiente(almacenamiento, usuarioId, actual.pagoId, actual.claveCarga)
+        publicar({ ...parcial, claveCarga: null })
+        return
+      }
+      publicar(parcial)
+    },
+    [almacenamiento, publicar, usuarioId],
+  )
 
   const volverACuotas = useCallback(() => {
     onVolver(huboConfirmacionRef.current)
@@ -497,7 +548,7 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
         etiquetaAlumno={etiquetaAlumno}
         carga={cargaPagos.tipo === 'ok' ? { tipo: 'ok', pagos: [] } : cargaPagos}
         onElegir={() => undefined}
-        onVolver={() => publicar({ ...COMPROBANTE_VACIO })}
+        onVolver={reiniciar}
         onReintentar={() => setRecarga(n => n + 1)}
       />
     )
@@ -517,15 +568,15 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
       etapa={enviando ? estado.etapa : null}
       progreso={estado.progreso}
       mensaje={estado.fase === 'edicion' ? estado.mensaje : null}
-      onCambiarFecha={v => publicar({ fecha: v })}
-      onCambiarImporte={v => publicar({ importe: v })}
-      onCambiarNumero={v => publicar({ numero: v })}
+      onCambiarFecha={v => editarCampo({ fecha: mascaraFecha(v) })}
+      onCambiarImporte={v => editarCampo({ importe: v })}
+      onCambiarNumero={v => editarCampo({ numero: v })}
       onTomarFoto={() => void elegir(() => selector.tomarFoto())}
       onElegirImagen={() => void elegir(() => selector.elegirImagen())}
       onElegirArchivo={() => void elegir(() => selector.elegirArchivo())}
       onQuitarArchivo={() => publicar({ archivo: null, claveCarga: null, mensaje: null })}
       onEnviar={() => void enviar()}
-      onVolver={() => publicar({ ...COMPROBANTE_VACIO })}
+      onVolver={reiniciar}
     />
   )
 }
