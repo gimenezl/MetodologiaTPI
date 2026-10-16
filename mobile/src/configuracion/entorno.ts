@@ -69,11 +69,15 @@ export function esUrlHttpsValida(valor: string): boolean {
   }
 }
 
-function esUrlLocalIntegracionValida(valor: string, plataforma: OpcionesEntorno['plataforma']): boolean {
+function esUrlLocalIntegracionValida(
+  valor: string,
+  plataforma: OpcionesEntorno['plataforma'],
+  puerto = '54321',
+): boolean {
   const hostEsperado = plataforma === 'android' ? '10.0.2.2' : '127.0.0.1'
   try {
     const url = new URL(valor)
-    return url.protocol === 'http:' && url.hostname === hostEsperado && url.port === '54321' &&
+    return url.protocol === 'http:' && url.hostname === hostEsperado && url.port === puerto &&
       url.pathname === '/' && !url.username && !url.password && !url.search && !url.hash
   } catch {
     return false
@@ -93,7 +97,11 @@ export function leerEntorno(variables: VariablesCrudas, opciones: OpcionesEntorn
   if (!supabaseAnonKey) motivos.push('Falta EXPO_PUBLIC_SUPABASE_ANON_KEY.')
   else if (esClavePrivada(supabaseAnonKey)) motivos.push('EXPO_PUBLIC_SUPABASE_ANON_KEY contiene una clave privilegiada: solo se admite la clave pública.')
   if (!apiBaseUrl) motivos.push('Falta EXPO_PUBLIC_API_BASE_URL.')
-  else if (!esUrlHttpsValida(apiBaseUrl)) motivos.push('EXPO_PUBLIC_API_BASE_URL debe ser una URL https sin credenciales.')
+  else if (!esUrlHttpsValida(apiBaseUrl) &&
+    // Solo en builds e2e efímeros: el servidor Next local del runner, en el host y puerto exactos.
+    !(opciones.authIntegracionLocal && esUrlLocalIntegracionValida(apiBaseUrl, opciones.plataforma, '3000'))) {
+    motivos.push('EXPO_PUBLIC_API_BASE_URL debe ser una URL https sin credenciales.')
+  }
   return motivos.length ? { ok: false, motivos } : { ok: true, entorno: { supabaseUrl, supabaseAnonKey, apiBaseUrl } }
 }
 

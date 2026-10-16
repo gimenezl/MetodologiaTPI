@@ -31,13 +31,19 @@ export class ErrorTransporte extends Error {
   readonly tipo: TipoErrorTransporte
   readonly estado: number | null
   readonly dominio: ErrorDeDominio | null
+  /** Cuerpo JSON de una respuesta no exitosa, tal como lo envió el servidor (solo en `HTTP`). */
+  readonly cuerpo: unknown
 
-  constructor(tipo: TipoErrorTransporte, opciones: { estado?: number; dominio?: ErrorDeDominio } = {}) {
+  constructor(
+    tipo: TipoErrorTransporte,
+    opciones: { estado?: number; dominio?: ErrorDeDominio; cuerpo?: unknown } = {},
+  ) {
     super(tipo === 'HTTP' ? (opciones.dominio?.message ?? MENSAJES.RESPUESTA_INVALIDA) : MENSAJES[tipo])
     this.name = 'ErrorTransporte'
     this.tipo = tipo
     this.estado = opciones.estado ?? null
     this.dominio = opciones.dominio ?? null
+    this.cuerpo = opciones.cuerpo ?? null
   }
 }
 
@@ -49,6 +55,8 @@ export interface OpcionesTransporte {
   timeoutMs?: number
   /** Permite `http://` solo hacia loopback (desarrollo). Nunca para hosts de red. */
   permitirHttpLocal?: boolean
+  /** Hosts `http://` adicionales, exactos (p. ej. `10.0.2.2` del emulador en un build de integración). */
+  hostsHttpLocalesExtra?: readonly string[]
 }
 
 export interface SolicitudHttp {
@@ -68,14 +76,18 @@ export interface RespuestaHttp<T> {
 
 const HOSTS_LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]'])
 
-export function validarBaseUrl(baseUrl: string, permitirHttpLocal = false): URL {
+export function validarBaseUrl(
+  baseUrl: string,
+  permitirHttpLocal = false,
+  hostsHttpLocalesExtra: readonly string[] = [],
+): URL {
   let url: URL
   try {
     url = new URL(baseUrl)
   } catch {
     throw new ErrorTransporte('RUTA_INVALIDA')
   }
-  const esLoopback = HOSTS_LOOPBACK.has(url.hostname)
+  const esLoopback = HOSTS_LOOPBACK.has(url.hostname) || hostsHttpLocalesExtra.includes(url.hostname)
   const protocoloValido = url.protocol === 'https:' || (permitirHttpLocal && url.protocol === 'http:' && esLoopback)
   if (!protocoloValido || url.username || url.password || url.search || url.hash) {
     throw new ErrorTransporte('RUTA_INVALIDA')
@@ -104,7 +116,7 @@ export interface TransporteHttp {
 }
 
 export function crearTransporteHttp(opciones: OpcionesTransporte): TransporteHttp {
-  const base = validarBaseUrl(opciones.baseUrl, opciones.permitirHttpLocal)
+  const base = validarBaseUrl(opciones.baseUrl, opciones.permitirHttpLocal, opciones.hostsHttpLocalesExtra)
   const timeoutMs = opciones.timeoutMs ?? 15000
   const llamar: typeof fetch = opciones.fetchImpl ?? ((...args) => fetch(...args))
 
@@ -182,7 +194,11 @@ export function crearTransporteHttp(opciones: OpcionesTransporte): TransporteHtt
       }
 
       if (!respuesta.ok) {
-        throw new ErrorTransporte('HTTP', { estado: respuesta.status, dominio: errorDesdeRespuesta(datos, respuesta.status) })
+        throw new ErrorTransporte('HTTP', {
+          estado: respuesta.status,
+          dominio: errorDesdeRespuesta(datos, respuesta.status),
+          cuerpo: datos,
+        })
       }
       return { estado: respuesta.status, datos: datos as T }
     } finally {

@@ -218,6 +218,8 @@ export interface PagoResultadoVistaProps {
   onVolverASeleccion: () => void
   onVerificar: () => void
   onReintentarMismoIntento: () => void
+  /** Solo con un pago pendiente de verificación recién registrado o recuperado (EPT-109). */
+  onAdjuntarComprobante?: () => void
 }
 
 export function PagoResultadoVista(props: PagoResultadoVistaProps): ReactElement {
@@ -279,7 +281,20 @@ export function PagoResultadoVista(props: PagoResultadoVistaProps): ReactElement
           ))}
         </Tarjeta>
         <DatosTransferencia banco={{ tipo: 'ok', datos: pago.banco }} onReintentar={() => undefined} />
-        <Boton etiqueta="Volver a las cuotas" onPress={props.onVolverACuotas} testID="volver-cuotas-pago" />
+        {pago.estado === 'PENDIENTE_VERIFICACION' && props.onAdjuntarComprobante ? (
+          <Boton
+            etiqueta="Adjuntar comprobante"
+            onPress={props.onAdjuntarComprobante}
+            pistaAccesible="Adjuntá la foto o el PDF del comprobante de tu transferencia"
+            testID="adjuntar-comprobante"
+          />
+        ) : null}
+        <Boton
+          etiqueta="Volver a las cuotas"
+          variante={props.onAdjuntarComprobante ? 'secundario' : 'primario'}
+          onPress={props.onVolverACuotas}
+          testID="volver-cuotas-pago"
+        />
       </View>
     )
   }

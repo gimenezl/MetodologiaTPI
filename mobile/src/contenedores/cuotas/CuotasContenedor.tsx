@@ -9,8 +9,12 @@ import {
 import type { ClienteEPT } from '@/servicios/supabase'
 
 import type { AlmacenamientoSeguro } from '@/servicios/almacenamiento-seguro'
+import type { SubirArchivo } from '@/servicios/comprobantes'
 import type { PagoRegistrado } from '@/servicios/pagos'
+import type { SelectorArchivos } from '@/servicios/selector-archivos'
+import type { TransporteHttp } from '@/servicios/transporte-http'
 
+import { COMPROBANTE_VACIO, ComprobanteContenedor, type EstadoComprobante } from '../comprobantes/ComprobanteContenedor'
 import { PagoContenedor } from '../pagos/PagoContenedor'
 import { DetalleCuotaVista, type ResultadoDetalle } from './DetalleCuotaVista'
 import { CuotasVista, type AlumnoSelector, type PestanaCuotas, type ResultadoListado } from './CuotasVista'
@@ -22,14 +26,29 @@ export interface ContextoCuotas {
   abierta: { alumnoId: string; facturaId: string } | null
   /** Pantalla «Pagar ítems» abierta para un hijo (solo padre). Un cambio de hijo la descarta. */
   pago?: { alumnoId: string; registrado?: PagoRegistrado } | null
+  /** Carga de comprobantes abierta para un hijo (solo padre). El estado sobrevive a una revalidación. */
+  comprobante?: { alumnoId: string; estado: EstadoComprobante } | null
 }
 
-export const CONTEXTO_CUOTAS_VACIO: ContextoCuotas = { elegido: null, pestana: 'pendientes', abierta: null, pago: null }
+export const CONTEXTO_CUOTAS_VACIO: ContextoCuotas = {
+  elegido: null,
+  pestana: 'pendientes',
+  abierta: null,
+  pago: null,
+  comprobante: null,
+}
 
 export interface PagosHabilitados {
   /** Cuenta autenticada: acota la recuperación de un intento de pago. */
   usuarioId: string
   almacenamiento: AlmacenamientoSeguro
+}
+
+/** Dependencias nativas y de red de la carga de comprobantes (EPT-109): inyectables y simulables. */
+export interface ComprobantesHabilitados {
+  transporte: TransporteHttp
+  selector: SelectorArchivos
+  subir: SubirArchivo
 }
 
 export interface CuotasContenedorProps {
@@ -43,6 +62,8 @@ export interface CuotasContenedorProps {
   onContexto?: (contexto: ContextoCuotas) => void
   /** Solo se informa para el PADRE: habilita «Pagar ítems». El servidor autoriza igualmente cada operación. */
   pagos?: PagosHabilitados
+  /** Solo para el PADRE (junto con `pagos`): habilita «Comprobantes de mis pagos». */
+  comprobantes?: ComprobantesHabilitados
 }
 
 type Listado = { alumnoId: string; recarga: number; resultado: Exclude<ResultadoListado, { tipo: 'cargando' }> }
@@ -53,10 +74,18 @@ type Detalle = { alumnoId: string; facturaId: string; recarga: number; resultado
  * volver o reanudar, una respuesta tardía nunca se muestra bajo otro contexto. Las lecturas en vuelo
  * se cancelan al cambiar el contexto o al desmontar (cierre de sesión o cambio de usuario).
  */
-export function CuotasContenedor({ cliente, alumnos, mostrarSelector, contexto, onContexto, pagos }: CuotasContenedorProps): ReactElement {
+export function CuotasContenedor({
+  cliente,
+  alumnos,
+  mostrarSelector,
+  contexto,
+  onContexto,
+  pagos,
+  comprobantes,
+}: CuotasContenedorProps): ReactElement {
   const [interno, setInterno] = useState<ContextoCuotas>(CONTEXTO_CUOTAS_VACIO)
   const actual = contexto ?? interno
-  const { elegido, pestana, abierta, pago } = actual
+  const { elegido, pestana, abierta, pago, comprobante } = actual
   const cambiar = (parcial: Partial<ContextoCuotas>) => {
     const siguiente = { ...actual, ...parcial }
     if (onContexto) onContexto(siguiente)
@@ -78,6 +107,8 @@ export function CuotasContenedor({ cliente, alumnos, mostrarSelector, contexto, 
   const facturaAbierta = abierta && abierta.alumnoId === alumnoId ? abierta.facturaId : null
   // La pantalla de pago solo existe para el hijo con el que se abrió y para una cuenta habilitada para pagar.
   const pagoAbierto = pagos && pago && pago.alumnoId === alumnoId ? alumnoId : null
+  // La carga de comprobantes también está atada al hijo con el que se abrió.
+  const comprobanteAbierto = pagos && comprobantes && comprobante && comprobante.alumnoId === alumnoId ? alumnoId : null
 
   useEffect(() => {
     const suscripcion = AppState.addEventListener('change', siguiente => {
@@ -135,6 +166,31 @@ export function CuotasContenedor({ cliente, alumnos, mostrarSelector, contexto, 
   const resultadoListado: ResultadoListado =
     listado && listado.alumnoId === alumnoId && listado.recarga === recarga ? listado.resultado : { tipo: 'cargando' }
 
+  if (pagos && comprobantes && comprobanteAbierto && comprobante) {
+    return (
+      <ComprobanteContenedor
+        // Otra cuenta u otro hijo remontan la pantalla: ni el archivo ni un resultado se heredan.
+        key={`${pagos.usuarioId}:${comprobanteAbierto}`}
+        cliente={cliente}
+        usuarioId={pagos.usuarioId}
+        alumnoId={comprobanteAbierto}
+        etiquetaAlumno={alumnos.find(a => a.id === comprobanteAbierto)?.etiqueta ?? 'Estudiante'}
+        almacenamiento={pagos.almacenamiento}
+        transporte={comprobantes.transporte}
+        selector={comprobantes.selector}
+        subir={comprobantes.subir}
+        // El estado vive en el contexto de la pantalla: una revalidación de la sesión remonta el contenedor
+        // y no debe perder el archivo elegido ni el resultado de un envío en vuelo.
+        estado={comprobante.estado}
+        onEstado={estado => cambiar({ comprobante: { alumnoId: comprobanteAbierto, estado } })}
+        onVolver={huboCambios => {
+          cambiar({ comprobante: null })
+          if (huboCambios) setRecarga(n => n + 1)
+        }}
+      />
+    )
+  }
+
   if (pagos && pagoAbierto) {
     return (
       <PagoContenedor
@@ -149,6 +205,15 @@ export function CuotasContenedor({ cliente, alumnos, mostrarSelector, contexto, 
         // contenedor y no debe devolver al padre a la selección después de haber registrado.
         registradoInicial={pago?.registrado}
         onRegistrado={registrado => cambiar({ pago: { alumnoId: pagoAbierto, registrado } })}
+        onAdjuntarComprobante={
+          comprobantes
+            ? pagoId =>
+                cambiar({
+                  pago: null,
+                  comprobante: { alumnoId: pagoAbierto, estado: { ...COMPROBANTE_VACIO, pagoId } },
+                })
+            : undefined
+        }
         onVolver={huboCambios => {
           cambiar({ pago: null })
           if (huboCambios) setRecarga(n => n + 1)
@@ -180,8 +245,12 @@ export function CuotasContenedor({ cliente, alumnos, mostrarSelector, contexto, 
       resultado={resultadoListado}
       permitirPago={Boolean(pagos)}
       onPagar={() => { if (alumnoId) cambiar({ pago: { alumnoId } }) }}
+      permitirComprobantes={Boolean(pagos && comprobantes)}
+      onComprobantes={() => {
+        if (alumnoId) cambiar({ comprobante: { alumnoId, estado: COMPROBANTE_VACIO } })
+      }}
       onSeleccionarAlumno={id => {
-        cambiar({ abierta: null, pago: null, elegido: id })
+        cambiar({ abierta: null, pago: null, comprobante: null, elegido: id })
       }}
       onCambiarPestana={setPestana}
       onAbrirDetalle={facturaId => { if (alumnoId) setAbierta({ alumnoId, facturaId }) }}

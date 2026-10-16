@@ -21,6 +21,15 @@ const config: ExpoConfig = {
     'expo-router',
     ['expo-secure-store', { configureAndroidBackup: true }],
     'expo-font',
+    [
+      // Comprobantes de transferencia (EPT-109): sin micrófono; los textos del sistema van en español.
+      'expo-image-picker',
+      {
+        cameraPermission: 'Usamos la cámara solo para fotografiar el comprobante de tu transferencia.',
+        photosPermission: 'Usamos tus fotos solo para que elijas el comprobante de tu transferencia.',
+        microphonePermission: false,
+      },
+    ],
     './plugins/with-auth-integration-network-security',
   ],
   experiments: { typedRoutes: false },
