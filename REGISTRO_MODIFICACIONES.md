@@ -1,5 +1,11 @@
 # Registro de modificaciones
 
+## Parte 3: EPT-111 (17/10/2026)
+
+Verificación de pagos desde el panel existente de Dirección: decisión atómica e idempotente, guarda de rol/acceso bajo bloqueo, liberación por rechazo y recuperación de respuestas inciertas. Se mantienen importes históricos, autorización de archivos y saldos derivados. No se generan recibos ni se modifica producción.
+
+Contrato, decisiones adaptadas y bitácora académica: `docs/parte3/EPT-111/README.md`. Matriz criterio/prueba, resultados reales, diagnósticos y límites de plataforma: `docs/evidence/EPT-111.md`. Las pruebas personales en teléfono y la revisión final del usuario permanecen pendientes; no se declara aprobación docente ni humana.
+
 | Corrección recibida | Archivo/línea | Antes | Después | Justificación |
 | --- | --- | --- | --- | --- |
 | 1. Idioma mezclado en español e inglés | `src/app/dashboard/legajos/page.tsx`: 38-181 y usos posteriores | Los estados y manejadores propios alternaban nombres como `loading`, `search`, `selected`, `formMode` y `loadData` con nombres en español. | Los identificadores propios se expresan en español: `cargando`, `busqueda`, `perfilSeleccionado`, `modoFormulario`, `cargarDatos`, entre otros. | Evita tener que recordar el idioma de cada identificador y hace coherente la lectura del archivo. Los nombres impuestos por bibliotecas se conservaron mediante alias en la desestructuración. |

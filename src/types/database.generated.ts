@@ -3306,6 +3306,10 @@ export type Database = {
           valida: boolean
         }[]
       }
+      consultar_verificacion_pago: {
+        Args: { p_pago_id: string }
+        Returns: Json
+      }
       consultar_vinculo: {
         Args: { p_operacion_id: string }
         Returns: {
@@ -4211,6 +4215,10 @@ export type Database = {
           intentos_restantes: number
           resultado: string
         }[]
+      }
+      verificar_pago: {
+        Args: { p_decision: string; p_motivo?: string; p_pago_id: string }
+        Returns: Json
       }
     }
     Enums: {

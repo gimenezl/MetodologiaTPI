@@ -116,6 +116,13 @@ async function conSesion(archivo: string) {
 // DIRECTOR
 // ================================================================
 test.describe.serial('DIRECTOR autenticado — comprobantes pendientes', () => {
+  test('verifica pagos completos, rechazo y acceso a pendientes antiguos con backend real', async () => {
+    test.setTimeout(180_000)
+    execFileSync(process.execPath, ['supabase/tests/comprobantes_verificacion.mjs', '--ui'], {
+      env: { ...process.env, EPT_VERIFICACION_UI_BASE_URL: BASE_URL }, encoding: 'utf8', timeout: 170_000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  })
   test.beforeAll(async () => {
     preparar()
     const r = await objeto('POST', PNG)
@@ -127,7 +134,7 @@ test.describe.serial('DIRECTOR autenticado — comprobantes pendientes', () => {
     limpiar()
   })
 
-  test('la pantalla lista el pago pendiente con sus datos, sin acciones de aprobación', async ({ page }) => {
+  test('la pantalla lista el pago con datos y no habilita decisiones sin reservas coherentes', async ({ page }) => {
     await page.goto('/dashboard/comprobantes')
     await expect(page.getByRole('main').getByRole('heading', { level: 1, name: 'Comprobantes' })).toBeVisible()
     const tarjeta = page.getByTestId(`pago-${PAGO_CON}`)
@@ -145,7 +152,7 @@ test.describe.serial('DIRECTOR autenticado — comprobantes pendientes', () => {
     const sinArchivo = page.getByTestId(`pago-${PAGO_SIN}`)
     await expect(sinArchivo).toContainText('Todavía no se cargó ningún comprobante.')
 
-    // Esta unidad solo lee: la aprobación y el rechazo no existen.
+    // El fixture histórico de EPT-109 no tiene imputaciones: no permite decidir.
     await expect(page.getByRole('button', { name: /aprobar|rechazar/iu })).toHaveCount(0)
     await expect(page.getByRole('link', { name: /aprobar|rechazar/iu })).toHaveCount(0)
     const alcance = await page.evaluate(

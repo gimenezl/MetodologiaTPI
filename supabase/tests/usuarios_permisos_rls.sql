@@ -614,6 +614,9 @@ BEGIN
     -- `comprobantes_carga.mjs` y `comprobantes_concurrencia.mjs`; las operaciones de servidor no son de `authenticated`.
     PERFORM pg_temp.rpc('public.preparar_carga_comprobante', 'x', pg_catalog.format('public.preparar_carga_comprobante(%L::UUID, %L::UUID, %L, %L, %L, %L, 1::BIGINT)', pg_temp.u('02'), pg_temp.u('01'), '2026-10-14', '1.00', 'OP-BAT-EPT109', 'image/png'));
     PERFORM pg_temp.rpc('public.consultar_carga_comprobante', 'x', pg_catalog.format('public.consultar_carga_comprobante(%L::UUID)', pg_temp.u('02')));
+    -- EPT-111: actor derivado de auth.uid(); un pago inexistente no permite escribir.
+    PERFORM pg_temp.rpc('public.verificar_pago', 'x', pg_catalog.format('public.verificar_pago(%L::UUID, %L, NULL)', pg_temp.u('01'), 'APROBADO'));
+    PERFORM pg_temp.rpc('public.consultar_verificacion_pago', 'x', pg_catalog.format('public.consultar_verificacion_pago(%L::UUID)', pg_temp.u('01')));
     -- EPT-110: consultas de solo lectura (inscripciones, facturas por período y registro saneado de comprobantes).
     -- La batería consulta un alumno inexistente: todo actor, incluso Dirección, recibe cero filas y anon, 42501. El alcance real
     -- por actor, los bordes de período y la ausencia de rutas están en `consultas_periodo_inscripciones_rls.sql`.

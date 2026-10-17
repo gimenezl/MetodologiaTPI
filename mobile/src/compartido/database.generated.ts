@@ -1,5 +1,5 @@
 // GENERADO por mobile/scripts/sync-compartido.mjs desde src/types/database.generated.ts. No editar a mano.
-// sha256 de la fuente: 558c3dbfb16144df3ed5d1709a5a9c8a77cf0caa819a96f4b4d6f01a0f3950d8
+// sha256 de la fuente: af551c4b19fc4f4644151fb74bc882e06d6f3000ca407c297811f9c8de919c92
 export type Json =
   | string
   | number
@@ -3308,6 +3308,10 @@ export type Database = {
           valida: boolean
         }[]
       }
+      consultar_verificacion_pago: {
+        Args: { p_pago_id: string }
+        Returns: Json
+      }
       consultar_vinculo: {
         Args: { p_operacion_id: string }
         Returns: {
@@ -4213,6 +4217,10 @@ export type Database = {
           intentos_restantes: number
           resultado: string
         }[]
+      }
+      verificar_pago: {
+        Args: { p_decision: string; p_motivo?: string; p_pago_id: string }
+        Returns: Json
       }
     }
     Enums: {
