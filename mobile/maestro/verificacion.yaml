@@ -52,8 +52,22 @@ name: Acceso real por rol, persistencia y cierre
 - tapOn:
     text: '.*Ver detalle.*'
     index: 0
-- assertVisible: 'Conceptos'
-- assertVisible: '.*Cuota.*'
+# La flecha «Volver» suma una fila arriba: el contenido baja y se llega con desplazamiento.
+- scrollUntilVisible:
+    element:
+      text: 'Conceptos'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: '.*Cuota.*'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: 'Volver a las cuotas'
+    direction: UP
+    timeout: 15000
 - tapOn: 'Volver a las cuotas'
 # HU8: selección de ítems, total calculado por el servidor y registro del pago pendiente de verificación
 # con RPC y RLS reales (Android). El saldo y las pestañas no cambian hasta que se apruebe el pago.
@@ -63,8 +77,21 @@ name: Acceso real por rol, persistencia y cierre
     direction: UP
     timeout: 15000
 - tapOn: 'Pagar ítems'
-- assertVisible: 'Elegí los ítems a pagar'
-- assertVisible: '.*Los ítems pagados o en verificación no se pueden seleccionar.*'
+- scrollUntilVisible:
+    element:
+      text: 'Elegí los ítems a pagar'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: '.*Los ítems pagados o en verificación no se pueden seleccionar.*'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: 'Cuota, Pendiente.*'
+    direction: DOWN
+    timeout: 15000
 - tapOn:
     text: 'Cuota, Pendiente.*'
     index: 0
