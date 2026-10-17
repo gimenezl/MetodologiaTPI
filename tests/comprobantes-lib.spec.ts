@@ -12,11 +12,42 @@ import {
   validarNumeroOperacion,
 } from '@/lib/comprobantes-contrato'
 import { extraerToken } from '@/services/autenticacion-bearer'
+import { decisionPagoSchema, verificacionPagoSchema, errorVerificacion } from '@/lib/comprobantes-verificacion'
 import {
   detectarTipo,
   estructuraPngValida,
   validarComprobante,
 } from '@/services/comprobantes-validacion'
+
+test.describe('EPT-111: contrato estricto de decisión y recuperación', () => {
+  test('solo permite dos decisiones y exige motivo sin aceptar campos de autoridad', () => {
+    expect(decisionPagoSchema.safeParse({ decision: 'APROBADO' }).success).toBe(true)
+    expect(decisionPagoSchema.parse({ decision: 'RECHAZADO', motivo: '  No corresponde  ' })).toEqual({ decision: 'RECHAZADO', motivo: 'No corresponde' })
+    for (const entrada of [null, {}, { decision: 'OTRA' }, { decision: 'RECHAZADO' },
+      { decision: 'RECHAZADO', motivo: ' \n\t' }, { decision: 'APROBADO', motivo: 'x' },
+      { decision: 'APROBADO', actor: 'inventado' }, { decision: 'APROBADO', importe: '1.00' }]) {
+      expect(decisionPagoSchema.safeParse(entrada).success).toBe(false)
+    }
+  })
+  test('una respuesta no fiable o incoherente nunca se interpreta como éxito', () => {
+    const pendiente = { pago_id: 'b1110000-0000-4000-8000-000000000061', estado: 'PENDIENTE_VERIFICACION',
+      verificado_por: null, verificado_en: null, motivo_rechazo: null, repetido: false }
+    expect(verificacionPagoSchema.safeParse(pendiente).success).toBe(true)
+    for (const respuesta of [{}, { ...pendiente, estado: 'APROBADO' },
+      { ...pendiente, estado: 'RECHAZADO', motivo_rechazo: ' ' }, { ...pendiente, verificado_por: pendiente.pago_id },
+      { ...pendiente, repetido: 'true' }]) {
+      expect(verificacionPagoSchema.safeParse(respuesta).success).toBe(false)
+    }
+  })
+  test('fallas desconocidas obligan a consultar, conflictos no se ocultan como éxito', () => {
+    expect(errorVerificacion('desconocido').codigo).toBe('RESULTADO_INCIERTO')
+    expect(errorVerificacion('P6882').estado).toBe(409)
+    expect(errorVerificacion('P6883').codigo).toBe('PAGO_INCOHERENTE')
+    for (const codigo of ['P6880', 'P6881', '42501', 'P5505']) {
+      expect(errorVerificacion(codigo).error).not.toMatch(/P\d{4}|SQLSTATE|supabase/iu)
+    }
+  })
+})
 
 /**
  * EPT-109: contrato compartido y validación del contenido. Archivos sintéticos

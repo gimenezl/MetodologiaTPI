@@ -32,6 +32,7 @@ Object.assign(aliases, { 'accesos-qr': 'accesos', 'asistencias-vinculos': 'asist
 Object.assign(aliases, { 'comprobantes-contrato': 'comprobantes', 'comprobantes-validacion': 'comprobantes',
   'comprobantes-finalizacion': 'comprobantes', 'comprobantes-conciliacion': 'comprobantes',
   'comprobantes-lectura': 'comprobantes', 'autenticacion-bearer': 'comprobantes' })
+Object.assign(aliases, { 'comprobantes-verificacion': 'comprobantes' })
 export const coreTitles = {
   chromium: 'muestra el catálogo ordenado con estados y protección institucional',
   'chromium-directora': 'sin sesión, cada endpoint nuevo responde 401',

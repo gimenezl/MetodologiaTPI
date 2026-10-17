@@ -1,6 +1,7 @@
 import { FileImage, FilePdf, Receipt } from '@phosphor-icons/react/dist/ssr'
 import { formatearFecha, formatearImporteArs } from '@/lib/tarifas'
 import type { PagoPendienteVista } from '@/services/comprobantes-lectura.service'
+import { DecisionPago } from './DecisionPago'
 
 const ZONA = 'America/Argentina/Buenos_Aires'
 
@@ -41,31 +42,43 @@ function difiere(a: string, b: string | null): boolean {
 }
 
 /**
- * Lista de pagos pendientes de verificación con sus comprobantes. Presentación
- * pura (componente de servidor): no aprueba ni rechaza nada.
+ * Datos de servidor; la decisión aislada recupera su estado ante incertidumbre.
  */
 export function PagosPendientes({
   pagos,
   truncado,
+  pagina = 1,
+  busqueda = false,
 }: {
   pagos: PagoPendienteVista[]
   truncado: boolean
+  pagina?: number
+  busqueda?: boolean
 }) {
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">Comprobantes</h1>
         <p className="text-neutral-500 text-sm mt-1">
-          Pagos pendientes de verificación y los archivos que cargó cada familia. Este listado es
-          de solo lectura: la aprobación o el rechazo se habilitan en otra etapa.
+          Revisa los ítems y todos los archivos antes de decidir. La aprobación paga los ítems
+          completos; el rechazo libera la reserva sin reducir la deuda.
         </p>
       </div>
+
+      <form action="/dashboard/comprobantes" className="flex flex-wrap items-end gap-3">
+        <div className="min-w-0 flex-1">
+          <label htmlFor="buscar-pago" className="block text-sm font-semibold text-neutral-700">Buscar un pago por identificador</label>
+          <input id="buscar-pago" name="pago" required className="mt-1 min-h-11 w-full rounded-xl border border-neutral-300 px-3 text-sm" />
+        </div>
+        <button className="min-h-11 rounded-xl bg-primary-700 px-4 text-sm font-semibold text-white">Buscar pago</button>
+        {busqueda && <a className="min-h-11 content-center text-sm underline" href="/dashboard/comprobantes">Ver pendientes</a>}
+      </form>
 
       {pagos.length === 0 ? (
         <div className="bg-white rounded-2xl border border-neutral-200 p-8 text-center">
           <Receipt size={32} className="mx-auto text-neutral-400" aria-hidden="true" />
           <p className="mt-3 text-sm font-semibold text-neutral-800">
-            No hay pagos pendientes de verificación
+            {busqueda ? 'No se encontró el pago solicitado' : 'No hay pagos pendientes de verificación en esta página'}
           </p>
         </div>
       ) : (
@@ -84,10 +97,8 @@ export function PagosPendientes({
                     <p className="text-xs text-neutral-500">
                       Pago registrado el {formatearInstante(pago.creadoEn)}
                     </p>
+                    <p className="mt-1 break-all text-xs text-neutral-600">Identificador: {pago.pagoId}</p>
                   </div>
-                  <span className="inline-flex items-center rounded-full bg-yellow-50 border border-yellow-200 px-2.5 py-0.5 text-xs font-semibold text-yellow-700">
-                    Pendiente de verificación
-                  </span>
                 </div>
 
                 <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
@@ -125,6 +136,16 @@ export function PagosPendientes({
                 </dl>
 
                 <div>
+                  <h3 className="text-sm font-semibold text-neutral-800">Ítems seleccionados y facturas</h3>
+                  <ul className="mt-2 space-y-2 text-sm text-neutral-700">
+                    {pago.items.map(item => <li key={item.itemId} className="break-words">
+                      {item.tipo} · Período {formatearFecha(item.periodo)} · {formatearImporteArs(item.importe)}
+                      <span className="block break-all text-xs">Factura: {item.facturaId} · Ítem: {item.itemId}</span>
+                    </li>)}
+                  </ul>
+                </div>
+
+                <div>
                   <h3 className="text-xs font-semibold text-neutral-500">
                     Comprobantes ({pago.archivos.length})
                   </h3>
@@ -160,17 +181,19 @@ export function PagosPendientes({
                     </ul>
                   )}
                 </div>
+                <DecisionPago pagoId={pago.pagoId} estadoInicial={pago.estado} motivoInicial={pago.motivoRechazo}
+                  habilitado={pago.archivos.length > 0 && pago.items.length > 0} />
               </li>
             )
           })}
         </ul>
       )}
 
-      {truncado && (
-        <p role="status" className="text-sm text-neutral-600">
-          Se muestran los 200 pagos pendientes más recientes.
-        </p>
-      )}
+      {!busqueda && <nav aria-label="Páginas de pagos pendientes" className="flex flex-wrap items-center gap-4 text-sm">
+        <p>Página {pagina}. Hasta 200 pagos pendientes por página, del más reciente al más antiguo.</p>
+        {pagina > 1 && <a className="min-h-11 content-center underline" href={`?pagina=${pagina - 1}`}>Página anterior</a>}
+        {truncado && <a className="min-h-11 content-center underline" href={`?pagina=${pagina + 1}`}>Pagos anteriores</a>}
+      </nav>}
     </div>
   )
 }

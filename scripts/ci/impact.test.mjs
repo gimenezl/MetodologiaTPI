@@ -12,6 +12,23 @@ import { changedPaths, profile, pureTests, unsupportedPackage } from './impact.m
 import { validateMobileWorkflow } from './mobile.mjs'
 import { sqlSuites, sqlRole, dbScripts, fullScripts, supportFiles, excludedFiles, validateRegistry } from './suites.mjs'
 import { families, uiFiles, validateUiRegistry, fullProjects } from './ui.mjs'
+
+test('EPT-111: verificación económica exige contratos reales, familia comprobantes y tipos móviles', () => {
+  for (const file of ['src/lib/comprobantes-verificacion.ts', 'src/services/comprobantes-verificacion.service.ts',
+    'src/app/api/comprobantes/pagos/[pagoId]/verificacion/route.ts',
+    'src/app/dashboard/comprobantes/_components/DecisionPago.tsx']) {
+    assert.deepEqual(profile([file]), { db: true, mutations: false, ui: ['comprobantes'] }, file)
+  }
+  for (const file of ['comprobantes_verificacion.mjs', 'comprobantes_verificacion_concurrencia.mjs']) {
+    assert.ok(dbScripts.includes(file))
+    assert.deepEqual(profile([`supabase/tests/${file}`]), { db: true, mutations: false, ui: [] })
+  }
+  assert.ok(supportFiles.includes('_verificacion-fixture.mjs'))
+  assert.deepEqual(profile(['src/types/database.generated.ts']), { db: true, mutations: false, ui: ['core'], mobile: true })
+  assert.match(readFileSync('tests/comprobantes-auth.spec.ts', 'utf8'), /comprobantes_verificacion\.mjs.*--ui/u)
+  // DB no dispone de Chromium: el modo normal prueba HTTP y JWT; UI ejecuta el navegador por su familia.
+  assert.match(readFileSync('supabase/tests/comprobantes_verificacion.mjs', 'utf8'), /if \(modoUi\)/u)
+})
 import { withCleanup } from './cleanup.mjs'
 import Reporter from './reporter.mjs'
 import { declaredOmission } from './omissions.mjs'
