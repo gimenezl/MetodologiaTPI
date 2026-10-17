@@ -9,6 +9,7 @@ import { resolve } from 'node:path'
 import { contenedorDb, ejecutarCuotas } from './integracion-cuotas.mjs'
 import { ejecutarPagos } from './integracion-pagos.mjs'
 import { ejecutarComprobantes } from './integracion-comprobantes.mjs'
+import { ejecutarConsultas } from './integracion-consultas.mjs'
 import { esperarBearerExpirado, mensajeFalloEtapaAuth, validarLineaBaseExpiracion } from './integracion-auth-utils.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
@@ -312,6 +313,27 @@ async function ejecutar() {
   })
   ok('Comprobantes: preparar solo para el padre del pago, subida sin reemplazo, finalización con Bearer, varios archivos por pago, datos que no se sobrescriben, saldo intacto, contenido inválido rechazado y original visible solo para el cargador y Dirección.')
 
+  // EPT-110: inscripciones, facturas y comprobantes por período, con JWT/RLS/RPC reales y datos de 2030 fijos.
+  etapaActual = 'consultas'
+  const tokenConsultas = async actor => {
+    const vigente = actor.sesion_consultas
+    if (vigente && Date.now() - vigente.en < 45_000) return vigente.token
+    const token = (await iniciar(actor)).access_token
+    actor.sesion_consultas = { token, en: Date.now() }
+    return token
+  }
+  const consultasMaestro = await ejecutarConsultas({
+    contenedor: contenedorDb(workdir),
+    restAdmin,
+    leer: async (actor, ruta) => respuesta(ruta, { token: await tokenConsultas(actor) }),
+    escribir: async (actor, ruta, method, body) => respuesta(ruta, { token: await tokenConsultas(actor), method, body }),
+    rpc: async (actor, nombre, body) => respuesta(`/rest/v1/rpc/${nombre}`, { token: await tokenConsultas(actor), method: 'POST', body }),
+    anonima: async (ruta, method, body) => respuesta(ruta, { method, body }),
+    crearActor: (rol, opciones) => crearActor(rol, { userRole: 'PERSONAL', ...opciones }),
+    actores: { docente: roleActors.DOCENTE, personal: roleActors.PERSONAL, director: roleActors.DIRECTOR },
+  })
+  ok('Consultas: inscripciones de solo lectura, facturas por período (bordes de mes y año), comprobantes por período de factura y por fecha de transferencia sin duplicar, registro saneado, original restringido, roles no autorizados, anónimo, bloqueo, identificadores ajenos, vínculo revocado y sin efectos económicos.')
+
   etapaActual = 'refresh'
   const sesionRefreshable = await iniciar(padreA)
   const refrescada = exigirStatus(await respuesta('/auth/v1/token?grant_type=refresh_token', {
@@ -365,6 +387,8 @@ async function ejecutar() {
     ['MAESTRO_ESTUDIANTE', roleActors.ESTUDIANTE],
     ['MAESTRO_DOCENTE', roleActors.DOCENTE],
     ['MAESTRO_COMPROBANTE', maestroComprobante],
+    ['MAESTRO_CONSULTAS', consultasMaestro.padre],
+    ['MAESTRO_CONSULTAS_ESTUDIANTE', consultasMaestro.estudiante],
   ]
   const invalid = { email: `ept105-invalid-${idSuffix()}@ept105.invalid`, password: `${randomBytes(30).toString('base64url')}A1!` }
   for (const [prefix, actor] of [...actorMaestro, ['MAESTRO_INVALIDO', invalid]]) {

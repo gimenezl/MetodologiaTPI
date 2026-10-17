@@ -245,6 +245,8 @@ jobs:
             ${{ runner.temp }}/evidencia-movil-android/android-version.txt
             ${{ runner.temp }}/evidencia-movil-android/maestro-android/
             ${{ runner.temp }}/evidencia-movil-android/maestro-comprobante/
+            ${{ runner.temp }}/evidencia-movil-android/maestro-consultas/
+            ${{ runner.temp }}/evidencia-movil-android/maestro-consultas-estudiante/
             ${{ runner.temp }}/evidencia-movil-android/maestro-recuperacion-solicitud/
             ${{ runner.temp }}/evidencia-movil-android/maestro-recuperacion-cambio/
           if-no-files-found: warn

@@ -98,6 +98,36 @@ test('EPT-108: la selección de pagos tiene suites registradas, plan focal y eta
   assert.match(maestro, /Registrar pago/u)
   assert.doesNotMatch(readFileSync('mobile/maestro/smoke-ios.yaml', 'utf8'), /Registrar pago|Pagar ítems/u)
 })
+test('EPT-110: consultas por período e inscripciones tienen rutas, suite SQL y escenarios por plataforma', () => {
+  // Base y tipos: la migración y la suite SQL entran por el contrato de base; los tipos copiados, por el móvil.
+  assert.deepEqual(profile(['supabase/migrations/20261017120000_ept_110_consultas_periodo_inscripciones.sql']),
+    { db: true, mutations: false, ui: ['core'] })
+  assert.deepEqual(profile(['supabase/tests/consultas_periodo_inscripciones_rls.sql']), { db: true, mutations: false, ui: [] })
+  assert.throws(() => profile(['supabase/tests/consultas_sin_registrar_rls.sql']), /Suite no ejecutable en CI general/u)
+  // Todo archivo móvil nuevo se registra con contrato propio y dispara los gates móviles, nunca el plan web vacío.
+  for (const file of ['mobile/src/servicios/consultas-familia.ts',
+    'mobile/src/contenedores/consultas/PeriodoContenedor.tsx', 'mobile/src/contenedores/consultas/PeriodoVista.tsx',
+    'mobile/src/contenedores/consultas/InscripcionesContenedor.tsx', 'mobile/src/contenedores/consultas/InscripcionesVista.tsx',
+    'mobile/src/contenedores/consultas/SelectorEstudiante.tsx',
+    'mobile/__tests__/consultas-familia.test.ts', 'mobile/__tests__/consultas-contenedores.test.tsx',
+    'mobile/scripts/integracion-consultas.mjs', 'mobile/maestro/consultas.yaml', 'mobile/maestro/consultas-estudiante.yaml']) {
+    assert.deepEqual(profile([file]), { db: false, mutations: false, ui: [], mobile: true }, file)
+  }
+  // El backend real (Auth + RLS + RPC) corre en Android; iOS no tiene backend y no puede presentarse como integración.
+  assert.match(readFileSync('mobile/scripts/integracion-auth-local.mjs', 'utf8'), /ejecutarConsultas\(/u)
+  const ejecutarAndroid = readFileSync('mobile/scripts/ejecutar-android.sh', 'utf8')
+  assert.match(ejecutarAndroid, /mobile\/maestro\/consultas\.yaml/u)
+  assert.match(ejecutarAndroid, /mobile\/maestro\/consultas-estudiante\.yaml/u)
+  assert.doesNotMatch(readFileSync('mobile/scripts/ejecutar-ios.sh', 'utf8'), /consultas/u)
+  assert.doesNotMatch(readFileSync('mobile/maestro/smoke-ios.yaml', 'utf8'), /consultas|Por período|Inscripciones/u)
+  // Escenarios focales: el monolito de Maestro no acumula pasos de este alcance (ya ronda su límite de 240 s).
+  assert.doesNotMatch(readFileSync('mobile/maestro/verificacion.yaml', 'utf8'), /seccion-periodo|seccion-inscripciones|Por período/u)
+  assert.doesNotMatch(readFileSync('mobile/maestro/comprobante.yaml', 'utf8'), /seccion-periodo|seccion-inscripciones/u)
+  // Las pestañas nuevas son solo de consulta: ningún escenario de estudiante ofrece pagar ni adjuntar.
+  const estudiante = readFileSync('mobile/maestro/consultas-estudiante.yaml', 'utf8')
+  assert.match(estudiante, /assertNotVisible:\s*'Pagar ítems'/u)
+  assert.match(estudiante, /assertNotVisible:\s*'Adjuntar comprobante'/u)
+})
 test('EPT-106: la recuperación de contraseña tiene rutas registradas y escenarios por plataforma', () => {
   // Rutas, servicios, contenedores, pruebas, scripts y flujos nuevos se registran con contrato móvil; nada queda sin cubrir.
   for (const file of ['mobile/app/restablecer.tsx', 'mobile/app/recuperar.tsx', 'mobile/app/+not-found.tsx',

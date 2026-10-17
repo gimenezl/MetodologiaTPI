@@ -1,0 +1,146 @@
+appId: org.educarparatransformar.app
+name: Consultas del padre (período e inscripciones) contra backend real
+---
+# EPT-110. Un padre con dos hijos consulta, con Auth, RLS y RPC reales, las facturas y el registro de
+# comprobantes por rango de fechas y las inscripciones de cada hijo. Los datos usan períodos de 2030
+# (fijos): el escenario no depende de la fecha del runner. Escenario focal y separado del monolito.
+- launchApp:
+    clearState: true
+- tapOn:
+    id: 'correo'
+- inputText: ${MAESTRO_CONSULTAS_EMAIL}
+- tapOn:
+    id: 'contrasena'
+- inputText: ${MAESTRO_CONSULTAS_PASSWORD}
+- tapOn: 'Ingresar'
+- assertVisible: 'Hijos vinculados'
+
+# Las pestañas se deslizan: «Por período» e «Inscripciones» quedan a la derecha en pantallas angostas.
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
+- tapOn:
+    id: 'seccion-periodo'
+- assertVisible: 'Rango de fechas'
+- tapOn:
+    id: 'periodo-desde'
+- eraseText
+- inputText: '01012030'
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: 'periodo-hasta'
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: 'periodo-hasta'
+- eraseText
+- inputText: '31122030'
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: 'periodo-consultar'
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: 'periodo-consultar'
+- scrollUntilVisible:
+    element:
+      text: 'Factura de marzo de 2030'
+    direction: DOWN
+    timeout: 20000
+- assertVisible: 'Factura de abril de 2030'
+- scrollUntilVisible:
+    element:
+      text: 'Comprobantes por período de factura'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: '20/03/2030'
+    direction: DOWN
+    timeout: 15000
+
+# La fecha de transferencia es otro criterio: el título y el resultado lo dicen.
+- scrollUntilVisible:
+    element:
+      id: 'criterio-transferencia'
+    direction: UP
+    timeout: 15000
+- tapOn:
+    id: 'criterio-transferencia'
+- scrollUntilVisible:
+    element:
+      text: 'Comprobantes por fecha de transferencia'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: '20/03/2030'
+    direction: DOWN
+    timeout: 15000
+
+# Un rango invertido no deja resultados y explica el error.
+- scrollUntilVisible:
+    element:
+      id: 'periodo-hasta'
+    direction: UP
+    timeout: 15000
+- tapOn:
+    id: 'periodo-hasta'
+- eraseText
+- inputText: '01012029'
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: 'periodo-consultar'
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: 'periodo-consultar'
+- assertVisible: 'La fecha desde no puede ser posterior a la fecha hasta.'
+
+# Inscripciones del hijo con datos y del hijo sin inscripciones.
+- scrollUntilVisible:
+    element:
+      id: 'pestanas'
+    direction: UP
+    timeout: 15000
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
+- tapOn:
+    id: 'seccion-inscripciones'
+- assertVisible: 'Solo consulta'
+- scrollUntilVisible:
+    element:
+      text: 'Comedor escolar'
+    direction: DOWN
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: 'Fútbol'
+    direction: UP
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: 'Estudiante'
+    direction: UP
+    timeout: 20000
+- tapOn:
+    text: 'Vacío.*'
+- scrollUntilVisible:
+    element:
+      text: 'No hay inscripciones a deportes registradas.'
+    direction: DOWN
+    timeout: 20000
