@@ -1,5 +1,5 @@
 // GENERADO por mobile/scripts/sync-compartido.mjs desde src/types/database.generated.ts. No editar a mano.
-// sha256 de la fuente: c60de472a52fa2d423f70d31ba5a6a4cfa7e07884f6746dfd9b001128fa7554b
+// sha256 de la fuente: 558c3dbfb16144df3ed5d1709a5a9c8a77cf0caa819a96f4b4d6f01a0f3950d8
 export type Json =
   | string
   | number
@@ -3199,6 +3199,23 @@ export type Database = {
         }[]
       }
       consultar_detalle_hijo: { Args: { p_hijo_id: string }; Returns: Json }
+      consultar_facturas_periodo: {
+        Args: { p_alumno_id: string; p_desde: string; p_hasta: string }
+        Returns: {
+          alumno_id: string
+          cantidad_archivos: number
+          cantidad_pagos: number
+          estado: string
+          factura_id: string
+          fecha_corte: string
+          inconsistente: boolean
+          pagado_centavos: number
+          periodo: string
+          saldo_centavos: number
+          total_centavos: number
+          vencimiento: string
+        }[]
+      }
       consultar_ficha_profesor: {
         Args: { p_profesor_id?: string }
         Returns: {
@@ -3218,9 +3235,42 @@ export type Database = {
           telefono: string
         }[]
       }
+      consultar_inscripciones_alumno: {
+        Args: { p_alumno_id: string }
+        Returns: {
+          catalogo_activo: boolean
+          categoria: string
+          estado: string
+          fecha_cancelacion: string
+          fecha_inscripcion: string
+          grupo: string
+          inscripcion_id: string
+          nivel: string
+          nombre: string
+        }[]
+      }
       consultar_intento_pago: {
         Args: { p_clave_intento: string }
         Returns: Json
+      }
+      consultar_registro_comprobantes: {
+        Args: {
+          p_alumno_id: string
+          p_criterio: string
+          p_desde: string
+          p_hasta: string
+        }
+        Returns: {
+          cantidad_archivos: number
+          creado_en: string
+          estado: string
+          fecha_transferencia: string
+          importe_informado_centavos: number
+          pago_id: string
+          periodos: string[]
+          total_calculado_centavos: number
+          ultima_carga_en: string
+        }[]
       }
       consultar_usuario: {
         Args: { p_perfil_id: string }

@@ -3197,6 +3197,23 @@ export type Database = {
         }[]
       }
       consultar_detalle_hijo: { Args: { p_hijo_id: string }; Returns: Json }
+      consultar_facturas_periodo: {
+        Args: { p_alumno_id: string; p_desde: string; p_hasta: string }
+        Returns: {
+          alumno_id: string
+          cantidad_archivos: number
+          cantidad_pagos: number
+          estado: string
+          factura_id: string
+          fecha_corte: string
+          inconsistente: boolean
+          pagado_centavos: number
+          periodo: string
+          saldo_centavos: number
+          total_centavos: number
+          vencimiento: string
+        }[]
+      }
       consultar_ficha_profesor: {
         Args: { p_profesor_id?: string }
         Returns: {
@@ -3216,9 +3233,42 @@ export type Database = {
           telefono: string
         }[]
       }
+      consultar_inscripciones_alumno: {
+        Args: { p_alumno_id: string }
+        Returns: {
+          catalogo_activo: boolean
+          categoria: string
+          estado: string
+          fecha_cancelacion: string
+          fecha_inscripcion: string
+          grupo: string
+          inscripcion_id: string
+          nivel: string
+          nombre: string
+        }[]
+      }
       consultar_intento_pago: {
         Args: { p_clave_intento: string }
         Returns: Json
+      }
+      consultar_registro_comprobantes: {
+        Args: {
+          p_alumno_id: string
+          p_criterio: string
+          p_desde: string
+          p_hasta: string
+        }
+        Returns: {
+          cantidad_archivos: number
+          creado_en: string
+          estado: string
+          fecha_transferencia: string
+          importe_informado_centavos: number
+          pago_id: string
+          periodos: string[]
+          total_calculado_centavos: number
+          ultima_carga_en: string
+        }[]
       }
       consultar_usuario: {
         Args: { p_perfil_id: string }
