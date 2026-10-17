@@ -35,6 +35,17 @@ if [ "$estado" -eq 0 ]; then
   estado=$?
 fi
 if [ "$estado" -eq 0 ]; then
+  # EPT-110: escenarios focales y separados (cada uno con su propio presupuesto, sin ampliar el monolito).
+  stage android-maestro-consultas 180 maestro test --format junit --output "$SALIDA/maestro-consultas.xml" \
+    --test-output-dir "$SALIDA/maestro-consultas" mobile/maestro/consultas.yaml
+  estado=$?
+fi
+if [ "$estado" -eq 0 ]; then
+  stage android-maestro-consultas-estudiante 150 maestro test --format junit --output "$SALIDA/maestro-consultas-estudiante.xml" \
+    --test-output-dir "$SALIDA/maestro-consultas-estudiante" mobile/maestro/consultas-estudiante.yaml
+  estado=$?
+fi
+if [ "$estado" -eq 0 ]; then
   # EPT-106: recuperación y cambio de contraseña con correo y enlace reales (Mailpit local).
   bash mobile/scripts/recuperacion-android.sh "$SALIDA"
   estado=$?

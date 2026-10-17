@@ -1,0 +1,63 @@
+appId: org.educarparatransformar.app
+name: Consultas del estudiante (solo lo propio) contra backend real
+---
+# EPT-110. El estudiante consulta únicamente lo propio: sin selector de alumnos, sin acciones de pago ni de
+# carga de comprobantes y con sus inscripciones de solo lectura. Datos de 2030 (fijos).
+- launchApp:
+    clearState: true
+- tapOn:
+    id: 'correo'
+- inputText: ${MAESTRO_CONSULTAS_ESTUDIANTE_EMAIL}
+- tapOn:
+    id: 'contrasena'
+- inputText: ${MAESTRO_CONSULTAS_ESTUDIANTE_PASSWORD}
+- tapOn: 'Ingresar'
+- assertVisible: 'Mi información académica'
+- swipe:
+    from:
+      id: 'seccion-cuotas'
+    direction: LEFT
+- tapOn:
+    id: 'seccion-inscripciones'
+- assertVisible: 'Solo consulta'
+- scrollUntilVisible:
+    element:
+      text: 'Comedor escolar'
+    direction: DOWN
+    timeout: 20000
+- assertNotVisible:
+    id: 'insc-hijo-.*'
+- assertNotVisible: 'Inscribir.*'
+
+- scrollUntilVisible:
+    element:
+      id: 'seccion-cuotas'
+    direction: UP
+    timeout: 15000
+- swipe:
+    from:
+      id: 'seccion-cuotas'
+    direction: LEFT
+- tapOn:
+    id: 'seccion-periodo'
+- assertVisible: 'Rango de fechas'
+- assertNotVisible:
+    id: 'periodo-hijo-.*'
+- tapOn:
+    id: 'periodo-desde'
+- eraseText
+- inputText: '01012030'
+- tapOn:
+    id: 'periodo-hasta'
+- eraseText
+- inputText: '31122030'
+- hideKeyboard
+- tapOn:
+    id: 'periodo-consultar'
+- scrollUntilVisible:
+    element:
+      text: 'Factura de marzo de 2030'
+    direction: DOWN
+    timeout: 20000
+- assertNotVisible: 'Pagar ítems'
+- assertNotVisible: 'Adjuntar comprobante'
