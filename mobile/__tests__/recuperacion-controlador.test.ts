@@ -72,10 +72,71 @@ describe('ControladorRecuperacion', () => {
     await controlador.procesarEnlace(interpretarEnlace(url(CODIGO_A)))
     expect(recuperacionActiva()).toBe(true)
     controlador.detener()
+    // La sesión del canje se cierra ANTES de devolver el control al acceso ordinario.
+    await Promise.resolve()
+    await Promise.resolve()
     expect(recuperacionActiva()).toBe(false)
     expect(liberaciones).toEqual([{ sesionAlterada: true }])
     controlador.detener() // idempotente
     expect(liberaciones).toHaveLength(1)
+  })
+
+  it('salir sin terminar (cancelar, atrás o gesto) cierra la sesión que creó el canje: el enlace no equivale a un ingreso', async () => {
+    const orden: string[] = []
+    alLiberarRecuperacion(() => orden.push('liberada'))
+    const { auth, controlador, ultimo } = preparar()
+    auth.signOut.mockImplementation(async () => {
+      await Promise.resolve()
+      orden.push('signOut')
+      return { error: null }
+    })
+    await controlador.procesarEnlace(interpretarEnlace(url(CODIGO_A)))
+    expect(ultimo()).toEqual({ tipo: 'formulario', usuarioId: 'u-recuperado' })
+    controlador.cancelar()
+    for (let i = 0; i < 5; i++) await Promise.resolve()
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
+    expect(orden).toEqual(['signOut', 'liberada'])
+  })
+
+  it('salir con el canje en vuelo cierra la sesión apenas llega el resultado', async () => {
+    const lento = diferido<unknown>()
+    const { auth, controlador } = preparar({ intercambio: () => lento.promesa })
+    const pendiente = controlador.procesarEnlace(interpretarEnlace(url(CODIGO_A)))
+    for (let i = 0; i < 4; i++) await Promise.resolve()
+    controlador.detener()
+    expect(auth.signOut).not.toHaveBeenCalled()
+    lento.resolver({ data: { session: { user: { id: 'u-recuperado' } }, user: { id: 'u-recuperado' }, redirectType: 'recovery' }, error: null })
+    await pendiente
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
+  })
+
+  it('no cierra la sesión si otra instancia de la pantalla ya tomó el relevo del mismo canje', async () => {
+    const lento = diferido<unknown>()
+    const { auth, controlador } = preparar({ intercambio: () => lento.promesa })
+    const pendiente = controlador.procesarEnlace(interpretarEnlace(url(CODIGO_A)))
+    for (let i = 0; i < 4; i++) await Promise.resolve()
+    controlador.detener()
+    const relevo = preparar({ intercambio: () => lento.promesa })
+    relevo.controlador.iniciar()
+    lento.resolver({ data: { session: { user: { id: 'u-recuperado' } }, user: { id: 'u-recuperado' }, redirectType: 'recovery' }, error: null })
+    await pendiente
+    expect(auth.signOut).not.toHaveBeenCalled()
+    relevo.controlador.detener()
+  })
+
+  it('un enlace nuevo no interrumpe un guardado en curso', async () => {
+    const lento = diferido<unknown>()
+    const { auth, controlador, ultimo } = preparar({ actualizacion: () => lento.promesa })
+    await controlador.procesarEnlace(interpretarEnlace(url(CODIGO_A)))
+    const guardando = controlador.guardar('nueva', 'nueva')
+    await Promise.resolve()
+    expect(ultimo()).toEqual({ tipo: 'guardando', usuarioId: 'u-recuperado' })
+    await controlador.procesarEnlace(interpretarEnlace(url(CODIGO_B)))
+    expect(auth.exchangeCodeForSession).toHaveBeenCalledTimes(1)
+    expect(ultimo()).toEqual({ tipo: 'guardando', usuarioId: 'u-recuperado' })
+    lento.resolver({ data: { user: { id: 'u-recuperado' } }, error: null })
+    await guardando
+    expect(ultimo()).toEqual({ tipo: 'exito' })
   })
 
   it('un enlace inválido o de otro destino no toca la sesión ni llama a Auth', async () => {

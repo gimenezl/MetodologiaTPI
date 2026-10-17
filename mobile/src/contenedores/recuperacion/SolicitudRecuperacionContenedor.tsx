@@ -12,6 +12,18 @@ import { color, estiloDeTexto } from '@/tokens'
  */
 export const ESPERA_REENVIO_SEGUNDOS = 60
 
+// La espera sobrevive a volver atrás y reabrir la pantalla (solo memoria del proceso): así la pantalla no sirve para
+// encadenar solicitudes seguidas al mismo correo, que es lo que permitiría deducir si la cuenta existe.
+let proximoEnvioMs = 0
+
+const segundosRestantes = () => Math.max(0, Math.ceil((proximoEnvioMs - Date.now()) / 1000))
+const iniciarEspera = (segundos: number) => { proximoEnvioMs = Date.now() + segundos * 1000 }
+
+/** Solo para pruebas. */
+export function reiniciarEsperaParaPruebas(): void {
+  proximoEnvioMs = 0
+}
+
 export interface SolicitudRecuperacionProps {
   cliente: Pick<ClienteEPT, 'auth'>
   onVolver: () => void
@@ -33,7 +45,7 @@ export function SolicitudRecuperacionContenedor({
   const [errorCorreo, setErrorCorreo] = useState<string>()
   const [aviso, setAviso] = useState<{ tipo: 'enviada' } | { tipo: 'fallo'; mensaje: string } | null>(null)
   const [enviando, setEnviando] = useState(false)
-  const [restante, setRestante] = useState(0)
+  const [restante, setRestante] = useState(segundosRestantes)
   // El estado de React llega tarde ante un doble toque rápido: la referencia cierra esa ventana.
   const enCurso = useRef(false)
   const vigente = useRef(true)
@@ -65,12 +77,16 @@ export function SolicitudRecuperacionContenedor({
       if (!vigente.current) return
       if (resultado.tipo === 'enviada') {
         setAviso({ tipo: 'enviada' })
+        iniciarEspera(esperaSegundos)
         setRestante(esperaSegundos)
       } else if (resultado.tipo === 'correo_invalido') {
         setErrorCorreo('Ingresá un correo electrónico válido.')
       } else {
         setAviso({ tipo: 'fallo', mensaje: MENSAJES[resultado.tipo] })
-        if (resultado.tipo === 'limite') setRestante(esperaSegundos)
+        if (resultado.tipo === 'limite') {
+          iniciarEspera(esperaSegundos)
+          setRestante(esperaSegundos)
+        }
       }
     } finally {
       enCurso.current = false

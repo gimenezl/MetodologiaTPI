@@ -12,7 +12,7 @@ import {
   type EnlaceRecuperacion,
   type ResultadoIntercambio,
 } from '@/servicios/recuperacion'
-import { iniciarRecuperacion, marcarSesionAlterada } from '@/servicios/recuperacion-activa'
+import { iniciarRecuperacion, marcarSesionAlterada, recuperacionActiva } from '@/servicios/recuperacion-activa'
 import type { ClienteEPT } from '@/servicios/supabase'
 
 export type CausaEnlaceNoValido =
@@ -73,6 +73,8 @@ export class ControladorRecuperacion {
   private huellaEnCurso: string | null = null
   private pendiente: EnlaceConCodigo | null = null
   private usuarioRecuperado: string | null = null
+  /** El canje de este controlador dejó guardada una sesión que todavía no se usó para cambiar la contraseña. */
+  private sesionDeRecuperacion = false
   private estado: EstadoRecuperacion = { tipo: 'iniciando' }
 
   constructor(
@@ -93,12 +95,23 @@ export class ControladorRecuperacion {
     this.huellaEnCurso = null
     const liberar = this.liberarCompuerta
     this.liberarCompuerta = null
+    if (this.sesionDeRecuperacion) {
+      // Salir sin terminar (cancelar, atrás, gesto): poseer el enlace no equivale a iniciar sesión. La sesión que
+      // creó el canje se cierra antes de devolver el control al acceso ordinario, que luego vuelve a validar.
+      this.sesionDeRecuperacion = false
+      marcarSesionAlterada()
+      void this.cerrarSesionLocal().finally(() => liberar?.())
+      return
+    }
     liberar?.()
   }
 
   /** Recibe un enlace (arranque en frío, aplicación abierta o entrega repetida). */
   async procesarEnlace(enlace: EnlaceRecuperacion): Promise<void> {
     this.iniciar()
+    // Un enlace nuevo no interrumpe un guardado en curso: reemplazar la sesión entre la verificación del usuario
+    // y la escritura haría que la contraseña se aplique a otra cuenta.
+    if (this.estado.tipo === 'guardando') return
     if (enlace.tipo !== 'codigo') {
       ++this.revision
       this.huellaEnCurso = null
@@ -170,7 +183,14 @@ export class ControladorRecuperacion {
   private async canjear(enlace: EnlaceConCodigo, huella: string, revision: number): Promise<void> {
     this.publicar({ tipo: 'verificando' })
     const resultado = await intercambioUnico(huella, () => intercambiarCodigo(this.cliente.auth, enlace))
-    if (revision !== this.revision) return
+    if (revision !== this.revision) {
+      // Se salió de la pantalla con el canje en vuelo: si creó una sesión y nadie más la está usando, se cierra.
+      if (resultado.tipo === 'ok' && !recuperacionActiva()) {
+        marcarSesionAlterada()
+        await this.cerrarSesionLocal()
+      }
+      return
+    }
     this.pendiente = null
     await this.aplicarResultado(resultado, false)
   }
@@ -183,6 +203,7 @@ export class ControladorRecuperacion {
       }
       marcarSesionAlterada()
       this.usuarioRecuperado = resultado.usuarioId
+      this.sesionDeRecuperacion = true
       return this.publicar({ tipo: 'formulario', usuarioId: resultado.usuarioId })
     }
     if (resultado.tipo === 'no_es_recuperacion') marcarSesionAlterada()
@@ -208,6 +229,11 @@ export class ControladorRecuperacion {
   /** La sesión creada por el enlace no debe quedar como ingreso: la persona entra con la contraseña nueva. */
   private async cerrarSesionDeRecuperacion(): Promise<void> {
     marcarSesionAlterada()
+    this.sesionDeRecuperacion = false
+    await this.cerrarSesionLocal()
+  }
+
+  private async cerrarSesionLocal(): Promise<void> {
     try {
       await this.cliente.auth.signOut({ scope: 'local' })
     } catch {

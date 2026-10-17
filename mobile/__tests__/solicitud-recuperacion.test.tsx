@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native'
 
-import { SolicitudRecuperacionContenedor } from '@/contenedores/recuperacion/SolicitudRecuperacionContenedor'
+import { SolicitudRecuperacionContenedor, reiniciarEsperaParaPruebas } from '@/contenedores/recuperacion/SolicitudRecuperacionContenedor'
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaProvider: ({ children }: { children: unknown }) => children,
@@ -21,6 +21,9 @@ async function montar(respuesta: () => Promise<unknown> = async () => ({ data: {
 }
 
 describe('solicitud del correo de recuperación', () => {
+  beforeEach(() => {
+    reiniciarEsperaParaPruebas()
+  })
   afterEach(() => {
     jest.useRealTimers()
   })
@@ -85,6 +88,19 @@ describe('solicitud del correo de recuperación', () => {
     await waitFor(() => expect(screen.getByText(texto)).toBeTruthy())
     expect(screen.queryByText('Revisá tu correo')).toBeNull()
     expect(screen.queryByText(/detalle interno/u)).toBeNull()
+  })
+
+  it('la espera sobrevive a volver atrás y reabrir la pantalla: no se encadenan solicitudes', async () => {
+    const primera = await montar()
+    await fireEvent.changeText(screen.getByTestId('recuperar-correo'), 'a@b.test')
+    await fireEvent.press(screen.getByText('Enviar enlace'))
+    await waitFor(() => expect(screen.getByText('Revisá tu correo')).toBeTruthy())
+    await primera.utilidades.unmount()
+    const segunda = await montar()
+    expect(screen.getByText(/Podés pedir otro enlace en/u)).toBeTruthy()
+    await fireEvent.changeText(screen.getByTestId('recuperar-correo'), 'a@b.test')
+    await fireEvent.press(screen.getByText('Enviar enlace'))
+    expect(segunda.resetPasswordForEmail).not.toHaveBeenCalled()
   })
 
   it('volver y cancelar no envían nada', async () => {
