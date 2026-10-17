@@ -1,0 +1,131 @@
+appId: org.educarparatransformar.app
+name: Recuperación de contraseña - enlace, nueva contraseña y cambio desde el perfil
+---
+# EPT-106. Entrega del enlace real del correo (retorno de Auth con el esquema de la app), cambio de la contraseña,
+# rechazo de la anterior, cambio desde Mi cuenta y enlace ya utilizado. La URL llega por variable de entorno.
+- stopApp
+# Inicio en frío desde el enlace.
+- openLink: ${MAESTRO_RECUPERACION_ENLACE}
+- extendedWaitUntil:
+    visible: 'Elegí una contraseña nueva'
+    timeout: 30000
+# Entrega repetida del mismo enlace con la app abierta: la pantalla no cambia ni vuelve a canjear.
+- openLink: ${MAESTRO_RECUPERACION_ENLACE}
+- assertVisible: 'Elegí una contraseña nueva'
+# Validación local de la confirmación.
+- tapOn:
+    id: 'restablecer-nueva'
+- inputText: ${MAESTRO_RECUPERACION_NUEVA}
+- tapOn:
+    id: 'restablecer-confirmacion'
+- inputText: 'otra-contraseña-distinta'
+- scrollUntilVisible:
+    element:
+      text: 'Guardar contraseña'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Guardar contraseña'
+- assertVisible: '.*Las contraseñas no coinciden.*'
+- tapOn:
+    id: 'restablecer-confirmacion'
+- eraseText: 40
+- inputText: ${MAESTRO_RECUPERACION_NUEVA}
+- scrollUntilVisible:
+    element:
+      text: 'Guardar contraseña'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Guardar contraseña'
+- extendedWaitUntil:
+    visible: 'Contraseña actualizada'
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: 'Ir a iniciar sesión'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Ir a iniciar sesión'
+- assertVisible: 'Iniciar sesión'
+# La contraseña anterior ya no sirve.
+- tapOn:
+    id: 'correo'
+- inputText: ${MAESTRO_RECUPERACION_EMAIL}
+- tapOn:
+    id: 'contrasena'
+- inputText: ${MAESTRO_RECUPERACION_PASSWORD}
+- tapOn: 'Ingresar'
+- assertVisible: '.*No se pudo iniciar sesión.*Revisá el correo y la contraseña.*'
+# La nueva sí, con la misma cuenta y el mismo rol.
+- tapOn:
+    id: 'correo'
+- inputText: ${MAESTRO_RECUPERACION_EMAIL}
+- tapOn:
+    id: 'contrasena'
+- inputText: ${MAESTRO_RECUPERACION_NUEVA}
+- tapOn: 'Ingresar'
+- extendedWaitUntil:
+    visible: 'Mi información'
+    timeout: 30000
+# Cambio desde Mi cuenta con la sesión vigente.
+- tapOn: 'Mi cuenta'
+- scrollUntilVisible:
+    element:
+      text: 'Cambiar contraseña'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Cambiar contraseña'
+- tapOn:
+    id: 'cambio-nueva'
+- inputText: ${MAESTRO_RECUPERACION_NUEVA2}
+- tapOn:
+    id: 'cambio-confirmacion'
+- inputText: ${MAESTRO_RECUPERACION_NUEVA2}
+- scrollUntilVisible:
+    element:
+      id: 'cambio-guardar'
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: 'cambio-guardar'
+- extendedWaitUntil:
+    visible: 'Contraseña actualizada'
+    timeout: 30000
+- tapOn: 'Volver a Mi cuenta'
+- scrollUntilVisible:
+    element:
+      text: 'Cerrar sesión'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Cerrar sesión'
+- assertVisible: 'Iniciar sesión'
+# Ingreso con la contraseña elegida desde el perfil.
+- tapOn:
+    id: 'correo'
+- inputText: ${MAESTRO_RECUPERACION_EMAIL}
+- tapOn:
+    id: 'contrasena'
+- inputText: ${MAESTRO_RECUPERACION_NUEVA2}
+- tapOn: 'Ingresar'
+- extendedWaitUntil:
+    visible: 'Mi información'
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: 'Cerrar sesión'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Cerrar sesión'
+- assertVisible: 'Iniciar sesión'
+# El enlace del correo ya se usó: no abre la recuperación.
+- openLink: ${MAESTRO_RECUPERACION_ENLACE}
+- extendedWaitUntil:
+    visible: 'Enlace no disponible'
+    timeout: 30000
+- assertNotVisible: 'Elegí una contraseña nueva'
+- scrollUntilVisible:
+    element:
+      text: 'Volver al inicio de sesión'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Volver al inicio de sesión'
+- assertVisible: 'Iniciar sesión'

@@ -83,6 +83,17 @@ function preparar(plataformaObjetivo) {
   config = config.replace(/^jwt_expiry\s*=\s*\d+/mu, 'jwt_expiry = 120')
   config = config.replace(/^enabled\s*=\s*true(?=\s*\n\s*# Specifies an ordered list of seed files)/mu, 'enabled = false')
   config = config.replace(/^sql_paths\s*=\s*\["\.\/seed\.sql"\]/mu, 'sql_paths = []')
+  // EPT-106: perfil de pruebas de recuperación de contraseña. Solo afecta a esta copia efímera (nunca a
+  // supabase/config.toml ni a un proyecto remoto): el retorno de la app debe figurar en la lista de
+  // redirecciones, el límite horario de correos del stack local (2) impediría las pruebas y
+  // «secure_password_change» activa la reautenticación que la aplicación debe soportar.
+  const aplicarConfig = (patron, reemplazo, nombre) => {
+    exigir(patron.test(config), `La configuración base no contiene ${nombre}.`)
+    config = config.replace(patron, reemplazo)
+  }
+  aplicarConfig(/^additional_redirect_urls\s*=\s*\["https:\/\/127\.0\.0\.1:3000"\]/mu, 'additional_redirect_urls = ["https://127.0.0.1:3000", "educarparatransformar://restablecer"]', 'additional_redirect_urls')
+  aplicarConfig(/^email_sent\s*=\s*\d+/mu, 'email_sent = 100', 'email_sent')
+  aplicarConfig(/^secure_password_change\s*=\s*false/mu, 'secure_password_change = true', 'secure_password_change')
   writeFileSync(join(destino, 'config.toml'), config, { mode: 0o600 })
   writeFileSync(join(workdir, 'owner.json'), JSON.stringify({ run: process.env.GITHUB_RUN_ID, attempt: process.env.GITHUB_RUN_ATTEMPT }), { mode: 0o600 })
 
@@ -95,7 +106,9 @@ function preparar(plataformaObjetivo) {
 
   const migrationNames = readdirSync(join(destino, 'migrations')).filter(file => file.endsWith('.sql')).length
   exigir(Number(migrationNames) > 0, 'El stack efímero no tiene migraciones.')
-  cli(['start', '--workdir', workdir, '--exclude', 'studio,logflare,vector,imgproxy,realtime,edge-runtime,postgres-meta,mailpit,supavisor'], {
+  // Mailpit solo en Android: ahí corre el backend real con el correo de recuperación (EPT-106). iOS no usa backend.
+  const excluidos = ['studio', 'logflare', 'vector', 'imgproxy', 'realtime', 'edge-runtime', 'postgres-meta', ...(plataformaObjetivo === 'android' ? [] : ['mailpit']), 'supavisor']
+  cli(['start', '--workdir', workdir, '--exclude', excluidos.join(',')], {
     timeout: 240_000,
     diagnosticFile: plataformaObjetivo === 'ios' ? process.env.EPT_MOBILE_SUPABASE_DIAGNOSTICS_FILE : undefined,
   })

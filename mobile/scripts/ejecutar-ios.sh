@@ -29,6 +29,12 @@ set +e
 maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-ios.xml" \
   --test-output-dir "$SALIDA/maestro-ios" mobile/maestro/smoke-ios.yaml
 estado=$?
+# EPT-106: enlace profundo y formularios de recuperación (solo lo nativo; sin correo ni backend).
+if [ "$estado" -eq 0 ]; then
+  maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-ios-recuperacion.xml" \
+    --test-output-dir "$SALIDA/maestro-ios-recuperacion" mobile/maestro/recuperacion-ios.yaml
+  estado=$?
+fi
 set -e
 
 xcrun simctl io "$UDID" screenshot "$SALIDA/ios-final.png" || true

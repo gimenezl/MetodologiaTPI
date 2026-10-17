@@ -98,6 +98,44 @@ test('EPT-108: la selección de pagos tiene suites registradas, plan focal y eta
   assert.match(maestro, /Registrar pago/u)
   assert.doesNotMatch(readFileSync('mobile/maestro/smoke-ios.yaml', 'utf8'), /Registrar pago|Pagar ítems/u)
 })
+test('EPT-106: la recuperación de contraseña tiene rutas registradas y escenarios por plataforma', () => {
+  // Rutas, servicios, contenedores, pruebas, scripts y flujos nuevos se registran con contrato móvil; nada queda sin cubrir.
+  for (const file of ['mobile/app/restablecer.tsx', 'mobile/app/recuperar.tsx', 'mobile/app/+not-found.tsx',
+    'mobile/src/servicios/recuperacion.ts', 'mobile/src/servicios/recuperacion-controlador.ts', 'mobile/src/servicios/recuperacion-activa.ts',
+    'mobile/src/contenedores/recuperacion/RestablecerContenedor.tsx', 'mobile/src/contenedores/recuperacion/CambioContrasenaContenedor.tsx',
+    'mobile/__tests__/recuperacion.test.ts', 'mobile/__tests__/restablecer-contenedor.test.tsx', 'mobile/__tests__/autenticacion-eventos.test.ts',
+    'mobile/scripts/integracion-recuperacion.mjs', 'mobile/scripts/recuperacion-utils.mjs', 'mobile/scripts/recuperacion-enlace.mjs',
+    'mobile/scripts/recuperacion-android.sh', 'mobile/maestro/recuperacion-solicitud.yaml', 'mobile/maestro/recuperacion-cambio.yaml',
+    'mobile/maestro/recuperacion-ios.yaml']) {
+    assert.deepEqual(profile([file]), { db: false, mutations: false, ui: [], mobile: true }, file)
+  }
+  // El `+` solo es válido como inicio del nombre de la ruta reservada de Expo Router, no en cualquier parte.
+  for (const file of ['mobile/app/a+b.tsx', 'mobile/app/+not-found.png', 'mobile/app/++x.tsx', 'mobile/app/+dir/x.tsx']) {
+    assert.throws(() => profile([file]), undefined, file)
+  }
+  // Android: Mailpit se habilita solo en el stack efímero de ese perfil y la integración real corre en el job.
+  const stack = readFileSync('mobile/scripts/supabase-local.mjs', 'utf8')
+  assert.match(stack, /plataformaObjetivo === 'android' \? \[\] : \['mailpit'\]/u)
+  assert.match(stack, /educarparatransformar:\/\/restablecer/u)
+  const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
+  const android = yml.slice(yml.indexOf('  mobile-android:')).split(/\n  [a-z-]+:/u)[0]
+  assert.match(android, /integracion-recuperacion\.mjs/u)
+  const ejecutarAndroid = readFileSync('mobile/scripts/ejecutar-android.sh', 'utf8')
+  assert.match(ejecutarAndroid, /recuperacion-android\.sh/u)
+  const escenario = readFileSync('mobile/scripts/recuperacion-android.sh', 'utf8')
+  assert.match(escenario, /recuperacion-solicitud\.yaml/u)
+  assert.match(escenario, /recuperacion-cambio\.yaml/u)
+  assert.match(escenario, /::add-mask::/u)
+  // iOS no tiene backend ni correo: su escenario no puede presentarse como recuperación completa.
+  const ios = yml.slice(yml.indexOf('  mobile-ios:')).split(/\n  [a-z-]+:/u)[0]
+  assert.doesNotMatch(ios, /integracion-recuperacion|mailpit/iu)
+  assert.match(readFileSync('mobile/scripts/ejecutar-ios.sh', 'utf8'), /recuperacion-ios\.yaml/u)
+  const flujoIos = readFileSync('mobile/maestro/recuperacion-ios.yaml', 'utf8')
+  assert.match(flujoIos, /NO prueba la recuperación completa/u)
+  assert.doesNotMatch(flujoIos, /MAESTRO_RECUPERACION|Revisá tu correo|Contraseña actualizada/u)
+  // El flujo compartido de Maestro no acumula pasos de este escenario (ya ronda su límite de 240 s).
+  assert.doesNotMatch(readFileSync('mobile/maestro/verificacion.yaml', 'utf8'), /Cambiar contraseña|olvide-contrasena/u)
+})
 test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
   assert.equal(validateMobileWorkflow(yml), true)
