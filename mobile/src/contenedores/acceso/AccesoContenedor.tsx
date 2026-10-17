@@ -13,11 +13,22 @@ import { alLiberarRecuperacion } from '@/servicios/recuperacion-activa'
 import { obtenerClienteSupabase, vincularCicloDeVida } from '@/servicios/supabase'
 import { color, espacio, estiloDeTexto } from '@/tokens'
 
+import { CONTEXTO_INSCRIPCIONES_VACIO, InscripcionesContenedor, type ContextoInscripciones } from '../consultas/InscripcionesContenedor'
+import { PeriodoContenedor, contextoPeriodoVacio, type ContextoPeriodo } from '../consultas/PeriodoContenedor'
 import { CONTEXTO_CUOTAS_VACIO, CuotasContenedor, type ContextoCuotas } from '../cuotas/CuotasContenedor'
 import { CambioContrasenaContenedor } from '../recuperacion/CambioContrasenaContenedor'
 import { cargarDatosRol, type DatosRol } from './datos-rol'
 
 const INICIAL: EstadoAutenticacion = { tipo: 'cargando' }
+
+type NombreSeccion = 'principal' | 'cuotas' | 'periodo' | 'inscripciones' | 'cuenta'
+
+/** Alumnos que la sesión puede consultar: los hijos vinculados del padre o el alumno propio del estudiante. */
+function alumnosDeConsulta(datos: DatosRol, etiquetaPropia: string): { id: string; etiqueta: string }[] {
+  return datos.rol === 'PADRE'
+    ? datos.hijos.map(hijo => ({ id: hijo.id, etiqueta: [hijo.nombre, hijo.apellido].filter(Boolean).join(' ') || 'Estudiante' }))
+    : [{ id: datos.alumno.id, etiqueta: etiquetaPropia }]
+}
 
 export interface AccesoContenedorProps {
   /** Abre la solicitud del correo de recuperación (ruta propia con su navegación nativa). */
@@ -43,8 +54,10 @@ export function AccesoContenedor({ alRecuperarContrasena }: AccesoContenedorProp
     | { clave: string; error: true }
     | null
   >(null)
-  const [seccion, setSeccion] = useState<{ clave: string; nombre: 'principal' | 'cuotas' | 'cuenta' } | null>(null)
+  const [seccion, setSeccion] = useState<{ clave: string; nombre: NombreSeccion } | null>(null)
   const [contextoCuotas, setContextoCuotas] = useState<{ clave: string; contexto: ContextoCuotas } | null>(null)
+  const [contextoPeriodo, setContextoPeriodo] = useState<{ clave: string; contexto: ContextoPeriodo } | null>(null)
+  const [contextoInscripciones, setContextoInscripciones] = useState<{ clave: string; contexto: ContextoInscripciones } | null>(null)
   const [cambioContrasena, setCambioContrasena] = useState<{ clave: string } | null>(null)
   const [errorEnlaceWeb, setErrorEnlaceWeb] = useState(false)
   const estadoRealActual = useRef<EstadoAutenticacion>(INICIAL)
@@ -161,6 +174,9 @@ export function AccesoContenedor({ alRecuperarContrasena }: AccesoContenedorProp
     // cubre «Cuotas» y «Mi cuenta» en su nivel raíz, que vuelven a la sección principal.
     const enSubpantalla = Boolean(contextoActual.abierta || contextoActual.pago || contextoActual.comprobante)
     const cambiandoContrasena = cambioContrasena?.clave === clave
+    // Otra cuenta (otra clave) descarta el contexto de período e inscripciones: nada se hereda entre usuarios.
+    const contextoPeriodoActual = contextoPeriodo?.clave === clave ? contextoPeriodo.contexto : null
+    const contextoInscripcionesActual = contextoInscripciones?.clave === clave ? contextoInscripciones.contexto : CONTEXTO_INSCRIPCIONES_VACIO
     return (
       <MarcoPantalla>
         <Formulario titulo={soloWeb ? 'Continuá desde el sistema web' : 'Tu cuenta móvil'} accionPrincipal={{ etiqueta: 'Cerrar sesión', onPress: () => void controlador.salir() }}>
@@ -186,6 +202,8 @@ export function AccesoContenedor({ alRecuperarContrasena }: AccesoContenedorProp
               >
                 <Boton etiqueta={estado.rol === 'PADRE' ? 'Hijos vinculados' : 'Mi información'} variante={seccionActual === 'principal' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'principal' })} />
                 <Boton etiqueta="Cuotas" variante={seccionActual === 'cuotas' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'cuotas' })} testID="seccion-cuotas" />
+                <Boton etiqueta="Por período" variante={seccionActual === 'periodo' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'periodo' })} testID="seccion-periodo" />
+                <Boton etiqueta="Inscripciones" variante={seccionActual === 'inscripciones' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'inscripciones' })} testID="seccion-inscripciones" />
                 <Boton etiqueta="Mi cuenta" variante={seccionActual === 'cuenta' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'cuenta' })} />
               </ScrollView>
               <PantallaConVolver
@@ -215,6 +233,30 @@ export function AccesoContenedor({ alRecuperarContrasena }: AccesoContenedorProp
                       <Boton etiqueta="Cambiar contraseña" variante="secundario" testID="cambiar-contrasena" onPress={() => setCambioContrasena({ clave })} />
                     </Tarjeta>
                   </>
+                )
+              ) : seccionActual === 'periodo' || seccionActual === 'inscripciones' ? (
+                !resultado ? (
+                  <EstadoPantalla tipo="cargando" mensaje="Cargando información autorizada…" />
+                ) : 'error' in resultado || !datosRol ? (
+                  <EstadoPantalla tipo="error" titulo="No pudimos cargar la información" descripcion="La sesión sigue sin mostrar datos hasta poder validarlos." onReintentar={() => void controlador.revalidar()} />
+                ) : seccionActual === 'periodo' ? (
+                  <PeriodoContenedor
+                    key={estado.usuarioId}
+                    cliente={cliente}
+                    mostrarSelector={datosRol.rol === 'PADRE'}
+                    alumnos={alumnosDeConsulta(datosRol, 'Mis facturas')}
+                    contexto={contextoPeriodoActual ?? contextoPeriodoVacio()}
+                    onContexto={contexto => setContextoPeriodo({ clave, contexto })}
+                  />
+                ) : (
+                  <InscripcionesContenedor
+                    key={estado.usuarioId}
+                    cliente={cliente}
+                    mostrarSelector={datosRol.rol === 'PADRE'}
+                    alumnos={alumnosDeConsulta(datosRol, 'Mis inscripciones')}
+                    contexto={contextoInscripcionesActual}
+                    onContexto={contexto => setContextoInscripciones({ clave, contexto })}
+                  />
                 )
               ) : seccionActual === 'cuotas' ? (
                 !resultado ? (

@@ -28,6 +28,7 @@ export type InsigniaEstadoProps =
   | { dominio: 'factura'; estado: 'pendiente' | 'parcial' | 'pagada' | 'vencida' }
   | { dominio: 'item'; estado: 'pagado' | 'verificacion' | 'pendiente' }
   | { dominio: 'pago'; estado: 'aprobado' | 'pendiente' | 'rechazado' }
+  | { dominio: 'inscripcion'; estado: 'activa' | 'cancelada' }
 
 interface VarianteInsignia {
   texto: string
@@ -55,6 +56,9 @@ function variante(p: InsigniaEstadoProps): VarianteInsignia {
     if (p.estado === 'pagado') return { ...PAGADA, texto: 'Pagado' }
     if (p.estado === 'verificacion') return VERIFICACION
     return PENDIENTE
+  }
+  if (p.dominio === 'inscripcion') {
+    return p.estado === 'activa' ? { ...PAGADA, texto: 'Activa' } : { ...VERIFICACION, glifo: '○', texto: 'Cancelada' }
   }
   if (p.estado === 'aprobado') return { ...PAGADA, texto: 'Aprobado' }
   if (p.estado === 'rechazado') return { ...VENCIDA, texto: 'Rechazado' }
