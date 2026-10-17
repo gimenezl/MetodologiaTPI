@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
-import { AppState, Linking, Text, View } from 'react-native'
+import { AppState, Linking, ScrollView, Text, View } from 'react-native'
 
 import { Aviso, Boton, CampoTexto, EstadoPantalla, Formulario, MarcoPantalla, Tarjeta } from '@/catalogo'
 import { entornoDelBundle } from '@/configuracion/entorno'
@@ -151,11 +151,18 @@ export function AccesoContenedor(): ReactElement {
             </>
           ) : (
             <>
-              <View accessibilityRole="tablist" style={{ flexDirection: 'row', gap: espacio.sm }}>
+              {/* Deslizable de izquierda a derecha: en pantallas angostas o con texto ampliado no entran todas. */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                accessibilityRole="tablist"
+                contentContainerStyle={{ flexDirection: 'row', gap: espacio.sm, paddingRight: espacio.lg }}
+                style={{ flexGrow: 0 }}
+              >
                 <Boton etiqueta={estado.rol === 'PADRE' ? 'Hijos vinculados' : 'Mi información'} variante={seccionActual === 'principal' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'principal' })} />
                 <Boton etiqueta="Cuotas" variante={seccionActual === 'cuotas' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'cuotas' })} testID="seccion-cuotas" />
                 <Boton etiqueta="Mi cuenta" variante={seccionActual === 'cuenta' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'cuenta' })} />
-              </View>
+              </ScrollView>
               {seccionActual === 'cuenta' ? (
                 <Tarjeta>
                   <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>Cuenta verificada</Text>

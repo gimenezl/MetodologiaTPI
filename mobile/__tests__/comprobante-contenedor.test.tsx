@@ -521,6 +521,31 @@ describe('ComprobanteContenedor', () => {
     await waitFor(() => expect(screen.getByText(/no es una imagen JPG o PNG ni un PDF/u)).toBeTruthy())
   })
 
+  it('la flecha vuelve del formulario al listado de pagos y, desde ahí, a las cuotas', async () => {
+    const m = crearMundo()
+    const alVolver = jest.fn()
+    await abrirFormulario(m, { onVolver: alVolver })
+    await fireEvent.press(screen.getByTestId('volver-flecha'))
+    await waitFor(() => expect(screen.getByTestId(`adjuntar-${PAGO}`)).toBeTruthy())
+    expect(alVolver).not.toHaveBeenCalled()
+    await fireEvent.press(screen.getByTestId('volver-flecha'))
+    expect(alVolver).toHaveBeenCalledWith(false)
+  })
+
+  it('durante un envío en vuelo la flecha no vuelve', async () => {
+    const m = crearMundo()
+    const alVolver = jest.fn()
+    await abrirFormulario(m, { onVolver: alVolver })
+    await elegirArchivo()
+    await completar()
+    await fireEvent.press(screen.getByTestId('enviar-comprobante'))
+    await waitFor(() => expect(m.rpcs.length).toBe(1))
+    expect(screen.getByTestId('volver-flecha').props.accessibilityState).toMatchObject({ disabled: true })
+    await fireEvent.press(screen.getByTestId('volver-flecha'))
+    expect(alVolver).not.toHaveBeenCalled()
+    expect(screen.getByTestId('progreso-envio')).toBeTruthy()
+  })
+
   it('elegir otro pago no hereda archivo, datos ni clave del anterior', async () => {
     const m = crearMundo({ pagos: [FILA_PAGO(PAGO), FILA_PAGO(PAGO_B)] })
     await render(

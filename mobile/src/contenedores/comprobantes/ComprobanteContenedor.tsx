@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 
+import { PantallaConVolver } from '@/catalogo'
+
 import {
   MENSAJE_DESCARTE,
   MENSAJE_PREPARACION,
@@ -486,8 +488,17 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
   // ---- Presentación ----------------------------------------------------------------------------------
   const enviando = estado.fase === 'enviando'
 
+  // Flecha y gesto de «volver»: del formulario al listado de pagos y, desde ahí o desde un resultado, a las
+  // cuotas. Durante un envío en vuelo no hacen nada (el botón «Volver» del formulario también está bloqueado).
+  const atras = () => (estado.pagoId && estado.fase === 'edicion' ? reiniciar() : volverACuotas())
+  const conVolver = (pantalla: ReactElement): ReactElement => (
+    <PantallaConVolver onVolver={atras} deshabilitado={enviando}>
+      {pantalla}
+    </PantallaConVolver>
+  )
+
   if (!estado.pagoId) {
-    return (
+    return conVolver(
       <ListaPagosVista
         etiquetaAlumno={etiquetaAlumno}
         carga={cargaPagos}
@@ -503,7 +514,7 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
   }
 
   if (estado.fase === 'confirmado' && estado.carga) {
-    return (
+    return conVolver(
       <ResultadoComprobanteVista
         resultado={{ tipo: 'confirmado', carga: estado.carga }}
         onAdjuntarOtro={() => {
@@ -519,7 +530,7 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
   }
 
   if (estado.fase === 'rechazado') {
-    return (
+    return conVolver(
       <ResultadoComprobanteVista
         resultado={{ tipo: 'rechazado', mensaje: estado.mensaje ?? 'No se pudo registrar el comprobante.' }}
         onAdjuntarOtro={() => undefined}
@@ -531,7 +542,7 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
   }
 
   if (estado.fase === 'incierto') {
-    return (
+    return conVolver(
       <ResultadoComprobanteVista
         resultado={{
           tipo: 'incierto',
@@ -547,7 +558,7 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
   }
 
   if (cargaPagos.tipo !== 'ok' || !pagoElegido) {
-    return (
+    return conVolver(
       <ListaPagosVista
         etiquetaAlumno={etiquetaAlumno}
         carga={cargaPagos.tipo === 'ok' ? { tipo: 'ok', pagos: [] } : cargaPagos}
@@ -558,7 +569,7 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
     )
   }
 
-  return (
+  return conVolver(
     <FormularioComprobanteVista
       etiquetaAlumno={etiquetaAlumno}
       pago={pagoElegido}

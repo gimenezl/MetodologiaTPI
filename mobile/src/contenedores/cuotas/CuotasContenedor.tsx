@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { AppState } from 'react-native'
 
+import { PantallaConVolver } from '@/catalogo'
 import {
   consultarCuotas,
   consultarDetalleCuota,
@@ -228,11 +229,13 @@ export function CuotasContenedor({
         ? detalle.resultado
         : { tipo: 'cargando' }
     return (
-      <DetalleCuotaVista
-        resultado={resultadoDetalle}
-        onVolver={() => setAbierta(null)}
-        onReintentar={() => setRecarga(n => n + 1)}
-      />
+      <PantallaConVolver onVolver={() => setAbierta(null)}>
+        <DetalleCuotaVista
+          resultado={resultadoDetalle}
+          onVolver={() => setAbierta(null)}
+          onReintentar={() => setRecarga(n => n + 1)}
+        />
+      </PantallaConVolver>
     )
   }
 

@@ -179,10 +179,12 @@ Reglas del contenedor: un solo envío en vuelo (doble toque); un desenlace incie
 hasta consultar la carga; un archivo distinto invalida la clave anterior; el estado vive en el contexto de la
 pantalla y sobrevive a la revalidación de la sesión (garantía de EPT-108); una respuesta atrasada nunca se
 aplica a otro hijo ni a otra cuenta; no se persisten binarios ni rutas, y el archivo elegido es una copia en
-la caché de la aplicación (el original del usuario no se toca ni se borra). La imagen se sube **tal como la
-entrega la cámara o la galería**: la aplicación no vuelve a codificarla, así que puede conservar metadatos
-EXIF (por ejemplo, la ubicación). Solo la ven el padre que la subió y Dirección; quitar esos metadatos
-exigiría recodificar la imagen y queda fuera de esta unidad.
+la caché de la aplicación (el original del usuario no se toca ni se borra). Las imágenes de la cámara y de la
+galería se **reducen y recodifican a JPEG** antes de validarse (lado mayor de 2400 px, calidad 0,8): una foto
+de un iPhone (HEIC de 12 MP o más) puede pasar los 5 MiB aprobados, y la recodificación además descarta los
+metadatos EXIF, ubicación incluida. Un PNG o JPEG elegido desde Archivos solo se recodifica si supera el
+máximo; un PDF nunca se toca (si pasa de 5 MiB se rechaza). El decodificador nativo es quien confirma que lo
+elegido es una imagen; el servidor valida igualmente los bytes que recibe.
 
 ## Lectura web para Dirección
 

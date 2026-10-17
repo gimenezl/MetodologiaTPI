@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 
-import { EstadoPantalla } from '@/catalogo'
+import { EstadoPantalla, PantallaConVolver } from '@/catalogo'
 import type { AlmacenamientoSeguro } from '@/servicios/almacenamiento-seguro'
 import {
   descartarIntentoPendiente,
@@ -313,12 +313,23 @@ export function PagoContenedor({
   const registradoPorContexto = registradoInicial !== undefined && fase.tipo !== 'registrado'
   const faseVigente: Fase = registradoPorContexto ? { tipo: 'registrado', pago: registradoInicial } : fase
 
+  // Flecha y gesto de «volver» a las cuotas; con un registro en vuelo no hacen nada.
+  const volverACuotas = useCallback(
+    () => onVolver(huboRegistroRef.current || registradoInicial !== undefined),
+    [onVolver, registradoInicial],
+  )
+  const conVolver = (pantalla: ReactElement): ReactElement => (
+    <PantallaConVolver onVolver={volverACuotas} deshabilitado={faseVigente.tipo === 'enviando'}>
+      {pantalla}
+    </PantallaConVolver>
+  )
+
   if (lectura === 'cargando' && !registradoPorContexto) {
-    return <EstadoPantalla tipo="cargando" mensaje="Comprobando pagos pendientes…" />
+    return conVolver(<EstadoPantalla tipo="cargando" mensaje="Comprobando pagos pendientes…" />)
   }
 
   if (faseVigente.tipo === 'seleccion' || faseVigente.tipo === 'enviando') {
-    return (
+    return conVolver(
       <>
         <PagoSeleccionVista
           etiquetaAlumno={etiquetaAlumno}
@@ -334,11 +345,11 @@ export function PagoContenedor({
           onReintentarCotizacion={() => setRecargaCotizacion(n => n + 1)}
           onReintentarBanco={() => setRecargaBanco(n => n + 1)}
         />
-      </>
+      </>,
     )
   }
 
-  return (
+  return conVolver(
     <PagoResultadoVista
       etiquetaAlumno={etiquetaAlumno}
       resultado={
