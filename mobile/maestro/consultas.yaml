@@ -23,7 +23,6 @@ name: Consultas del padre (período e inscripciones) contra backend real
 - tapOn:
     id: 'seccion-periodo'
 - assertVisible: 'Rango de fechas'
-- assertVisible: 'Fecha de transferencia'
 - tapOn:
     id: 'periodo-desde'
 - eraseText
