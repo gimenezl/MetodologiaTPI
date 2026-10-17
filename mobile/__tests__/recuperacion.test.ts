@@ -159,6 +159,7 @@ describe('intercambiarCodigo', () => {
     ['falta el verificador', errorAuth('AuthPKCECodeVerifierMissingError'), 'sin_verificador'],
     ['sin conexión', errorAuth('AuthRetryableFetchError', { status: 0 }), 'sin_conexion'],
     ['falla del servicio', errorAuth('AuthApiError', { status: 500 }), 'error'],
+    ['límite de peticiones', errorAuth('AuthApiError', { status: 429, code: 'over_request_rate_limit' }), 'error'],
   ])('clasifica %s', async (_caso, error, esperado) => {
     const auth = { exchangeCodeForSession: jest.fn(async () => ({ data: { session: null, user: null }, error })), signOut: jest.fn() }
     expect((await intercambiarCodigo(auth as never, enlace)).tipo).toBe(esperado)

@@ -201,6 +201,38 @@ describe('ControladorRecuperacion', () => {
     expect(tercero.ultimo()).toEqual({ tipo: 'enlace_no_valido', causa: 'usado' })
   })
 
+  it('un enlace con el que ya se cambió la contraseña no reabre el formulario, aunque la misma cuenta vuelva a ingresar', async () => {
+    const primero = preparar()
+    await primero.controlador.procesarEnlace(interpretarEnlace(url(CODIGO_A)))
+    await primero.controlador.guardar('nueva', 'nueva')
+    expect(primero.ultimo()).toEqual({ tipo: 'exito' })
+    primero.controlador.detener()
+
+    // Misma cuenta con sesión vigente (volvió a ingresar con la contraseña nueva) y el enlace viejo del correo.
+    const segundo = preparar({ sesionPrevia: 'u-recuperado' })
+    await segundo.controlador.procesarEnlace(interpretarEnlace(url(CODIGO_A)))
+    expect(segundo.ultimo()).toEqual({ tipo: 'enlace_no_valido', causa: 'usado' })
+    expect(segundo.auth.exchangeCodeForSession).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['pide reautenticación', errorAuth('AuthApiError', { status: 400, code: 'reauthentication_needed' })],
+    ['código de reautenticación inválido', errorAuth('AuthApiError', { status: 422, code: 'reauthentication_not_valid' })],
+  ])('si el guardado %s (sin campo de código en este formulario), pide un enlace nuevo en lugar de dejar la pantalla sin salida', async (_caso, error) => {
+    const { controlador, ultimo } = preparar({ actualizacion: async () => ({ data: { user: null }, error }) })
+    await controlador.procesarEnlace(interpretarEnlace(url(CODIGO_A)))
+    await controlador.guardar('nueva', 'nueva')
+    expect(ultimo()).toEqual({ tipo: 'enlace_no_valido', causa: 'sesion_vencida' })
+  })
+
+  it('un límite de peticiones (429) al canjear no se presenta como enlace ya usado', async () => {
+    const { controlador, ultimo } = preparar({
+      intercambio: async () => ({ data: { session: null, user: null }, error: errorAuth('AuthApiError', { status: 429 }) }),
+    })
+    await controlador.procesarEnlace(interpretarEnlace(url(CODIGO_A)))
+    expect(ultimo()).toEqual({ tipo: 'enlace_no_valido', causa: 'error' })
+  })
+
   describe('con la sesión de otra cuenta', () => {
     it('pide confirmación y no canjea antes de recibirla', async () => {
       const { auth, controlador, ultimo } = preparar({ sesionPrevia: 'u-otra' })

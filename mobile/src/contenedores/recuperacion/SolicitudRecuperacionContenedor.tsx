@@ -106,7 +106,6 @@ export function SolicitudRecuperacionContenedor({
           deshabilitado: enEspera,
           pistaAccesible: enEspera ? `Podés pedir otro enlace en ${restante} segundos.` : undefined,
         }}
-        accionSecundaria={{ etiqueta: 'Volver al inicio de sesión', onPress: onVolver, deshabilitado: enviando }}
       >
         <PantallaConVolver onVolver={onVolver} deshabilitado={enviando}>
         <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>

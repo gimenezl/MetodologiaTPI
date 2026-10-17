@@ -103,15 +103,20 @@ describe('solicitud del correo de recuperación', () => {
     expect(segunda.resetPasswordForEmail).not.toHaveBeenCalled()
   })
 
-  it('volver y cancelar no envían nada', async () => {
+  it('volver (flecha única y gesto) no envía nada', async () => {
     const { resetPasswordForEmail, onVolver } = await montar()
+    expect(screen.getAllByTestId('volver-flecha')).toHaveLength(1)
+    expect(screen.queryByText('Volver al inicio de sesión')).toBeNull()
     await fireEvent.press(screen.getByTestId('volver-flecha'))
-    await fireEvent.press(screen.getByText('Volver al inicio de sesión'))
+    const marco = screen.getByTestId('pantalla-con-volver')
+    marco.props.onTouchStart({ nativeEvent: { pageX: 8, pageY: 300 } })
+    expect(marco.props.onMoveShouldSetResponderCapture({ nativeEvent: { pageX: 120, pageY: 305 } })).toBe(true)
+    await fireEvent(marco, 'responderRelease', { nativeEvent: { pageX: 120, pageY: 305 } })
     expect(onVolver).toHaveBeenCalledTimes(2)
     expect(resetPasswordForEmail).not.toHaveBeenCalled()
   })
 
-  it('una respuesta que llega tras desmontar no actualiza el estado', async () => {
+  it('una respuesta que llega tras desmontar no produce errores', async () => {
     let resolver: (valor: unknown) => void = () => undefined
     const { utilidades } = await montar(() => new Promise(resolve => { resolver = resolve }))
     await fireEvent.changeText(screen.getByTestId('recuperar-correo'), 'a@b.test')

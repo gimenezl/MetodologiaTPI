@@ -11,7 +11,11 @@ name: Recuperación de contraseña - enlace, nueva contraseña y cambio desde el
     timeout: 30000
 # Entrega repetida del mismo enlace con la app abierta: la pantalla no cambia ni vuelve a canjear.
 - openLink: ${MAESTRO_RECUPERACION_ENLACE}
+- waitForAnimationToEnd:
+    timeout: 4000
 - assertVisible: 'Elegí una contraseña nueva'
+# Un segundo canje del mismo código habría sido rechazado por Auth y mostraría «Enlace no disponible».
+- assertNotVisible: 'Enlace no disponible'
 # Validación local de la confirmación.
 - tapOn:
     id: 'restablecer-nueva'
@@ -116,7 +120,20 @@ name: Recuperación de contraseña - enlace, nueva contraseña y cambio desde el
     timeout: 15000
 - tapOn: 'Cerrar sesión'
 - assertVisible: 'Iniciar sesión'
-# El enlace del correo ya se usó: no abre la recuperación.
+# El enlace del correo ya se usó: no abre la recuperación (en el mismo proceso y en uno nuevo, donde responde Auth).
+- openLink: ${MAESTRO_RECUPERACION_ENLACE}
+- extendedWaitUntil:
+    visible: 'Enlace no disponible'
+    timeout: 30000
+- assertNotVisible: 'Elegí una contraseña nueva'
+- scrollUntilVisible:
+    element:
+      text: 'Volver al inicio de sesión'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Volver al inicio de sesión'
+- assertVisible: 'Iniciar sesión'
+- stopApp
 - openLink: ${MAESTRO_RECUPERACION_ENLACE}
 - extendedWaitUntil:
     visible: 'Enlace no disponible'

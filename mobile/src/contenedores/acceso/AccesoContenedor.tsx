@@ -80,7 +80,9 @@ export function AccesoContenedor({ alRecuperarContrasena }: AccesoContenedorProp
     // solo se vuelve a validar el acceso cuando cambió, para no desmontar lo que la persona estaba haciendo.
     const alTerminarRecuperacion = alLiberarRecuperacion(({ sesionAlterada }) => {
       const tipo = estadoRealActual.current.tipo
-      if (sesionAlterada || tipo === 'cargando' || tipo === 'revalidando') void controlador.revalidar()
+      // `cargando` sin sesión alterada: la lectura inicial quedó en pausa por la compuerta y nadie la retomará.
+      // `revalidando` termina por su cuenta, así que no se interrumpe lo que la persona estaba haciendo.
+      if (sesionAlterada || tipo === 'cargando') void controlador.revalidar()
     })
     return () => {
       alTerminarRecuperacion()

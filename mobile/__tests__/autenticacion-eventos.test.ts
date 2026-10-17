@@ -1,10 +1,12 @@
 import { ControladorAutenticacion, type EstadoAutenticacion } from '@/servicios/autenticacion'
+import { reiniciarRecuperacionParaPruebas } from '@/servicios/recuperacion-activa'
+import { ControladorRecuperacion } from '@/servicios/recuperacion-controlador'
 import type { ClienteEPT } from '@/servicios/supabase'
 
 type Evento = 'SIGNED_IN' | 'SIGNED_OUT' | 'PASSWORD_RECOVERY' | 'USER_UPDATED' | 'TOKEN_REFRESHED' | 'INITIAL_SESSION'
 type Escucha = (evento: Evento, sesion: { user: { id: string } } | null) => void
 
-async function preparar(recuperacion = { activa: false }) {
+async function preparar(recuperacion: { activa: boolean } | undefined = { activa: false }, compuertaPorDefecto = false) {
   const estados: EstadoAutenticacion[] = []
   const escucha: { actual?: Escucha } = {}
   const cliente = {
@@ -20,7 +22,9 @@ async function preparar(recuperacion = { activa: false }) {
     },
     rpc: jest.fn(async (nombre: string) => ({ data: nombre === 'mi_estado_acceso' ? 'HABILITADO' : 'PADRE', error: null })),
   } as unknown as ClienteEPT
-  const controlador = new ControladorAutenticacion(cliente, { cambiar: e => estados.push(e) }, () => recuperacion.activa)
+  const controlador = compuertaPorDefecto
+    ? new ControladorAutenticacion(cliente, { cambiar: e => estados.push(e) })
+    : new ControladorAutenticacion(cliente, { cambiar: e => estados.push(e) }, () => recuperacion.activa)
   const detener = controlador.iniciar()
   // La lectura inicial de la sesión publica su propio estado: se descarta para medir solo cada evento.
   await new Promise(resolve => setTimeout(resolve, 0))
@@ -35,6 +39,24 @@ async function preparar(recuperacion = { activa: false }) {
   }
   return { controlador, cliente, estados, emitir, detener, recuperacion }
 }
+
+describe('cableado real de la compuerta de recuperación', () => {
+  afterEach(() => reiniciarRecuperacionParaPruebas())
+
+  it('con la compuerta por defecto, ControladorRecuperacion.iniciar() hace que el acceso ignore los eventos y detener() los reanuda', async () => {
+    const { cliente, estados, emitir, detener } = await preparar(undefined, true)
+    const recuperacion = new ControladorRecuperacion({ auth: cliente.auth } as never, () => undefined)
+    recuperacion.iniciar()
+    for (const evento of ['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED'] as const) await emitir(evento, 'u-recuperado')
+    await emitir('SIGNED_OUT', null)
+    expect(estados).toEqual([])
+    expect(cliente.rpc).not.toHaveBeenCalled()
+    recuperacion.detener()
+    await emitir('SIGNED_IN', 'u-1')
+    expect(estados.at(-1)).toEqual({ tipo: 'autenticada', usuarioId: 'u-1', rol: 'PADRE' })
+    detener()
+  })
+})
 
 describe('eventos de Auth y recuperación de contraseña', () => {
   it('SIGNED_IN y TOKEN_REFRESHED revalidan al mismo usuario sin cambiar de rol', async () => {

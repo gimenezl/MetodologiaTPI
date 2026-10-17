@@ -351,7 +351,6 @@ async function errorDeConexion() {
   etapa = 'errorDeConexion'
   const sinServicio = crearClienteApp('http://127.0.0.1:9')
   assert.deepEqual(await solicitarRecuperacion(sinServicio.cliente.auth, 'a@b.test'), { tipo: 'sin_conexion' })
-  assert.deepEqual(await intercambiarCodigo(sinServicio.cliente.auth, { tipo: 'codigo', codigo: crypto.randomUUID(), flowId: null }).then(r => ({ tipo: r.tipo === 'sin_verificador' ? 'sin_conexion' : r.tipo })), { tipo: 'sin_conexion' })
   ok('Sin servicio, la solicitud informa falla de conexión.')
 
   // Falla de red durante el intercambio: el SDK descarta el verificador, así que se debe pedir un enlace nuevo.
@@ -368,8 +367,11 @@ async function errorDeConexion() {
     } },
   })
   assert.deepEqual(await intercambiarCodigo(clienteCaido.auth, codigo), { tipo: 'sin_conexion' })
+  // El SDK descarta el verificador aunque la petición no haya llegado: el reintento ya no puede canjear el enlace.
   const reintento = await intercambiarCodigo(app.cliente.auth, codigo)
-  observacion(`Falla de red durante el canje: el reintento con el mismo enlace ${reintento.tipo === 'ok' ? 'funciona' : `devuelve «${reintento.tipo}»; la app pide un enlace nuevo`}.`)
+  assert.equal(reintento.tipo, 'sin_verificador', 'El reintento tras una falla de red no debería poder canjear el enlace')
+  observacion('Falla de red durante el canje: el reintento con el mismo enlace devuelve «sin_verificador»; la app pide un enlace nuevo.')
+  assert.equal((await iniciarSesion(actor.email, actor.password)).status, 200, 'La contraseña cambió tras una falla de red')
   ok('Falla de red durante el canje: se informa «sin conexión» sin cambiar la contraseña.')
 }
 

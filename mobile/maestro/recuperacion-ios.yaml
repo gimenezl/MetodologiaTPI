@@ -8,11 +8,21 @@ name: Recuperación de contraseña en iOS (enlace y formularios, sin backend)
 - launchApp:
     clearState: true
 - assertVisible: 'Iniciar sesión'
+- scrollUntilVisible:
+    element:
+      text: '¿Olvidaste tu contraseña?'
+    direction: DOWN
+    timeout: 15000
 - tapOn: '¿Olvidaste tu contraseña?'
 - assertVisible: 'Recuperar contraseña'
 - tapOn:
     id: 'recuperar-correo'
 - inputText: 'no-es-un-correo'
+- scrollUntilVisible:
+    element:
+      text: 'Enviar enlace'
+    direction: DOWN
+    timeout: 15000
 - tapOn: 'Enviar enlace'
 - assertVisible: 'Ingresá un correo electrónico válido.'
 - stopApp
@@ -29,6 +39,11 @@ name: Recuperación de contraseña en iOS (enlace y formularios, sin backend)
 - assertVisible: '.*El enlace venció.*'
 - assertNotVisible: 'Elegí una contraseña nueva'
 - takeScreenshot: 02-enlace-vencido
+- scrollUntilVisible:
+    element:
+      text: 'Pedir un enlace nuevo'
+    direction: DOWN
+    timeout: 15000
 - tapOn: 'Pedir un enlace nuevo'
 - assertVisible: 'Recuperar contraseña'
 # Un enlace hacia una ruta desconocida termina en el inicio de sesión, sin mostrar sus parámetros.

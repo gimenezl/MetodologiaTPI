@@ -48,6 +48,8 @@ const MAXIMO_INTERCAMBIOS = 20
  * el SDK ya descartó el verificador de la entrega buena. Solo memoria: nada se persiste.
  */
 const intercambios = new Map<string, Promise<ResultadoIntercambio>>()
+/** Enlaces con los que ya se cambió la contraseña: aunque la misma cuenta vuelva a ingresar, no reabren el formulario. */
+const completados = new Set<string>()
 
 function intercambioUnico(huella: string, crear: () => Promise<ResultadoIntercambio>): Promise<ResultadoIntercambio> {
   const existente = intercambios.get(huella)
@@ -65,6 +67,7 @@ function intercambioUnico(huella: string, crear: () => Promise<ResultadoIntercam
 /** Solo para pruebas. */
 export function reiniciarIntercambiosParaPruebas(): void {
   intercambios.clear()
+  completados.clear()
 }
 
 export class ControladorRecuperacion {
@@ -128,6 +131,7 @@ export class ControladorRecuperacion {
 
     const presentado = intercambios.get(huella)
     if (presentado) {
+      if (completados.has(huella)) return this.publicar({ tipo: 'enlace_no_valido', causa: 'usado' })
       const resultado = await presentado
       if (revision !== this.revision) return
       return this.aplicarResultado(resultado, true)
@@ -168,12 +172,15 @@ export class ControladorRecuperacion {
     const resultado = await actualizarContrasena(this.cliente.auth, contrasena, { usuarioEsperado: usuarioId })
     if (revision !== this.revision) return
     if (resultado.tipo === 'ok') {
+      if (this.huellaEnCurso) completados.add(this.huellaEnCurso)
       await this.cerrarSesionDeRecuperacion()
       if (revision !== this.revision) return
       this.usuarioRecuperado = null
       return this.publicar({ tipo: 'exito' })
     }
-    if (resultado.tipo === 'sesion_expirada' || resultado.tipo === 'usuario_distinto') {
+    // La sesión del enlace es recién creada: pedir reautenticación (sin campo de código aquí) o perder la sesión
+    // significa que la verificación ya no sirve, y se pide un enlace nuevo.
+    if (resultado.tipo === 'sesion_expirada' || resultado.tipo === 'usuario_distinto' || resultado.tipo === 'reautenticar' || resultado.tipo === 'codigo_invalido') {
       this.usuarioRecuperado = null
       return this.publicar({ tipo: 'enlace_no_valido', causa: 'sesion_vencida' })
     }

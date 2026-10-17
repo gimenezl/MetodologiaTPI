@@ -212,6 +212,8 @@ export async function intercambiarCodigo(
       const { nombre, codigo, estado } = datosDeError(error)
       if (esSinConexion(error)) return { tipo: 'sin_conexion' }
       if (nombre === 'AuthPKCECodeVerifierMissingError') return { tipo: 'sin_verificador' }
+      // Un límite de peticiones (429) no dice que el enlace sea inválido: no se presenta como «ya usado».
+      if (estado === 429) return { tipo: 'error' }
       if (estado !== null && estado >= 400 && estado < 500) return { tipo: 'enlace_invalido' }
       if (codigo === 'flow_state_not_found' || codigo === 'flow_state_expired' || codigo === 'bad_code_verifier' || codigo === 'otp_expired') {
         return { tipo: 'enlace_invalido' }
