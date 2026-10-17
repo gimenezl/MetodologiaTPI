@@ -23,10 +23,27 @@ name: Carga de comprobante de transferencia contra backend real
     timeout: 20000
 - tapOn: 'Comprobantes de mis pagos'
 - assertVisible: 'Comprobantes de transferencia'
-- assertVisible: '.*Sin comprobantes cargados.*'
+- scrollUntilVisible:
+    element:
+      text: '.*Sin comprobantes cargados.*'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: 'Adjuntar comprobante'
+    direction: DOWN
+    timeout: 15000
 - tapOn: 'Adjuntar comprobante'
-- assertVisible: 'Datos de la transferencia'
-- assertVisible: '.*no aprueba el pago ni cambia tu saldo.*'
+- scrollUntilVisible:
+    element:
+      text: '.*no aprueba el pago ni cambia tu saldo.*'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: 'Datos de la transferencia'
+    direction: DOWN
+    timeout: 15000
 
 # Sin archivo no hay envío posible.
 - scrollUntilVisible:
@@ -88,8 +105,16 @@ name: Carga de comprobante de transferencia contra backend real
 - extendedWaitUntil:
     visible: 'Comprobante recibido: pendiente de verificación.'
     timeout: 60000
-- assertVisible: '.*Comprobantes del pago: 1.*'
-- assertVisible: '.*OP-MAESTRO-109.*'
+- scrollUntilVisible:
+    element:
+      text: '.*OP-MAESTRO-109.*'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: '.*Comprobantes del pago: 1.*'
+    direction: DOWN
+    timeout: 15000
 
 # Un segundo archivo del mismo pago: los datos ya informados no se piden ni se modifican.
 - scrollUntilVisible:
@@ -139,7 +164,11 @@ name: Carga de comprobante de transferencia contra backend real
 - extendedWaitUntil:
     visible: 'Comprobante recibido: pendiente de verificación.'
     timeout: 60000
-- assertVisible: '.*Comprobantes del pago: 2.*'
+- scrollUntilVisible:
+    element:
+      text: '.*Comprobantes del pago: 2.*'
+    direction: DOWN
+    timeout: 15000
 
 # Persistencia: tras relanzar sin borrar el estado, el pago sigue pendiente con sus dos comprobantes.
 - stopApp
@@ -151,4 +180,8 @@ name: Carga de comprobante de transferencia contra backend real
     direction: DOWN
     timeout: 20000
 - tapOn: 'Comprobantes de mis pagos'
-- assertVisible: '.*2 comprobantes cargados.*'
+- scrollUntilVisible:
+    element:
+      text: '.*2 comprobantes cargados.*'
+    direction: DOWN
+    timeout: 15000

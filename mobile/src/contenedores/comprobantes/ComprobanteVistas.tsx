@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { Image, Text, View } from 'react-native'
+import { ActivityIndicator, Image, Text, View } from 'react-native'
 
 import { Aviso, Boton, CampoTexto, EstadoPantalla, Importe, InsigniaEstado, Tarjeta } from '@/catalogo'
 import type { CargaComprobante, PagoPendienteDelPadre } from '@/servicios/comprobantes'
@@ -131,6 +131,76 @@ const TEXTO_ETAPA: Record<EtapaEnvio, string> = {
   preparando: 'Preparando el envío…',
   subiendo: 'Subiendo el archivo…',
   verificando: 'Verificando el archivo en el servidor…',
+}
+
+const PASOS_ENVIO: readonly { etapa: EtapaEnvio; hecho: string }[] = [
+  { etapa: 'preparando', hecho: 'Envío preparado' },
+  { etapa: 'subiendo', hecho: 'Archivo subido' },
+  { etapa: 'verificando', hecho: 'Archivo verificado' },
+]
+
+/**
+ * Pantalla de envío en curso: reemplaza al formulario mientras se sube el archivo, para que el envío se sienta
+ * fluido y no se toque nada a medias. Muestra una animación de carga, el paso actual (con su porcentaje al
+ * subir) y los pasos ya terminados. El estado se comunica con texto y símbolos, no solo con color.
+ */
+export function EnviandoComprobanteVista({ etapa, progreso }: { etapa: EtapaEnvio; progreso: number }): ReactElement {
+  const porcentaje = Math.round(progreso * 100)
+  const actual = PASOS_ENVIO.findIndex(p => p.etapa === etapa)
+  const avance = etapa === 'preparando' ? 0 : porcentaje
+  return (
+    <Tarjeta>
+      <View
+        accessible
+        accessibilityLiveRegion="polite"
+        accessibilityState={{ busy: true }}
+        style={{ alignItems: 'center', gap: espacio.md, paddingVertical: espacio.lg }}
+      >
+        <ActivityIndicator size="large" color={color.primario500} />
+        <Text accessibilityRole="header" style={[estiloDeTexto('subtitulo'), { color: color.neutro800, textAlign: 'center' }]}>
+          Enviando comprobante…
+        </Text>
+        <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700, textAlign: 'center' }]}>
+          No cierres la aplicación hasta que termine.
+        </Text>
+      </View>
+      <View style={{ gap: espacio.sm }}>
+        {PASOS_ENVIO.map((paso, i) => {
+          const estado = i < actual ? 'hecho' : i === actual ? 'actual' : 'pendiente'
+          const texto =
+            estado === 'hecho'
+              ? paso.hecho
+              : estado === 'actual'
+                ? `${TEXTO_ETAPA[paso.etapa]}${paso.etapa === 'subiendo' ? ` ${porcentaje} %` : ''}`
+                : TEXTO_ETAPA[paso.etapa]
+          return (
+            <View key={paso.etapa} style={{ flexDirection: 'row', gap: espacio.sm, alignItems: 'flex-start' }}>
+              <Text accessibilityElementsHidden importantForAccessibility="no" style={[estiloDeTexto('cuerpo'), { color: estado === 'actual' ? color.primario600 : color.neutro700, width: 20 }]}>
+                {estado === 'hecho' ? '✓' : estado === 'actual' ? '●' : '○'}
+              </Text>
+              <Text
+                style={[
+                  estiloDeTexto('cuerpo'),
+                  { flex: 1, color: estado === 'pendiente' ? color.neutro700 : color.neutro800, fontWeight: estado === 'actual' ? '700' : '400' },
+                ]}
+              >
+                {texto}
+              </Text>
+            </View>
+          )
+        })}
+      </View>
+      <View
+        testID="progreso-envio"
+        accessibilityRole="progressbar"
+        accessibilityLabel="Progreso del envío"
+        accessibilityValue={{ min: 0, max: 100, now: avance }}
+        style={{ height: 10, borderRadius: 5, backgroundColor: color.neutro200, overflow: 'hidden' }}
+      >
+        <View style={{ width: `${avance}%`, height: 10, backgroundColor: color.primario500 }} />
+      </View>
+    </Tarjeta>
+  )
 }
 
 export function FormularioComprobanteVista(props: FormularioComprobanteVistaProps): ReactElement {

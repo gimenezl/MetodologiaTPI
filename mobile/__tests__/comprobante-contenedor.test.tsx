@@ -251,7 +251,9 @@ describe('ComprobanteContenedor', () => {
     await elegirArchivo()
     await completar()
     await fireEvent.press(screen.getByTestId('enviar-comprobante'))
-    await fireEvent.press(screen.getByTestId('enviar-comprobante')) // doble toque
+    // Un segundo toque ya no es posible: una pantalla de carga reemplaza al formulario.
+    expect(screen.queryByTestId('enviar-comprobante')).toBeNull()
+    expect(screen.getByText('Enviando comprobante…')).toBeTruthy()
     await waitFor(() => expect(m.rpcs.some(r => r.nombre === 'preparar_carga_comprobante')).toBe(true))
     expect(m.rpcs.filter(r => r.nombre === 'preparar_carga_comprobante')).toHaveLength(1)
     expect(await leerCargaPendiente(m.almacenamiento, U, PAGO)).toMatchObject({ claveCarga: CLAVE })
@@ -477,8 +479,9 @@ describe('ComprobanteContenedor', () => {
     // La revalidación de la sesión remonta la pantalla mientras la subida sigue en vuelo.
     await rerender(<Anfitrion visible={false} />)
     await rerender(<Anfitrion visible />)
-    await waitFor(() => expect(screen.getByTestId('enviar-comprobante')).toBeTruthy())
-    expect(screen.getByTestId('archivo-elegido')).toBeTruthy()
+    // La instancia nueva retoma la pantalla de carga del envío en vuelo, sin volver al formulario.
+    await waitFor(() => expect(screen.getByText('Enviando comprobante…')).toBeTruthy())
+    expect(screen.queryByTestId('enviar-comprobante')).toBeNull()
 
     await act(async () => {
       m.subidas[0].resolver({ tipo: 'subido' })
@@ -519,6 +522,53 @@ describe('ComprobanteContenedor', () => {
     await rerender(<Anfitrion visible={false} />)
     await rerender(<Anfitrion visible />)
     await waitFor(() => expect(screen.getByText(/no es una imagen JPG o PNG ni un PDF/u)).toBeTruthy())
+  })
+
+  it('la flecha vuelve del formulario al listado de pagos y, desde ahí, a las cuotas', async () => {
+    const m = crearMundo()
+    const alVolver = jest.fn()
+    await abrirFormulario(m, { onVolver: alVolver })
+    await fireEvent.press(screen.getByTestId('volver-flecha'))
+    await waitFor(() => expect(screen.getByTestId(`adjuntar-${PAGO}`)).toBeTruthy())
+    expect(alVolver).not.toHaveBeenCalled()
+    await fireEvent.press(screen.getByTestId('volver-flecha'))
+    expect(alVolver).toHaveBeenCalledWith(false)
+  })
+
+  it('mientras se envía muestra «Enviando comprobante…» con los pasos y el avance de la subida', async () => {
+    const m = crearMundo()
+    await abrirFormulario(m)
+    await elegirArchivo()
+    await completar()
+    await fireEvent.press(screen.getByTestId('enviar-comprobante'))
+    await waitFor(() => expect(m.rpcs.length).toBe(1))
+    expect(screen.getByText('Enviando comprobante…')).toBeTruthy()
+    expect(screen.getByText('No cierres la aplicación hasta que termine.')).toBeTruthy()
+    expect(screen.getByText('Preparando el envío…')).toBeTruthy()
+
+    await responder(m, 'preparar_carga_comprobante', cargaJson())
+    await waitFor(() => expect(m.subidas).toHaveLength(1))
+    await act(async () => {
+      m.subidas[0].solicitud.onProgreso(0.5)
+    })
+    expect(screen.getByText('Envío preparado')).toBeTruthy()
+    expect(screen.getByText(/Subiendo el archivo… 50 %/u)).toBeTruthy()
+    expect(screen.getByText('Verificando el archivo en el servidor…')).toBeTruthy()
+    expect(screen.getByTestId('progreso-envio').props.accessibilityValue).toMatchObject({ now: 50 })
+  })
+
+  it('durante un envío en vuelo la flecha no vuelve', async () => {
+    const m = crearMundo()
+    const alVolver = jest.fn()
+    await abrirFormulario(m, { onVolver: alVolver })
+    await elegirArchivo()
+    await completar()
+    await fireEvent.press(screen.getByTestId('enviar-comprobante'))
+    await waitFor(() => expect(m.rpcs.length).toBe(1))
+    expect(screen.getByTestId('volver-flecha').props.accessibilityState).toMatchObject({ disabled: true })
+    await fireEvent.press(screen.getByTestId('volver-flecha'))
+    expect(alVolver).not.toHaveBeenCalled()
+    expect(screen.getByTestId('progreso-envio')).toBeTruthy()
   })
 
   it('elegir otro pago no hereda archivo, datos ni clave del anterior', async () => {

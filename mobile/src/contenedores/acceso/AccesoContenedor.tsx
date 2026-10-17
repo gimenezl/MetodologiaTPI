@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
-import { AppState, Linking, Text, View } from 'react-native'
+import { AppState, Linking, ScrollView, Text, View } from 'react-native'
 
-import { Aviso, Boton, CampoTexto, EstadoPantalla, Formulario, MarcoPantalla, Tarjeta } from '@/catalogo'
+import { Aviso, Boton, CampoTexto, EstadoPantalla, Formulario, MarcoPantalla, PantallaConVolver, Tarjeta } from '@/catalogo'
 import { entornoDelBundle } from '@/configuracion/entorno'
 import { obtenerTransporteApi } from '@/servicios/api'
 import { crearAlmacenamientoSeguro } from '@/servicios/almacenamiento-seguro'
@@ -136,6 +136,9 @@ export function AccesoContenedor(): ReactElement {
     const datosRol = resultado && 'datos' in resultado ? resultado.datos : null
     const seccionActual = seccion?.clave === clave ? seccion.nombre : 'principal'
     const contextoActual = contextoCuotas?.clave === clave ? contextoCuotas.contexto : CONTEXTO_CUOTAS_VACIO
+    // Las pantallas internas de Cuotas (detalle, pago, comprobantes) traen su propia flecha: este marco solo
+    // cubre «Cuotas» y «Mi cuenta» en su nivel raíz, que vuelven a la sección principal.
+    const enSubpantalla = Boolean(contextoActual.abierta || contextoActual.pago || contextoActual.comprobante)
     return (
       <MarcoPantalla>
         <Formulario titulo={soloWeb ? 'Continuá desde el sistema web' : 'Tu cuenta móvil'} accionPrincipal={{ etiqueta: 'Cerrar sesión', onPress: () => void controlador.salir() }}>
@@ -151,11 +154,22 @@ export function AccesoContenedor(): ReactElement {
             </>
           ) : (
             <>
-              <View accessibilityRole="tablist" style={{ flexDirection: 'row', gap: espacio.sm }}>
+              {/* Deslizable de izquierda a derecha: en pantallas angostas o con texto ampliado no entran todas. */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                accessibilityRole="tablist"
+                contentContainerStyle={{ flexDirection: 'row', gap: espacio.sm, paddingRight: espacio.lg }}
+                style={{ flexGrow: 0 }}
+              >
                 <Boton etiqueta={estado.rol === 'PADRE' ? 'Hijos vinculados' : 'Mi información'} variante={seccionActual === 'principal' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'principal' })} />
                 <Boton etiqueta="Cuotas" variante={seccionActual === 'cuotas' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'cuotas' })} testID="seccion-cuotas" />
                 <Boton etiqueta="Mi cuenta" variante={seccionActual === 'cuenta' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'cuenta' })} />
-              </View>
+              </ScrollView>
+              <PantallaConVolver
+                activo={seccionActual !== 'principal' && !enSubpantalla}
+                onVolver={() => setSeccion({ clave, nombre: 'principal' })}
+              >
               {seccionActual === 'cuenta' ? (
                 <Tarjeta>
                   <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>Cuenta verificada</Text>
@@ -209,6 +223,7 @@ export function AccesoContenedor(): ReactElement {
                   <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Nivel: {datosRol.alumno.nivel_nombre ?? 'No disponible'}</Text>
                 </Tarjeta>
               ) : null}
+              </PantallaConVolver>
             </>
           )}
         </Formulario>

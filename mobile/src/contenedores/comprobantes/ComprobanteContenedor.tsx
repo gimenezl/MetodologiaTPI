@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 
+import { PantallaConVolver } from '@/catalogo'
+
 import {
   MENSAJE_DESCARTE,
   MENSAJE_PREPARACION,
@@ -28,6 +30,7 @@ import type { ClienteEPT } from '@/servicios/supabase'
 import type { TransporteHttp } from '@/servicios/transporte-http'
 
 import {
+  EnviandoComprobanteVista,
   FormularioComprobanteVista,
   ListaPagosVista,
   ResultadoComprobanteVista,
@@ -486,8 +489,17 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
   // ---- Presentación ----------------------------------------------------------------------------------
   const enviando = estado.fase === 'enviando'
 
+  // Flecha y gesto de «volver»: del formulario al listado de pagos y, desde ahí o desde un resultado, a las
+  // cuotas. Durante un envío en vuelo no hacen nada (el botón «Volver» del formulario también está bloqueado).
+  const atras = () => (estado.pagoId && estado.fase === 'edicion' ? reiniciar() : volverACuotas())
+  const conVolver = (pantalla: ReactElement): ReactElement => (
+    <PantallaConVolver onVolver={atras} deshabilitado={enviando}>
+      {pantalla}
+    </PantallaConVolver>
+  )
+
   if (!estado.pagoId) {
-    return (
+    return conVolver(
       <ListaPagosVista
         etiquetaAlumno={etiquetaAlumno}
         carga={cargaPagos}
@@ -503,7 +515,7 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
   }
 
   if (estado.fase === 'confirmado' && estado.carga) {
-    return (
+    return conVolver(
       <ResultadoComprobanteVista
         resultado={{ tipo: 'confirmado', carga: estado.carga }}
         onAdjuntarOtro={() => {
@@ -519,7 +531,7 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
   }
 
   if (estado.fase === 'rechazado') {
-    return (
+    return conVolver(
       <ResultadoComprobanteVista
         resultado={{ tipo: 'rechazado', mensaje: estado.mensaje ?? 'No se pudo registrar el comprobante.' }}
         onAdjuntarOtro={() => undefined}
@@ -531,7 +543,7 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
   }
 
   if (estado.fase === 'incierto') {
-    return (
+    return conVolver(
       <ResultadoComprobanteVista
         resultado={{
           tipo: 'incierto',
@@ -546,8 +558,13 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
     )
   }
 
+  // Mientras se envía, una pantalla de carga reemplaza al formulario (el estado vive en el contexto).
+  if (enviando && estado.etapa) {
+    return conVolver(<EnviandoComprobanteVista etapa={estado.etapa} progreso={estado.progreso} />)
+  }
+
   if (cargaPagos.tipo !== 'ok' || !pagoElegido) {
-    return (
+    return conVolver(
       <ListaPagosVista
         etiquetaAlumno={etiquetaAlumno}
         carga={cargaPagos.tipo === 'ok' ? { tipo: 'ok', pagos: [] } : cargaPagos}
@@ -558,7 +575,7 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
     )
   }
 
-  return (
+  return conVolver(
     <FormularioComprobanteVista
       etiquetaAlumno={etiquetaAlumno}
       pago={pagoElegido}
