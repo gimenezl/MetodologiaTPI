@@ -47,6 +47,11 @@ name: Recuperación de contraseña - enlace, nueva contraseña y cambio desde el
 - tapOn:
     id: 'contrasena'
 - inputText: ${MAESTRO_RECUPERACION_PASSWORD}
+- scrollUntilVisible:
+    element:
+      text: 'Ingresar'
+    direction: DOWN
+    timeout: 15000
 - tapOn: 'Ingresar'
 - assertVisible: '.*No se pudo iniciar sesión.*Revisá el correo y la contraseña.*'
 # La nueva sí, con la misma cuenta y el mismo rol.
@@ -56,6 +61,11 @@ name: Recuperación de contraseña - enlace, nueva contraseña y cambio desde el
 - tapOn:
     id: 'contrasena'
 - inputText: ${MAESTRO_RECUPERACION_NUEVA}
+- scrollUntilVisible:
+    element:
+      text: 'Ingresar'
+    direction: DOWN
+    timeout: 15000
 - tapOn: 'Ingresar'
 - extendedWaitUntil:
     visible: 'Mi información'
@@ -99,6 +109,11 @@ name: Recuperación de contraseña - enlace, nueva contraseña y cambio desde el
 - tapOn:
     id: 'contrasena'
 - inputText: ${MAESTRO_RECUPERACION_NUEVA2}
+- scrollUntilVisible:
+    element:
+      text: 'Ingresar'
+    direction: DOWN
+    timeout: 15000
 - tapOn: 'Ingresar'
 - extendedWaitUntil:
     visible: 'Mi información'
