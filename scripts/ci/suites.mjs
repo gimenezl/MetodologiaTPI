@@ -4,7 +4,7 @@ export const sqlSuites = [
   'asistencias_actores_bloqueo_rls.sql', 'asistencias_identidad_escritura_rls.sql',
   'asistencias_superficie_seguridad_rls.sql', 'asistencias_vinculo_academico_rls.sql',
   'asistencias_vinculo_deportivo_rls.sql', 'asistencias_vinculos_combinados_rls.sql',
-  'comedor_rls.sql', 'credenciales_qr_rls.sql', 'cuotas_consulta_rls.sql', 'cursos_rls.sql',
+  'comedor_rls.sql', 'consultas_periodo_inscripciones_rls.sql', 'credenciales_qr_rls.sql', 'cuotas_consulta_rls.sql', 'cursos_rls.sql',
   'deportes_administracion_rls.sql', 'deportes_rls.sql', 'economico_esquema.sql',
   'economico_rls.sql', 'horarios_academicos_rls.sql', 'horarios_rls.sql',
   'inscripcion_hijos_rls.sql', 'inscripciones_administracion_rls.sql',

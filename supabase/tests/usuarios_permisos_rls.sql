@@ -614,6 +614,12 @@ BEGIN
     -- `comprobantes_carga.mjs` y `comprobantes_concurrencia.mjs`; las operaciones de servidor no son de `authenticated`.
     PERFORM pg_temp.rpc('public.preparar_carga_comprobante', 'x', pg_catalog.format('public.preparar_carga_comprobante(%L::UUID, %L::UUID, %L, %L, %L, %L, 1::BIGINT)', pg_temp.u('02'), pg_temp.u('01'), '2026-10-14', '1.00', 'OP-BAT-EPT109', 'image/png'));
     PERFORM pg_temp.rpc('public.consultar_carga_comprobante', 'x', pg_catalog.format('public.consultar_carga_comprobante(%L::UUID)', pg_temp.u('02')));
+    -- EPT-110: consultas de solo lectura (inscripciones, facturas por período y registro saneado de comprobantes).
+    -- La batería consulta un alumno inexistente: todo actor, incluso Dirección, recibe cero filas y anon, 42501. El alcance real
+    -- por actor, los bordes de período y la ausencia de rutas están en `consultas_periodo_inscripciones_rls.sql`.
+    PERFORM pg_temp.rpc('public.consultar_inscripciones_alumno', 'n', 'public.consultar_inscripciones_alumno(''00000000-0000-4000-8000-000000000110''::UUID)');
+    PERFORM pg_temp.rpc('public.consultar_facturas_periodo', 'n', 'public.consultar_facturas_periodo(''00000000-0000-4000-8000-000000000110''::UUID, DATE ''2026-01-01'', DATE ''2026-12-31'')');
+    PERFORM pg_temp.rpc('public.consultar_registro_comprobantes', 'n', 'public.consultar_registro_comprobantes(''00000000-0000-4000-8000-000000000110''::UUID, ''PERIODO_FACTURA'', DATE ''2026-01-01'', DATE ''2026-12-31'')');
     PERFORM pg_temp.rpc('public.configurar_horario_materia', 'x', pg_catalog.format('public.configurar_horario_materia(%L, 2::smallint, %L, %L, NULL)', ASIG, '09:00', '10:00'));
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria', 'n', 'public.consultar_compatibilidad_horaria()');
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria_alumno', 'n', pg_catalog.format('public.consultar_compatibilidad_horaria_alumno(%L)', EST));
