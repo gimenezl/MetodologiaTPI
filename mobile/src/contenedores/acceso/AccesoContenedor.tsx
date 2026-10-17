@@ -196,6 +196,7 @@ export function AccesoContenedor({ alRecuperarContrasena }: AccesoContenedorProp
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
+                testID="pestanas"
                 accessibilityRole="tablist"
                 contentContainerStyle={{ flexDirection: 'row', gap: espacio.sm, paddingRight: espacio.lg }}
                 style={{ flexGrow: 0 }}

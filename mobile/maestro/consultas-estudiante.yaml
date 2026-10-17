@@ -15,11 +15,11 @@ name: Consultas del estudiante (solo lo propio) contra backend real
 - assertVisible: 'Mi información académica'
 - swipe:
     from:
-      id: 'seccion-cuotas'
+      id: 'pestanas'
     direction: LEFT
 - swipe:
     from:
-      id: 'seccion-cuotas'
+      id: 'pestanas'
     direction: LEFT
 - tapOn:
     id: 'seccion-inscripciones'
@@ -35,16 +35,16 @@ name: Consultas del estudiante (solo lo propio) contra backend real
 
 - scrollUntilVisible:
     element:
-      id: 'seccion-cuotas'
+      id: 'pestanas'
     direction: UP
     timeout: 15000
 - swipe:
     from:
-      id: 'seccion-cuotas'
+      id: 'pestanas'
     direction: LEFT
 - swipe:
     from:
-      id: 'seccion-cuotas'
+      id: 'pestanas'
     direction: LEFT
 - tapOn:
     id: 'seccion-periodo'

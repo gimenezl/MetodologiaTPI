@@ -18,11 +18,11 @@ name: Consultas del padre (período e inscripciones) contra backend real
 # Las pestañas se deslizan: «Por período» e «Inscripciones» quedan a la derecha en pantallas angostas.
 - swipe:
     from:
-      id: 'seccion-cuotas'
+      id: 'pestanas'
     direction: LEFT
 - swipe:
     from:
-      id: 'seccion-cuotas'
+      id: 'pestanas'
     direction: LEFT
 - tapOn:
     id: 'seccion-periodo'
@@ -108,16 +108,16 @@ name: Consultas del padre (período e inscripciones) contra backend real
 # Inscripciones del hijo con datos y del hijo sin inscripciones.
 - scrollUntilVisible:
     element:
-      id: 'seccion-cuotas'
+      id: 'pestanas'
     direction: UP
     timeout: 15000
 - swipe:
     from:
-      id: 'seccion-cuotas'
+      id: 'pestanas'
     direction: LEFT
 - swipe:
     from:
-      id: 'seccion-cuotas'
+      id: 'pestanas'
     direction: LEFT
 - tapOn:
     id: 'seccion-inscripciones'
