@@ -186,6 +186,12 @@ metadatos EXIF, ubicación incluida. Un PNG o JPEG elegido desde Archivos solo s
 máximo; un PDF nunca se toca (si pasa de 5 MiB se rechaza). El decodificador nativo es quien confirma que lo
 elegido es una imagen; el servidor valida igualmente los bytes que recibe.
 
+Mientras se envía, una pantalla de carga reemplaza al formulario («Enviando comprobante…», con los pasos
+preparar, subir y verificar, el porcentaje de la subida y el aviso de no cerrar la aplicación); la flecha y el
+gesto de volver quedan sin efecto hasta que termina. En toda la aplicación, las pantallas secundarias (detalle
+de cuota, pago, comprobantes, «Cuotas» y «Mi cuenta») tienen una flecha «Volver» y se vuelve deslizando hacia
+la derecha desde el borde izquierdo.
+
 ## Lectura web para Dirección
 
 `/dashboard/comprobantes` (solo DIRECTOR): lista los pagos pendientes con importe informado, total

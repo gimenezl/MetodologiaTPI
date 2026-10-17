@@ -30,6 +30,7 @@ import type { ClienteEPT } from '@/servicios/supabase'
 import type { TransporteHttp } from '@/servicios/transporte-http'
 
 import {
+  EnviandoComprobanteVista,
   FormularioComprobanteVista,
   ListaPagosVista,
   ResultadoComprobanteVista,
@@ -555,6 +556,11 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
         onVolverACuotas={volverACuotas}
       />
     )
+  }
+
+  // Mientras se envía, una pantalla de carga reemplaza al formulario (el estado vive en el contexto).
+  if (enviando && estado.etapa) {
+    return conVolver(<EnviandoComprobanteVista etapa={estado.etapa} progreso={estado.progreso} />)
   }
 
   if (cargaPagos.tipo !== 'ok' || !pagoElegido) {

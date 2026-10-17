@@ -5,10 +5,10 @@ import { PantallaConVolver } from '@/catalogo'
 
 const toque = (x: number, y: number) => ({ nativeEvent: { pageX: x, pageY: y } })
 
-async function montar(opciones: { deshabilitado?: boolean } = {}) {
+async function montar(opciones: { deshabilitado?: boolean; activo?: boolean } = {}) {
   const onVolver = jest.fn()
   await render(
-    <PantallaConVolver onVolver={onVolver} deshabilitado={opciones.deshabilitado}>
+    <PantallaConVolver onVolver={onVolver} deshabilitado={opciones.deshabilitado} activo={opciones.activo}>
       <Text>Contenido</Text>
     </PantallaConVolver>,
   )
@@ -56,5 +56,13 @@ describe('PantallaConVolver', () => {
     expect(arrastrar([10, 300], [160, 300])).toBe(false)
     expect(onVolver).not.toHaveBeenCalled()
     expect(screen.getByTestId('volver-flecha').props.accessibilityState).toMatchObject({ disabled: true })
+  })
+
+  it('inactivo: no muestra flecha ni captura el gesto, pero el contenido sigue ahí', async () => {
+    const { onVolver, arrastrar } = await montar({ activo: false })
+    expect(screen.getByText('Contenido')).toBeTruthy()
+    expect(screen.queryByTestId('volver-flecha')).toBeNull()
+    expect(arrastrar([10, 300], [160, 300])).toBe(false)
+    expect(onVolver).not.toHaveBeenCalled()
   })
 })

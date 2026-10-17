@@ -8,6 +8,11 @@ export interface PantallaConVolverProps {
   onVolver: () => void
   /** Hay una operación en curso que no debe interrumpirse: la flecha y el gesto quedan sin efecto. */
   deshabilitado?: boolean
+  /**
+   * Sin flecha ni gesto (pantalla raíz o ya cubierta por otro marco más interno). Se mantiene la misma
+   * estructura de vistas: activar o desactivar el marco no remonta el contenido ni pierde su estado.
+   */
+  activo?: boolean
   children: ReactNode
 }
 
@@ -22,7 +27,12 @@ const UMBRAL = 72
  * llama a `onVolver`. El gesto se limita al borde para no competir con el desplazamiento vertical ni con los
  * campos de texto.
  */
-export function PantallaConVolver({ onVolver, deshabilitado = false, children }: PantallaConVolverProps): ReactElement {
+export function PantallaConVolver({
+  onVolver,
+  deshabilitado = false,
+  activo = true,
+  children,
+}: PantallaConVolverProps): ReactElement {
   // Dónde empezó el toque: solo se escribe y se lee en los manejadores de eventos, nunca al dibujar.
   const inicio = useRef({ x: 0, y: 0 })
 
@@ -35,18 +45,19 @@ export function PantallaConVolver({ onVolver, deshabilitado = false, children }:
       }}
       // Captura solo un arrastre claramente horizontal hacia la derecha que nació en el borde izquierdo.
       onMoveShouldSetResponderCapture={evento => {
-        if (deshabilitado) return false
+        if (deshabilitado || !activo) return false
         const dx = evento.nativeEvent.pageX - inicio.current.x
         const dy = evento.nativeEvent.pageY - inicio.current.y
         return inicio.current.x <= ZONA_BORDE && dx > 12 && Math.abs(dy) < dx * 0.5
       }}
       onResponderRelease={evento => {
-        if (deshabilitado) return
+        if (deshabilitado || !activo) return
         const dx = evento.nativeEvent.pageX - inicio.current.x
         const dy = evento.nativeEvent.pageY - inicio.current.y
         if (dx >= UMBRAL && Math.abs(dy) < dx * 0.6) onVolver()
       }}
     >
+      {activo ? (
       <Pressable
         testID="volver-flecha"
         accessibilityRole="button"
@@ -73,6 +84,7 @@ export function PantallaConVolver({ onVolver, deshabilitado = false, children }:
           ←
         </Text>
       </Pressable>
+      ) : null}
       {children}
     </View>
   )
