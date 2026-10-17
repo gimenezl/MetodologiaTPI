@@ -1,0 +1,33 @@
+appId: org.educarparatransformar.app
+name: Recuperación de contraseña en iOS (enlace y formularios, sin backend)
+---
+# EPT-106. Comprueba en el simulador el comportamiento NATIVO aplicable sin backend: la entrada desde el inicio
+# de sesión, la validación del correo antes de llamar a Auth y la flecha de volver.
+# NO prueba la recuperación completa (correo, canje y cambio reales), que corre en Android contra Supabase local.
+# La entrega del enlace profundo no se pudo automatizar en el simulador (openLink no llegó a la app en dos
+# ejecuciones de CI): el esquema se verifica en Android y el enrutamiento de la ruta en Jest.
+- launchApp:
+    clearState: true
+- assertVisible: 'Iniciar sesión'
+- scrollUntilVisible:
+    element:
+      text: '¿Olvidaste tu contraseña?'
+    direction: DOWN
+    timeout: 15000
+- tapOn: '¿Olvidaste tu contraseña?'
+- assertVisible: 'Recuperar contraseña'
+- tapOn:
+    id: 'recuperar-correo'
+- inputText: 'no-es-un-correo'
+- scrollUntilVisible:
+    element:
+      text: 'Enviar enlace'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Enviar enlace'
+- assertVisible: 'Ingresá un correo electrónico válido.'
+# La flecha de la solicitud vuelve al inicio de sesión sin enviar nada.
+- tapOn:
+    id: 'volver-flecha'
+- assertVisible: 'Iniciar sesión'
+- assertNotVisible: 'Recuperar contraseña'

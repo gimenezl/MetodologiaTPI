@@ -129,3 +129,15 @@ describe('ciclo de vida del refresco', () => {
     expect(c.auth.stopAutoRefresh).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('recuperación de contraseña (EPT-106)', () => {
+  it('el cliente usa PKCE: el enlace del correo se canjea con un verificador guardado en el dispositivo', () => {
+    const { crearClienteSupabase } = cargarModulo()
+    const cliente = crearClienteSupabase(
+      { supabaseUrl: ENTORNO.EXPO_PUBLIC_SUPABASE_URL, supabaseAnonKey: ENTORNO.EXPO_PUBLIC_SUPABASE_ANON_KEY, apiBaseUrl: ENTORNO.EXPO_PUBLIC_API_BASE_URL },
+      { getItem: async () => null, setItem: async () => undefined, removeItem: async () => undefined }
+    )
+    expect((cliente.auth as unknown as { flowType: string }).flowType).toBe('pkce')
+    void cliente.auth.stopAutoRefresh()
+  })
+})

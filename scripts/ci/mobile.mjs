@@ -11,7 +11,8 @@ export const mobileExact = new Set([
 
 // Familias de archivos: cada patrón es literal y acotado; no hay comodines sobre binarios arbitrarios.
 export const mobilePatterns = [
-  /^mobile\/app\/(?:[A-Za-z0-9_()-]+\/)*[A-Za-z0-9_()-]+\.tsx?$/u,
+  // `+not-found` es el nombre reservado de Expo Router para rutas desconocidas (EPT-106).
+  /^mobile\/app\/(?:[A-Za-z0-9_()-]+\/)*\+?[A-Za-z0-9_()-]+\.tsx?$/u,
   /^mobile\/src\/(?:[a-z0-9-]+\/)*[A-Za-z0-9_.-]+\.tsx?$/u,
   /^mobile\/__tests__\/[A-Za-z0-9._-]+\.test\.tsx?$/u,
   /^mobile\/plugins\/(?:[a-z0-9-]+\/)*[a-z0-9-]+\.(?:cjs|js|mjs|ts)$/u,

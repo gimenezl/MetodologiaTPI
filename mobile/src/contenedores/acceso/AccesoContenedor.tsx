@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { AppState, Linking, ScrollView, Text, View } from 'react-native'
 
 import { Aviso, Boton, CampoTexto, EstadoPantalla, Formulario, MarcoPantalla, PantallaConVolver, Tarjeta } from '@/catalogo'
@@ -9,15 +9,22 @@ import { crearSelectorArchivos } from '@/servicios/selector-archivos'
 import { crearSubidaExpo } from '@/servicios/subida-archivo'
 import type { TransporteHttp } from '@/servicios/transporte-http'
 import { ControladorAutenticacion, estadoVisible, type EstadoAutenticacion } from '@/servicios/autenticacion'
+import { alLiberarRecuperacion } from '@/servicios/recuperacion-activa'
 import { obtenerClienteSupabase, vincularCicloDeVida } from '@/servicios/supabase'
 import { color, espacio, estiloDeTexto } from '@/tokens'
 
 import { CONTEXTO_CUOTAS_VACIO, CuotasContenedor, type ContextoCuotas } from '../cuotas/CuotasContenedor'
+import { CambioContrasenaContenedor } from '../recuperacion/CambioContrasenaContenedor'
 import { cargarDatosRol, type DatosRol } from './datos-rol'
 
 const INICIAL: EstadoAutenticacion = { tipo: 'cargando' }
 
-export function AccesoContenedor(): ReactElement {
+export interface AccesoContenedorProps {
+  /** Abre la solicitud del correo de recuperación (ruta propia con su navegación nativa). */
+  alRecuperarContrasena?: () => void
+}
+
+export function AccesoContenedor({ alRecuperarContrasena }: AccesoContenedorProps = {}): ReactElement {
   const entorno = useMemo(() => entornoDelBundle(), [])
   const cliente = useMemo(() => entorno.ok ? obtenerClienteSupabase() : null, [entorno])
   const [estadoReal, setEstadoReal] = useState<EstadoAutenticacion>(INICIAL)
@@ -38,7 +45,12 @@ export function AccesoContenedor(): ReactElement {
   >(null)
   const [seccion, setSeccion] = useState<{ clave: string; nombre: 'principal' | 'cuotas' | 'cuenta' } | null>(null)
   const [contextoCuotas, setContextoCuotas] = useState<{ clave: string; contexto: ContextoCuotas } | null>(null)
+  const [cambioContrasena, setCambioContrasena] = useState<{ clave: string } | null>(null)
   const [errorEnlaceWeb, setErrorEnlaceWeb] = useState(false)
+  const estadoRealActual = useRef<EstadoAutenticacion>(INICIAL)
+  useEffect(() => {
+    estadoRealActual.current = estadoReal
+  }, [estadoReal])
   const controlador = useMemo(() => cliente ? new ControladorAutenticacion(cliente, {
     cambiar: siguiente => {
       if (siguiente.tipo === 'autenticada') setUltimaAutenticada(siguiente)
@@ -64,7 +76,16 @@ export function AccesoContenedor(): ReactElement {
     const appState = AppState.addEventListener('change', siguiente => {
       if (siguiente === 'active') void controlador.revalidar()
     })
+    // Una recuperación de contraseña (otra pantalla) pudo reemplazar la sesión guardada o dejarla igual:
+    // solo se vuelve a validar el acceso cuando cambió, para no desmontar lo que la persona estaba haciendo.
+    const alTerminarRecuperacion = alLiberarRecuperacion(({ sesionAlterada }) => {
+      const tipo = estadoRealActual.current.tipo
+      // `cargando` sin sesión alterada: la lectura inicial quedó en pausa por la compuerta y nadie la retomará.
+      // `revalidando` termina por su cuenta, así que no se interrumpe lo que la persona estaba haciendo.
+      if (sesionAlterada || tipo === 'cargando') void controlador.revalidar()
+    })
     return () => {
+      alTerminarRecuperacion()
       appState.remove()
       detener()
       liberarCiclo()
@@ -139,6 +160,7 @@ export function AccesoContenedor(): ReactElement {
     // Las pantallas internas de Cuotas (detalle, pago, comprobantes) traen su propia flecha: este marco solo
     // cubre «Cuotas» y «Mi cuenta» en su nivel raíz, que vuelven a la sección principal.
     const enSubpantalla = Boolean(contextoActual.abierta || contextoActual.pago || contextoActual.comprobante)
+    const cambiandoContrasena = cambioContrasena?.clave === clave
     return (
       <MarcoPantalla>
         <Formulario titulo={soloWeb ? 'Continuá desde el sistema web' : 'Tu cuenta móvil'} accionPrincipal={{ etiqueta: 'Cerrar sesión', onPress: () => void controlador.salir() }}>
@@ -167,14 +189,33 @@ export function AccesoContenedor(): ReactElement {
                 <Boton etiqueta="Mi cuenta" variante={seccionActual === 'cuenta' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'cuenta' })} />
               </ScrollView>
               <PantallaConVolver
-                activo={seccionActual !== 'principal' && !enSubpantalla}
+                activo={seccionActual !== 'principal' && !enSubpantalla && !cambiandoContrasena}
                 onVolver={() => setSeccion({ clave, nombre: 'principal' })}
               >
               {seccionActual === 'cuenta' ? (
-                <Tarjeta>
-                  <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>Cuenta verificada</Text>
-                  <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Rol institucional: {estado.rol === 'PADRE' ? 'Familia' : 'Estudiante'}.</Text>
-                </Tarjeta>
+                cambiandoContrasena ? (
+                  <CambioContrasenaContenedor
+                    key={estado.usuarioId}
+                    cliente={cliente}
+                    usuarioId={estado.usuarioId}
+                    onVolver={() => setCambioContrasena(null)}
+                    onSesionExpirada={() => {
+                      setCambioContrasena(null)
+                      void controlador.revalidar()
+                    }}
+                  />
+                ) : (
+                  <>
+                    <Tarjeta>
+                      <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>Cuenta verificada</Text>
+                      <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Rol institucional: {estado.rol === 'PADRE' ? 'Familia' : 'Estudiante'}.</Text>
+                    </Tarjeta>
+                    <Tarjeta>
+                      <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>Seguridad</Text>
+                      <Boton etiqueta="Cambiar contraseña" variante="secundario" testID="cambiar-contrasena" onPress={() => setCambioContrasena({ clave })} />
+                    </Tarjeta>
+                  </>
+                )
               ) : seccionActual === 'cuotas' ? (
                 !resultado ? (
                   <EstadoPantalla tipo="cargando" mensaje="Cargando información autorizada…" />
@@ -238,6 +279,9 @@ export function AccesoContenedor(): ReactElement {
         <CampoTexto etiqueta="Correo electrónico" valor={correo} onChangeText={texto => { setCorreo(texto); setErrorCorreo(undefined) }} teclado="correo" accionTeclado="siguiente" placeholder="nombre@institucion.edu.ar" testID="correo" error={errorCorreo} deshabilitado={enviando} />
         <CampoTexto etiqueta="Contraseña" valor={contrasena} onChangeText={texto => { setContrasena(texto); setErrorContrasena(undefined) }} error={errorContrasena} secreto controlMostrar={{ visible: mostrarContrasena, onToggle: () => setMostrarContrasena(v => !v) }} accionTeclado="enviar" onSubmitEditing={ingresar} testID="contrasena" deshabilitado={enviando} />
         {errorIngreso ? <Aviso tipo="error" titulo="No se pudo iniciar sesión" mensaje={errorIngreso} anuncio="alerta" /> : null}
+        {alRecuperarContrasena ? (
+          <Boton etiqueta="¿Olvidaste tu contraseña?" variante="enlace" testID="olvide-contrasena" onPress={alRecuperarContrasena} deshabilitado={enviando} />
+        ) : null}
       </Formulario>
       <View style={{ height: espacio.md }} />
     </MarcoPantalla>

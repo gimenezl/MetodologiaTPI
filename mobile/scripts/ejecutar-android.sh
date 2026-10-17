@@ -34,5 +34,10 @@ if [ "$estado" -eq 0 ]; then
     --test-output-dir "$SALIDA/maestro-comprobante" mobile/maestro/comprobante.yaml
   estado=$?
 fi
+if [ "$estado" -eq 0 ]; then
+  # EPT-106: recuperación y cambio de contraseña con correo y enlace reales (Mailpit local).
+  bash mobile/scripts/recuperacion-android.sh "$SALIDA"
+  estado=$?
+fi
 set -e
 exit "$estado"

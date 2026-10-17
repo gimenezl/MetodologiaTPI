@@ -207,6 +207,10 @@ jobs:
           echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
       - name: Verificar Auth, roles, expiración y RLS con actores sintéticos
         run: python3 scripts/ci/run-stage.py --stage auth-integration --seconds 210 -- node mobile/scripts/integracion-auth-local.mjs
+      # EPT-106: recuperación y cambio de contraseña con GoTrue y Mailpit reales (solicitud, correo, enlace,
+      # canje PKCE, cambio, login y rechazo de la anterior). También prepara el actor del escenario del emulador.
+      - name: Verificar recuperación de contraseña con correo real
+        run: python3 scripts/ci/run-stage.py --stage recovery-integration --seconds 150 -- node --experimental-strip-types --no-warnings mobile/scripts/integracion-recuperacion.mjs
       - name: Habilitar KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -241,6 +245,8 @@ jobs:
             ${{ runner.temp }}/evidencia-movil-android/android-version.txt
             ${{ runner.temp }}/evidencia-movil-android/maestro-android/
             ${{ runner.temp }}/evidencia-movil-android/maestro-comprobante/
+            ${{ runner.temp }}/evidencia-movil-android/maestro-recuperacion-solicitud/
+            ${{ runner.temp }}/evidencia-movil-android/maestro-recuperacion-cambio/
           if-no-files-found: warn
           retention-days: 14
   mobile-ios:

@@ -1,0 +1,41 @@
+appId: org.educarparatransformar.app
+name: Recuperación de contraseña - solicitud del correo
+---
+# EPT-106. Solicitud real a Auth (GoTrue local) desde el inicio de sesión. El correo lo captura Mailpit y el
+# script de CI extrae el enlace entre este escenario y el siguiente; la dirección es de un actor sintético.
+- launchApp:
+    clearState: true
+- assertVisible: 'Iniciar sesión'
+- scrollUntilVisible:
+    element:
+      text: '¿Olvidaste tu contraseña?'
+    direction: DOWN
+    timeout: 15000
+- tapOn: '¿Olvidaste tu contraseña?'
+- assertVisible: 'Recuperar contraseña'
+# Primero la validación local: un correo mal escrito no llama a Auth.
+- tapOn:
+    id: 'recuperar-correo'
+- inputText: 'no-es-un-correo'
+- scrollUntilVisible:
+    element:
+      text: 'Enviar enlace'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Enviar enlace'
+- assertVisible: 'Ingresá un correo electrónico válido.'
+- tapOn:
+    id: 'recuperar-correo'
+- eraseText: 40
+- inputText: ${MAESTRO_RECUPERACION_EMAIL}
+- scrollUntilVisible:
+    element:
+      text: 'Enviar enlace'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Enviar enlace'
+- extendedWaitUntil:
+    visible: 'Revisá tu correo'
+    timeout: 25000
+# La confirmación es genérica y el reenvío queda bloqueado un tiempo.
+- assertVisible: '.*Si el correo corresponde a una cuenta.*'
