@@ -192,7 +192,7 @@ export function AccesoContenedor({ alRecuperarContrasena }: AccesoContenedorProp
             </>
           ) : (
             <>
-              {/* Deslizable de izquierda a derecha: en pantallas angostas o con texto ampliado no entran todas. */}
+              {/* Deslizable de izquierda a derecha: en pantallas angostas o con texto ampliado no entran todas. «Mi cuenta» conserva su lugar; las consultas (EPT-110) van a continuación. */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -202,9 +202,9 @@ export function AccesoContenedor({ alRecuperarContrasena }: AccesoContenedorProp
               >
                 <Boton etiqueta={estado.rol === 'PADRE' ? 'Hijos vinculados' : 'Mi información'} variante={seccionActual === 'principal' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'principal' })} />
                 <Boton etiqueta="Cuotas" variante={seccionActual === 'cuotas' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'cuotas' })} testID="seccion-cuotas" />
+                <Boton etiqueta="Mi cuenta" variante={seccionActual === 'cuenta' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'cuenta' })} />
                 <Boton etiqueta="Por período" variante={seccionActual === 'periodo' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'periodo' })} testID="seccion-periodo" />
                 <Boton etiqueta="Inscripciones" variante={seccionActual === 'inscripciones' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'inscripciones' })} testID="seccion-inscripciones" />
-                <Boton etiqueta="Mi cuenta" variante={seccionActual === 'cuenta' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'cuenta' })} />
               </ScrollView>
               <PantallaConVolver
                 activo={seccionActual !== 'principal' && !enSubpantalla && !cambiandoContrasena}
