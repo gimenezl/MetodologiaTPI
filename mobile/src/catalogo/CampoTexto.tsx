@@ -21,6 +21,8 @@ export interface CampoTextoProps {
   placeholder?: string
   teclado?: TecladoCampo
   secreto?: boolean
+  /** La contraseña se está definiendo (no ingresando): el sistema ofrece generar o guardar una nueva. */
+  contrasenaNueva?: boolean
   /** Control «Mostrar» de la contraseña. Solo se informa en campos `secreto`. */
   controlMostrar?: { visible: boolean; onToggle: () => void }
   deshabilitado?: boolean
@@ -42,6 +44,7 @@ export function CampoTexto({
   placeholder,
   teclado = 'texto',
   secreto = false,
+  contrasenaNueva = false,
   controlMostrar,
   deshabilitado = false,
   accionTeclado,
@@ -94,7 +97,7 @@ export function CampoTexto({
             inputMode={MODO_ENTRADA[teclado]}
             autoCapitalize={teclado === 'correo' || secreto ? 'none' : undefined}
             autoCorrect={teclado === 'correo' || secreto ? false : undefined}
-            autoComplete={teclado === 'correo' ? 'email' : secreto ? 'current-password' : 'off'}
+            autoComplete={teclado === 'correo' ? 'email' : secreto ? (contrasenaNueva ? 'new-password' : 'current-password') : 'off'}
             secureTextEntry={ocultar}
             returnKeyType={accionTeclado ? TECLA_ACCION[accionTeclado] : undefined}
             submitBehavior={accionTeclado === 'siguiente' ? 'submit' : accionTeclado ? 'blurAndSubmit' : undefined}
