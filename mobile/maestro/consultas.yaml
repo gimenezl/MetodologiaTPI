@@ -38,6 +38,11 @@ name: Consultas del padre (período e inscripciones) contra backend real
 - eraseText
 - inputText: '31122030'
 - hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: 'periodo-consultar'
+    direction: DOWN
+    timeout: 15000
 - tapOn:
     id: 'periodo-consultar'
 - scrollUntilVisible:
@@ -87,6 +92,11 @@ name: Consultas del padre (período e inscripciones) contra backend real
 - eraseText
 - inputText: '01012029'
 - hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: 'periodo-consultar'
+    direction: DOWN
+    timeout: 15000
 - tapOn:
     id: 'periodo-consultar'
 - assertVisible: 'La fecha desde no puede ser posterior a la fecha hasta.'

@@ -58,6 +58,11 @@ name: Consultas del estudiante (solo lo propio) contra backend real
 - eraseText
 - inputText: '31122030'
 - hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: 'periodo-consultar'
+    direction: DOWN
+    timeout: 15000
 - tapOn:
     id: 'periodo-consultar'
 - scrollUntilVisible:
