@@ -29,6 +29,10 @@ export function crearClienteSupabase(entorno: EntornoPublico, almacenamiento: Al
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: false,
+      // La recuperación de contraseña (EPT-106) usa PKCE: el enlace del correo trae un código de un solo uso
+      // que solo canjea la instalación que lo pidió (su verificador vive en el almacenamiento seguro).
+      // El ingreso con contraseña no cambia.
+      flowType: 'pkce',
     },
   })
 }

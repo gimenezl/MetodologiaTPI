@@ -1,3 +1,4 @@
+import { recuperacionActiva } from '@/servicios/recuperacion-activa'
 import type { ClienteEPT } from '@/servicios/supabase'
 
 export type RolAplicacion = 'DIRECTOR' | 'DOCENTE' | 'PADRE' | 'ESTUDIANTE' | 'PERSONAL'
@@ -44,13 +45,18 @@ export class ControladorAutenticacion {
 
   constructor(
     private readonly cliente: ClienteEPT,
-    private readonly observador: ObservadorAutenticacion
+    private readonly observador: ObservadorAutenticacion,
+    // Mientras una recuperación de contraseña está en curso, la sesión guardada es la de la cuenta verificada
+    // por el enlace: este controlador no la trata como un ingreso (ver `recuperacion-activa`).
+    private readonly recuperacionEnCurso: () => boolean = recuperacionActiva
   ) {}
 
   iniciar(): () => void {
     let activo = true
     const suscripcion = this.cliente.auth.onAuthStateChange((evento, sesion) => {
       // Mantener este callback síncrono: el SDK puede esperar su retorno.
+      // PASSWORD_RECOVERY nunca es un ingreso ordinario: no publica `autenticada` ni consulta roles.
+      if (evento === 'PASSWORD_RECOVERY' || this.recuperacionEnCurso()) return
       const usuarioId = sesion?.user.id ?? null
       if (evento === 'SIGNED_IN' && this.envioEnCurso && usuarioId) {
         // signInWithPassword notifica SIGNED_IN antes de resolver su promesa. La transacción
@@ -148,6 +154,7 @@ export class ControladorAutenticacion {
   }
 
   async revalidar(): Promise<void> {
+    if (this.recuperacionEnCurso()) return
     const revision = ++this.revision
     this.publicar({ tipo: 'cargando' })
     try {
@@ -161,6 +168,7 @@ export class ControladorAutenticacion {
   }
 
   private async procesarSesion(usuarioId: string | null, revisionInicial?: number): Promise<void> {
+    if (this.recuperacionEnCurso()) return
     const revision = revisionInicial ?? ++this.revision
     if (revision !== this.revision) return
     if (!usuarioId) {
