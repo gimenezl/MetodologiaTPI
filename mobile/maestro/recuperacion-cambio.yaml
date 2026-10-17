@@ -81,6 +81,12 @@ name: Recuperación de contraseña - enlace, nueva contraseña y cambio desde el
 - tapOn:
     id: 'cambio-nueva'
 - inputText: ${MAESTRO_RECUPERACION_NUEVA2}
+# El formulario del perfil es más largo que la pantalla: con el teclado, el campo queda debajo.
+- scrollUntilVisible:
+    element:
+      id: 'cambio-confirmacion'
+    direction: DOWN
+    timeout: 15000
 - tapOn:
     id: 'cambio-confirmacion'
 - inputText: ${MAESTRO_RECUPERACION_NUEVA2}

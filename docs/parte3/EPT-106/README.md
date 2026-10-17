@@ -102,7 +102,7 @@ de Auth y se muestran en español. No se valida una contraseña anterior por cue
 | Jest (servicios, controlador, componentes, rutas reales de `app/` con `expo-router/testing-library`) | parser, errores, estados, doble entrega, otra cuenta, eventos `SIGNED_IN`/`PASSWORD_RECOVERY`/`USER_UPDATED`/`TOKEN_REFRESHED`, respuestas atrasadas | CI `móvil` y local |
 | `integracion-recuperacion.mjs` | el **mismo código de la app** contra GoTrue y Mailpit reales (correo, enlace, canje, cambio, login nuevo, rechazo del anterior, identidades, vencido, reutilizado, red, otra cuenta, perfil y reautenticación) | CI Android (stack efímero) |
 | Maestro `recuperacion-solicitud.yaml` + `recuperacion-cambio.yaml` | la UI en el emulador con el enlace real del correo | CI Android |
-| Maestro `recuperacion-ios.yaml` | **solo lo nativo sin backend**: esquema, enlace vencido, ruta desconocida, validación local | CI iOS |
+| Maestro `recuperacion-ios.yaml` | **solo lo nativo sin backend**: entrada desde el inicio de sesión, validación local del correo y flecha de volver. La entrega del enlace profundo **no** se pudo automatizar en el simulador (`openLink` no llegó a la app en dos ejecuciones de CI): el esquema se verifica en Android y el enrutamiento en Jest | CI iOS |
 
 El flujo compartido `verificacion.yaml` (ronda su límite de 240 s) **no** recibió pasos nuevos.
 
