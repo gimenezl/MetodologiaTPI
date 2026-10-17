@@ -20,6 +20,10 @@ name: Consultas del padre (período e inscripciones) contra backend real
     from:
       id: 'seccion-cuotas'
     direction: LEFT
+- swipe:
+    from:
+      id: 'seccion-cuotas'
+    direction: LEFT
 - tapOn:
     id: 'seccion-periodo'
 - assertVisible: 'Rango de fechas'
@@ -107,6 +111,10 @@ name: Consultas del padre (período e inscripciones) contra backend real
       id: 'seccion-cuotas'
     direction: UP
     timeout: 15000
+- swipe:
+    from:
+      id: 'seccion-cuotas'
+    direction: LEFT
 - swipe:
     from:
       id: 'seccion-cuotas'

@@ -17,6 +17,10 @@ name: Consultas del estudiante (solo lo propio) contra backend real
     from:
       id: 'seccion-cuotas'
     direction: LEFT
+- swipe:
+    from:
+      id: 'seccion-cuotas'
+    direction: LEFT
 - tapOn:
     id: 'seccion-inscripciones'
 - assertVisible: 'Solo consulta'
@@ -34,6 +38,10 @@ name: Consultas del estudiante (solo lo propio) contra backend real
       id: 'seccion-cuotas'
     direction: UP
     timeout: 15000
+- swipe:
+    from:
+      id: 'seccion-cuotas'
+    direction: LEFT
 - swipe:
     from:
       id: 'seccion-cuotas'
