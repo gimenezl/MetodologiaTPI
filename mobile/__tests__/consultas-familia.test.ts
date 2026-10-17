@@ -93,6 +93,13 @@ describe('fechas civiles', () => {
     expect(fechaArgentina('2026-11-11T02:30:00+00:00')).toBe('2026-11-10')
     expect(fechaArgentina('2026-11-11T03:00:00+00:00')).toBe('2026-11-11')
     expect(fechaArgentina('2026-12-31T23:30:00-03:00')).toBe('2026-12-31')
+    // Formatos reales de PostgREST: microsegundos, huso con y sin dos puntos, Z.
+    expect(fechaArgentina('2026-01-06T12:00:00.123456+00:00')).toBe('2026-01-06')
+    expect(fechaArgentina('2026-01-06T00:30:00.5Z')).toBe('2026-01-05')
+    expect(fechaArgentina('2026-01-06 02:59:59+00')).toBe('2026-01-05')
+    expect(fechaArgentina('2026-01-06T03:00:00+0000')).toBe('2026-01-06')
+    expect(fechaArgentina('2026-01-06T01:00:00+02:00')).toBe('2026-01-05')
+    expect(() => fechaArgentina('2026-02-30T12:00:00+00:00')).toThrow(ErrorConsultaFamilia)
     expect(() => fechaArgentina('no es fecha')).toThrow(ErrorConsultaFamilia)
   })
 

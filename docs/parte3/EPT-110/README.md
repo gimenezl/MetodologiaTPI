@@ -113,5 +113,5 @@ Registro de los aportes de IA de la unidad. **No hay aprobación docente registr
 | Respuesta | Claude Code (Sonnet 5.5): tres RPC de lectura con guarda de alcance, pantallas nativas, suite SQL, etapa de integración real, escenarios Maestro y documentación. Una revisión independiente acotada con un segundo agente (ver evidencia). |
 | Comprensión | Se leyeron las migraciones de 013, 014, EPT-100/101, EPT-107 y EPT-109 y los patrones existentes (envoltorio `SECURITY INVOKER`, auxiliar privado, guarda `alumno_economico_visible`) antes de escribir; se descartó abrir políticas RLS y exponer el original. |
 | Adaptación | Los períodos de las pruebas de integración son fijos (2030) para no depender de la fecha del runner; el filtro por período es por mes calendario; el rango inicial de la pantalla es el año del dispositivo (comodidad, no regla de negocio); no se ofrece el original (ver «Seguridad»). |
-| Prueba | Suite SQL de 45 comprobaciones y las 32 suites SQL registradas; etapa de integración con Auth, RLS y RPC reales; Jest (servicio y contenedores); Maestro Android; selector de CI. |
+| Prueba | Suite SQL de 46 comprobaciones y las 32 suites SQL registradas; etapa de integración con Auth, RLS y RPC reales; Jest (servicio y contenedores); Maestro Android; selector de CI. |
 | Resultado | Ver [`docs/evidence/EPT-110.md`](../../evidence/EPT-110.md). |

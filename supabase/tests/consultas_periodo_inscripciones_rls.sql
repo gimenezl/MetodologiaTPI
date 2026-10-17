@@ -338,6 +338,15 @@ SELECT pg_temp.afirmar(
     = 'PRIMARIO'
     AND pg_temp.como(pg_temp.u(5), 'authenticated', pg_temp.q_insc(pg_temp.u(2))) = '5',
     'A14: un cambio de nivel del alumno no oculta sus inscripciones; el grupo conserva su nivel');
+-- Estudiante bloqueado: ya no consulta ni lo propio (la guarda exige cuenta habilitada).
+UPDATE public.perfiles SET estado_acceso = 'BLOQUEADO' WHERE id = pg_temp.u(3);
+SELECT pg_temp.afirmar(
+    pg_temp.como(pg_temp.u(3), 'authenticated', pg_temp.q_insc(pg_temp.u(3))) = '0'
+    AND pg_temp.como(pg_temp.u(3), 'authenticated', pg_temp.q_fact(pg_temp.u(3), '2025-01-01', '2026-12-31')) = '0'
+    AND pg_temp.como(pg_temp.u(3), 'authenticated',
+        pg_temp.q_reg(pg_temp.u(3), 'PERIODO_FACTURA', '2025-01-01', '2026-12-31')) = '0',
+    'A15b: un estudiante bloqueado no consulta ni inscripciones, ni facturas ni comprobantes propios');
+UPDATE public.perfiles SET estado_acceso = 'HABILITADO' WHERE id = pg_temp.u(3);
 -- Revocación del vínculo.
 DELETE FROM public.padres_hijos WHERE padre_id = pg_temp.u(6) AND hijo_id = pg_temp.u(2);
 SELECT pg_temp.afirmar(

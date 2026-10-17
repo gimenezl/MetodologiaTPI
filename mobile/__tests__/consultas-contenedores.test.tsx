@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AppState } from 'react-native'
 import { act, fireEvent, render, screen, within } from '@testing-library/react-native'
 
 import { InscripcionesContenedor } from '@/contenedores/consultas/InscripcionesContenedor'
@@ -294,6 +295,39 @@ describe('PeriodoContenedor', () => {
     await fireEvent.press(screen.getByTestId('periodo-consultar'))
     await responder(pendientes, 'consultar_facturas_periodo', 'a1', null, { code: '42501' })
     expect(screen.getAllByText('No tenés permiso para ver esta información').length).toBeGreaterThan(0)
+  })
+
+  it('reanudar la aplicación repite la consulta y descarta la respuesta anterior', async () => {
+    let alActivar: ((estado: string) => void) | undefined
+    jest.spyOn(AppState, 'addEventListener').mockImplementationOnce(((_: string, fn: (e: string) => void) => {
+      alActivar = fn
+      return { remove: () => undefined }
+    }) as never)
+    {
+      const { cliente, pendientes } = clienteControlado()
+      await render(<PeriodoControlado cliente={cliente} />)
+      await fireEvent.press(screen.getByTestId('periodo-consultar'))
+      const vieja = pendientes.find(p => p.nombre === 'consultar_facturas_periodo')
+      await act(async () => { alActivar?.('active') })
+      expect(vieja?.senal?.aborted).toBe(true)
+      await responder(pendientes, 'consultar_facturas_periodo', 'a1', [factura('nueva', 'a1', '2026-01-01')])
+      await act(async () => { vieja?.resolver({ data: [factura('vieja', 'a1', '2026-01-01')], error: null }) })
+      expect(screen.queryByTestId('factura-vieja')).toBeNull()
+      expect(screen.getByTestId('factura-nueva')).toBeTruthy()
+    }
+  })
+
+  it('una respuesta tardía de comprobantes del criterio anterior no aparece bajo el nuevo', async () => {
+    const { cliente, pendientes } = clienteControlado()
+    await render(<PeriodoControlado cliente={cliente} />)
+    await fireEvent.press(screen.getByTestId('periodo-consultar'))
+    const porFactura = pendientes.find(p => p.nombre === 'consultar_registro_comprobantes')
+    await fireEvent.press(screen.getByTestId('criterio-transferencia'))
+    expect(porFactura?.senal?.aborted).toBe(true)
+    await responder(pendientes, 'consultar_registro_comprobantes', 'a1', [pago('nuevo')])
+    await act(async () => { porFactura?.resolver({ data: [pago('viejo')], error: null }) })
+    expect(screen.queryByTestId('comprobante-viejo')).toBeNull()
+    expect(screen.getByTestId('comprobante-nuevo')).toBeTruthy()
   })
 
   it('estudiante: sin selector y solo sobre su alumno', async () => {

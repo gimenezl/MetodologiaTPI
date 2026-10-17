@@ -92,11 +92,25 @@ export function rangoDelAnio(hoy: Date): { desde: string; hasta: string } {
   return { desde: `01/01/${anio}`, hasta: `31/12/${anio}` }
 }
 
-/** Argentina no tiene horario de verano (UTC−3 todo el año): la fecha civil no depende del teléfono. */
+const INSTANTE = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}(?::?\d{2})?)?$/u
+
+/**
+ * Argentina no tiene horario de verano (UTC−3 todo el año): la fecha civil no depende del teléfono.
+ * El instante se descompone a mano (sin `Date.parse`): el motor del dispositivo no tiene por qué aceptar las
+ * fracciones de microsegundo ni el huso de `timestamptz` tal como los emite PostgREST.
+ */
 export function fechaArgentina(instante: string): string {
-  const t = Date.parse(instante)
-  if (!Number.isFinite(t)) throw new ErrorConsultaFamilia('respuesta', 'Respuesta inválida: fecha.')
-  return new Date(t - 3 * 3_600_000).toISOString().slice(0, 10)
+  const m = INSTANTE.exec(instante)
+  if (!m || !fechaIsoValida(`${m[1]}-${m[2]}-${m[3]}`)) throw new ErrorConsultaFamilia('respuesta', 'Respuesta inválida: fecha.')
+  const huso = m[7] ?? 'Z'
+  let desplazamiento = 0
+  if (huso !== 'Z') {
+    const signo = huso.startsWith('-') ? -1 : 1
+    const digitos = huso.slice(1).replace(':', '')
+    desplazamiento = signo * (Number(digitos.slice(0, 2)) * 60 + Number(digitos.slice(2) || '0'))
+  }
+  const utc = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6])) - desplazamiento * 60_000
+  return new Date(utc - 3 * 3_600_000).toISOString().slice(0, 10)
 }
 
 // ---- Tipos y análisis de respuestas --------------------------------------------------------------------
