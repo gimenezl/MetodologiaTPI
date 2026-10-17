@@ -29,7 +29,8 @@ name: Recuperación de contraseña - enlace, nueva contraseña y cambio desde el
     direction: DOWN
     timeout: 15000
 - tapOn: 'Guardar contraseña'
-- assertVisible: '.*Las contraseñas no coinciden.*'
+# El detalle queda bajo el teclado: se afirma el resumen que aparece arriba del formulario.
+- assertVisible: 'No se pudo guardar la contraseña.'
 - tapOn:
     id: 'restablecer-confirmacion'
 - eraseText: 40

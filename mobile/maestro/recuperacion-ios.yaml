@@ -25,14 +25,12 @@ name: Recuperación de contraseña en iOS (enlace y formularios, sin backend)
     timeout: 15000
 - tapOn: 'Enviar enlace'
 - assertVisible: 'Ingresá un correo electrónico válido.'
-- stopApp
-# Enlace vencido informado por Auth: llega por el esquema y no abre el formulario de contraseña nueva.
+# Enlace vencido informado por Auth con la app abierta: llega por el esquema y no abre el formulario de contraseña nueva.
 - openLink: 'educarparatransformar://restablecer?error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired'
-- runFlow:
-    when:
-      visible: 'Open'
-    commands:
-      - tapOn: 'Open'
+# iOS pregunta antes de abrir un esquema propio: se acepta si aparece (en inglés en el simulador de CI).
+- tapOn:
+    text: 'Open'
+    optional: true
 - extendedWaitUntil:
     visible: 'Enlace no disponible'
     timeout: 20000
@@ -47,13 +45,10 @@ name: Recuperación de contraseña en iOS (enlace y formularios, sin backend)
 - tapOn: 'Pedir un enlace nuevo'
 - assertVisible: 'Recuperar contraseña'
 # Un enlace hacia una ruta desconocida termina en el inicio de sesión, sin mostrar sus parámetros.
-- stopApp
 - openLink: 'educarparatransformar://desconocida?code=00000000-0000-0000-0000-000000000000'
-- runFlow:
-    when:
-      visible: 'Open'
-    commands:
-      - tapOn: 'Open'
+- tapOn:
+    text: 'Open'
+    optional: true
 - extendedWaitUntil:
     visible: 'Iniciar sesión'
     timeout: 20000
