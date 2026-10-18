@@ -1,6 +1,7 @@
 // Auth, PostgREST, API web, SQL monetario y concurrencia reales. Sin producción.
 import assert from 'node:assert/strict'
 import { execSync } from 'node:child_process'
+import { setTimeout as pausa } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import {
   sql,
@@ -12,8 +13,43 @@ import {
   crearServidorNext,
   limpiarFixture,
 } from './_arnes-ept59.mjs'
-import { SesionPsql, esperarBloqueo } from './_sesion-psql.mjs'
+import { SesionPsql } from './_sesion-psql.mjs'
 import { ID, fixture, limpiarEconomia, roles } from './_reportes-economicos-fixture.mjs'
+
+// Espera exclusiva de EPT-112: el sondeo reduce CPU, pero nunca acredita el orden.
+// Solo la observación del PID exacto en pg_blocking_pids permite continuar.
+async function esperarBloqueoEconomico(sesion, bloqueador, bloqueado, limiteMs = 10_000) {
+  assert.ok(Number.isInteger(bloqueador) && bloqueador > 0 && Number.isInteger(bloqueado) && bloqueado > 0)
+  const hasta = performance.now() + limiteMs
+  let observado = null
+  const fallo = () =>
+    new Error(
+      `Barrera EPT112 no observada dentro de ${limiteMs} ms: ${JSON.stringify({ bloqueador, bloqueado, observado })}`
+    )
+  while (performance.now() < hasta) {
+    let temporizador
+    try {
+      observado = JSON.parse(
+        await Promise.race([
+          sesion.escalar(
+            `jsonb_build_object('bloqueadores',pg_catalog.pg_blocking_pids(${bloqueado}),
+              'actividad',(SELECT jsonb_build_object('estado',state,'espera_tipo',wait_event_type,'espera',wait_event)
+                FROM pg_catalog.pg_stat_activity WHERE pid=${bloqueado}))`,
+            'barrera_economica'
+          ),
+          new Promise((_, reject) => {
+            temporizador = setTimeout(() => reject(fallo()), Math.max(0, hasta - performance.now()))
+          }),
+        ])
+      )
+    } finally {
+      clearTimeout(temporizador)
+    }
+    if (observado.bloqueadores.includes(bloqueador)) return observado
+    await pausa(Math.min(20, Math.max(0, hasta - performance.now())))
+  }
+  throw fallo()
+}
 
 const dir = process.env.EPT_SUPABASE_WORKDIR
 const salida = execSync(
@@ -289,12 +325,17 @@ try {
         `SET ROLE authenticated; SET request.jwt.claims='${JSON.stringify({ sub: sesiones.director.user.id, role: 'authenticated' })}';`,
         'actor'
       )
+      // Demora controlada superior a los 0,9 s del fallo Linux. No ordena la
+      // decisión: esta sigue condicionada a observar el bloqueo real del lector.
+      const inicioEspera = performance.now()
       const enVuelo = lector.escalar(
-        `(WITH q AS MATERIALIZED (SELECT public.reporte_economico('ingresos','2030-01-01','2030-12-31') AS doc)
+        `(WITH q AS MATERIALIZED (SELECT public.reporte_economico('ingresos','2030-01-01','2030-12-31') AS doc,
+          pg_catalog.pg_sleep(1.2) AS demora_prueba)
         SELECT q.doc FROM q CROSS JOIN LATERAL (SELECT pg_advisory_xact_lock(112000+(q.doc->>'total')::INTEGER)) b)`,
         'lectura'
       )
-      await esperarBloqueo(observador, pidGate, pidLector)
+      await esperarBloqueoEconomico(observador, pidGate, pidLector)
+      const esperaObservadaMs = performance.now() - inicioEspera
       const decision = await rpc(local, sesiones.director.access_token, 'verificar_pago', {
         p_pago_id: ID(807),
         p_decision: 'APROBADO',
@@ -305,7 +346,8 @@ try {
       const anterior = JSON.parse(await enVuelo),
         actual = await reporte('ingresos')
       comprobar(
-        anterior.total === 5 &&
+        esperaObservadaMs >= 1_200 &&
+          anterior.total === 5 &&
           anterior.totales.imputado_centavos === '46000' &&
           actual.total === 6 &&
           actual.totales.imputado_centavos === '56000',
@@ -319,7 +361,7 @@ try {
         SELECT q.doc FROM q CROSS JOIN LATERAL (SELECT pg_advisory_xact_lock(112000+(q.doc->>'total')::INTEGER)) b)`,
         'lectura_rechazo'
       )
-      await esperarBloqueo(observador, pidGate, pidLector)
+      await esperarBloqueoEconomico(observador, pidGate, pidLector)
       const rechazo = await rpc(local, sesiones.director.access_token, 'verificar_pago', {
         p_pago_id: ID(809),
         p_decision: 'RECHAZADO',
