@@ -64,8 +64,11 @@ BEGIN
     FROM public.imputaciones_pago ip JOIN public.pagos p ON p.id=ip.pago_id AND p.alumno_id=ip.alumno_id
     JOIN public.items_factura i ON i.id=ip.item_factura_id AND i.alumno_id=ip.alumno_id
     WHERE ip.activa AND p.estado='APROBADO'
-  ), por_pago AS (
-    SELECT pago_id,sum(importe)*100 AS imputado FROM aprobadas GROUP BY pago_id
+  ), por_pago AS MATERIALIZED (
+    -- Una sola fila materializada evita que estadísticas aún pequeñas elijan
+    -- recorrer el agregado completo por cada pago (producto cuadrático).
+    SELECT jsonb_object_agg(pago_id::TEXT,imputado) AS importes
+    FROM (SELECT pago_id,sum(importe)*100 AS imputado FROM aprobadas GROUP BY pago_id) x
   ), estado AS MATERIALIZED (
     SELECT * FROM public.estado_cuotas_alumno WHERE p_reporte IN ('completos','incompletos')
   ), relaciones AS (
@@ -81,11 +84,11 @@ BEGIN
     SELECT p.id::TEXT AS id,p.alumno_id,p.id AS pago_id,NULL::UUID AS factura_id,
       NULL::UUID AS item_id,p.fecha_transferencia AS fecha,'Transferencia'::TEXT AS criterio,
       (p.importe_informado*100)::NUMERIC AS informado,
-      COALESCE(pp.imputado,0) AS imputado,
+      COALESCE((pp.importes->>p.id::TEXT)::NUMERIC,0) AS imputado,
       NULL::UUID AS deporte_id,NULL::UUID AS recorrido_id,NULL::UUID AS profesor_id,
       NULL::TEXT AS concepto,NULL::TEXT AS profesor,NULL::INTEGER AS nivel_deportivo_id,
       NULL::TEXT AS nivel_deportivo,'[]'::JSONB AS horarios
-    FROM public.pagos p LEFT JOIN por_pago pp ON pp.pago_id=p.id WHERE p_reporte='ingresos' AND p.estado='APROBADO'
+    FROM public.pagos p CROSS JOIN por_pago pp WHERE p_reporte='ingresos' AND p.estado='APROBADO'
     UNION ALL
     -- RF18/19: relación pago-factura; la clasificación procede del saldo vigente completo.
     SELECT r.pago_id::TEXT||'/'||r.factura_id,r.alumno_id,r.pago_id,r.factura_id,NULL::UUID,

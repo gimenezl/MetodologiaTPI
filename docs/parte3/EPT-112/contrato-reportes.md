@@ -43,7 +43,7 @@ La huella MD5 del contenido ordenado detecta cambios entre páginas, incluyendo 
 
 Si el catálogo falla o ya no contiene un identificador aplicado, cada selector conserva ese valor en una opción de respaldo identificada. Consultar mantiene el filtro, y elegir explícitamente «Todos» lo quita. No se sustituye silenciosamente por vacío.
 
-El formulario GET y los enlaces de paginación realizan navegación de documento completo; no existen respuestas de fetch reutilizadas bajo filtros nuevos. El navegador descarta la navegación anterior al iniciar otra. No se crea infraestructura persistente de snapshots. Se preagrega por pago antes de unir. La RPC conserva RLS e INVOKER y usa `plan_cache_mode=force_custom_plan` solo durante su ejecución para evitar reutilizar planes inadecuados entre filtros de cardinalidades muy distintas; no modifica timeouts ni configuración persistente.
+El formulario GET y los enlaces de paginación realizan navegación de documento completo; no existen respuestas de fetch reutilizadas bajo filtros nuevos. El navegador descarta la navegación anterior al iniciar otra. No se crea infraestructura persistente de snapshots. Se preagrega por pago en un mapa JSONB materializado de una sola fila, con clave UUID de pago única y valor NUMERIC en centavos. El acceso por clave evita que una estimación pequeña cause un recorrido completo del agregado para cada pago. La extracción vuelve a NUMERIC, sin pasar por Number ni punto flotante. La RPC conserva RLS e INVOKER y usa `plan_cache_mode=force_custom_plan` solo durante su ejecución para evitar reutilizar planes inadecuados entre filtros de cardinalidades muy distintas; no modifica timeouts ni configuración persistente.
 
 ## Autorización y privacidad
 

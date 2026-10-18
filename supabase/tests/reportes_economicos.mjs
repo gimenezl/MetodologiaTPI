@@ -245,6 +245,9 @@ try {
   if (!ui) {
     // 9010 importes máximos exceden Number.MAX_SAFE_INTEGER en centavos.
     sql(`BEGIN;
+      -- Estadísticas de la base pequeña ANTES del crecimiento: la lectura inmediata
+      -- no puede depender de que autovacuum analice las 9010 filas recién insertadas.
+      ANALYZE public.facturas,public.items_factura,public.pagos,public.imputaciones_pago;
       INSERT INTO public.facturas(id,alumno_id,periodo,vencimiento,total)
         SELECT ('b1120000-0000-4000-8000-'||lpad((300000+n)::TEXT,12,'0'))::UUID,'${actores.estudiante}',
         (DATE '4000-01-01'+(n||' months')::INTERVAL)::DATE,(DATE '4000-01-10'+(n||' months')::INTERVAL)::DATE,9999999999.99 FROM generate_series(1,9010) n;
