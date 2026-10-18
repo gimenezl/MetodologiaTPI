@@ -157,3 +157,26 @@ test('workflow sanea diagnóstico antes del upload sin alterar presupuestos ni g
   assert.match(ios, /--sanitize-directory "\$RUNNER_TEMP\/evidencia-movil-ios"/u)
   assert.match(workflow, /test "\$IOS" = success/u)
 })
+
+test('upload iOS evalúa la condición real y solo publica tras sanitario exitoso', () => {
+  const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8')
+  const sanitario = workflow.slice(
+    workflow.indexOf('      - name: Sanear artifacts iOS'),
+    workflow.indexOf('      - name: Subir evidencia iOS')
+  )
+  const upload = workflow.slice(workflow.indexOf('      - name: Subir evidencia iOS'), workflow.indexOf('  gate:'))
+  const id = sanitario.match(/^        id: ([a-z_]+)$/mu)?.[1]
+  assert.ok(id, 'El sanitario debe tener identidad explícita')
+  assert.doesNotMatch(sanitario, /continue-on-error:/u)
+  const condicion = upload.match(/^        if: (.+)$/mu)?.[1]
+  assert.equal(condicion, `always() && steps.${id}.outcome == 'success'`)
+  // Ejecuta la expresión extraída del workflow, no una política paralela del mock.
+  const permiteUpload = new Function('always', 'steps', `return (${condicion})`)
+  for (const outcome of ['failure', 'skipped', 'cancelled', 'success']) {
+    assert.equal(
+      permiteUpload(() => true, { [id]: { outcome } }),
+      outcome === 'success',
+      outcome
+    )
+  }
+})
