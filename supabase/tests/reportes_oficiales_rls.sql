@@ -45,6 +45,22 @@
 
 BEGIN;
 
+-- Inventario exclusivo de EPT-63, derivado de sus diez DROP documentados.
+-- La identidad incluye esquema y argumentos: una RPC de otro módulo que comparta
+-- prefijo no pertenece a esta batería ni a su reversión.
+CREATE TEMP TABLE funciones_academicas (firma TEXT PRIMARY KEY) ON COMMIT DROP;
+INSERT INTO funciones_academicas (firma) VALUES
+    ('public.catalogos_reportes()'),
+    ('public.reporte_docentes_nivel(text, integer, uuid, integer, uuid, uuid, uuid, text, integer, integer)'),
+    ('public.reporte_alumnos_recorrido(text, integer, uuid, integer, uuid, uuid, uuid, uuid, boolean, integer, integer)'),
+    ('public.reporte_alumnos_horario(text, integer, uuid, integer, uuid, uuid, uuid, uuid, text, integer, integer)'),
+    ('public.reporte_alumnos_deporte(text, integer, uuid, integer, uuid, uuid, uuid, uuid, boolean, integer, integer)'),
+    ('public.reporte_alumnos_materia(text, integer, uuid, integer, uuid, uuid, uuid, uuid, integer, integer)'),
+    ('public.reporte_alumnos_curso(text, integer, uuid, integer, uuid, uuid, uuid, uuid, boolean, integer, integer)'),
+    ('app_private.reporte_alumnos_filtrados(text, integer, uuid, integer, uuid, uuid, uuid, uuid)'),
+    ('app_private.preparar_reporte(text, integer, integer, text)'),
+    ('app_private.exigir_director_reporte()');
+
 -- ================================================================
 -- 0. HERRAMIENTAS
 -- ================================================================
@@ -387,9 +403,9 @@ DECLARE
 BEGIN
     FOR r IN
         SELECT n.nspname, p.proname, p.oid, p.prosecdef, p.proconfig, p.provolatile
-        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-        WHERE (n.nspname = 'public' AND (p.proname LIKE 'reporte\_%' OR p.proname = 'catalogos_reportes'))
-           OR (n.nspname = 'app_private' AND p.proname IN ('exigir_director_reporte', 'preparar_reporte', 'reporte_alumnos_filtrados'))
+        FROM funciones_academicas f
+        JOIN pg_proc p ON p.oid = pg_catalog.to_regprocedure(f.firma)
+        JOIN pg_namespace n ON n.oid = p.pronamespace
     LOOP
         v_n := v_n + 1;
         PERFORM pg_temp.exigir(NOT r.prosecdef, 'A1 ' || r.proname || ' es SECURITY DEFINER');
@@ -790,8 +806,10 @@ BEGIN
     -- con documentos o con datos de contacto.
     FOR v_fn IN
         SELECT p.oid::regprocedure::TEXT
-        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-        WHERE n.nspname = 'public' AND (p.proname LIKE 'reporte\_%' OR p.proname = 'catalogos_reportes')
+        FROM funciones_academicas f
+        JOIN pg_proc p ON p.oid = pg_catalog.to_regprocedure(f.firma)
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public'
     LOOP
         v_cols := pg_get_function_result(v_fn::regprocedure) || ' ' || pg_get_function_arguments(v_fn::regprocedure);
         PERFORM pg_temp.exigir(v_cols !~* '(confirm|dni|telefono|direccion|nacimiento|user_id|email|correo)',
@@ -911,15 +929,14 @@ END $$;
 -- ================================================================
 -- Ejecuta LITERALMENTE los DROP documentados en la cabecera de la migración y
 -- comprueba que sueltan exactamente las 10 funciones nuevas (7 públicas y 3
--- privadas): ninguna fila cambia, no queda ninguna función de reportes y no se
+-- privadas): ninguna fila cambia, no queda ninguna función del inventario y no se
 -- pierde ninguna función previa.
 SAVEPOINT reversion;
 
 CREATE TEMP TABLE reversion_antes AS
 SELECT (SELECT count(*) FROM pg_catalog.pg_proc) AS funciones,
-       (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
-        WHERE n.nspname IN ('public', 'app_private')
-          AND (p.proname LIKE 'reporte\_%' OR p.proname IN ('catalogos_reportes', 'exigir_director_reporte', 'preparar_reporte'))) AS nuevas,
+       (SELECT count(*) FROM funciones_academicas f
+        JOIN pg_catalog.pg_proc p ON p.oid = pg_catalog.to_regprocedure(f.firma)) AS nuevas,
        pg_temp.huella() AS huella;
 
 DROP FUNCTION public.catalogos_reportes();
@@ -942,10 +959,9 @@ BEGIN
     PERFORM pg_temp.exigir((SELECT count(*) FROM pg_catalog.pg_proc) = v_antes.funciones - 10,
         'R1 la reversión no suelta exactamente 10 funciones');
     PERFORM pg_temp.exigir(NOT EXISTS (
-        SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
-        WHERE n.nspname IN ('public', 'app_private')
-          AND (p.proname LIKE 'reporte\_%' OR p.proname IN ('catalogos_reportes', 'exigir_director_reporte', 'preparar_reporte'))),
-        'R1 quedaron funciones de reportes después de la reversión');
+        SELECT 1 FROM funciones_academicas f
+        JOIN pg_catalog.pg_proc p ON p.oid = pg_catalog.to_regprocedure(f.firma)),
+        'R1 quedaron funciones académicas del inventario después de la reversión');
     PERFORM pg_temp.exigir(pg_temp.huella() = v_antes.huella, 'R1 la reversión cambió filas');
     PERFORM pg_temp.exigir(pg_catalog.to_regprocedure('public.es_director_actual()') IS NOT NULL
                            AND pg_catalog.to_regprocedure('public.confirmar_matricula(uuid)') IS NOT NULL,
