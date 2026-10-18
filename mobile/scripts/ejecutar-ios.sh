@@ -27,13 +27,17 @@ xcrun simctl listapps "$UDID" | grep -F 'org.educarparatransformar.app'
 
 set +e
 maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-ios.xml" \
+  --debug-output "$SALIDA/smoke-debug" --flatten-debug-output \
   --test-output-dir "$SALIDA/maestro-ios" mobile/maestro/smoke-ios.yaml
 estado=$?
+node mobile/scripts/diagnostico-ios.mjs "$UDID" smoke || true
 # EPT-106: enlace profundo y formularios de recuperación (solo lo nativo; sin correo ni backend).
 if [ "$estado" -eq 0 ]; then
   maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-ios-recuperacion.xml" \
+    --debug-output "$SALIDA/recuperacion-debug" --flatten-debug-output \
     --test-output-dir "$SALIDA/maestro-ios-recuperacion" mobile/maestro/recuperacion-ios.yaml
   estado=$?
+  node mobile/scripts/diagnostico-ios.mjs "$UDID" recuperacion || true
 fi
 set -e
 

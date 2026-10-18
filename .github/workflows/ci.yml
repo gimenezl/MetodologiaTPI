@@ -316,6 +316,10 @@ jobs:
           mkdir -p "$RUNNER_TEMP/evidencia-movil-ios"
           if [ -n "${{ steps.app.outputs.ruta }}" ]; then ditto -c -k --keepParent "${{ steps.app.outputs.ruta }}" "$RUNNER_TEMP/evidencia-movil-ios/aplicacion-ios-simulador.zip"; fi
           cp "$RUNNER_TEMP/xcodebuild.log" "$RUNNER_TEMP/evidencia-movil-ios/xcodebuild.log" || true
+          node mobile/scripts/diagnostico-ios.mjs || true
+      - name: Sanear artifacts iOS
+        if: always()
+        run: python3 scripts/ci/run-stage.py --sanitize-directory "$RUNNER_TEMP/evidencia-movil-ios"
       - name: Subir evidencia iOS
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
