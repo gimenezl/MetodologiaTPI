@@ -11,7 +11,7 @@ export const families = {
   horarios: ['horarios-ui', 'horarios-auth', 'horarios', 'horarios-academicos-auth'],
   inscripciones: ['inscripciones-administracion-ui', 'inscripciones-administracion-auth', 'inscripciones-administracion-e2e-auth', 'inscripciones-administracion-paginacion-auth', 'inscripciones-administracion', 'cupos-legadas-ui', 'cupos-legadas-auth'],
   hijos: ['hijos-ui', 'hijos-auth'],
-  reportes: ['reportes-auth', 'reportes'],
+  reportes: ['reportes-auth', 'reportes', 'reportes-economicos-auth'],
   credenciales: ['credenciales-qr-ui', 'credenciales-qr-auth'],
   accesos: ['accesos-qr-ui', 'accesos-qr-auth', 'accesos-qr'],
   asistencias: ['asistencias-vinculos-ui', 'asistencias-vinculos-auth'],
@@ -56,3 +56,5 @@ export function validateUiRegistry(files, pure) {
     if (!registered.has(file)) throw new Error(`Prueba UI no registrada: ${file}`)
   }
 }
+
+Object.assign(aliases, { 'reportes-economicos': 'reportes' })

@@ -1,5 +1,5 @@
 // GENERADO por mobile/scripts/sync-compartido.mjs desde src/types/database.generated.ts. No editar a mano.
-// sha256 de la fuente: af551c4b19fc4f4644151fb74bc882e06d6f3000ca407c297811f9c8de919c92
+// sha256 de la fuente: b6b76f0d1db3246fa29383ba1eecea45ffa1f8aaaba275e1f8cda5b35ef6aff7
 export type Json =
   | string
   | number
@@ -4156,6 +4156,18 @@ export type Database = {
           origen: string
           total_filas: number
         }[]
+      }
+      reporte_economico: {
+        Args: {
+          p_desde: string
+          p_filtros?: Json
+          p_hasta: string
+          p_huella?: string
+          p_pagina?: number
+          p_reporte: string
+          p_tamano?: number
+        }
+        Returns: Json
       }
       reservar_vinculo_cuenta: {
         Args: {

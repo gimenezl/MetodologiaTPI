@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowRight } from '@phosphor-icons/react/dist/ssr'
 import { LISTA_REPORTES } from '@/lib/reportes'
+import { REPORTES_ECONOMICOS } from '@/lib/reportes-economicos'
 import { requerirDirector } from '@/services/autorizacion'
 import { PanelRestringido } from './_components/Paneles'
 
@@ -43,6 +44,17 @@ export default async function ReportesPage() {
         </p>
       </header>
 
+      <section aria-labelledby="economicos-titulo" className="space-y-3">
+        <h2 id="economicos-titulo" className="text-xl font-bold text-neutral-900">Reportes económicos</h2>
+        <p className="text-sm text-neutral-600">Cinco consultas de pagos aprobados y saldo vigente. No modifican deuda ni comprobantes.</p>
+        <ul className="divide-y divide-neutral-200 border-y border-neutral-200">
+          {Object.entries(REPORTES_ECONOMICOS).map(([id, r]) => <li key={id} className="py-3">
+            <Link className="inline-flex min-h-11 items-center gap-3 font-semibold text-brand-700 underline underline-offset-4 focus-visible:outline-2" href={`/dashboard/reportes/economicos/${id}`}>{r.titulo}<ArrowRight size={16} aria-hidden="true" /></Link>
+            <p className="text-sm text-neutral-600">{r.descripcion}</p>
+          </li>)}
+        </ul>
+      </section>
+      <h2 className="text-xl font-bold text-neutral-900">Reportes académicos</h2>
       <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Reportes disponibles">
         {LISTA_REPORTES.map((reporte) => (
           <li key={reporte.id} className="bg-white rounded-2xl border border-neutral-200 p-5 flex flex-col gap-3">

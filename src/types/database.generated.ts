@@ -4155,6 +4155,18 @@ export type Database = {
           total_filas: number
         }[]
       }
+      reporte_economico: {
+        Args: {
+          p_desde: string
+          p_filtros?: Json
+          p_hasta: string
+          p_huella?: string
+          p_pagina?: number
+          p_reporte: string
+          p_tamano?: number
+        }
+        Returns: Json
+      }
       reservar_vinculo_cuenta: {
         Args: {
           p_dni: string
