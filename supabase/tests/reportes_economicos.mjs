@@ -430,6 +430,68 @@ try {
         (await pagina.getByRole('heading', { name: 'Ingresos por período', exact: true }).count()) === 0,
       'Una navegación anterior retenida no sustituye el contexto nuevo; respuestas económicas no simuladas'
     )
+    const nivel = sql(`SELECT nivel_id FROM public.cursos WHERE id='${ID(101)}';`)
+    const filtrosAplicados = {
+      nivel,
+      deporte: deporte.filas[0].deporte_id,
+      profesor: actores.docente,
+      horario: horarioId,
+    }
+    const filtroUrl = (valores) => new URLSearchParams({ desde: '2030-01-01', hasta: '2030-12-31', ...valores })
+    async function conservarFiltros(valores) {
+      for (const [campo, valor] of Object.entries(valores)) {
+        assert.equal(
+          await pagina.locator(`select[name="${campo}"]`).inputValue(),
+          valor,
+          `Selector ${campo} conserva filtro`
+        )
+      }
+      await pagina.getByRole('button', { name: 'Consultar', exact: true }).click()
+      await pagina.getByRole('heading', { name: 'Resultado del 01/01/2030 al 31/12/2030', exact: true }).waitFor()
+      for (const [campo, valor] of Object.entries(valores)) {
+        assert.equal(new URL(pagina.url()).searchParams.get(campo), valor, `GET conserva ${campo}`)
+      }
+    }
+    try {
+      sql('REVOKE EXECUTE ON FUNCTION public.catalogos_reportes() FROM authenticated;')
+      await pagina.goto(`${urlNavegador}/dashboard/reportes/economicos/deportes?${filtroUrl(filtrosAplicados)}`)
+      await pagina.getByRole('alert').filter({ hasText: 'No se pudieron cargar las listas.' }).waitFor()
+      await conservarFiltros(filtrosAplicados)
+      comprobar(
+        (await pagina.getByRole('table').count()) === 1,
+        'Catálogo falla realmente: nivel, deporte, profesor y horario aplicados sobreviven Consultar'
+      )
+      await pagina.goto(
+        `${urlNavegador}/dashboard/reportes/economicos/recorridos?${filtroUrl({ recorrido: recorrido.filas[0].recorrido_id })}`
+      )
+      await pagina.getByRole('alert').filter({ hasText: 'No se pudieron cargar las listas.' }).waitFor()
+      await conservarFiltros({ recorrido: recorrido.filas[0].recorrido_id })
+      comprobar(true, 'Catálogo no disponible conserva también el recorrido aplicado')
+    } finally {
+      sql('GRANT EXECUTE ON FUNCTION public.catalogos_reportes() TO authenticated;')
+    }
+    const ausentes = { nivel: '9999', deporte: ID(999991), profesor: ID(999992), horario: ID(999993) }
+    await pagina.goto(`${urlNavegador}/dashboard/reportes/economicos/deportes?${filtroUrl(ausentes)}`)
+    await conservarFiltros(ausentes)
+    const catalogosRepuestos = await rpc(local, sesiones.director.access_token, 'catalogos_reportes', {})
+    comprobar(
+      catalogosRepuestos.estado === 200 &&
+        (await pagina.getByRole('alert').filter({ hasText: 'No se pudieron cargar las listas.' }).count()) === 0,
+      'Catálogo responde correctamente pero no contiene valores activos: tampoco se descartan'
+    )
+    await pagina.locator('select[name="deporte"]').selectOption('')
+    await pagina.getByRole('button', { name: 'Consultar', exact: true }).click()
+    await pagina.getByText('No hay resultados con estos filtros.', { exact: true }).waitFor()
+    comprobar(
+      new URL(pagina.url()).searchParams.get('deporte') === '' &&
+        new URL(pagina.url()).searchParams.get('profesor') === ausentes.profesor,
+      'Quitar un filtro es explícito y no elimina los demás filtros ausentes del catálogo'
+    )
+    await pagina.goto(
+      `${urlNavegador}/dashboard/reportes/economicos/recorridos?${filtroUrl({ recorrido: ID(999994) })}`
+    )
+    await conservarFiltros({ recorrido: ID(999994) })
+    comprobar(true, 'Recorrido activo ausente de un catálogo disponible se conserva al consultar')
     const denegado = await navegador.newContext()
     const cookiePadre = cookieDe(sesiones.padre).split(';')[0],
       separador = cookiePadre.indexOf('=')

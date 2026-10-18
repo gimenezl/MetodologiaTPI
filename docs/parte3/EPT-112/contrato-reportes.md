@@ -41,6 +41,8 @@ Filtros: desde/hasta, año calendario, nivel, denominación exacta de curso y ca
 
 La huella MD5 del contenido ordenado detecta cambios entre páginas, incluyendo importe, saldo, matrícula y etiquetas mostradas. Ante una huella diferente la RPC devuelve solo la señal de actualización y la API responde 409; la interfaz exige volver a la primera página conservando filtros. No es una firma de integridad ni un informe inmutable multipágina. Recargar sin huella produce una lectura nueva, identificada por su instante.
 
+Si el catálogo falla o ya no contiene un identificador aplicado, cada selector conserva ese valor en una opción de respaldo identificada. Consultar mantiene el filtro, y elegir explícitamente «Todos» lo quita. No se sustituye silenciosamente por vacío.
+
 El formulario GET y los enlaces de paginación realizan navegación de documento completo; no existen respuestas de fetch reutilizadas bajo filtros nuevos. El navegador descarta la navegación anterior al iniciar otra. No se crea infraestructura persistente de snapshots. Se preagrega por pago antes de unir. La RPC conserva RLS e INVOKER y usa `plan_cache_mode=force_custom_plan` solo durante su ejecución para evitar reutilizar planes inadecuados entre filtros de cardinalidades muy distintas; no modifica timeouts ni configuración persistente.
 
 ## Autorización y privacidad
@@ -69,10 +71,12 @@ Inventario de despliegue futuro, **no aplicado a producción en esta unidad**: E
 | Campo | Registro |
 |---|---|
 | Problema / encargo | Completar EPT-112 de extremo a extremo conforme a Parte 3 RF17–21, decisiones EPT-80/83/84/86 y conversación del 18/10/2026 |
+| Prompt | «Misión: completar EPT-112 de extremo a extremo», encargo del 18/10/2026 con cinco reportes web, contratos económicos, seguridad, pruebas y entrega autorizada |
+| Respuesta | Implementación de cinco reportes con consulta SQL coherente, API autorizada, filtros y totales exactos, interfaz institucional, pruebas reales y documentación de límites |
 | Apoyo utilizado | Codex para auditoría de fuentes, implementación, fixtures sintéticos, pruebas y documentación |
 | Análisis y adaptación | Se contrastaron contratos EPT-107–111, esquema, PDF, autorización, guías Next instaladas y selector; se separaron granos, informado/imputado y saldo vigente; se descartaron prorrateos y snapshots persistidos |
 | Verificación | Matriz enlazada y evidencia con pruebas puras y contratos SQL/Auth/API/lectura concurrente/UI diferenciados |
-| Revisión | Revisión independiente pendiente en el candidato inicial; actualizar evidencia antes de integrar |
+| Revisión | Revisión independiente de fcde8ed inspeccionó 22 archivos y confirmó P2 de pérdida silenciosa de filtros ante fallo/ausencia de catálogo. Corregido con opciones de respaldo y prueba UI real; revalidación acotada y CI del SHA final pendientes |
 | Comprensión / aprobación humana | No se inventa comprensión, aprobación humana ni aprobación docente; se registra el análisis técnico observable y las decisiones expresas del usuario |
 
 Véanse [matriz de aceptación](matriz-aceptacion.md) y [evidencia de entrega](../../evidence/EPT-112.md).

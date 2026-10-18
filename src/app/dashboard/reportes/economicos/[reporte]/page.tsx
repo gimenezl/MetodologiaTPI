@@ -129,6 +129,10 @@ export default async function ReporteEconomicoPage({
             Nivel
             <select className={control} name="nivel" defaultValue={url.get('nivel') ?? ''}>
               <option value="">Todos los niveles</option>
+              <OpcionFiltroConservado
+                valor={url.get('nivel')}
+                disponibles={catalogos.ok ? catalogos.datos.niveles.map((item) => item.id) : []}
+              />
               {catalogos.ok &&
                 catalogos.datos.niveles.map((n) => (
                   <option key={n.id} value={n.id}>
@@ -152,6 +156,10 @@ export default async function ReporteEconomicoPage({
                 Deporte
                 <select className={control} name="deporte" defaultValue={url.get('deporte') ?? ''}>
                   <option value="">Todos los deportes</option>
+                  <OpcionFiltroConservado
+                    valor={url.get('deporte')}
+                    disponibles={catalogos.ok ? catalogos.datos.deportes.map((item) => item.id) : []}
+                  />
                   {catalogos.ok &&
                     catalogos.datos.deportes.map((d) => (
                       <option key={d.id} value={d.id}>
@@ -164,6 +172,10 @@ export default async function ReporteEconomicoPage({
                 Profesor a cargo
                 <select className={control} name="profesor" defaultValue={url.get('profesor') ?? ''}>
                   <option value="">Todos los profesores</option>
+                  <OpcionFiltroConservado
+                    valor={url.get('profesor')}
+                    disponibles={catalogos.ok ? catalogos.datos.profesores.map((item) => item.id) : []}
+                  />
                   {catalogos.ok &&
                     catalogos.datos.profesores.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -176,6 +188,10 @@ export default async function ReporteEconomicoPage({
                 Horario
                 <select className={control} name="horario" defaultValue={url.get('horario') ?? ''}>
                   <option value="">Todos los horarios</option>
+                  <OpcionFiltroConservado
+                    valor={url.get('horario')}
+                    disponibles={catalogos.ok ? catalogos.datos.horarios.map((item) => item.id) : []}
+                  />
                   {catalogos.ok &&
                     catalogos.datos.horarios.map((h) => (
                       <option key={h.id} value={h.id}>
@@ -191,6 +207,10 @@ export default async function ReporteEconomicoPage({
               Recorrido
               <select className={control} name="recorrido" defaultValue={url.get('recorrido') ?? ''}>
                 <option value="">Todos los recorridos</option>
+                <OpcionFiltroConservado
+                  valor={url.get('recorrido')}
+                  disponibles={catalogos.ok ? catalogos.datos.recorridos.map((item) => item.id) : []}
+                />
                 {catalogos.ok &&
                   catalogos.datos.recorridos.map((r) => (
                     <option key={r.id} value={r.id}>
@@ -222,8 +242,8 @@ export default async function ReporteEconomicoPage({
         </form>
         {!catalogos.ok && (
           <p role="alert" className="mt-3 text-sm text-red-800">
-            No se pudieron cargar las listas. Actualice la consulta para reintentar; no se han quitado filtros del
-            enlace.
+            No se pudieron cargar las listas. Los filtros aplicados se conservan al consultar. Puede quitarlos
+            explícitamente eligiendo la opción «Todos» correspondiente, o actualizar para reintentar.
           </p>
         )}
       </section>
@@ -480,4 +500,16 @@ function Fila({ fila: f, reporte: id }: { fila: FilaEconomica; reporte: ReporteE
       ))}
     </tr>
   )
+}
+
+/** Nunca permitir que un select sin su opción activa envíe vacío de forma implícita. */
+function OpcionFiltroConservado({
+  valor,
+  disponibles,
+}: {
+  valor: string | null
+  disponibles: readonly (string | number)[]
+}) {
+  if (!valor || disponibles.some((id) => String(id) === valor)) return null
+  return <option value={valor}>Filtro aplicado no disponible en la lista ({valor})</option>
 }
