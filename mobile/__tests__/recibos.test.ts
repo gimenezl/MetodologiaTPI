@@ -205,3 +205,17 @@ test("fallo de red no escribe ni abre recursos externos", async () => {
   expect(mockEscribir).not.toHaveBeenCalled();
   expect(Sharing.shareAsync).not.toHaveBeenCalled();
 });
+
+test("notifica fin de descarga antes de abrir el menú nativo", async () => {
+  const preparada = jest.fn();
+  jest.mocked(Sharing.shareAsync).mockImplementationOnce(async () => {
+    expect(preparada).toHaveBeenCalledTimes(1);
+  });
+  await compartirRecibo(
+    cliente(),
+    id,
+    new AbortController().signal,
+    () => {},
+    preparada,
+  );
+});

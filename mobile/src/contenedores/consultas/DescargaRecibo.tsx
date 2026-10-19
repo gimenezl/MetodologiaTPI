@@ -18,6 +18,13 @@ export function DescargaRecibo({
     bytes: number;
     error: string | null;
   }>({ cargando: false, bytes: 0, error: null });
+  const [contexto, setContexto] = useState({ cliente, reciboId });
+  // Ajuste condicional al cambiar props: no arrastra el estado de otro recibo/cuenta.
+  if (contexto.cliente !== cliente || contexto.reciboId !== reciboId) {
+    setContexto({ cliente, reciboId });
+    setCerrado(false);
+    setEstado({ cargando: false, bytes: 0, error: null });
+  }
   useEffect(
     () => () => {
       control.current?.abort();
@@ -33,13 +40,19 @@ export function DescargaRecibo({
     setCerrado(false);
     setEstado({ cargando: true, bytes: 0, error: null });
     try {
-      await compartirRecibo(cliente, reciboId, c.signal, (bytes) => {
-        if (!c.signal.aborted)
-          setEstado({ cargando: true, bytes, error: null });
-      });
-      if (!c.signal.aborted) {
+      await compartirRecibo(
+        cliente,
+        reciboId,
+        c.signal,
+        (bytes) => {
+          if (control.current === c && !c.signal.aborted)
+            setEstado({ cargando: true, bytes, error: null });
+        },
+        () => clearTimeout(timeout),
+      );
+      if (control.current === c) {
         setEstado({ cargando: false, bytes: 0, error: null });
-        setCerrado(true);
+        setCerrado(!c.signal.aborted);
       }
     } catch (e) {
       if (control.current === c)

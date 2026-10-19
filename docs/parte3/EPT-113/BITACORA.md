@@ -24,3 +24,8 @@ El usuario autorizó explícitamente `size:exception` para un único PR con revi
 Ruta sugerida para revisión independiente: (1) transacción/locks/ACL y fuente; (2) renderer, API y dinero; (3) autorización por recurso; (4) transporte/limpieza/contexto móvil; (5) rutas de historial, paginación y cobertura CI. Los resultados deben registrarse con evidencia del candidato exacto antes de integrar.
 
 No se inventó aprobación docente, humana o legal. PR, checks finales, squash merge, publicación de evidencia y transición Jira permanecen a cargo de la coordinación hasta que los gates reales lo permitan.
+
+
+### Corrección focal de revisión
+
+La revisión independiente detectó un único P2: menú nativo abierto después de 60 s dejaba el botón de recibo cargando indefinidamente. La descarga ahora notifica su finalización antes de compartir para detener el timeout de red; toda resolución del intento vigente termina su estado, y un cambio de cuenta/recibo descarta progreso/resultado anterior. Se conservan cancelación y límite de red. Pruebas focales: 20/20 (3,14 s), TypeScript (3,09 s), lint sin errores (2,67 s). No hubo nueva matriz larga. Primer draft PR67/head17b39ad inició CI39291239847; validación independiente de la corrección y CI del head final siguen pendientes. Rollback de esta unidad se limita al controlador móvil, callback de fase y sus pruebas; no toca datos ni migraciones.

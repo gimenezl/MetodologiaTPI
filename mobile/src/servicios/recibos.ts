@@ -81,6 +81,7 @@ export async function compartirRecibo(
   reciboId: string,
   senal: AbortSignal,
   progreso: (bytes: number) => void,
+  descargaPreparada: () => void = () => {},
 ): Promise<void> {
   if (ocupado) throw new Error("Ya hay una descarga en curso.");
   if (!ID.test(reciboId)) throw new Error("El recibo no es válido.");
@@ -114,6 +115,8 @@ export async function compartirRecibo(
     );
     if (senal.aborted || token !== (await obtenerTokenDeAcceso(cliente.auth)))
       throw new Error("El contexto de la sesión cambió. Consulta nuevamente.");
+    // El tiempo de decisión en el menú nativo no es tiempo de red.
+    descargaPreparada();
     await compartirPdfPrivado(bytes, reciboId, senal);
   } finally {
     ocupado = false;
