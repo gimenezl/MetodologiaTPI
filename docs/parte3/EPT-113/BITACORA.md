@@ -29,3 +29,8 @@ No se inventó aprobación docente, humana o legal. PR, checks finales, squash m
 ### Corrección focal de revisión
 
 La revisión independiente detectó un único P2: menú nativo abierto después de 60 s dejaba el botón de recibo cargando indefinidamente. La descarga ahora notifica su finalización antes de compartir para detener el timeout de red; toda resolución del intento vigente termina su estado, y un cambio de cuenta/recibo descarta progreso/resultado anterior. Se conservan cancelación y límite de red. Pruebas focales: 20/20 (3,14 s), TypeScript (3,09 s), lint sin errores (2,67 s). No hubo nueva matriz larga. Primer draft PR67/head17b39ad inició CI39291239847; validación independiente de la corrección y CI del head final siguen pendientes. Rollback de esta unidad se limita al controlador móvil, callback de fase y sus pruebas; no toca datos ni migraciones.
+
+
+### CI y arneses
+
+El primer CI final `39291610198` falló: limpieza EPT112 sin recibos, segundo Next dentro de Playwright, carrera Android de destrucción de tarea y timeout del step iOS posterior a tres flujos aprobados. Se corrigieron únicamente fixtures/runners/sanitización: limpieza sintética prefijada, reutilización de base local, barrera observada de detención, diagnóstico/screenshot acotados y upload Android fail-closed. Artefacto propio con contraseñas sintéticas omitidas por el filtro se eliminó con autorización y 404 verificado, conservando copia privada saneada. No se atribuyó una causa exacta al tramo iOS sin trazas. Regresiones reales 87+32 y pruebas focales17+2 aprobadas; nuevo SHA debe superar validación independiente y CI, sin rerun ciego ni aumento de timeouts. Ver evidencia detallada.

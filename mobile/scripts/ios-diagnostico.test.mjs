@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, resolve } from 'node:path'
 import { test } from 'node:test'
-import { recopilar } from './diagnostico-ios.mjs'
+import { recopilar, capturarPantalla } from './diagnostico-ios.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const udid = '600A45A3-B3A0-4A39-8A9C-5D051F9FDA9C'
@@ -181,4 +181,65 @@ test('upload iOS evalúa la condición real y solo publica tras sanitario exitos
       outcome
     )
   }
+})
+
+
+test('diagnóstico por flujo conserva originales y no consulta drivers anteriores ni lanza JVM para versión', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'ept113-ios-flujo-'))
+  try {
+    for (const flujo of ['smoke', 'recibos']) {
+      mkdirSync(join(directory, `${flujo}-debug`))
+      writeFileSync(join(directory, `${flujo}-debug`, 'maestro.log'), `Maestro Version: 2.11.0\nSelected device ${udid} using port ${flujo === 'smoke' ? 12345 : 23456}`)
+    }
+    const calls = []
+    const output = recopilar({ directory, derived: directory, udid, flujo: 'recibos', run: (command, args) => { calls.push([command, args]); return 'exit=0 timedout=false' } })
+    assert.ok(calls.some(([command, args]) => command === 'curl' && args.includes('http://127.0.0.1:23456/status')))
+    assert.ok(!calls.some(([, args]) => args.join(' ').includes('12345')))
+    assert.ok(!calls.some(([command]) => command === 'maestro'))
+    assert.match(readFileSync(output, 'utf8'), /version=2.11.0 fuente=registro_original/u)
+    assert.match(readFileSync(join(directory, 'smoke-debug/maestro.log'), 'utf8'), /12345/u)
+  } finally { rmSync(directory, { recursive: true, force: true }) }
+})
+test('presupuesto global agota comandos pendientes con omitted y versión ausente no inventada', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'ept113-ios-presupuesto-'))
+  try {
+    let tiempo = 0
+    const calls = []
+    const output = recopilar({ directory, derived: directory, udid, ahora: () => tiempo, presupuestoMs: 10000, run: (_command, _args, timeout) => { calls.push(timeout); tiempo += timeout; return 'exit=143 error=ETIMEDOUT timedout=true' } })
+    const text = readFileSync(output, 'utf8')
+    assert.ok(tiempo <= 10000)
+    assert.deepEqual(calls, [4000, 4000])
+    assert.match(text, /version=no-disponible/u)
+    assert.match(text, /timedout=true/u)
+    // Sin puertos/PIDs solo existen dos comandos; presupuesto cero omite ambos.
+    const omitted = recopilar({ directory, derived: directory, udid, presupuestoMs: 0, run: () => assert.fail('No ejecutar fuera de presupuesto') })
+    assert.match(readFileSync(omitted, 'utf8'), /omitted=budget_exhausted/u)
+  } finally { rmSync(directory, { recursive: true, force: true }) }
+})
+test('screenshot final siempre usa límite5s y conserva resultado timeout explícito', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'ept113-ios-pantalla-'))
+  try {
+    for (const estado of ['exit=0 timedout=false', 'exit=143 error=ETIMEDOUT timedout=true']) {
+      capturarPantalla({ directory, udid, run: (command, args, timeout) => {
+        assert.equal(command, 'xcrun'); assert.equal(timeout, 5000)
+        assert.deepEqual(args.slice(0, 4), ['simctl', 'io', udid, 'screenshot'])
+        return estado
+      } })
+      assert.equal(readFileSync(join(directory, 'screenshot-final-diagnostico.txt'), 'utf8'), estado)
+    }
+  } finally { rmSync(directory, { recursive: true, force: true }) }
+})
+
+
+test('upload Android falla cerrado si el sanitario no termina con éxito', () => {
+  const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8')
+  const sanitario = workflow.slice(workflow.indexOf('      - name: Sanear artifacts nativos'), workflow.indexOf('      - name: Subir evidencia Android'))
+  const upload = workflow.slice(workflow.indexOf('      - name: Subir evidencia Android'), workflow.indexOf('  mobile-ios:'))
+  const id = sanitario.match(/^        id: ([a-z_]+)$/mu)?.[1]
+  assert.equal(id, 'sanear_android')
+  assert.doesNotMatch(sanitario, /continue-on-error:/u)
+  const condicion = upload.match(/^        if: (.+)$/mu)?.[1]
+  assert.equal(condicion, `always() && steps.${id}.outcome == 'success'`)
+  const permite = new Function('always', 'steps', `return (${condicion})`)
+  for (const outcome of ['failure', 'skipped', 'cancelled', 'success']) assert.equal(permite(() => true, { [id]: { outcome } }), outcome === 'success')
 })

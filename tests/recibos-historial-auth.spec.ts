@@ -5,13 +5,15 @@ test.skip(
   "Requiere backend local descartable con actores reales",
 );
 test.describe("DIRECTOR autenticado: historial y recibos", () => {
-  test("aprobación, historial familiar y descarga web real del recibo", () => {
+  test("aprobación, historial familiar y descarga web real del recibo", ({
+    baseURL,
+  }) => {
     test.setTimeout(120000);
     execFileSync(
       process.execPath,
       ["supabase/tests/recibos_historial.mjs", "--ui"],
       {
-        env: { ...process.env, EPT_PUERTO_NEXT: "32313" },
+        env: { ...process.env, EPT_RECIBOS_UI_BASE_URL: baseURL },
         encoding: "utf8",
         timeout: 110000,
         stdio: ["ignore", "pipe", "pipe"],

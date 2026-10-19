@@ -48,5 +48,5 @@ if [ "$estado" -eq 0 ]; then
 fi
 set -e
 
-xcrun simctl io "$UDID" screenshot "$SALIDA/ios-final.png" || true
+node mobile/scripts/diagnostico-ios.mjs "$UDID" pantalla || true
 exit "$estado"

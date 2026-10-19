@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from enum import IntEnum
 import os
 from pathlib import Path
@@ -77,6 +78,15 @@ class StageTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0)
             self.assertNotIn("private-example", artifact.read_text())
             ET.parse(artifact)
+
+    def test_generated_recovery_passwords_preserve_artifact_structure(self):
+        values = {"MAESTRO_RECUPERACION_NUEVA": "synthetic-recovery-one!", "MAESTRO_RECUPERACION_NUEVA2": "synthetic-recovery-two!"}
+        with mock.patch.dict(os.environ, values):
+            for preserve in (False, True):
+                result = stage.redact(json.dumps(values), preserve_structure=preserve)
+                for value in values.values():
+                    self.assertNotIn(value, result)
+                self.assertEqual(json.loads(result), dict.fromkeys(values, "[REDACTED]"))
 
     def test_supabase_token_families_without_environment(self):
         import json

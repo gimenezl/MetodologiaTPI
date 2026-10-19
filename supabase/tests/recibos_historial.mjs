@@ -35,9 +35,16 @@ const local = Object.fromEntries(
 );
 assert.equal(new URL(local.API_URL).hostname, "127.0.0.1");
 const modoUi = process.argv.includes("--ui");
-const servidor = crearServidorNext(
-  Number(process.env.EPT_PUERTO_NEXT ?? 32313),
-);
+const baseUi = modoUi ? process.env.EPT_RECIBOS_UI_BASE_URL : undefined;
+if (baseUi) {
+  const url = new URL(baseUi);
+  assert.ok(["http:", "https:"].includes(url.protocol));
+  assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(url.hostname));
+  assert.equal(url.username + url.password + url.search + url.hash, "");
+}
+const servidor = baseUi
+  ? { url: baseUi, iniciar: async () => {}, detener: async () => {} }
+  : crearServidorNext(Number(process.env.EPT_PUERTO_NEXT ?? 32313));
 const a = {},
   sesiones = {};
 let navegador, primario;
@@ -164,12 +171,28 @@ try {
   );
   // Identidad preexistente sin fuente: no borrar ni renumerar una emisión incierta.
   sql(`DELETE FROM app_private.recibos_fuente WHERE recibo_id='${r.id}';`);
-  assert.equal((await historial('padre')).cuerpo[0].recibo_id,null);
-  assert.equal((await llamada('padre','consultar_recibo',{p_recibo_id:r.id})).cuerpo.code,'P6892');
-  assert.equal((await llamada('director','recuperar_recibo',{p_pago_id:PAGO})).cuerpo.code,'P6892');
-  assert.equal(sql(`SELECT id FROM public.recibos WHERE pago_id='${PAGO}';`),r.id);
-  sql(`INSERT INTO app_private.recibos_fuente(recibo_id,contenido)VALUES('${r.id}','${antes.replaceAll("'","''")}'::JSONB);`);
-  ok(true,'identidad existente sin fuente queda por conciliar, sin nueva numeración ni enlace descargable');
+  assert.equal((await historial("padre")).cuerpo[0].recibo_id, null);
+  assert.equal(
+    (await llamada("padre", "consultar_recibo", { p_recibo_id: r.id })).cuerpo
+      .code,
+    "P6892",
+  );
+  assert.equal(
+    (await llamada("director", "recuperar_recibo", { p_pago_id: PAGO })).cuerpo
+      .code,
+    "P6892",
+  );
+  assert.equal(
+    sql(`SELECT id FROM public.recibos WHERE pago_id='${PAGO}';`),
+    r.id,
+  );
+  sql(
+    `INSERT INTO app_private.recibos_fuente(recibo_id,contenido)VALUES('${r.id}','${antes.replaceAll("'", "''")}'::JSONB);`,
+  );
+  ok(
+    true,
+    "identidad existente sin fuente queda por conciliar, sin nueva numeración ni enlace descargable",
+  );
   const verificado = sql(
     `SELECT verificado_en::TEXT FROM public.pagos WHERE id='${PAGO}';`,
   );
@@ -260,10 +283,25 @@ try {
     ),
   );
   ok(true, "recibo no amplía el permiso del original ni expone archivo_path");
-  await servidor.iniciar({
-    NEXT_PUBLIC_SUPABASE_URL: local.API_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: local.ANON_KEY,
-  });
+  try {
+    await servidor.iniciar({
+      NEXT_PUBLIC_SUPABASE_URL: local.API_URL,
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: local.ANON_KEY,
+    });
+  } catch (error) {
+    // Solo categorías conocidas: no publicar rutas, variables ni datos de peticiones.
+    const registro = servidor.registro ?? "";
+    const diagnostico = [
+      "Unable to acquire lock",
+      "EADDRINUSE",
+      "EACCES",
+    ].filter((codigo) => registro.includes(codigo));
+    console.error(
+      "Inicio Next EPT113:",
+      diagnostico.length ? diagnostico.join(", ") : "sin categoría pública",
+    );
+    throw error;
+  }
   for (const actor of ["padre", "copadre", "alumno", "director"])
     for (const cookie of [false, true]) {
       const res = await pdf(actor, recibo, cookie);

@@ -232,10 +232,11 @@ jobs:
         if: always()
         run: node mobile/scripts/supabase-local.mjs stop
       - name: Sanear artifacts nativos
+        id: sanear_android
         if: always()
         run: python3 scripts/ci/run-stage.py --sanitize-directory "$RUNNER_TEMP/evidencia-movil-android"
       - name: Subir evidencia Android
-        if: always()
+        if: always() && steps.sanear_android.outcome == 'success'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: movil-android-${{ github.sha }}

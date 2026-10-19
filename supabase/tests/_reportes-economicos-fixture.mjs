@@ -105,6 +105,7 @@ export function limpiarEconomia() {
   return `
     DELETE FROM public.comprobantes_pago WHERE ${propio};
     DELETE FROM public.imputaciones_pago WHERE pago_id::TEXT LIKE 'b1120000-%';
+    DELETE FROM public.recibos WHERE pago_id::TEXT LIKE 'b1120000-%';
     DELETE FROM public.pagos WHERE ${propio}; DELETE FROM public.items_factura WHERE ${propio};
     DELETE FROM public.facturas WHERE ${propio};
     DELETE FROM public.inscripciones_deportivas WHERE ${propio};

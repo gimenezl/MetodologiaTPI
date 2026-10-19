@@ -15,7 +15,7 @@ import time
 
 def redact(text, preserve_structure=False):
     for name, value in sorted(os.environ.items(), key=lambda pair: len(pair[1]), reverse=True):
-        if value and re.search(r"(?:SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL|EMAIL|AUTHORIZATION)(?:$|_)|_URL$", name, re.I):
+        if value and re.search(r"(?:SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL|EMAIL|AUTHORIZATION)(?:$|_)|_URL$|^MAESTRO_RECUPERACION_NUEVA2?$", name, re.I):
             text = text.replace(value, "[REDACTED]")
     text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
     # CLI table/JSON output can contain newly minted keys absent from the environment.
