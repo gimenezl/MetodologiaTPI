@@ -90,6 +90,8 @@ name: Consultas del padre (período e inscripciones) contra backend real
     element:
       id: 'periodo-hasta'
     direction: UP
+    speed: 80
+    visibilityPercentage: 100
     timeout: 15000
 - tapOn:
     id: 'periodo-hasta'

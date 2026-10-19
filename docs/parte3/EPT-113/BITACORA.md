@@ -39,3 +39,8 @@ El primer CI final `39291610198` falló: limpieza EPT112 sin recibos, segundo Ne
 ### Contraste y límite SQL → móvil
 
 El segundo CI aprobó contratos DB pero detectó un botón fuera del catálogo (sin fondo Tailwind generado) y el parser móvil rechazando centavos textuales de ítems reales. Se reutiliza el botón institucional y se valida el texto decimal por BigInt antes de convertir a entero seguro, sin ampliar el contrato global. Se agregaron negativas y respuesta RPC real no vacía de los tres estados al arnés Android. AA real y axe sin hallazgos; regresión móvil67/67 y contrato real1/1 aprobados. iOS volvió a agotar el step aunque los tres flujos y capturas acabaron: solo se desactiva telemetría CLI oficial, sin afirmar causa ni solución hasta CI. No se aumentan límites ni se quitan gates. Ver evidencia detallada del run39296436449.
+
+
+### Gate y límites medidos
+
+El tercer CI concluyó cancelled/gate failure. Aunque UI completó150/150 sin omisiones, el job8min venció (509s reales), por lo que no se declaró PASS. Se autorizó únicamente UI10min (600s, margen aproximado18%), sin retirar fresh/reset/cleanup ni150tests. Android avanzó hasta un scroll cuyo último gesto dejó Hasta visible después del plazo: se ajusta solo su velocidad80 conservando15s/100%/asserts. iOS no inició el primer flujo porque XCTest no atendió120s; la causa sigue indeterminada. Se añade captura temprana acotada de sus procesos para diagnóstico, no cambios de readiness ni reparación especulativa. Si persiste sin causa con mejor evidencia, se detiene para decisión, sin merge ni bypass.

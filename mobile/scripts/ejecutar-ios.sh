@@ -25,6 +25,23 @@ xcrun simctl bootstatus "$UDID" -b
 xcrun simctl install "$UDID" "$APP"
 xcrun simctl listapps "$UDID" | grep -F 'org.educarparatransformar.app'
 
+# Recolector propio: se cierra también si Maestro falla o el step recibe TERM.
+node mobile/scripts/ios-captura-temprana.mjs "$UDID" &
+CAPTURA_PID=$!
+finalizar_captura() {
+  kill -TERM "$CAPTURA_PID" 2>/dev/null || true
+  # Límite de cierre del recolector propio, no una espera de readiness del driver.
+  for intento in {1..20}; do
+    kill -0 "$CAPTURA_PID" 2>/dev/null || break
+    sleep 0.1
+  done
+  if kill -0 "$CAPTURA_PID" 2>/dev/null; then kill -KILL "$CAPTURA_PID" 2>/dev/null || true; fi
+  wait "$CAPTURA_PID" 2>/dev/null || true
+}
+trap finalizar_captura EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+
 set +e
 maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-ios.xml" \
   --debug-output "$SALIDA/smoke-debug" --flatten-debug-output \

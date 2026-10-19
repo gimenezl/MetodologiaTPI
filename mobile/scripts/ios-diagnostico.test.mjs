@@ -257,3 +257,21 @@ test('Maestro CLI hereda opt-out oficial de telemetría en CI nativo sin bypass 
   for (const script of ['ejecutar-android.sh', 'ejecutar-ios.sh']) assert.doesNotMatch(readFileSync(join(root, 'mobile/scripts', script), 'utf8'), /env -i|unset MAESTRO_CLI_NO_ANALYTICS/u)
   assert.doesNotMatch(android + ios, /continue-on-error:/u)
 })
+
+
+test('scroll UP de Hasta preserva visibilidad completa, plazo y asserts con cadencia medida', () => {
+  const flow = readFileSync(join(root, 'mobile/maestro/consultas.yaml'), 'utf8')
+  const rango = flow.slice(flow.indexOf('# Un rango invertido'), flow.indexOf('# Inscripciones del hijo'))
+  assert.match(rango, /id: 'periodo-hasta'\n    direction: UP\n    speed: 80\n    visibilityPercentage: 100\n    timeout: 15000/u)
+  assert.match(rango, /- assertVisible: 'La fecha desde no puede ser posterior a la fecha hasta.'/u)
+  assert.equal((flow.match(/speed: 80/gu) ?? []).length, 1)
+})
+test('presupuesto UI medido no cambia DB, full ni fallback', () => {
+  const yml = readFileSync(join(root, '.github/workflows/local-tests.yml'), 'utf8')
+  const expression = yml.match(/timeout-minutes: \$\{\{ (.+) \}\}/u)?.[1]
+  assert.ok(expression)
+  const seleccionar = new Function('inputs', `return (${expression})`)
+  for (const [kind, expected] of [['full', 30], ['db', 12], ['ui', 10], ['otro', 8]]) assert.equal(seleccionar({ kind }), expected)
+  const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8')
+  assert.match(workflow.slice(workflow.indexOf('  fast:'), workflow.indexOf('  plan:')), /timeout-minutes: 8/u)
+})
