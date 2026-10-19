@@ -139,6 +139,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
+      MAESTRO_CLI_NO_ANALYTICS: '1'
       CI: '1'
       EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
     steps:
@@ -312,6 +313,7 @@ jobs:
         timeout-minutes: 12
         env:
           MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'
+          MAESTRO_CLI_NO_ANALYTICS: '1'
         run: bash mobile/scripts/ejecutar-ios.sh "${{ steps.app.outputs.ruta }}"
       - name: Empaquetar evidencia iOS
         if: always()

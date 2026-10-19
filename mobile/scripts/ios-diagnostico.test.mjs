@@ -243,3 +243,17 @@ test('upload Android falla cerrado si el sanitario no termina con éxito', () =>
   const permite = new Function('always', 'steps', `return (${condicion})`)
   for (const outcome of ['failure', 'skipped', 'cancelled', 'success']) assert.equal(permite(() => true, { [id]: { outcome } }), outcome === 'success')
 })
+
+
+test('Maestro CLI hereda opt-out oficial de telemetría en CI nativo sin bypass ni cambios de presupuesto', () => {
+  const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8')
+  const android = workflow.slice(workflow.indexOf('  mobile-android:'), workflow.indexOf('  mobile-ios:'))
+  const ios = workflow.slice(workflow.indexOf('  mobile-ios:'), workflow.indexOf('  gate:'))
+  assert.match(android, /    env:\n      MAESTRO_CLI_NO_ANALYTICS: '1'/u)
+  assert.match(ios, /MAESTRO_CLI_NO_ANALYTICS: '1'\n        run: bash mobile\/scripts\/ejecutar-ios.sh/u)
+  assert.match(android, /timeout-minutes: 30/u)
+  assert.match(ios, /timeout-minutes: 12/u)
+  assert.match(ios, /timeout-minutes: 40/u)
+  for (const script of ['ejecutar-android.sh', 'ejecutar-ios.sh']) assert.doesNotMatch(readFileSync(join(root, 'mobile/scripts', script), 'utf8'), /env -i|unset MAESTRO_CLI_NO_ANALYTICS/u)
+  assert.doesNotMatch(android + ios, /continue-on-error:/u)
+})

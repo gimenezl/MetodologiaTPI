@@ -34,3 +34,8 @@ La revisión independiente detectó un único P2: menú nativo abierto después 
 ### CI y arneses
 
 El primer CI final `39291610198` falló: limpieza EPT112 sin recibos, segundo Next dentro de Playwright, carrera Android de destrucción de tarea y timeout del step iOS posterior a tres flujos aprobados. Se corrigieron únicamente fixtures/runners/sanitización: limpieza sintética prefijada, reutilización de base local, barrera observada de detención, diagnóstico/screenshot acotados y upload Android fail-closed. Artefacto propio con contraseñas sintéticas omitidas por el filtro se eliminó con autorización y 404 verificado, conservando copia privada saneada. No se atribuyó una causa exacta al tramo iOS sin trazas. Regresiones reales 87+32 y pruebas focales17+2 aprobadas; nuevo SHA debe superar validación independiente y CI, sin rerun ciego ni aumento de timeouts. Ver evidencia detallada.
+
+
+### Contraste y límite SQL → móvil
+
+El segundo CI aprobó contratos DB pero detectó un botón fuera del catálogo (sin fondo Tailwind generado) y el parser móvil rechazando centavos textuales de ítems reales. Se reutiliza el botón institucional y se valida el texto decimal por BigInt antes de convertir a entero seguro, sin ampliar el contrato global. Se agregaron negativas y respuesta RPC real no vacía de los tres estados al arnés Android. AA real y axe sin hallazgos; regresión móvil67/67 y contrato real1/1 aprobados. iOS volvió a agotar el step aunque los tres flujos y capturas acabaron: solo se desactiva telemetría CLI oficial, sin afirmar causa ni solución hasta CI. No se aumentan límites ni se quitan gates. Ver evidencia detallada del run39296436449.

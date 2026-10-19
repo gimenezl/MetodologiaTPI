@@ -1,3 +1,4 @@
+import { estilosDeBoton } from "@/components/ui/estilosDeBoton";
 import type { Database } from "@/types/database.generated";
 import { z } from "zod";
 import { createServerSupabaseClient } from "@/services/supabase.server";
@@ -136,7 +137,9 @@ export async function HistorialPagos({
             <option value="FECHA_TRANSFERENCIA">Fecha de transferencia</option>
           </select>
         </label>
-        <button className="min-h-11 rounded-xl bg-primary-700 px-4 text-white">
+        <button
+          className={estilosDeBoton({ variante: "primary", tamano: "lg" })}
+        >
           Consultar historial
         </button>
       </form>

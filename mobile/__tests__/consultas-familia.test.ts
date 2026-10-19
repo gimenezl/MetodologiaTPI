@@ -228,3 +228,19 @@ describe('historial paginado EPT-113',()=>{
   expect(()=>analizarRegistroComprobante(registro({items:undefined}))).toThrow(ErrorConsultaFamilia)
  })
 })
+
+
+describe('importe textual canónico de ítems del historial', () => {
+  const item = { item_id: 'item', factura_id: 'factura', periodo: '2030-03-01', concepto: 'CUOTA', importe_centavos: '5000000', activa: true }
+  it.each(['PENDIENTE_VERIFICACION', 'APROBADO', 'RECHAZADO'])('parsea el payload canónico %s sin redondear', estado => {
+    const resultado = analizarRegistroComprobante(registro({ estado, items: [{ ...item, activa: estado !== 'RECHAZADO' }] }))
+    expect(resultado.items?.[0]?.importeCentavos).toBe(5000000)
+    expect(resultado.items?.[0]?.activa).toBe(estado !== 'RECHAZADO')
+  })
+  it.each(['0', String(Number.MAX_SAFE_INTEGER)])('acepta límite exacto %s', importe => {
+    expect(analizarRegistroComprobante(registro({ items: [{ ...item, importe_centavos: importe }] })).items?.[0]?.importeCentavos).toBe(Number(importe))
+  })
+  it.each(['9007199254740992', '-1', '1.00', '01', '1e3', ' 1', '', 'NaN', 5000000, null])('rechaza importe no canónico o inseguro %s', importe => {
+    expect(() => analizarRegistroComprobante(registro({ items: [{ ...item, importe_centavos: importe }] }))).toThrow(ErrorConsultaFamilia)
+  })
+})

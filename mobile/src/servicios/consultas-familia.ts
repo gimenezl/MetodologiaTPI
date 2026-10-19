@@ -286,13 +286,21 @@ export function analizarRegistroComprobante(fila: Fila): RegistroComprobante {
   }
 }
 
+/** JSON de SQL conserva estos BIGINT como texto; Number solo después del límite exacto. */
+function centavosItemRegistro(valor: unknown): number {
+  if (typeof valor !== 'string' || !/^(?:0|[1-9]\d*)$/u.test(valor)) throw respuestaInvalida('importe imputado')
+  const exacto = BigInt(valor)
+  if (exacto > BigInt(Number.MAX_SAFE_INTEGER)) throw respuestaInvalida('importe imputado fuera de rango')
+  return Number(exacto)
+}
+
 function analizarItemsRegistro(valor: unknown): NonNullable<RegistroComprobante['items']> {
   if (!Array.isArray(valor)) throw respuestaInvalida('ítems del historial')
   return valor.map(i => {
     if (!i || typeof i !== 'object' || typeof i.activa !== 'boolean') throw respuestaInvalida('ítem del historial')
     return { itemId: texto(i.item_id,'ítem'), facturaId:texto(i.factura_id,'factura'),
       periodo:fechaDia(i.periodo,'período'), concepto:texto(i.concepto,'concepto'),
-      importeCentavos:centavos(i.importe_centavos,'imputado'),activa:i.activa }
+      importeCentavos:centavosItemRegistro(i.importe_centavos),activa:i.activa }
   })
 }
 
