@@ -134,14 +134,16 @@ exit ${exit}`
       })
       assert.equal(result.status, exit, result.stderr)
       const calls = readFileSync(trace, 'utf8').trim().split(/\r?\n/u)
-      assert.equal(calls.length, exit === 0 ? 2 : 1)
+      assert.equal(calls.length, exit === 0 ? 3 : 1)
       for (const [index, call] of calls.entries()) {
         assert.match(call, /--debug-output .*--flatten-debug-output --test-output-dir/u)
-        assert.match(call, index === 0 ? /smoke-ios.yaml/u : /recuperacion-ios.yaml/u)
+        assert.match(call, [/smoke-ios.yaml/u, /recuperacion-ios.yaml/u, /recibos-ios.yaml/u][index])
       }
       assert.ok(existsSync(join(directory, 'evidencia-movil-ios/smoke-debug/maestro.log')))
       assert.ok(existsSync(join(directory, 'evidencia-movil-ios/smoke-diagnostico.txt')))
       assert.equal(existsSync(join(directory, 'evidencia-movil-ios/recuperacion-debug/maestro.log')), exit === 0)
+      assert.equal(existsSync(join(directory, 'evidencia-movil-ios/recibos-debug/maestro.log')), exit === 0)
+      assert.equal(existsSync(join(directory, 'evidencia-movil-ios/recibos-diagnostico.txt')), exit === 0)
     } finally {
       rmSync(directory, { recursive: true, force: true })
     }

@@ -23,7 +23,7 @@ function ejecutar(command, args) {
 }
 
 export function recopilar({ directory, derived, udid, flujo = 'final', run = ejecutar }) {
-  if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu.test(udid) || !/^(?:smoke|recuperacion|final)$/u.test(flujo)) {
+  if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu.test(udid) || !/^(?:smoke|recuperacion|recibos|final)$/u.test(flujo)) {
     throw new Error('Identidad de simulador o flujo inválida; no se capturan recursos desconocidos.')
   }
   const logs = archivos(directory).filter((path) => path.endsWith('.log') && lstatSync(path).size <= 2097152)

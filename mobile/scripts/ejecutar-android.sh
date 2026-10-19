@@ -46,6 +46,11 @@ if [ "$estado" -eq 0 ]; then
   estado=$?
 fi
 if [ "$estado" -eq 0 ]; then
+  stage android-maestro-recibos 180 maestro test --format junit --output "$SALIDA/maestro-recibos.xml" \
+    --test-output-dir "$SALIDA/maestro-recibos" mobile/maestro/recibos.yaml
+  estado=$?
+fi
+if [ "$estado" -eq 0 ]; then
   # EPT-106: recuperación y cambio de contraseña con correo y enlace reales (Mailpit local).
   bash mobile/scripts/recuperacion-android.sh "$SALIDA"
   estado=$?

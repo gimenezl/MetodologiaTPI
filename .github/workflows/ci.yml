@@ -247,6 +247,7 @@ jobs:
             ${{ runner.temp }}/evidencia-movil-android/maestro-comprobante/
             ${{ runner.temp }}/evidencia-movil-android/maestro-consultas/
             ${{ runner.temp }}/evidencia-movil-android/maestro-consultas-estudiante/
+            ${{ runner.temp }}/evidencia-movil-android/maestro-recibos/
             ${{ runner.temp }}/evidencia-movil-android/maestro-recuperacion-solicitud/
             ${{ runner.temp }}/evidencia-movil-android/maestro-recuperacion-cambio/
           if-no-files-found: warn
@@ -261,6 +262,7 @@ jobs:
     # Android (Linux + Docker): los runners macOS ARM de GitHub no tienen Docker y un Supabase local allí no entra en presupuesto.
     env:
       CI: '1'
+      EPT_MOBILE_RECIBOS_NATIVE_QA: '1'
       DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
       EXPO_PUBLIC_SUPABASE_URL: https://placeholder-pruebas.supabase.co
       EXPO_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-solo-para-pruebas

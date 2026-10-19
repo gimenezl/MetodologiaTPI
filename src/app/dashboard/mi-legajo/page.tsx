@@ -1,3 +1,4 @@
+import { HistorialPagos, type FiltrosHistorial } from '@/components/recibos/HistorialPagos'
 import type { Metadata } from 'next'
 import { Lock, Student, WarningCircle } from '@phosphor-icons/react/dist/ssr'
 import { EnlaceBoton } from '@/components/ui/EnlaceBoton'
@@ -19,7 +20,7 @@ export const dynamic = 'force-dynamic'
  * estudiante no puede consultar el legajo de otro ni inferir que exista, ni
  * siquiera manipulando la petición: no hay parámetro que manipular.
  */
-export default async function MiLegajoPage() {
+export default async function MiLegajoPage({searchParams}:{searchParams:Promise<FiltrosHistorial>}) {
   const sesion = await requerirSesion()
 
   if (!sesion.autorizado) {
@@ -96,6 +97,7 @@ export default async function MiLegajoPage() {
         errorHistorial={historial.ok ? undefined : historial.mensaje}
         rutaReintento="/dashboard/mi-legajo"
       />
+      <HistorialPagos alumnos={[{id:alumno.id,nombre:alumno.nombre}]} filtros={await searchParams} ruta="/dashboard/mi-legajo" estudiante />
       <p className="text-xs text-neutral-400 text-center">
         Si algún dato no es correcto, comunicate con la administración del centro
         educativo.

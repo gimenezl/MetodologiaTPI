@@ -32,6 +32,7 @@ export interface PagoPendienteVista {
   numeroOperacion: string | null
   archivos: ArchivoComprobante[]
   estado: 'PENDIENTE_VERIFICACION' | 'APROBADO' | 'RECHAZADO'
+  reciboId: string | null
   motivoRechazo: string | null
   items: Array<{ itemId: string; facturaId: string; periodo: string; tipo: string; importe: string }>
 }
@@ -80,7 +81,7 @@ export async function obtenerPagosPendientes(pagina = 1, pagoId?: string): Promi
     const idsPago = visibles.map((p) => p.id)
     const idsAlumno = [...new Set(visibles.map((p) => p.alumno_id))]
 
-    const [archivos, alumnos, imputaciones] = await Promise.all([
+    const [archivos, alumnos, imputaciones, recibos] = await Promise.all([
       leerTodasLasFilas<ArchivoFila>((desde, hasta) => supabase
         .from('comprobantes_pago')
         .select('id, pago_id, tipo_mime, tamano_bytes, creado_en')
@@ -93,7 +94,9 @@ export async function obtenerPagosPendientes(pagina = 1, pagoId?: string): Promi
           .in('pago_id', idsPago).order('pago_id').order('item_factura_id').range(desde, hasta)
         return { error: r.error, data: r.data?.map(x => ({ ...x, id: `${x.pago_id}:${x.item_factura_id}` })) ?? null }
       }),
+      supabase.from('recibos').select('id,pago_id').in('pago_id',idsPago),
     ])
+    if (recibos.error) return { ok: false, mensaje: MENSAJE_FALLA }
     if (!archivos.ok || alumnos.error || !imputaciones.ok) return { ok: false, mensaje: MENSAJE_FALLA }
 
     const porItems = new Map<string, PagoPendienteVista['items']>()
@@ -134,6 +137,7 @@ export async function obtenerPagosPendientes(pagina = 1, pagoId?: string): Promi
           numeroOperacion: p.numero_operacion,
           archivos: porPago.get(p.id) ?? [],
           estado: p.estado,
+          reciboId: recibos.data?.find(r=>r.pago_id===p.id)?.id ?? null,
           motivoRechazo: p.motivo_rechazo,
           items: porItems.get(p.id) ?? [],
         })),

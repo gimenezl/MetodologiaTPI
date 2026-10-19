@@ -3251,6 +3251,7 @@ export type Database = {
         Args: { p_clave_intento: string }
         Returns: Json
       }
+      consultar_recibo: { Args: { p_recibo_id: string }; Returns: Json }
       consultar_registro_comprobantes: {
         Args: {
           p_alumno_id: string
@@ -3264,10 +3265,14 @@ export type Database = {
           estado: string
           fecha_transferencia: string
           importe_informado_centavos: number
+          items: Json
+          motivo_rechazo: string
           pago_id: string
           periodos: string[]
+          recibo_id: string
           total_calculado_centavos: number
           ultima_carga_en: string
+          verificado_en: string
         }[]
       }
       consultar_usuario: {
@@ -3852,6 +3857,7 @@ export type Database = {
         Args: { p_alumno_id: string; p_curso_id: string }
         Returns: string
       }
+      recuperar_recibo: { Args: { p_pago_id: string }; Returns: string }
       registrar_acceso_servicio: {
         Args: {
           p_actor_user_id: string

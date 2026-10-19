@@ -250,6 +250,10 @@ export interface RegistroComprobante {
   ultimaCarga: string | null
   /** Todos los períodos de factura que toca el pago. */
   periodos: string[]
+  items?: { itemId: string; facturaId: string; periodo: string; concepto: string; importeCentavos: number; activa: boolean }[]
+  reciboId?: string | null
+  verificadoEn?: string | null
+  motivoRechazo?: string | null
 }
 
 const ESTADOS_PAGO: ReadonlySet<string> = new Set<EstadoPagoRegistro>(['PENDIENTE_VERIFICACION', 'APROBADO', 'RECHAZADO'])
@@ -275,7 +279,21 @@ export function analizarRegistroComprobante(fila: Fila): RegistroComprobante {
     cantidadArchivos: archivos,
     ultimaCarga: ultima === null ? null : fechaArgentina(ultima),
     periodos: fila.periodos.map(p => fechaDia(p, 'período del pago')),
+    items: analizarItemsRegistro(fila.items),
+    reciboId: textoOpcional(fila.recibo_id, 'recibo'),
+    verificadoEn: textoOpcional(fila.verificado_en, 'verificación'),
+    motivoRechazo: textoOpcional(fila.motivo_rechazo, 'motivo'),
   }
+}
+
+function analizarItemsRegistro(valor: unknown): NonNullable<RegistroComprobante['items']> {
+  if (!Array.isArray(valor)) throw respuestaInvalida('ítems del historial')
+  return valor.map(i => {
+    if (!i || typeof i !== 'object' || typeof i.activa !== 'boolean') throw respuestaInvalida('ítem del historial')
+    return { itemId: texto(i.item_id,'ítem'), facturaId:texto(i.factura_id,'factura'),
+      periodo:fechaDia(i.periodo,'período'), concepto:texto(i.concepto,'concepto'),
+      importeCentavos:centavos(i.importe_centavos,'imputado'),activa:i.activa }
+  })
 }
 
 // ---- Llamadas ------------------------------------------------------------------------------------------
@@ -333,15 +351,22 @@ export async function consultarRegistroComprobantes(
   rango: RangoValidado,
   senal?: AbortSignal,
 ): Promise<RegistroComprobante[]> {
-  const consulta = cliente.rpc('consultar_registro_comprobantes', {
-    p_alumno_id: alumnoId,
-    p_criterio: criterio,
-    p_desde: rango.desde,
-    p_hasta: rango.hasta,
-  })
-  const { data, error } = await (senal ? consulta.abortSignal(senal) : consulta)
-  if (error) throw clasificar(error)
-  return filas(data).map(analizarRegistroComprobante)
+  const resultado: RegistroComprobante[] = []
+  const vistos = new Set<string>()
+  for (let desde=0; ; desde+=200) {
+    const consulta = cliente.rpc('consultar_registro_comprobantes', {
+      p_alumno_id: alumnoId, p_criterio: criterio, p_desde: rango.desde, p_hasta: rango.hasta,
+    }).range(desde,desde+199)
+    const {data,error}=await (senal ? consulta.abortSignal(senal) : consulta)
+    if(error) throw clasificar(error)
+    const pagina=filas(data).map(analizarRegistroComprobante)
+    for(const r of pagina) {
+      if(vistos.has(r.pagoId)) throw new ErrorConsultaFamilia('respuesta','El historial cambió durante la consulta. Consulta nuevamente.')
+      vistos.add(r.pagoId);resultado.push(r)
+    }
+    if(pagina.length<200) return resultado
+    if(senal?.aborted) throw new ErrorConsultaFamilia('red',MENSAJE_RED)
+  }
 }
 
 // ---- Presentación --------------------------------------------------------------------------------------

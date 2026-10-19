@@ -3,6 +3,7 @@ import { AppState, Linking, ScrollView, Text, View } from 'react-native'
 
 import { Aviso, Boton, CampoTexto, EstadoPantalla, Formulario, MarcoPantalla, PantallaConVolver, Tarjeta } from '@/catalogo'
 import { entornoDelBundle } from '@/configuracion/entorno'
+import { limpiarRecibosTemporales } from '@/servicios/recibos'
 import { obtenerTransporteApi } from '@/servicios/api'
 import { crearAlmacenamientoSeguro } from '@/servicios/almacenamiento-seguro'
 import { crearSelectorArchivos } from '@/servicios/selector-archivos'
@@ -32,16 +33,18 @@ function alumnosDeConsulta(datos: DatosRol, etiquetaPropia: string): { id: strin
 
 export interface AccesoContenedorProps {
   /** Abre la solicitud del correo de recuperación (ruta propia con su navegación nativa). */
+  alVerificarRecibo?: () => void
   alRecuperarContrasena?: () => void
 }
 
-export function AccesoContenedor({ alRecuperarContrasena }: AccesoContenedorProps = {}): ReactElement {
+export function AccesoContenedor({ alRecuperarContrasena, alVerificarRecibo }: AccesoContenedorProps = {}): ReactElement {
   const entorno = useMemo(() => entornoDelBundle(), [])
   const cliente = useMemo(() => entorno.ok ? obtenerClienteSupabase() : null, [entorno])
   const [estadoReal, setEstadoReal] = useState<EstadoAutenticacion>(INICIAL)
   const [ultimaAutenticada, setUltimaAutenticada] = useState<Extract<EstadoAutenticacion, { tipo: 'autenticada' }> | null>(null)
   // Un refresco de token del mismo usuario no desmonta la pantalla: ver `estadoVisible`.
   const estado = estadoVisible(estadoReal, ultimaAutenticada)
+  useEffect(()=>{try{limpiarRecibosTemporales()}catch{/* Se reintenta antes de descargar. */}},[estadoReal.tipo])
   const [correo, setCorreo] = useState('')
   const [contrasena, setContrasena] = useState('')
   const [errorIngreso, setErrorIngreso] = useState<string>()
@@ -310,7 +313,8 @@ export function AccesoContenedor({ alRecuperarContrasena }: AccesoContenedorProp
               </PantallaConVolver>
             </>
           )}
-        </Formulario>
+        {alVerificarRecibo ? <Boton etiqueta="Verificar PDF nativo" variante="enlace" onPress={alVerificarRecibo}/> : null}
+      </Formulario>
       </MarcoPantalla>
     )
   }
@@ -325,6 +329,7 @@ export function AccesoContenedor({ alRecuperarContrasena }: AccesoContenedorProp
         {alRecuperarContrasena ? (
           <Boton etiqueta="¿Olvidaste tu contraseña?" variante="enlace" testID="olvide-contrasena" onPress={alRecuperarContrasena} deshabilitado={enviando} />
         ) : null}
+      {alVerificarRecibo ? <Boton etiqueta="Verificar PDF nativo" variante="enlace" onPress={alVerificarRecibo}/> : null}
       </Formulario>
       <View style={{ height: espacio.md }} />
     </MarcoPantalla>

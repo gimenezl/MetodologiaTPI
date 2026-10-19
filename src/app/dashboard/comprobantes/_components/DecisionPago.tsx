@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
 import { verificacionPagoSchema, type DecisionPago as Decision, type VerificacionPago } from '@/lib/comprobantes-verificacion'
 
@@ -9,6 +10,7 @@ const BOTON = 'min-h-11 rounded-xl border border-neutral-300 px-4 py-2 text-sm f
 export function DecisionPago({ pagoId, habilitado, estadoInicial, motivoInicial }: {
   pagoId: string; habilitado: boolean; estadoInicial: VerificacionPago['estado']; motivoInicial: string | null
 }) {
+  const router=useRouter()
   const [estado, setEstado] = useState(estadoInicial)
   const [motivoFinal, setMotivoFinal] = useState(motivoInicial)
   const [decision, setDecision] = useState<Decision['decision'] | null>(null)
@@ -23,6 +25,7 @@ export function DecisionPago({ pagoId, habilitado, estadoInicial, motivoInicial 
   const aplicar = (valor: unknown) => {
     const parsed = verificacionPagoSchema.safeParse(valor)
     if (!parsed.success || parsed.data.pago_id !== pagoId) throw new Error('respuesta inválida')
+    if(parsed.data.estado==='APROBADO')router.refresh()
     setEstado(parsed.data.estado)
     setMotivoFinal(parsed.data.motivo_rechazo)
     setDecision(null)

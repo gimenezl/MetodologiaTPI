@@ -21,6 +21,7 @@ async function restaurar() {
   await Promise.all([a, b, r].map(s => s.ejecutar('ROLLBACK; RESET ROLE;', 'restaurar')))
   await Promise.allSettled(pendientes.splice(0))
   await c.ejecutar(`BEGIN;
+    DELETE FROM public.recibos WHERE pago_id IN(SELECT id FROM public.pagos WHERE alumno_id='${A.alumno}');
     DELETE FROM public.comprobantes_pago WHERE pago_id IN(SELECT id FROM public.pagos WHERE alumno_id='${A.alumno}');
     DELETE FROM public.cargas_comprobante WHERE pago_id IN(SELECT id FROM public.pagos WHERE alumno_id='${A.alumno}');
     DELETE FROM public.imputaciones_pago WHERE alumno_id='${A.alumno}';

@@ -169,6 +169,7 @@ export function PeriodoContenedor({
 
   return (
     <PeriodoVista
+      cliente={cliente}
       alumnos={alumnos}
       alumnoId={alumnoId}
       mostrarSelector={mostrarSelector}

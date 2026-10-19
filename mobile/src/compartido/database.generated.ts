@@ -1,5 +1,5 @@
 // GENERADO por mobile/scripts/sync-compartido.mjs desde src/types/database.generated.ts. No editar a mano.
-// sha256 de la fuente: b6b76f0d1db3246fa29383ba1eecea45ffa1f8aaaba275e1f8cda5b35ef6aff7
+// sha256 de la fuente: ae8f66282a0396abbf8e017207156bdc5b9beac7c107081d1a4c6b32b889afdb
 export type Json =
   | string
   | number
@@ -3253,6 +3253,7 @@ export type Database = {
         Args: { p_clave_intento: string }
         Returns: Json
       }
+      consultar_recibo: { Args: { p_recibo_id: string }; Returns: Json }
       consultar_registro_comprobantes: {
         Args: {
           p_alumno_id: string
@@ -3266,10 +3267,14 @@ export type Database = {
           estado: string
           fecha_transferencia: string
           importe_informado_centavos: number
+          items: Json
+          motivo_rechazo: string
           pago_id: string
           periodos: string[]
+          recibo_id: string
           total_calculado_centavos: number
           ultima_carga_en: string
+          verificado_en: string
         }[]
       }
       consultar_usuario: {
@@ -3854,6 +3859,7 @@ export type Database = {
         Args: { p_alumno_id: string; p_curso_id: string }
         Returns: string
       }
+      recuperar_recibo: { Args: { p_pago_id: string }; Returns: string }
       registrar_acceso_servicio: {
         Args: {
           p_actor_user_id: string

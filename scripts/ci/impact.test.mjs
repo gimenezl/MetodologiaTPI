@@ -842,3 +842,15 @@ test('EPT-109: la carga de comprobantes tiene suites, familia UI y etapa de inte
   // El stack del runner ya incluye Storage: sin él no hay carga que probar.
   assert.doesNotMatch(readFileSync('mobile/scripts/supabase-local.mjs', 'utf8'), /--exclude'?,?\s*'[^']*storage-api/u)
 })
+
+test('EPT-113: PDF, historial, SQL, API, carreras y escenarios nativos tienen contratos explícitos',()=>{
+ for(const file of ['src/services/recibos-pdf.ts','src/services/recibos-acciones.ts','src/components/recibos/HistorialPagos.tsx','src/app/api/recibos/[reciboId]/pdf/route.ts']) assert.deepEqual(profile([file]),{db:true,mutations:false,ui:['recibos-historial']},file)
+ for(const nombre of ['recibo-sintetico.pdf','contacto-9-paginas.png','pagina-1.png','pagina-9.png'])assert.deepEqual(profile([`docs/parte3/EPT-113/evidencia/${nombre}`]),{db:false,mutations:false,ui:[]})
+ assert.throws(()=>profile(['docs/parte3/EPT-113/evidencia/desconocido.png']))
+ assert.ok(pureTests.includes('recibos-pdf'))
+ assert.ok(sqlSuites.includes('recibos_esquema.sql'))
+ for(const f of ['recibos_historial.mjs','recibos_concurrencia.mjs'])assert.ok(dbScripts.includes(f))
+ for(const f of ['mobile/src/servicios/recibos.ts','mobile/src/contenedores/consultas/DescargaRecibo.tsx','mobile/app/recibo-prueba.tsx','mobile/maestro/recibos.yaml','mobile/maestro/recibos-ios.yaml'])assert.deepEqual(profile([f]),{db:false,mutations:false,ui:[],mobile:true})
+ assert.match(readFileSync('mobile/scripts/ejecutar-android.sh','utf8'),/android-maestro-recibos 180/u)
+ assert.match(readFileSync('mobile/scripts/ejecutar-ios.sh','utf8'),/recibos-ios\.yaml/u)
+})

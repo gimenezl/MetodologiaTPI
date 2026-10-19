@@ -14,6 +14,9 @@ import {
 import { etiquetaPeriodo, formatearFecha, insigniaDeEstado } from '@/servicios/cuotas'
 import { color, espacio, estiloDeTexto } from '@/tokens'
 
+import type { ClienteEPT } from '@/servicios/supabase'
+import { DescargaRecibo } from './DescargaRecibo'
+
 import type { AlumnoSelector } from '../cuotas/CuotasVista'
 import { SelectorEstudiante } from './SelectorEstudiante'
 
@@ -23,6 +26,7 @@ export type ResultadoLista<T> =
   | { tipo: 'ok'; filas: T[] }
 
 export interface PeriodoVistaProps {
+  cliente?: ClienteEPT
   alumnos: AlumnoSelector[]
   alumnoId: string | null
   mostrarSelector: boolean
@@ -96,7 +100,7 @@ export function TarjetaFacturaPeriodo({ factura }: { factura: FacturaPeriodo }):
   )
 }
 
-export function TarjetaRegistro({ registro }: { registro: RegistroComprobante }): ReactElement {
+export function TarjetaRegistro({ registro, cliente }: { registro: RegistroComprobante; cliente?: ClienteEPT }): ReactElement {
   return (
     <View testID={`comprobante-${registro.pagoId}`}>
       <Tarjeta>
@@ -110,9 +114,15 @@ export function TarjetaRegistro({ registro }: { registro: RegistroComprobante })
         <Dato rotulo="Importe informado">
           {registro.importeInformadoCentavos === null ? 'No informado' : <Importe centavos={registro.importeInformadoCentavos} />}
         </Dato>
-        <Dato rotulo="Total del pago">
+        <Dato rotulo={registro.estado === 'APROBADO' ? 'Importe imputado' : 'Importe seleccionado'}>
           <Importe centavos={registro.totalCalculadoCentavos} />
         </Dato>
+        {registro.importeInformadoCentavos!==null ? <Dato rotulo="Diferencia (informado menos imputado o seleccionado)"><Importe centavos={registro.importeInformadoCentavos-registro.totalCalculadoCentavos}/></Dato> : null}
+        <Text accessibilityRole="header">{registro.estado === 'APROBADO' ? 'Ítems abonados' : 'Ítems seleccionados, no abonados'}</Text>
+        {(registro.items ?? []).map(i=><View key={i.itemId}><Text>{i.concepto} · {etiquetaPeriodo(i.periodo)}</Text><Importe centavos={i.importeCentavos} /><Text>Factura: {i.facturaId}{!i.activa ? ' · Imputación histórica inactiva' : ''}</Text></View>)}
+        {registro.motivoRechazo ? <Text>Motivo del rechazo: {registro.motivoRechazo}</Text> : null}
+        {registro.verificadoEn ? <Text>Verificación: {registro.verificadoEn}</Text> : null}
+        {registro.estado === 'APROBADO' ? (registro.reciboId && cliente ? <DescargaRecibo key={registro.reciboId} cliente={cliente} reciboId={registro.reciboId} /> : <Text>Recibo preparándose. Consulta nuevamente o contacta a Dirección.</Text>) : null}
         <Dato rotulo="Comprobantes">{textoArchivos(registro.cantidadArchivos)}</Dato>
         {registro.ultimaCarga ? <Dato rotulo="Último archivo cargado el">{isoAEntrada(registro.ultimaCarga)}</Dato> : null}
         <Dato rotulo="Facturas que cubre">
@@ -287,7 +297,7 @@ export function PeriodoVista(props: PeriodoVistaProps): ReactElement {
                 : 'Ningún pago tiene una fecha de transferencia informada dentro de las fechas elegidas.',
             }}
             onReintentar={props.onReintentar}
-            render={registro => <TarjetaRegistro key={registro.pagoId} registro={registro} />}
+            render={registro => <TarjetaRegistro key={registro.pagoId} registro={registro} cliente={props.cliente} />}
           />
           <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro600 }]}>
             Solo se muestra el registro de cada comprobante. El archivo original solo lo puede ver quien lo cargó y la Dirección de la institución.

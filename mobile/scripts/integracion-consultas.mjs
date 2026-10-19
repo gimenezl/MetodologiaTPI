@@ -261,8 +261,8 @@ COMMIT;`)
   for (const fila of [...porFactura, ...sinFecha]) {
     assert.deepEqual(Object.keys(fila).sort(), [
       'cantidad_archivos', 'creado_en', 'estado', 'fecha_transferencia', 'importe_informado_centavos',
-      'pago_id', 'periodos', 'total_calculado_centavos', 'ultima_carga_en',
-    ])
+      'pago_id', 'periodos', 'total_calculado_centavos', 'ultima_carga_en', 'items','recibo_id','verificado_en','motivo_rechazo',
+    ].sort())
   }
   for (const actor of [copadre, hijo, a.director]) {
     assert.deepEqual((await reg(actor, hijo, 'PERIODO_FACTURA', '2030-12-01', '2031-01-31')).map(r => r.pago_id), [id.p1])
@@ -312,5 +312,14 @@ COMMIT;`)
   // 10. Nada económico ni de inscripción cambió por consultar.
   assert.equal(huella(), antes, 'Las consultas modificaron datos económicos o inscripciones.')
 
+  // EPT-113. La aceptación la ejecuta Dirección real: aprobación -> identidad única -> lectura del padre/estudiante.
+  const aprobacion=await ctx.rpc(a.director,'verificar_pago',{p_pago_id:id.pM1,p_decision:'APROBADO',p_motivo:null})
+  assert.equal(aprobacion.status,200,JSON.stringify(aprobacion.data))
+  const recibos=await ctx.leer(padreMaestro,`/rest/v1/recibos?select=id,pago_id&pago_id=eq.${id.pM1}`)
+  assert.equal(recibos.status,200);assert.equal(recibos.data.length,1)
+  for(const actor of [padreMaestro,hijoMaestro]) {
+    const fuente=await ctx.rpc(actor,'consultar_recibo',{p_recibo_id:recibos.data[0].id})
+    assert.equal(fuente.status,200);assert.equal(fuente.data.importe_imputado,'50000.00')
+  }
   return { padre: padreMaestro, estudiante: hijoMaestro }
 }

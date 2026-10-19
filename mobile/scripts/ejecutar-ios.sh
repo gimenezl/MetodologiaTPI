@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Inicia un simulador de iPhone, instala la aplicación y recorre el smoke de Maestro (sin backend).
-# El E2E con Auth/RLS reales corre en Android; aquí se prueba que la app nativa iOS arranca y muestra el acceso.
+# El E2E con Auth/RLS reales corre en Android; iOS prueba acceso/recuperación y compartir PDF sintético, sin backend.
 # Uso: bash mobile/scripts/ejecutar-ios.sh <ruta-a-la-app>
 set -euo pipefail
 
@@ -38,6 +38,13 @@ if [ "$estado" -eq 0 ]; then
     --test-output-dir "$SALIDA/maestro-ios-recuperacion" mobile/maestro/recuperacion-ios.yaml
   estado=$?
   node mobile/scripts/diagnostico-ios.mjs "$UDID" recuperacion || true
+fi
+if [ "$estado" -eq 0 ]; then
+  maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-ios-recibos.xml" \
+    --debug-output "$SALIDA/recibos-debug" --flatten-debug-output \
+    --test-output-dir "$SALIDA/maestro-ios-recibos" mobile/maestro/recibos-ios.yaml
+  estado=$?
+  node mobile/scripts/diagnostico-ios.mjs "$UDID" recibos || true
 fi
 set -e
 

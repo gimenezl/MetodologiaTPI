@@ -37,7 +37,7 @@ function registro(extra: Fila = {}): Fila {
   return {
     pago_id: 'p1', estado: 'PENDIENTE_VERIFICACION', fecha_transferencia: '2026-01-05', importe_informado_centavos: 5000000,
     total_calculado_centavos: 5000000, creado_en: '2026-01-04T12:00:00+00:00', cantidad_archivos: 1,
-    ultima_carga_en: '2026-01-06T12:00:00+00:00', periodos: ['2026-01-01'], ...extra,
+    items: [], recibo_id:null, verificado_en:null, motivo_rechazo:null, ultima_carga_en: '2026-01-06T12:00:00+00:00', periodos: ['2026-01-01'], ...extra,
   }
 }
 
@@ -51,6 +51,7 @@ function clienteRpc(respuesta: { data?: unknown; error?: { code?: string; messag
       const llamada: Llamada = { nombre, args }
       llamadas.push(llamada)
       const constructor = {
+        range:()=>constructor,
         abortSignal: (senal: AbortSignal) => { llamada.senal = senal; return constructor },
         then: (resolver: (v: unknown) => unknown, rechazar?: (e: unknown) => unknown) =>
           Promise.resolve({ data: respuesta.data ?? null, error: respuesta.error ?? null }).then(resolver, rechazar),
@@ -157,8 +158,8 @@ describe('análisis de respuestas', () => {
     const ok = analizarRegistroComprobante(registro())
     expect(Object.keys(ok).sort()).toEqual([
       'cantidadArchivos', 'creadoEn', 'estado', 'fechaTransferencia', 'importeInformadoCentavos', 'pagoId',
-      'periodos', 'totalCalculadoCentavos', 'ultimaCarga',
-    ])
+      'periodos', 'totalCalculadoCentavos', 'ultimaCarga', 'items', 'reciboId', 'verificadoEn', 'motivoRechazo',
+    ].sort())
     expect(() => analizarRegistroComprobante(registro({ cantidad_archivos: 0 }))).toThrow(ErrorConsultaFamilia)
     expect(() => analizarRegistroComprobante(registro({ cantidad_archivos: 1, ultima_carga_en: null }))).toThrow(ErrorConsultaFamilia)
     expect(() => analizarRegistroComprobante(registro({ periodos: 'x' }))).toThrow(ErrorConsultaFamilia)
@@ -214,4 +215,16 @@ describe('consultas', () => {
     const { cliente } = clienteRpc({ data: { no: 'lista' } })
     await expect(consultarInscripciones(cliente, 'a1')).rejects.toMatchObject({ causa: 'respuesta' })
   })
+})
+
+describe('historial paginado EPT-113',()=>{
+ it('recorre más de mil registros y propaga rango y señal en cada página',async()=>{
+  const registros=Array.from({length:1006},(_,n)=>registro({pago_id:`p${n}`}));const rangos:number[][]=[];let limite=[0,0]
+  const mock={rpc:()=>{const q={range:(a:number,b:number)=>{limite=[a,b];rangos.push(limite);return q},abortSignal:()=>q,then:(resolver:(v:unknown)=>unknown)=>Promise.resolve({data:registros.slice(limite[0],limite[1]+1),error:null}).then(resolver)};return q}} as unknown as ClienteEPT
+  const res=await consultarRegistroComprobantes(mock,'a1','PERIODO_FACTURA',{desde:'2026-01-01',hasta:'2026-12-31'},new AbortController().signal)
+  expect(res).toHaveLength(1006);expect(rangos).toHaveLength(6);expect(res.at(-1)?.pagoId).toBe('p1005')
+ })
+ it('un contrato sin ítems no se presenta como historial completo',()=>{
+  expect(()=>analizarRegistroComprobante(registro({items:undefined}))).toThrow(ErrorConsultaFamilia)
+ })
 })
