@@ -4,7 +4,7 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { verificarFuente, seleccionarBase, validarCaso } from './experimento-ios.mjs'
+import { verificarFuente, seleccionarBase, validarCaso, requiereBoot } from './experimento-ios.mjs'
 test('solo acepta fuente propia exacta, nunca otro run, head o artifact', () => {
   const run = { id: 39338153901, head_sha: 'b3b82f4983d00540ddfa5cfea078a347e6f8e5b2', status: 'completed' }
   const artifact = { id: 12227059866, workflow_run: { id: run.id }, name: 'movil-ios-6735186e2fe1038d9f89971fbbede47735ee54e1' }
@@ -39,4 +39,17 @@ test('sanitizador real preserva JSON y elimina credenciales del diagnóstico', (
     assert.equal(JSON.parse(data).aceptacion, false)
     assert.doesNotMatch(readFileSync(join(dir, 'host.log'), 'utf8'), /ept113-sintetico/u)
   } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+test('cold services tienen presupuesto medido, observación previa y estado inicial explícito', () => {
+  assert.equal(requiereBoot('Booted'), false)
+  assert.equal(requiereBoot('Shutdown'), true)
+  for (const s of ['Booting', undefined, 'otro']) assert.throws(() => requiereBoot(s))
+  const s = readFileSync('mobile/scripts/experimento-ios.mjs', 'utf8')
+  assert.match(s, /'available', '-j'\], 45000/u)
+  assert.match(s, /'bootstatus', udid, '-b'\], 180000/u)
+  assert.ok(s.indexOf("host = spawn('log'") < s.indexOf("comando('devices'"))
+  assert.ok(s.indexOf('cerrarSim = iniciarCapturaXCTest') < s.indexOf("comando('bootstatus'"))
+  assert.ok(s.indexOf("comando('gui'") < s.indexOf("comando('bootstatus'"))
+  assert.match(s, /metadata.etapas.push\(etapa\); guardar\(\)/u)
+  assert.match(readFileSync('.github/workflows/full.yml', 'utf8'), /--seconds 360/u)
 })

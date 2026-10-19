@@ -19,16 +19,24 @@ export function validarCaso(caso) {
   if (!['baseline', 'gui'].includes(caso)) throw new Error('Caso experimental inválido')
   return caso
 }
+export function requiereBoot(state) {
+  if (state === 'Booted') return false
+  if (state === 'Shutdown') return true
+  throw new Error('Estado inicial no verificable')
+}
 async function ejecutar(caso) {
   validarCaso(caso)
   const temp = process.env.RUNNER_TEMP
   if (!temp) throw new Error('RUNNER_TEMP requerido')
   const salida = join(temp, 'experimento-ios'); mkdirSync(salida, { recursive: true })
-  const metadata = { caso, aceptacion: false, inicio: new Date().toISOString(), runtime: 'iOS-26-2', xcode: '26.5', maestro: '2.11.0', errores: [] }
+  const metadata = { caso, aceptacion: false, inicio: new Date().toISOString(), runtime: 'iOS-26-2', xcode: '26.5', maestro: '2.11.0', errores: [], etapas: [] }
   const guardar = () => writeFileSync(join(salida, 'caso.json'), JSON.stringify(metadata), { mode: 0o600 })
   guardar()
   const comando = (nombre, cmd, args, timeout = 10000) => {
+    const inicio = performance.now(), etapa = { nombre, inicio: new Date().toISOString(), timeout, estado: 'en-curso' }
+    metadata.etapas.push(etapa); guardar()
     const r = spawnSync(cmd, args, { encoding: 'utf8', timeout, maxBuffer: 1048576 })
+    Object.assign(etapa, { duracionMs: performance.now() - inicio, exit: r.status, error: r.error?.code ?? null, estado: r.error || r.status !== 0 ? 'fallo' : 'completa' }); guardar()
     writeFileSync(join(salida, `${nombre}.log`), `${r.stdout ?? ''}\n${r.stderr ?? ''}`, { mode: 0o600 })
     if (r.error || r.status !== 0) throw new Error(`${nombre}: ${r.error?.code ?? r.status}`)
     return r.stdout
@@ -36,33 +44,38 @@ async function ejecutar(caso) {
   let udid, creado = false, cerrarSim, host
   let hostBytes = 0, hostTruncado = false
   try {
-    comando('xcode', 'xcodebuild', ['-version'])
-    comando('arquitectura', 'uname', ['-m'])
-    comando('maestro-version', 'maestro', ['--version'], 20000)
-    const devices = JSON.parse(comando('devices', 'xcrun', ['simctl', 'list', 'devices', 'available', '-j']))
-    udid = seleccionarBase(devices)
-    if (caso === 'gui') {
-      udid = comando('crear', 'xcrun', ['simctl', 'create', 'EPT113-experimento', 'com.apple.CoreSimulator.SimDeviceType.iPhone-16e', 'com.apple.CoreSimulator.SimRuntime.iOS-26-2']).trim()
-      if (!/^[0-9a-f-]{36}$/iu.test(udid)) throw new Error('UDID creado inválido')
-      creado = true
-    }
-    metadata.udid = udid; guardar()
-    comando('boot', 'xcrun', ['simctl', 'boot', udid])
-    comando('bootstatus', 'xcrun', ['simctl', 'bootstatus', udid, '-b'], 90000)
-    if (caso === 'gui') comando('gui', 'open', ['-a', `${process.env.DEVELOPER_DIR}/Applications/Simulator.app`, '--args', '-CurrentDeviceUDID', udid])
-    const apps = readdirSync(join(temp, 'app')).filter(f => f.endsWith('.app'))
-    if (apps.length !== 1) throw new Error('App fuente ambigua')
-    comando('install', 'xcrun', ['simctl', 'install', udid, join(temp, 'app', apps[0])], 30000)
-    cerrarSim = iniciarCapturaXCTest({ directory: salida, udid })
     host = spawn('log', ['stream', '--style', 'compact', '--level', 'info', '--predicate', 'process == "xcodebuild" OR process == "testmanagerd" OR process == "xctestdaemon" OR process == "Simulator" OR process == "CoreSimulatorService"'], { stdio: ['ignore', 'pipe', 'pipe'] })
     const recibir = b => { const libre = 2097152 - hostBytes; if (libre > 0) { appendFileSync(join(salida, 'host.log'), b.subarray(0, libre)); hostBytes += Math.min(libre, b.length) }; if (b.length > libre) { hostTruncado = true; host.kill('SIGTERM') } }
     host.stdout.on('data', recibir); host.stderr.on('data', recibir)
     host.on('error', e => { metadata.errores.push(`host:${e.code}`); guardar() })
+    comando('xcode', 'xcodebuild', ['-version'])
+    comando('arquitectura', 'uname', ['-m'])
+    comando('maestro-version', 'maestro', ['--version'], 20000)
+    const devices = JSON.parse(comando('devices', 'xcrun', ['simctl', 'list', 'devices', 'available', '-j'], 45000))
+    udid = seleccionarBase(devices)
+    let estadoInicial = devices.devices['com.apple.CoreSimulator.SimRuntime.iOS-26-2'].find(d => d.udid === udid).state
+    if (caso === 'gui') {
+      udid = comando('crear', 'xcrun', ['simctl', 'create', 'EPT113-experimento', 'com.apple.CoreSimulator.SimDeviceType.iPhone-16e', 'com.apple.CoreSimulator.SimRuntime.iOS-26-2']).trim()
+      if (!/^[0-9a-f-]{36}$/iu.test(udid)) throw new Error('UDID creado inválido')
+      creado = true; estadoInicial = 'Shutdown'
+    }
+    metadata.udid = udid; guardar()
+    metadata.estadoInicial = estadoInicial; guardar()
+    if (requiereBoot(estadoInicial)) comando('boot', 'xcrun', ['simctl', 'boot', udid], 30000)
+    cerrarSim = iniciarCapturaXCTest({ directory: salida, udid })
+    if (caso === 'gui') comando('gui', 'open', ['-a', `${process.env.DEVELOPER_DIR}/Applications/Simulator.app`, '--args', '-CurrentDeviceUDID', udid])
+    comando('bootstatus', 'xcrun', ['simctl', 'bootstatus', udid, '-b'], 180000)
+    const apps = readdirSync(join(temp, 'app')).filter(f => f.endsWith('.app'))
+    if (apps.length !== 1) throw new Error('App fuente ambigua')
+    comando('install', 'xcrun', ['simctl', 'install', udid, join(temp, 'app', apps[0])], 30000)
+    const inicioMaestro = performance.now(), etapaMaestro = { nombre: 'maestro', estado: 'en-curso', inicio: new Date().toISOString() }
+    metadata.etapas.push(etapaMaestro); guardar()
     const maestro = spawn('maestro', ['--device', udid, 'test', '--format', 'junit', '--output', join(salida, 'smoke.xml'), '--debug-output', join(salida, 'debug'), '--flatten-debug-output', '--test-output-dir', join(salida, 'capturas'), 'mobile/maestro/smoke-ios.yaml'], { stdio: ['ignore', 'pipe', 'pipe'] })
     let bytes = 0
     const log = b => { const libre = 1048576 - bytes; if (libre > 0) appendFileSync(join(salida, 'maestro.log'), b.subarray(0, libre)); bytes += b.length }
     maestro.stdout.on('data', log); maestro.stderr.on('data', log)
     metadata.exit = await new Promise((ok, fail) => { maestro.once('error', fail); maestro.once('close', ok) })
+    Object.assign(etapaMaestro, { estado: metadata.exit === 0 ? 'completa' : 'fallo', exit: metadata.exit, duracionMs: performance.now() - inicioMaestro }); guardar()
     metadata.maestroTruncado = bytes > 1048576
     comando('procesos', 'ps', ['-axo', 'pid=,ppid=,stat=,comm='])
     comando('launchctl', 'xcrun', ['simctl', 'spawn', udid, 'launchctl', 'list'])
