@@ -13,6 +13,21 @@ import { validateMobileWorkflow } from './mobile.mjs'
 import { sqlSuites, sqlRole, dbScripts, fullScripts, supportFiles, excludedFiles, validateRegistry } from './suites.mjs'
 import { families, uiFiles, validateUiRegistry, fullProjects } from './ui.mjs'
 
+test('EPT-112: cinco reportes conservan contratos reales, pruebas puras y familia académica', () => {
+  for (const file of ['src/lib/reportes-economicos.ts', 'src/services/reportes-economicos.service.ts',
+    'src/app/api/reportes/economicos/[reporte]/route.ts', 'src/app/dashboard/reportes/economicos/[reporte]/page.tsx']) {
+    assert.deepEqual(profile([file]), { db: true, mutations: false, ui: ['reportes'] })
+  }
+  assert.ok(sqlSuites.includes('reportes_economicos_rls.sql'))
+  assert.ok(dbScripts.includes('reportes_economicos.mjs'))
+  assert.ok(supportFiles.includes('_reportes-economicos-fixture.mjs'))
+  assert.ok(pureTests.includes('reportes-economicos-lib'))
+  assert.ok(families.reportes.includes('reportes-economicos-auth'))
+  assert.ok(families.reportes.includes('reportes-auth') && families.reportes.includes('reportes'))
+  assert.match(readFileSync('tests/reportes-economicos-auth.spec.ts', 'utf8'), /reportes_economicos\.mjs.*--ui/u)
+  assert.deepEqual(profile(['src/types/database.generated.ts']), { db: true, mutations: false, ui: ['core'], mobile: true })
+})
+
 test('EPT-111: verificación económica exige contratos reales, familia comprobantes y tipos móviles', () => {
   for (const file of ['src/lib/comprobantes-verificacion.ts', 'src/services/comprobantes-verificacion.service.ts',
     'src/app/api/comprobantes/pagos/[pagoId]/verificacion/route.ts',

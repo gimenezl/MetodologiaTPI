@@ -9,7 +9,7 @@ export const sqlSuites = [
   'economico_rls.sql', 'horarios_academicos_rls.sql', 'horarios_rls.sql',
   'inscripcion_hijos_rls.sql', 'inscripciones_administracion_rls.sql',
   'inscripciones_legadas_contraccion_rls.sql', 'materias_rls.sql', 'niveles_rls.sql',
-  'pagos_seleccion_rls.sql', 'perfiles_privacidad_rls.sql', 'profesores_rls.sql', 'reportes_oficiales_rls.sql',
+  'pagos_seleccion_rls.sql', 'perfiles_privacidad_rls.sql', 'profesores_rls.sql', 'reportes_oficiales_rls.sql', 'reportes_economicos_rls.sql',
   'tarifas_administracion_rls.sql', 'transporte_rls.sql',
   'usuarios_alta_atomica.sql', 'usuarios_permisos_rls.sql',
 ]
@@ -17,7 +17,7 @@ export const dbScripts = [
   'accesos_servicios_concurrencia.mjs', 'alumnos_academicos_concurrencia.mjs',
   'asistencias_revocaciones_concurrencia.mjs', 'comedor_concurrencia.mjs',
   'comprobantes_carga.mjs', 'comprobantes_concurrencia.mjs',
-  'comprobantes_verificacion.mjs', 'comprobantes_verificacion_concurrencia.mjs',
+  'reportes_economicos.mjs', 'comprobantes_verificacion.mjs', 'comprobantes_verificacion_concurrencia.mjs',
   'credenciales_qr_concurrencia.mjs', 'deportes_administracion_concurrencia.mjs',
   'deportes_concurrencia.mjs', 'economico_concurrencia.mjs', 'economico_storage.mjs',
   'facturacion.mjs', 'facturacion-concurrencia.mjs', 'facturacion-api.mjs', 'facturacion-progreso.mjs',
@@ -31,7 +31,7 @@ export const dbScripts = [
 ]
 export const fullScripts = ['facturacion-mutaciones.mjs', 'correr-autenticadas.mjs']
 export const supportFiles = ['_arnes-ept59.mjs', '_arnes-produccion.mjs',
-  '_facturacion-fixture.mjs', '_sesion-psql.mjs', '_verificacion-fixture.mjs']
+  '_facturacion-fixture.mjs', '_sesion-psql.mjs', '_verificacion-fixture.mjs', '_reportes-economicos-fixture.mjs']
 // Procedimientos históricos, de carga, setup o producción: requieren una ejecución específica revisada.
 export const excludedFiles = [
   'inscripciones_legadas_expansion_rls.sql', 'preflight_ept59.sql', 'preflight_ept66.sql',

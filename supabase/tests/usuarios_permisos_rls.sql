@@ -553,6 +553,7 @@ BEGIN
     PERFORM pg_temp.rpc('public.agregar_horario_grupo_deportivo', 'x', pg_catalog.format('public.agregar_horario_grupo_deportivo(%L, 4::smallint, %L, %L)', GR, '10:00', '11:00'));
     PERFORM pg_temp.rpc('public.asignar_materia_curso', 'x', pg_catalog.format('public.asignar_materia_curso(%s, %L, %L)', MAT, C2, DOC));
     PERFORM pg_temp.rpc('public.calcular_porcentaje_asistencia', 'v', pg_catalog.format('public.calcular_porcentaje_asistencia(%L)', EST));
+    PERFORM pg_temp.rpc('public.reporte_economico', 'v', pg_catalog.format('public.reporte_economico(%L,%L,%L)', 'ingresos', '2030-01-01', '2030-12-31'));
     -- EPT-63: reportes oficiales (solo Dirección habilitada; el resto recibe 42501).
     PERFORM pg_temp.rpc('public.catalogos_reportes', 'v', 'public.catalogos_reportes()');
     PERFORM pg_temp.rpc('public.reporte_alumnos_curso', 'n', 'public.reporte_alumnos_curso()');

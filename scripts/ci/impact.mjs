@@ -7,7 +7,7 @@ import { ept96Paths, validateEpt96Assets } from './ept96-assets.mjs'
 import { families, aliases, validateUiRegistry } from './ui.mjs'
 import { requireMobileContract, touchesMobile, validateMobileWorkflowFile } from './mobile.mjs'
 
-export const pureTests = ['tarifas-lib', 'asistencias-lib', 'reportes-lib', 'paginacion',
+export const pureTests = ['tarifas-lib', 'asistencias-lib', 'reportes-lib', 'reportes-economicos-lib', 'paginacion',
   'paginacion-paralela', 'inscripciones-legadas-lib', 'accesos-qr-cripto',
   'credenciales-qr-cripto', 'semantica-estatica', 'accesos-qr-servicio', 'redireccion-login',
   'comprobantes-lib', 'comprobantes-servicio']
