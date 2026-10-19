@@ -1,6 +1,12 @@
 name: Matriz completa
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Matriz de aceptación o experimento EPT-113 sin aceptación'
+        type: choice
+        options: [full, ept113-ios-diagnostico]
+        default: full
   schedule:
     - cron: '0 6 * * 0'
 permissions:
@@ -9,12 +15,30 @@ concurrency:
   group: full-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  mode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    outputs:
+      mode: ${{ steps.mode.outputs.mode }}
+    steps:
+      - id: mode
+        env:
+          MODE: ${{ inputs.mode }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = schedule ]; then MODE=full; fi
+          case "$MODE" in full|ept113-ios-diagnostico) ;; *) exit 1 ;; esac
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
   database:
+    needs: mode
+    if: needs.mode.outputs.mode == 'full'
     uses: ./.github/workflows/local-tests.yml
     with:
       kind: db
       mutations: true
   ui:
+    needs: mode
+    if: needs.mode.outputs.mode == 'full'
     strategy:
       fail-fast: true
       max-parallel: 4
@@ -26,11 +50,63 @@ jobs:
       project: ${{ matrix.project }}
   gate:
     name: Matriz completa / gate
-    if: always()
-    needs: [database, ui]
+    if: always() && needs.mode.outputs.mode == 'full'
+    needs: [mode, database, ui]
     runs-on: ubuntu-latest
     steps:
       - env:
           DATABASE: ${{ needs.database.result }}
           UI: ${{ needs.ui.result }}
         run: test "$DATABASE" = success && test "$UI" = success
+  ios-diagnostico:
+    name: Experimento EPT-113, NO aceptación (${{ matrix.case }})
+    needs: mode
+    if: needs.mode.outputs.mode == 'ept113-ios-diagnostico'
+    runs-on: macos-26
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [baseline, gui]
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
+      MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'
+      MAESTRO_CLI_NO_ANALYTICS: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verificar y reutilizar únicamente app del candidato conocido
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/gimenezl/MetodologiaTPI/actions/runs/39338153901 > "$RUNNER_TEMP/run.json"
+          gh api repos/gimenezl/MetodologiaTPI/actions/artifacts/12227059866 > "$RUNNER_TEMP/artifact.json"
+          node mobile/scripts/experimento-ios.mjs verificar "$RUNNER_TEMP/run.json" "$RUNNER_TEMP/artifact.json"
+          gh run download 39338153901 --name movil-ios-6735186e2fe1038d9f89971fbbede47735ee54e1 --dir "$RUNNER_TEMP/fuente-ios"
+          echo 'd281a4808a1b160c8d3d85d443e58ac7bbf3b9f1a4688237e561c674b5e65c49  '"$RUNNER_TEMP/fuente-ios/aplicacion-ios-simulador.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/fuente-ios/aplicacion-ios-simulador.zip" -d "$RUNNER_TEMP/app"
+      - name: Instalar Maestro exacto, sin recompilar aplicación
+        run: |
+          curl --connect-timeout 10 --max-time 60 -fsSL -o "$RUNNER_TEMP/maestro.zip" https://github.com/mobile-dev-inc/maestro/releases/download/cli-2.11.0/maestro.zip
+          echo "5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a  $RUNNER_TEMP/maestro.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
+      - name: Un caso causal acotado, sin backend
+        env:
+          CASE: ${{ matrix.case }}
+        run: python3 scripts/ci/run-stage.py --stage ios-experimento --seconds 360 -- node mobile/scripts/experimento-ios.mjs "$CASE"
+      - name: Sanear evidencia, sin publicación alternativa
+        if: always()
+        id: sanitize
+        run: python3 scripts/ci/run-stage.py --sanitize-directory "$RUNNER_TEMP/experimento-ios"
+      - name: Publicar diagnóstico NO aceptación
+        if: always() && steps.sanitize.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: experimento-ios-${{ matrix.case }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/experimento-ios/
+          retention-days: 7
