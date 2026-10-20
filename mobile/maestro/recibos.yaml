@@ -31,6 +31,8 @@ name: Recibo institucional, descarga Bearer y compartir nativo contra backend re
     element:
       id: 'periodo-hasta'
     direction: DOWN
+    speed: 80
+    visibilityPercentage: 100
     timeout: 15000
 - tapOn:
     id: 'periodo-hasta'
@@ -41,6 +43,8 @@ name: Recibo institucional, descarga Bearer y compartir nativo contra backend re
     element:
       id: 'periodo-consultar'
     direction: DOWN
+    speed: 80
+    visibilityPercentage: 100
     timeout: 15000
 - tapOn:
     id: 'periodo-consultar'
@@ -48,6 +52,8 @@ name: Recibo institucional, descarga Bearer y compartir nativo contra backend re
     element:
       id: 'recibo-descargar'
     direction: DOWN
+    speed: 80
+    visibilityPercentage: 100
     timeout: 20000
 - tapOn:
     id: 'recibo-descargar'

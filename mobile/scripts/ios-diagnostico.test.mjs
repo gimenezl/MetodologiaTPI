@@ -277,6 +277,24 @@ test('scroll UP de Hasta preserva visibilidad completa, plazo y asserts con cade
   assert.match(rango, /- assertVisible: 'La fecha desde no puede ser posterior a la fecha hasta.'/u)
   assert.equal((flow.match(/speed: 80/gu) ?? []).length, 1)
 })
+test('recibo real conserva tres desplazamientos completos con cadencia medida, plazos y aserciones', () => {
+  const flow = readFileSync(join(root, 'mobile/maestro/recibos.yaml'), 'utf8')
+  const scrolls = [...flow.matchAll(/- scrollUntilVisible:\n(?<config>(?: {4,}.+\n)+)/gu)]
+  assert.equal(scrolls.length, 3)
+  for (const [index, [id, timeout]] of [['periodo-hasta', 15000], ['periodo-consultar', 15000], ['recibo-descargar', 20000]].entries()) {
+    const config = scrolls[index].groups.config
+    assert.ok(config.includes(`id: '${id}'`))
+    assert.match(config, /direction: DOWN\n    speed: 80\n    visibilityPercentage: 100/u)
+    assert.ok(config.includes(`timeout: ${timeout}\n`))
+  }
+  assert.equal((flow.match(/speed: 80/gu) ?? []).length, 3)
+  assert.match(flow, /launchApp:\n    clearState: true/u)
+  assert.match(flow, /- tapOn:\n    id: 'recibo-descargar'/u)
+  assert.match(flow, /- extendedWaitUntil:\n    visible: 'Guardar o compartir recibo institucional'\n    timeout: 60000/u)
+  assert.match(flow, /- takeScreenshot: recibo-menu-nativo\n- back\n- extendedWaitUntil:\n    visible: 'Menú de descarga cerrado\. Temporal eliminado\.'\n    timeout: 15000/u)
+  assert.match(flow, /- takeScreenshot: recibo-temporal-eliminado/u)
+  assert.doesNotMatch(flow, /optional: true|retry:|retryTapIfNoChange:/u)
+})
 test('presupuesto UI medido no cambia DB, full ni fallback', () => {
   const yml = readFileSync(join(root, '.github/workflows/local-tests.yml'), 'utf8')
   const expression = yml.match(/timeout-minutes: \$\{\{ (.+) \}\}/u)?.[1]
