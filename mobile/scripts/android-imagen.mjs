@@ -59,8 +59,18 @@ export function prepararImagen({ sdk, temp, ejecutar = spawnSync, ahora = () => 
     const source = join(dirname(dirname(manager)), 'source.properties')
     metadata.versionHerramienta = existsSync(source) ? readFileSync(source, 'utf8').match(/^Pkg.Revision\s*=\s*(.+)$/mu)?.[1]?.trim() ?? 'no-disponible' : 'no-disponible'
     const help = run(['--help'], process.env)
-    writeFileSync(join(evidencia, 'sdkmanager-help.log'), `${help.stdout ?? ''}\n${help.stderr ?? ''}`, { mode: 0o600 })
-    if (help.error || help.status !== 0 || !['--sdk_root', '--list_installed', '--verbose'].every(flag => `${help.stdout ?? ''}${help.stderr ?? ''}`.includes(flag))) throw new Error('Ayuda de sdkmanager no confirma el contrato requerido')
+    const textoAyuda = `${help.stdout ?? ''}\n${help.stderr ?? ''}`
+    metadata.ayuda = { exit: help.status, error: help.error?.code ?? null }
+    writeFileSync(join(evidencia, 'sdkmanager-help.log'), `${JSON.stringify(metadata.ayuda)}\n${textoAyuda}`, { mode: 0o600 })
+    // SDK12 imprime Usage y sale1 ante --help (ShowUsageException), no ante una instalación.
+    if (help.error || ![0, 1].includes(help.status) || !/^\s*Usage:/mu.test(textoAyuda) ||
+      /\b(?:Fatal\b|Error:|Exception\b|Could not|Failed to|UnsupportedClassVersionError|NoClassDefFoundError)/iu.test(textoAyuda) ||
+      !['--sdk_root', '--list_installed', '--verbose'].every(flag => textoAyuda.includes(flag))) throw new Error('Ayuda de sdkmanager no confirma el contrato requerido')
+    const version = run(['--version'], process.env)
+    metadata.versionEjecutable = version.stdout?.trim()
+    metadata.consultaVersion = { exit: version.status, error: version.error?.code ?? null }
+    writeFileSync(join(evidencia, 'sdkmanager-version.log'), `${JSON.stringify(metadata.consultaVersion)}\n${version.stdout ?? ''}\n${version.stderr ?? ''}`.slice(0, 65536), { mode: 0o600 })
+    if (version.error || version.status !== 0 || !/^\d+(?:\.\d+){1,3}$/u.test(metadata.versionEjecutable ?? '')) throw new Error('Versión ejecutable de sdkmanager no verificable')
     guardar()
     const target = join(root, ...partes)
     if (existsSync(target)) {

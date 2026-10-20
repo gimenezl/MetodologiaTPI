@@ -22,7 +22,8 @@ function caso(fn) {
 function ejecucion(respuestas, llamadas, partial = false) {
   return (cmd, args, options) => {
     llamadas.push({ cmd, args, options })
-    if (args.includes('--help')) return { status: 0, stdout: '--sdk_root --list_installed --verbose' }
+    if (args.includes('--help')) return { status: 0, stdout: 'Usage:\n--sdk_root --list_installed --verbose' }
+    if (args.includes('--version')) return { status: 0, stdout: '12.0\n' }
     if (args.includes('--list_installed')) return { status: 0, stdout: PAQUETE }
     const r = respuestas.shift()
     if (r.status === 0) paquete(args.find(a => a.startsWith('--sdk_root=')).slice(11), partial)
@@ -70,6 +71,45 @@ test('discovery absoluto no depende de PATH y raíces ambiguas/binario ausente f
   const vacio = join(temp, 'sdk-vacio'); mkdirSync(vacio)
   assert.throws(() => prepararImagen({ sdk: vacio, temp, ejecutar: () => assert.fail('No lanzar un binario ausente') }), /sin sdkmanager/u)
 }))
+test('SDK12 Usage exit1 legítimo y versión exit0 permiten instalar, sin alterar instalación estricta', () => caso(({ sdk, temp }) => {
+  const llamadas = [], run = ejecucion([{ status: 0 }], llamadas)
+  prepararImagen({ sdk, temp, ejecutar: (cmd, args, opts) => args.includes('--help') ? { status: 1, stderr: 'Usage:\n sdkmanager --sdk_root --list_installed --verbose' } : run(cmd, args, opts) })
+  assert.equal(llamadas.filter(c => c.args.includes('--install')).length, 1)
+  const metadata = JSON.parse(readFileSync(join(temp, 'evidencia-movil-android/sdk-imagen/resultado.json')))
+  assert.deepEqual(metadata.ayuda, { exit: 1, error: null })
+  assert.equal(metadata.versionEjecutable, '12.0')
+}))
+test('ayuda incompleta/fatal/error/exit2 o versión no exit0 nunca inicia descarga ni retry', () => {
+  const completa = 'Usage:\n--sdk_root --list_installed --verbose'
+  for (const [ayuda, version] of [
+    [{ status: 1, stdout: 'Usage:\n--sdk_root' }, null],
+    [{ status: 1, stdout: completa, stderr: 'Error: Java no disponible' }, null],
+    [{ status: null, stdout: completa, error: { code: 'ENOENT' } }, null],
+    [{ status: 2, stdout: completa }, null],
+    [{ status: 1, stdout: completa }, { status: 1, stdout: '12.0' }],
+    [{ status: 1, stdout: completa }, { status: 0, stdout: 'no-verificable' }],
+  ]) caso(({ sdk, temp }) => {
+    assert.throws(() => prepararImagen({ sdk, temp, ejecutar: (_, args) => {
+      if (args.includes('--help')) return ayuda
+      if (args.includes('--version')) return version
+      assert.fail('Ayuda/versión inválida no permite instalar ni listar paquetes')
+    } }))
+    assert.equal(JSON.parse(readFileSync(join(temp, 'evidencia-movil-android/sdk-imagen/resultado.json'))).intentos.length, 0)
+  })
+})
+test('FATAL explícito junto a Usage y flags válidos bloquea antes de versión e instalación', () => {
+  for (const fatal of ['FATAL: internal sdkmanager failure', 'fatal error: internal sdkmanager failure']) caso(({ sdk, temp }) => {
+    const calls = []
+    assert.throws(() => prepararImagen({ sdk, temp, ejecutar: (_, args) => {
+      calls.push(args)
+      if (args.includes('--help')) return { status: 1, stdout: 'Usage:\n--sdk_root --list_installed --verbose', stderr: fatal }
+      if (args.includes('--version')) return { status: 0, stdout: '12.0' }
+      return { status: 0 }
+    } }), /Ayuda/u)
+    assert.deepEqual(calls, [['--help']])
+    assert.equal(JSON.parse(readFileSync(join(temp, 'evidencia-movil-android/sdk-imagen/resultado.json'))).intentos.length, 0)
+  })
+})
 test('paquete existente completo se reutiliza; parcial se preserva sin sobrescribir', () => {
   for (const partial of [false, true]) caso(({ sdk, temp }) => {
     paquete(sdk, partial); const llamadas = []
