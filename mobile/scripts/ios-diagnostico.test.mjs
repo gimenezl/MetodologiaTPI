@@ -110,7 +110,7 @@ for (const exit of [0, 7]) {
       const fake = (name, body) => writeFileSync(join(bin, name), `#!/usr/bin/env bash\n${body}\n`, { mode: 0o755 })
       fake(
         'xcrun',
-        `if [[ "$*" == "simctl list devices available -j" ]]; then echo '{"devices":{"iOS":[{"name":"iPhone de prueba","isAvailable":true,"udid":"${udid}"}]}}'; else echo org.educarparatransformar.app; fi`
+        `if [[ "$*" == "simctl list runtimes -j" ]]; then echo '{"runtimes":[{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-26-2","isAvailable":true}]}'; elif [[ "$*" == "simctl create"* ]]; then echo '${udid}'; else echo org.educarparatransformar.app; fi`
       )
       fake(
         'maestro',
@@ -118,9 +118,17 @@ for (const exit of [0, 7]) {
 printf '%s\\n' "$*" >> "$TRAZA_PRUEBA"
 debug=''; while [[ $# -gt 0 ]]; do if [[ "$1" == "--debug-output" ]]; then debug="$2"; shift; fi; shift; done
 if [[ -n "$debug" ]]; then mkdir -p "$debug"; echo 'Selected device ${udid} using port 23456' > "$debug/maestro.log"; fi
+if [[ ${exit} -eq 0 ]]; then
+  printf '[{"command":{"takeScreenshotCommand":{"path":"ept113-ios-smoke-completado"}},"metadata":{"status":"COMPLETED","timestamp":1}},{"command":{"takeScreenshotCommand":{"path":"ept113-ios-recuperacion-completado"}},"metadata":{"status":"COMPLETED","timestamp":2}},{"command":{"takeScreenshotCommand":{"path":"ept113-ios-recibos-completado"}},"metadata":{"status":"COMPLETED","timestamp":3}}]' > "$debug/commands.json"
+  for flujo in smoke recuperacion recibos; do printf '\\211PNG\\r\\n\\032\\n' > "$debug/ept113-ios-$flujo-completado.png"; done
+fi
 exit ${exit}`
       )
-      for (const name of ['ps', 'lsof', 'curl', 'xcodebuild']) fake(name, 'echo diagnostico-sintetico')
+      for (const name of ['ps', 'lsof', 'curl', 'xcodebuild', 'open']) fake(name, 'echo diagnostico-sintetico')
+      // Windows no ejecuta scripts POSIX sin extensión desde spawnSync de Node.
+      // El adaptador existe solo en este proceso de prueba, no en el runner de producción.
+      const shim = join(directory, 'posix-test.cjs')
+      if (process.platform === 'win32') writeFileSync(shim, `const cp=require('node:child_process'); const original=cp.spawnSync; cp.spawnSync=(cmd,args,opts)=>cmd==='xcrun'?original(${JSON.stringify(bash)},[${JSON.stringify(join(bin, 'xcrun'))},...args],opts):original(cmd,args,opts); require('node:module').syncBuiltinESMExports();`)
       const result = spawnSync(bash, ['mobile/scripts/ejecutar-ios.sh', 'app-sintetica.app'], {
         cwd: root,
         encoding: 'utf8',
@@ -130,20 +138,23 @@ exit ${exit}`
           PATH: `${bin}${delimiter}${process.env.PATH}`,
           RUNNER_TEMP: directory,
           TRAZA_PRUEBA: trace,
+          GITHUB_RUN_ID: 'synthetic-run',
+          GITHUB_RUN_ATTEMPT: '1',
+          DEVELOPER_DIR: directory,
+          ...(process.platform === 'win32' ? { NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require "${shim.replaceAll(String.fromCharCode(92), "/")}"` } : {}),
         },
       })
       assert.equal(result.status, exit, result.stderr)
       const calls = readFileSync(trace, 'utf8').trim().split(/\r?\n/u)
-      assert.equal(calls.length, exit === 0 ? 3 : 1)
-      for (const [index, call] of calls.entries()) {
+      assert.equal(calls.length, 1)
+      for (const call of calls) {
         assert.match(call, /--debug-output .*--flatten-debug-output --test-output-dir/u)
-        assert.match(call, [/smoke-ios.yaml/u, /recuperacion-ios.yaml/u, /recibos-ios.yaml/u][index])
+        assert.match(call, /suite-ios.yaml/u)
       }
-      assert.ok(existsSync(join(directory, 'evidencia-movil-ios/smoke-debug/maestro.log')))
-      assert.ok(existsSync(join(directory, 'evidencia-movil-ios/smoke-diagnostico.txt')))
-      assert.equal(existsSync(join(directory, 'evidencia-movil-ios/recuperacion-debug/maestro.log')), exit === 0)
-      assert.equal(existsSync(join(directory, 'evidencia-movil-ios/recibos-debug/maestro.log')), exit === 0)
-      assert.equal(existsSync(join(directory, 'evidencia-movil-ios/recibos-diagnostico.txt')), exit === 0)
+      assert.ok(existsSync(join(directory, 'evidencia-movil-ios/suite-debug/maestro.log')))
+      assert.ok(existsSync(join(directory, 'evidencia-movil-ios/final-diagnostico.txt')))
+      assert.equal(existsSync(join(directory, 'evidencia-movil-ios/completitud-ios.json')), exit === 0)
+      assert.equal(JSON.parse(readFileSync(join(directory, 'evidencia-movil-ios/simulador-propio.json'))).eliminado, true)
     } finally {
       rmSync(directory, { recursive: true, force: true })
     }

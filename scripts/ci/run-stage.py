@@ -21,7 +21,8 @@ def redact(text, preserve_structure=False):
     # CLI table/JSON output can contain newly minted keys absent from the environment.
     text = re.sub(r"(?<![A-Za-z0-9_-])sb_(?:secret|publishable)_[A-Za-z0-9_-]+(?![A-Za-z0-9_-])", "[REDACTED_SUPABASE_KEY]", text)
     text = re.sub(r"\beyJ[\w-]+\.[\w-]+\.[\w-]+\b", "[REDACTED_TOKEN]", text)
-    text = re.sub(r"\b(?:Bearer\s+\S+|[A-Za-z][\w+.-]*://\S+)", "[REDACTED]", text)
+    # Respect structured delimiters: redaction must not consume JSON/XML closing quotes.
+    text = re.sub(r'''\b(?:Bearer\s+[^\s"'<>\\]+|[A-Za-z][\w+.-]*://[^\s"'<>\\]+)''', "[REDACTED]", text)
     text = re.sub(r"/(?:Users|home|tmp|private|var/folders)/[^\s\"'<>]+", "[REDACTED_PATH]", text)
     return "[REDACTED_SENSITIVE_LINE]" if not preserve_structure and re.search(r"(?:secret|token|password|credential|anon.key|service.role(?:.key)?|authorization)\s*[\"']?\s*[:=]", text, re.I) else text
 

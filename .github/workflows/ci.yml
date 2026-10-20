@@ -217,6 +217,8 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - name: Preparar imagen SDK verificada, descarga aislada
+        run: python3 scripts/ci/run-stage.py --stage android-sdk-image --seconds 220 -- node mobile/scripts/android-imagen.mjs
       - name: Ejecutar en emulador Android (API 34)
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
@@ -244,6 +246,7 @@ jobs:
           path: |
             ${{ steps.apk.outputs.ruta }}
             ${{ runner.temp }}/evidencia-movil-android/stages/
+            ${{ runner.temp }}/evidencia-movil-android/sdk-imagen/
             ${{ runner.temp }}/evidencia-movil-android/android-version.txt
             ${{ runner.temp }}/evidencia-movil-android/maestro-android/
             ${{ runner.temp }}/evidencia-movil-android/maestro-comprobante/

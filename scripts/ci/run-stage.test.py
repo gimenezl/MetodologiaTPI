@@ -19,6 +19,22 @@ KILL = getattr(stage.signal, "SIGKILL", IntEnum("SyntheticSignal", {"SIGKILL": 9
 
 
 class StageTests(unittest.TestCase):
+    def test_structured_bearer_and_urls_keep_json_and_xml_delimiters(self):
+        values = ["Bearer synthetic-only", "https://private.example.test/path?key=synthetic-only"]
+        for value in values:
+            for separators in [(" , ", ": "), (",", ":")]:
+                source = json.dumps({"data": value, "nested": [value]}, separators=separators)
+                result = json.loads(stage.redact(source, preserve_structure=True))
+                self.assertEqual(result, {"data": "[REDACTED]", "nested": ["[REDACTED]"]})
+            source = f'<node value="{value}">retained</node>'
+            self.assertEqual(stage.redact(source, preserve_structure=True), '<node value="[REDACTED]">retained</node>')
+        with tempfile.TemporaryDirectory() as directory:
+            artifact = Path(directory) / "structured.json"
+            artifact.write_text(json.dumps({"message": values}, separators=(",", ":")))
+            result = subprocess.run([sys.executable, str(SCRIPT), "--sanitize-directory", directory], capture_output=True, timeout=5)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(json.loads(artifact.read_text()), {"message": ["[REDACTED]", "[REDACTED]"]})
+
     @classmethod
     def setUpClass(cls):
         # Preserve redacted child-stage logs outside disposable fixture directories.

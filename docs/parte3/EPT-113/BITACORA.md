@@ -44,3 +44,9 @@ El segundo CI aprobó contratos DB pero detectó un botón fuera del catálogo (
 ### Gate y límites medidos
 
 El tercer CI concluyó cancelled/gate failure. Aunque UI completó150/150 sin omisiones, el job8min venció (509s reales), por lo que no se declaró PASS. Se autorizó únicamente UI10min (600s, margen aproximado18%), sin retirar fresh/reset/cleanup ni150tests. Android avanzó hasta un scroll cuyo último gesto dejó Hasta visible después del plazo: se ajusta solo su velocidad80 conservando15s/100%/asserts. iOS no inició el primer flujo porque XCTest no atendió120s; la causa sigue indeterminada. Se añade captura temprana acotada de sus procesos para diagnóstico, no cambios de readiness ni reparación especulativa. Si persiste sin causa con mejor evidencia, se detiene para decisión, sin merge ni bypass.
+
+### Autoridad renovada y remediación nativa por clase
+
+El usuario renovó autorización para resolver causas reales y obtener CI verde, sin bypass. CI39338153901 aprobó rápido, JS, UI150/150 y DB; Android falló al preparar el ZIP SDK e iOS antes del primer flujo. Se agrega preflight del paquete Android en SDK privado, recuperación máxima de una descarga solo por ZIP observado y publicación atómica verificada. Sin borrar cachés globales ni repetir flujos.
+
+A/B sin PR reutilizó app/versiones verificadas, sin backend/build. Los primeros dos runs no alcanzaron Maestro por microtimeouts; el tercero mantuvo360s compartidos. B ejecutó smoke1/1 en95,136s, pero terminó failure por deadline, no aceptación. A tuvo menos tiempo restante: no prueba causa exclusiva. Se adopta dispositivo propio+GUI y una sesión de driver para acceso/recuperación/recibo, clearState individual y verificación de tres marcadores/PNG completos. Startup120s/step12min/job40min intactos. Se corrige redacción JSON/XML que consumía delimitadores tras Bearer/URL. Revisión focal y gate final pendientes; producción intacta. Detalle y fuentes en evidencia EPT-113.
