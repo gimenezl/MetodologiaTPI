@@ -4,7 +4,7 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { verificarFuente, seleccionarBase, validarCaso, requiereBoot } from './experimento-ios.mjs'
+import { verificarFuente, seleccionarBase, validarCaso, requiereBoot, crearPresupuesto } from './experimento-ios.mjs'
 test('solo acepta fuente propia exacta, nunca otro run, head o artifact', () => {
   const run = { id: 39338153901, head_sha: 'b3b82f4983d00540ddfa5cfea078a347e6f8e5b2', status: 'completed' }
   const artifact = { id: 12227059866, workflow_run: { id: run.id }, name: 'movil-ios-6735186e2fe1038d9f89971fbbede47735ee54e1' }
@@ -40,16 +40,31 @@ test('sanitizador real preserva JSON y elimina credenciales del diagnóstico', (
     assert.doesNotMatch(readFileSync(join(dir, 'host.log'), 'utf8'), /ept113-sintetico/u)
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
-test('cold services tienen presupuesto medido, observación previa y estado inicial explícito', () => {
+test('cold services comparten un deadline, observación previa y estado inicial explícito', () => {
   assert.equal(requiereBoot('Booted'), false)
   assert.equal(requiereBoot('Shutdown'), true)
   for (const s of ['Booting', undefined, 'otro']) assert.throws(() => requiereBoot(s))
   const s = readFileSync('mobile/scripts/experimento-ios.mjs', 'utf8')
-  assert.match(s, /'available', '-j'\], 45000/u)
-  assert.match(s, /'bootstatus', udid, '-b'\], 180000/u)
+  assert.doesNotMatch(s, /timeout = 10000|\], (?:10000|30000|45000|180000)\)/u)
+  assert.match(s, /const timeout = restante\(limpiando\)/u)
   assert.ok(s.indexOf("host = spawn('log'") < s.indexOf("comando('devices'"))
   assert.ok(s.indexOf('cerrarSim = iniciarCapturaXCTest') < s.indexOf("comando('bootstatus'"))
   assert.ok(s.indexOf("comando('gui'") < s.indexOf("comando('bootstatus'"))
   assert.match(s, /metadata.etapas.push\(etapa\); guardar\(\)/u)
   assert.match(readFileSync('.github/workflows/full.yml', 'utf8'), /--seconds 360/u)
+})
+test('un deadline total reserva cinco segundos y nunca se renueva por comando', () => {
+  let ahora = 100
+  const restante = crearPresupuesto(() => ahora)
+  assert.equal(restante(), 355000)
+  ahora += 200000; assert.equal(restante(), 155000)
+  ahora += 155000; assert.throws(() => restante(), /incompleto/u)
+  assert.equal(restante(true), 5000)
+  ahora += 4999; assert.equal(restante(true), 1)
+  ahora++; assert.throws(() => restante(true), /incompleto/u)
+  const s = readFileSync('mobile/scripts/experimento-ios.mjs', 'utf8')
+  assert.match(s, /completo: false/u)
+  assert.match(s, /metadata.completo = metadata.exit === 0/u)
+  assert.match(s, /metadata.resultado \?\?= 'caso-incompleto'/u)
+  assert.match(s, /limpiando = true/u)
 })
