@@ -187,6 +187,8 @@ jobs:
         run: |
           python3 ../scripts/ci/run-stage.py --stage android-deps --seconds 180 -- npm ci
           python3 ../scripts/ci/run-stage.py --stage android-prebuild --seconds 90 -- npx --no-install expo prebuild --platform android --no-install
+      - name: Preparar NDK declarado, adquisición SDK aislada
+        run: python3 scripts/ci/run-stage.py --stage android-sdk-ndk --seconds 220 -- node mobile/scripts/android-imagen.mjs ndk
       - name: Build Android (release de prueba, x86_64)
         working-directory: mobile/android
         run: |
@@ -247,6 +249,7 @@ jobs:
             ${{ steps.apk.outputs.ruta }}
             ${{ runner.temp }}/evidencia-movil-android/stages/
             ${{ runner.temp }}/evidencia-movil-android/sdk-imagen/
+            ${{ runner.temp }}/evidencia-movil-android/sdk-ndk/
             ${{ runner.temp }}/evidencia-movil-android/android-version.txt
             ${{ runner.temp }}/evidencia-movil-android/maestro-android/
             ${{ runner.temp }}/evidencia-movil-android/maestro-comprobante/
