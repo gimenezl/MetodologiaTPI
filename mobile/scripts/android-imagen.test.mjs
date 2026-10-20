@@ -4,7 +4,7 @@ import test from 'node:test'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { PAQUETE, prepararImagen } from './android-imagen.mjs'
+import { PAQUETE, prepararImagen, resolverSdk, localizarSdkmanager } from './android-imagen.mjs'
 
 function paquete(root, partial = false) {
   const dir = join(root, ...PAQUETE.split(';')); mkdirSync(dir, { recursive: true })
@@ -15,11 +15,14 @@ function paquete(root, partial = false) {
 function caso(fn) {
   const dir = mkdtempSync(join(tmpdir(), 'ept113-imagen-test-')), sdk = join(dir, 'sdk'), temp = join(dir, 'tmp')
   mkdirSync(sdk); mkdirSync(temp)
+  mkdirSync(join(sdk, 'cmdline-tools/latest/bin'), { recursive: true })
+  writeFileSync(join(sdk, 'cmdline-tools/latest/bin/sdkmanager'), '#!/bin/sh\n', { mode: 0o755 })
   try { fn({ sdk, temp }) } finally { rmSync(dir, { recursive: true, force: true }) }
 }
 function ejecucion(respuestas, llamadas, partial = false) {
   return (cmd, args, options) => {
     llamadas.push({ cmd, args, options })
+    if (args.includes('--help')) return { status: 0, stdout: '--sdk_root --list_installed --verbose' }
     if (args.includes('--list_installed')) return { status: 0, stdout: PAQUETE }
     const r = respuestas.shift()
     if (r.status === 0) paquete(args.find(a => a.startsWith('--sdk_root=')).slice(11), partial)
@@ -31,8 +34,9 @@ test('primer éxito publica solo imagen verificada y SDK la reconoce', () => cas
   prepararImagen({ sdk, temp, ejecutar: ejecucion([{ status: 0 }], llamadas) })
   assert.equal(llamadas.filter(c => c.args.includes('--install')).length, 1)
   assert.ok(existsSync(join(sdk, ...PAQUETE.split(';'), 'system.img')))
-  assert.ok(llamadas[0].options.env.ANDROID_USER_HOME.startsWith(temp))
-  assert.ok(llamadas[0].options.env.JAVA_TOOL_OPTIONS.includes('-Duser.home='))
+  const install = llamadas.find(c => c.args.includes('--install'))
+  assert.ok(install.options.env.ANDROID_USER_HOME.startsWith(temp))
+  assert.ok(install.options.env.JAVA_TOOL_OPTIONS.includes('-Duser.home='))
   assert.equal(JSON.parse(readFileSync(join(temp, 'evidencia-movil-android/sdk-imagen/resultado.json'))).publicada, true)
 }))
 test('solo ZIP habilita una segunda descarga aislada, sin borrar caché global', () => caso(({ sdk, temp }) => {
@@ -42,7 +46,7 @@ test('solo ZIP habilita una segunda descarga aislada, sin borrar caché global',
   assert.equal(installs.length, 2)
   assert.notEqual(installs[0].args[0], installs[1].args[0])
   assert.ok(existsSync(installs[0].args[0].slice(11)))
-  assert.ok(installs.every(c => c.cmd === 'sdkmanager' && c.options.timeout <= 210000))
+  assert.ok(installs.every(c => c.cmd === localizarSdkmanager(sdk) && c.options.timeout <= 210000))
 }))
 test('segundo ZIP falla cerrado; otros errores y timeouts nunca reintentan', () => {
   for (const respuestas of [[{ status: 1, stderr: 'Error on ZipFile' }, { status: 1, stderr: 'Error on ZipFile' }], [{ status: 1, stderr: 'license rejected' }], [{ status: null, error: { code: 'ETIMEDOUT' }, stderr: 'Error on ZipFile' }]]) caso(({ sdk, temp }) => {
@@ -55,8 +59,16 @@ test('segundo ZIP falla cerrado; otros errores y timeouts nunca reintentan', () 
 test('exit0 con imagen parcial no publica y no reintenta', () => caso(({ sdk, temp }) => {
   const llamadas = []
   assert.throws(() => prepararImagen({ sdk, temp, ejecutar: ejecucion([{ status: 0 }], llamadas, true) }))
-  assert.equal(llamadas.length, 1)
+  assert.equal(llamadas.filter(c => c.args.includes('--install')).length, 1)
   assert.ok(!existsSync(join(sdk, ...PAQUETE.split(';'))))
+}))
+test('discovery absoluto no depende de PATH y raíces ambiguas/binario ausente fallan sin retry', () => caso(({ sdk, temp }) => {
+  assert.equal(resolverSdk({ home: sdk, sdkRoot: sdk }), resolverSdk({ home: sdk }))
+  assert.throws(() => resolverSdk({ home: sdk, sdkRoot: temp }), /ambigua/u)
+  assert.throws(() => resolverSdk({}), /ausente/u)
+  assert.ok(localizarSdkmanager(sdk).endsWith('sdkmanager'))
+  const vacio = join(temp, 'sdk-vacio'); mkdirSync(vacio)
+  assert.throws(() => prepararImagen({ sdk: vacio, temp, ejecutar: () => assert.fail('No lanzar un binario ausente') }), /sin sdkmanager/u)
 }))
 test('paquete existente completo se reutiliza; parcial se preserva sin sobrescribir', () => {
   for (const partial of [false, true]) caso(({ sdk, temp }) => {

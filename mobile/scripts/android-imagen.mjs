@@ -1,11 +1,27 @@
 // Instala una sola imagen en un SDK privado y publica únicamente un paquete completo.
 import { spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { accessSync, constants, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 export const PAQUETE = 'system-images;android-34;google_apis;x86_64'
 const partes = PAQUETE.split(';')
+export function resolverSdk({ home, sdkRoot }) {
+  const roots = [home, sdkRoot].filter(Boolean).map(p => realpathSync(p))
+  if (!roots.length || new Set(roots).size !== 1) throw new Error('Raíz SDK ausente o ambigua')
+  return roots[0]
+}
+export function localizarSdkmanager(root) {
+  for (const parts of [['cmdline-tools', 'latest', 'bin', 'sdkmanager'], ['tools', 'bin', 'sdkmanager']]) {
+    const candidate = join(root, ...parts)
+    if (!existsSync(candidate)) continue
+    const actual = realpathSync(candidate)
+    if (relative(root, actual).startsWith('..') || !statSync(actual).isFile()) throw new Error('sdkmanager fuera de la raíz SDK autorizada')
+    accessSync(actual, constants.X_OK)
+    return actual
+  }
+  throw new Error('SDK sin sdkmanager existente, no se instala otra versión implícitamente')
+}
 export function validarImagen(raiz) {
   const dir = join(raiz, ...partes)
   const xml = readFileSync(join(dir, 'package.xml'), 'utf8')
@@ -27,16 +43,25 @@ export function prepararImagen({ sdk, temp, ejecutar = spawnSync, ahora = () => 
   const metadata = { paquete: PAQUETE, inicio: new Date().toISOString(), intentos: [], publicada: false }
   const guardar = () => writeFileSync(join(evidencia, 'resultado.json'), JSON.stringify(metadata), { mode: 0o600 })
   const limite = ahora() + presupuestoMs
+  let manager
   const run = (args, env, input) => {
     const restante = Math.floor(limite - ahora())
     if (restante <= 0) throw new Error('Presupuesto SDK agotado')
-    return ejecutar('sdkmanager', args, { encoding: 'utf8', timeout: restante, maxBuffer: 4194304, input, env })
+    return ejecutar(manager, args, { encoding: 'utf8', timeout: restante, maxBuffer: 4194304, input, env })
   }
   const lista = (root, env) => {
     const r = run([`--sdk_root=${root}`, '--list_installed'], env)
     if (r.error || r.status !== 0 || !r.stdout?.includes(PAQUETE)) throw new Error('SDK no reconoce el paquete instalado completo')
   }
   try {
+    manager = localizarSdkmanager(root)
+    metadata.sdkmanager = relative(root, manager)
+    const source = join(dirname(dirname(manager)), 'source.properties')
+    metadata.versionHerramienta = existsSync(source) ? readFileSync(source, 'utf8').match(/^Pkg.Revision\s*=\s*(.+)$/mu)?.[1]?.trim() ?? 'no-disponible' : 'no-disponible'
+    const help = run(['--help'], process.env)
+    writeFileSync(join(evidencia, 'sdkmanager-help.log'), `${help.stdout ?? ''}\n${help.stderr ?? ''}`, { mode: 0o600 })
+    if (help.error || help.status !== 0 || !['--sdk_root', '--list_installed', '--verbose'].every(flag => `${help.stdout ?? ''}${help.stderr ?? ''}`.includes(flag))) throw new Error('Ayuda de sdkmanager no confirma el contrato requerido')
+    guardar()
     const target = join(root, ...partes)
     if (existsSync(target)) {
       validarImagen(root); lista(root, process.env)
@@ -71,6 +96,6 @@ export function prepararImagen({ sdk, temp, ejecutar = spawnSync, ahora = () => 
   finally { metadata.fin = new Date().toISOString(); guardar() }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  if (!process.env.ANDROID_HOME || !process.env.RUNNER_TEMP) throw new Error('SDK y temporal del runner requeridos')
-  prepararImagen({ sdk: process.env.ANDROID_HOME, temp: process.env.RUNNER_TEMP })
+  if (!process.env.RUNNER_TEMP) throw new Error('Temporal del runner requerido')
+  prepararImagen({ sdk: resolverSdk({ home: process.env.ANDROID_HOME, sdkRoot: process.env.ANDROID_SDK_ROOT }), temp: process.env.RUNNER_TEMP })
 }

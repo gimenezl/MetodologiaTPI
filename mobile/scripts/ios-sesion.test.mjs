@@ -4,32 +4,63 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { gestionarSimulador, RUNTIME, DEVICE } from './ios-simulador.mjs'
+import { gestionarSimulador, presupuestoLimpieza, RUNTIME, DEVICE } from './ios-simulador.mjs'
 import { comprobarCompletitud, FLUJOS } from './ios-completitud.mjs'
 const udid = '600A45A3-B3A0-4A39-8A9C-5D051F9FDA9C'
 function caso(fn) {
   const directory = mkdtempSync(join(tmpdir(), 'ept113-sesion-'))
   try { fn(directory) } finally { rmSync(directory, { recursive: true, force: true }) }
 }
-test('crea solo runtime/type explícitos; limpieza solo identidad propia con deadline total5s', () => caso(directory => {
-  const calls = [], base = { directory, run: '123', attempt: '1' }
-  const ejecutar = (_, args, opts) => { calls.push({ args, opts }); return { status: 0, stdout: args.includes('runtimes') ? JSON.stringify({ runtimes: [{ identifier: RUNTIME, isAvailable: true }] }) : udid } }
+test('crea solo runtime/type explícitos; limpieza propia comparte restante del step y readback', () => caso(directory => {
+  const calls = [], base = { directory, run: '123', attempt: '1', inicioStep: '1000', reloj: () => 2000 }
+  const ejecutar = (_, args, opts) => { calls.push({ args, opts }); return { status: 0, stdout: args.includes('runtimes') ? JSON.stringify({ runtimes: [{ identifier: RUNTIME, isAvailable: true }] }) : args.includes('devices') ? '{"devices":{}}' : udid } }
   assert.equal(gestionarSimulador({ ...base, accion: 'crear', ejecutar }), udid)
   assert.deepEqual(calls[1].args, ['simctl', 'create', 'EPT113-123-1', DEVICE, RUNTIME])
   assert.throws(() => gestionarSimulador({ ...base, run: 'otro', accion: 'limpiar', ejecutar: () => assert.fail('No tocar otro simulador') }), /ajeno/u)
   calls.length = 0; let tiempo = 0
   gestionarSimulador({ ...base, accion: 'limpiar', ahora: () => tiempo, ejecutar: (...args) => { tiempo += 2000; return ejecutar(...args) } })
-  assert.deepEqual(calls.map(c => c.args), [['simctl', 'shutdown', udid], ['simctl', 'delete', udid]])
-  assert.deepEqual(calls.map(c => c.opts.timeout), [5000, 3000])
+  assert.deepEqual(calls.map(c => c.args), [['simctl', 'shutdown', udid], ['simctl', 'delete', udid], ['simctl', 'list', 'devices', '-j']])
+  assert.deepEqual(calls.map(c => c.opts.timeout), [717000, 715000, 713000])
   assert.equal(JSON.parse(readFileSync(join(directory, 'simulador-propio.json'))).eliminado, true)
 }))
 test('runtime ausente/creación inválida fallan sin usar otro; timeout limpieza no inventa eliminación', () => caso(directory => {
-  const base = { directory, run: '123', attempt: '1' }
+  const base = { directory, run: '123', attempt: '1', inicioStep: '1000', reloj: () => 2000 }
   assert.throws(() => gestionarSimulador({ ...base, accion: 'crear', ejecutar: () => ({ status: 0, stdout: '{"runtimes":[]}' }) }), /Runtime/u)
   writeFileSync(join(directory, 'simulador-propio.json'), JSON.stringify({ ...base, udid, creado: true, runtime: RUNTIME, device: DEVICE }))
   assert.throws(() => gestionarSimulador({ ...base, accion: 'limpiar', ejecutar: () => ({ status: null, error: { code: 'ETIMEDOUT' } }) }), /no confirmada/u)
   assert.notEqual(JSON.parse(readFileSync(join(directory, 'simulador-propio.json'))).eliminado, true)
 }))
+test('fecha validada y monotónico conservan720s totales, reservan2s y agotado no lanza cleanup', () => {
+  let mono = 0
+  const restante = presupuestoLimpieza({ inicioStep: '1000', reloj: () => 601000, ahora: () => mono })
+  assert.equal(restante(), 118000)
+  mono = 117999; assert.equal(restante(), 1)
+  mono++; assert.throws(() => restante(), /agotado/u)
+  for (const inicioStep of [undefined, 'otro', '2000', '-1']) assert.throws(() => presupuestoLimpieza({ inicioStep, reloj: () => 1000 }))
+  caso(directory => {
+    writeFileSync(join(directory, 'simulador-propio.json'), JSON.stringify({ run: '1', attempt: '1', udid, creado: true, runtime: RUNTIME, device: DEVICE }))
+    assert.throws(() => gestionarSimulador({ accion: 'limpiar', directory, run: '1', attempt: '1', inicioStep: '1000', reloj: () => 721001, ejecutar: () => assert.fail('No queda presupuesto') }), /agotado/u)
+    assert.match(JSON.parse(readFileSync(join(directory, 'simulador-propio.json'))).error, /agotado/u)
+  })
+})
+test('shutdown/delete fallidos o inciertos conservan causa y readback presente/malformado no es éxito', () => {
+  for (const fallo of ['shutdown', 'delete', 'timeout', 'presente', 'malformado']) caso(directory => {
+    const base = { accion: 'limpiar', directory, run: '1', attempt: '1', inicioStep: '1000', reloj: () => 2000 }
+    writeFileSync(join(directory, 'simulador-propio.json'), JSON.stringify({ ...base, udid, creado: true, runtime: RUNTIME, device: DEVICE }))
+    const calls = []
+    assert.throws(() => gestionarSimulador({ ...base, ejecutar: (_, args) => {
+      calls.push(args)
+      if (args[1] === fallo) return { status: 7, stderr: 'causa sintética' }
+      if (fallo === 'timeout' && args[1] === 'delete') return { status: null, error: { code: 'ETIMEDOUT' }, stderr: 'operación incierta' }
+      return { status: 0, stdout: args.includes('devices') ? fallo === 'presente' ? JSON.stringify({ devices: { iOS: [{ udid }] } }) : '{"devices":"inválido"}' : '' }
+    } }))
+    const own = JSON.parse(readFileSync(join(directory, 'simulador-propio.json')))
+    assert.notEqual(own.eliminado, true)
+    assert.ok(own.limpieza.length > 0)
+    if (fallo === 'shutdown') assert.equal(calls.length, 1)
+    if (fallo === 'timeout') assert.equal(own.limpieza.at(-1).error, 'ETIMEDOUT')
+  })
+})
 test('una sesión llama los tres originales en orden y conserva aislamiento y todas las aserciones', () => {
   const wrapper = readFileSync(new URL('../maestro/suite-ios.yaml', import.meta.url), 'utf8')
   assert.deepEqual([...wrapper.matchAll(/^- runFlow: (.+)$/gmu)].map(m => m[1]), FLUJOS.map(f => f === 'smoke' ? 'smoke-ios.yaml' : `${f}-ios.yaml`))

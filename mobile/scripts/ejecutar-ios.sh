@@ -3,6 +3,7 @@
 # El E2E con Auth/RLS reales corre en Android; iOS prueba acceso/recuperación y compartir PDF sintético, sin backend.
 # Uso: bash mobile/scripts/ejecutar-ios.sh <ruta-a-la-app>
 set -euo pipefail
+export EPT_IOS_STEP_STARTED_AT="$(node -e 'console.log(Date.now())')"
 
 APP="$1"
 SALIDA="${RUNNER_TEMP:?RUNNER_TEMP requerido}/evidencia-movil-ios"

@@ -110,7 +110,7 @@ for (const exit of [0, 7]) {
       const fake = (name, body) => writeFileSync(join(bin, name), `#!/usr/bin/env bash\n${body}\n`, { mode: 0o755 })
       fake(
         'xcrun',
-        `if [[ "$*" == "simctl list runtimes -j" ]]; then echo '{"runtimes":[{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-26-2","isAvailable":true}]}'; elif [[ "$*" == "simctl create"* ]]; then echo '${udid}'; else echo org.educarparatransformar.app; fi`
+        `if [[ "$*" == "simctl list runtimes -j" ]]; then echo '{"runtimes":[{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-26-2","isAvailable":true}]}'; elif [[ "$*" == "simctl list devices -j" ]]; then echo '{"devices":{}}'; elif [[ "$*" == "simctl create"* ]]; then echo '${udid}'; else echo org.educarparatransformar.app; fi`
       )
       fake(
         'maestro',
