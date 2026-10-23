@@ -59,7 +59,7 @@ name: Recibo institucional, descarga Bearer y compartir nativo contra backend re
 - tapOn:
     id: 'recibo-descargar'
 - extendedWaitUntil:
-    visible: 'Guardar o compartir recibo institucional'
+    visible: '.*recibo-.*\.pdf'
     timeout: 60000
 - takeScreenshot: recibo-menu-nativo
 - back

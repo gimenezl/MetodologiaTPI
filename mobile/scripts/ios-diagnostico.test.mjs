@@ -290,7 +290,8 @@ test('recibo real conserva tres desplazamientos completos con cadencia medida, p
   assert.equal((flow.match(/speed: 80/gu) ?? []).length, 3)
   assert.match(flow, /launchApp:\n    clearState: true/u)
   assert.match(flow, /- tapOn:\n    id: 'recibo-descargar'/u)
-  assert.match(flow, /- extendedWaitUntil:\n    visible: 'Guardar o compartir recibo institucional'\n    timeout: 60000/u)
+  // Android 14 no muestra el dialogTitle: el menú se verifica por el archivo compartido.
+  assert.match(flow, /- extendedWaitUntil:\n    visible: '\.\*recibo-\.\*\\\.pdf'\n    timeout: 60000/u)
   assert.match(flow, /- takeScreenshot: recibo-menu-nativo\n- back\n- extendedWaitUntil:\n    visible: 'Menú de descarga cerrado\. Temporal eliminado\.'\n    timeout: 15000/u)
   assert.match(flow, /- takeScreenshot: recibo-temporal-eliminado/u)
   assert.doesNotMatch(flow, /optional: true|retry:|retryTapIfNoChange:/u)
