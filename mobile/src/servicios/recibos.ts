@@ -3,7 +3,7 @@ import { fetch as fetchNativo } from "expo/fetch";
 import { Directory, File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { entornoDelBundle } from "@/configuracion/entorno";
-import { obtenerTokenDeAcceso } from "@/servicios/sesion";
+import { obtenerSesionDelDispositivo } from "@/servicios/sesion";
 import type { ClienteEPT } from "@/servicios/supabase";
 import { validarBaseUrl } from "@/servicios/transporte-http";
 
@@ -96,8 +96,9 @@ export async function compartirRecibo(
       __DEV__ || integracion,
       integracion ? ["10.0.2.2"] : [],
     );
-    const token = await obtenerTokenDeAcceso(cliente.auth);
-    if (!token) throw new Error("Inicia sesión para descargar el recibo.");
+    const sesion = await obtenerSesionDelDispositivo(cliente.auth);
+    if (!sesion) throw new Error("Inicia sesión para descargar el recibo.");
+    const token = sesion.token;
     if (!(await Sharing.isAvailableAsync()))
       throw new Error("Este dispositivo no permite compartir archivos.");
     const destino = new URL(`/api/recibos/${reciboId}/pdf`, base);
@@ -113,7 +114,9 @@ export async function compartirRecibo(
       senal,
       progreso,
     );
-    if (senal.aborted || token !== (await obtenerTokenDeAcceso(cliente.auth)))
+    // Se compara la identidad, no el token: una renovación del token durante la descarga es legítima.
+    const actual = await obtenerSesionDelDispositivo(cliente.auth);
+    if (senal.aborted || actual?.usuarioId !== sesion.usuarioId)
       throw new Error("El contexto de la sesión cambió. Consulta nuevamente.");
     // El tiempo de decisión en el menú nativo no es tiempo de red.
     descargaPreparada();

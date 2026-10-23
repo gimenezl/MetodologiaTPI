@@ -80,17 +80,20 @@ function respuesta(
     },
   } as unknown as Response;
 }
-const cliente = (tokens = ["token"]) =>
+const cliente = (
+  sesiones: { token: string; usuario: string }[] = [
+    { token: "token", usuario: "u1" },
+  ],
+) =>
   ({
     auth: {
-      getSession: jest.fn(async () => ({
-        data: {
-          session: {
-            access_token: tokens.length > 1 ? tokens.shift() : tokens[0],
-          },
-        },
-        error: null,
-      })),
+      getSession: jest.fn(async () => {
+        const s = sesiones.length > 1 ? sesiones.shift()! : sesiones[0];
+        return {
+          data: { session: { access_token: s.token, user: { id: s.usuario } } },
+          error: null,
+        };
+      }),
     },
   }) as unknown as ClienteEPT;
 beforeEach(() => {
@@ -148,7 +151,10 @@ test("usa expo/fetch con rechazo nativo de redirects, sin cookies; comparte y li
 test("cambio de cuenta o logout antes de compartir descarta bytes", async () => {
   await expect(
     compartirRecibo(
-      cliente(["token", "otra-cuenta"]),
+      cliente([
+        { token: "token", usuario: "u1" },
+        { token: "token-b", usuario: "u2" },
+      ]),
       id,
       new AbortController().signal,
       () => {},
@@ -156,6 +162,32 @@ test("cambio de cuenta o logout antes de compartir descarta bytes", async () => 
   ).rejects.toThrow("sesión cambió");
   expect(Sharing.shareAsync).not.toHaveBeenCalled();
   expect(mockEscribir).not.toHaveBeenCalled();
+});
+test("la renovación del token de la misma cuenta durante la descarga no la invalida", async () => {
+  await compartirRecibo(
+    cliente([
+      { token: "token", usuario: "u1" },
+      { token: "token-renovado", usuario: "u1" },
+    ]),
+    id,
+    new AbortController().signal,
+    () => {},
+  );
+  expect(Sharing.shareAsync).toHaveBeenCalledTimes(1);
+});
+test("logout durante la descarga descarta los bytes", async () => {
+  const c = cliente();
+  jest
+    .mocked(c.auth.getSession)
+    .mockResolvedValueOnce({
+      data: { session: { access_token: "t", user: { id: "u1" } } },
+      error: null,
+    } as never)
+    .mockResolvedValueOnce({ data: { session: null }, error: null } as never);
+  await expect(
+    compartirRecibo(c, id, new AbortController().signal, () => {}),
+  ).rejects.toThrow("sesión cambió");
+  expect(Sharing.shareAsync).not.toHaveBeenCalled();
 });
 test("cancelación no abre el menú ni conserva el archivo", async () => {
   const c = new AbortController();
