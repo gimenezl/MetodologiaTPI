@@ -42,7 +42,10 @@ jobs:
       - run: npm run lint
       - run: npx playwright test --config=playwright.pure.config.ts
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
+      # Normalmente tarda ~20 s. Si el mirror de apt se cuelga (visto en EPT-113), el plazo evita agotar
+      # los 8 min del job y cae a instalar solo el navegador: las librerías de sistema ya vienen en la imagen.
+      - name: Instalar Chromium
+        run: timeout 150 npx playwright install --with-deps chromium || npx playwright install chromium
       - run: npx playwright test --config=playwright.smoke.config.ts
       # Prototipo EPT-96: contiene HTML/CSS/JS ejecutable; se recorre en Chromium real, no solo se verifican hashes.
       - name: Prototipo EPT-96 (navegación real)
