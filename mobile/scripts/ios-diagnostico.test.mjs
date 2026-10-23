@@ -280,20 +280,21 @@ test('scroll UP de Hasta preserva visibilidad completa, plazo y asserts con cade
 test('recibo real conserva tres desplazamientos completos con cadencia medida, plazos y aserciones', () => {
   const flow = readFileSync(join(root, 'mobile/maestro/recibos.yaml'), 'utf8')
   const scrolls = [...flow.matchAll(/- scrollUntilVisible:\n(?<config>(?: {4,}.+\n)+)/gu)]
-  assert.equal(scrolls.length, 3)
-  for (const [index, [id, timeout]] of [['periodo-hasta', 15000], ['periodo-consultar', 15000], ['recibo-descargar', 20000]].entries()) {
+  assert.equal(scrolls.length, 4)
+  for (const [index, [id, timeout]] of [['periodo-hasta', 15000], ['periodo-consultar', 15000], ['recibo-descargar', 20000], ['recibo-descargar', 30000]].entries()) {
     const config = scrolls[index].groups.config
     assert.ok(config.includes(`id: '${id}'`))
     assert.match(config, /direction: DOWN\n    speed: 80\n    visibilityPercentage: 100/u)
     assert.ok(config.includes(`timeout: ${timeout}\n`))
   }
-  assert.equal((flow.match(/speed: 80/gu) ?? []).length, 3)
+  assert.equal((flow.match(/speed: 80/gu) ?? []).length, 4)
   assert.match(flow, /launchApp:\n    clearState: true/u)
   assert.match(flow, /- tapOn:\n    id: 'recibo-descargar'/u)
   // Android 14 no muestra el dialogTitle: el menú se verifica por el archivo compartido.
   assert.match(flow, /- extendedWaitUntil:\n    visible: '\.\*recibo-\.\*\\\.pdf'\n    timeout: 60000/u)
-  assert.match(flow, /- takeScreenshot: recibo-menu-nativo\n- back\n- extendedWaitUntil:\n    visible: 'Menú de descarga cerrado\. Temporal eliminado\.'\n    timeout: 15000/u)
-  assert.match(flow, /- takeScreenshot: recibo-temporal-eliminado/u)
+  // La recarga al volver a primer plano desmonta el mensaje transitorio: se exige la acción disponible de nuevo.
+  assert.match(flow, /- takeScreenshot: recibo-menu-nativo\n- back\n(?:#.*\n)+- scrollUntilVisible:/u)
+  assert.match(flow, /- assertVisible: 'Descargar recibo PDF'\n- takeScreenshot: recibo-temporal-eliminado/u)
   assert.doesNotMatch(flow, /optional: true|retry:|retryTapIfNoChange:/u)
 })
 test('presupuesto UI medido no cambia DB, full ni fallback', () => {

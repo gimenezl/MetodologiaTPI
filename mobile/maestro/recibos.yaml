@@ -63,7 +63,15 @@ name: Recibo institucional, descarga Bearer y compartir nativo contra backend re
     timeout: 60000
 - takeScreenshot: recibo-menu-nativo
 - back
-- extendedWaitUntil:
-    visible: 'Menú de descarga cerrado. Temporal eliminado.'
-    timeout: 15000
+# Al volver a primer plano la consulta se recarga y el mensaje transitorio se desmonta: se verifica
+# que la acción vuelva a estar disponible (no «Preparando recibo…»), es decir, que el menú se resolvió.
+- scrollUntilVisible:
+    element:
+      id: 'recibo-descargar'
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 100
+    centerElement: true
+    timeout: 30000
+- assertVisible: 'Descargar recibo PDF'
 - takeScreenshot: recibo-temporal-eliminado
