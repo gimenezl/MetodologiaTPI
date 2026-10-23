@@ -49,6 +49,12 @@ try {
   assert.equal(programarFacturacion({url:servidor.url+'/api/cron/facturacion',secreto}).activo,false)
   ok('gates por defecto inactivos no producen facturas ni peticiones automáticas')
   sql(`UPDATE app_private.facturacion_config SET habilitada=true`)
+  // En los 7 días previos al último hábil el plan incluye a todo alumno ACTIVO sin factura:
+  // se aparta a alumno2 (en una sola transacción, por la invariante diferida) para no depender del calendario.
+  sql(`BEGIN;
+    DELETE FROM public.matriculas WHERE id='${id(22)}';
+    UPDATE public.alumnos SET estado='INACTIVO' WHERE perfil_id='${alumno2}';
+    COMMIT;`)
   let resolver,rechazar
   const dosTicks=new Promise((r,j)=>{resolver=r;rechazar=j})
   const resultados=[]
@@ -84,6 +90,10 @@ try {
   assert.equal((await llamar('/api/facturacion/reintentar',{method:'POST',cookie:cookieDe(sesionPadre),body:{alumno_id:alumno,periodo:mes}})).status,403)
   assert.equal((await llamar('/api/facturacion/reintentar',{method:'POST',cookie:cookieDe(sesionDir),body:{alumno_id:alumno,periodo:mes,total:'1'}})).status,400)
   ok('reintento manual autorizado conserva factura; padre y precio cliente rechazados')
+  sql(`BEGIN;
+    INSERT INTO public.matriculas(id,alumno_id,curso_id) VALUES ('${id(22)}','${alumno2}','${id(12)}');
+    UPDATE public.alumnos SET estado='ACTIVO' WHERE perfil_id='${alumno2}';
+    COMMIT;`)
   capturar(alumno2,mes)
   const inicio=intermediario.registro.length
   intermediario.planear('perder-respuesta',p=>p.ruta==='/rest/v1/rpc/facturacion_emitir_job')
