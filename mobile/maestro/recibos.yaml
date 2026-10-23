@@ -54,6 +54,7 @@ name: Recibo institucional, descarga Bearer y compartir nativo contra backend re
     direction: DOWN
     speed: 80
     visibilityPercentage: 100
+    centerElement: true
     timeout: 20000
 - tapOn:
     id: 'recibo-descargar'

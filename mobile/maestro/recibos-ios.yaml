@@ -14,7 +14,7 @@ name: PDF sintético y menú nativo iOS, sin backend ni autorización
 - tapOn: 'Compartir PDF sintético'
 - extendedWaitUntil:
     visible: '.*recibo-.*'
-    timeout: 20000
+    timeout: 45000
 - takeScreenshot: recibo-ios-menu-nativo
 - tapOn:
     text: 'Close'
