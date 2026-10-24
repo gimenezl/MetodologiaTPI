@@ -31,7 +31,10 @@ const extensionesDePagina = ["tsx", "ts", "jsx", "js"];
 const enPruebas = process.env.EPT_UI_HARNESS === "1";
 
 const nextConfig: NextConfig = {
-  outputFileTracingIncludes: { '/api/recibos/*/pdf': ['./mobile/assets/fonts/Outfit_400Regular.ttf'] },
+  outputFileTracingIncludes: {
+    '/api/recibos/*/pdf': ['./mobile/assets/fonts/Outfit_400Regular.ttf'],
+    '/api/cron/recordatorio-mensual': ['./mobile/assets/fonts/Outfit_400Regular.ttf'],
+  },
   ...(enPruebas ? { devIndicators: false as const } : {}),
   pageExtensions:
     process.env.NODE_ENV === "production"

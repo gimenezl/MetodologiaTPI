@@ -263,8 +263,8 @@ DECLARE v_n INTEGER;
 BEGIN
     PERFORM pg_temp.afirmar(pg_catalog.to_regclass('public.comprobantes_pago') IS NOT NULL,
         'A1: existe public.comprobantes_pago');
-    PERFORM pg_temp.afirmar(pg_catalog.to_regclass('public.envios_correo_facturas') IS NULL,
-        'A1: envios_correo_facturas sigue sin crearse (pendiente de decisión)');
+    PERFORM pg_temp.afirmar(pg_catalog.to_regclass('public.envios_correo_facturas') IS NOT NULL,
+        'A1: envios_correo_facturas existe (EPT-115 cerró la decisión pendiente)');
 
     SELECT pg_catalog.count(*) INTO v_n
     FROM (VALUES

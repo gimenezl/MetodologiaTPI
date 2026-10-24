@@ -21,6 +21,7 @@ export const dbScripts = ['recibos_historial.mjs', 'recibos_concurrencia.mjs',
   'credenciales_qr_concurrencia.mjs', 'deportes_administracion_concurrencia.mjs',
   'deportes_concurrencia.mjs', 'economico_concurrencia.mjs', 'economico_storage.mjs',
   'facturacion.mjs', 'facturacion-concurrencia.mjs', 'facturacion-api.mjs', 'facturacion-progreso.mjs',
+  'recordatorio-calendario.mjs', 'factura_pdf.mjs', 'recordatorio-api.mjs',
   'horarios_academicos_concurrencia.mjs', 'horarios_concurrencia.mjs', 'horarios_paridad.mjs',
   'inscripciones_administracion_concurrencia.mjs', 'inscripciones_legadas_concurrencia.mjs',
   'niveles_concurrencia.mjs', 'pagos_seleccion_concurrencia.mjs', 'profesores_concurrencia.mjs', 'profesores_paridad.mjs',
@@ -31,7 +32,7 @@ export const dbScripts = ['recibos_historial.mjs', 'recibos_concurrencia.mjs',
 ]
 export const fullScripts = ['facturacion-mutaciones.mjs', 'correr-autenticadas.mjs']
 export const supportFiles = ['_arnes-ept59.mjs', '_arnes-produccion.mjs',
-  '_facturacion-fixture.mjs', '_sesion-psql.mjs', '_verificacion-fixture.mjs', '_reportes-economicos-fixture.mjs']
+  '_facturacion-fixture.mjs', '_recordatorio-fixture.mjs', '_sesion-psql.mjs', '_verificacion-fixture.mjs', '_reportes-economicos-fixture.mjs']
 // Procedimientos históricos, de carga, setup o producción: requieren una ejecución específica revisada.
 export const excludedFiles = [
   'inscripciones_legadas_expansion_rls.sql', 'preflight_ept59.sql', 'preflight_ept66.sql',

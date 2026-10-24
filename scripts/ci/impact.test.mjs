@@ -886,3 +886,15 @@ test('EPT-113: PDF, historial, SQL, API, carreras y escenarios nativos tienen co
  assert.match(readFileSync('mobile/scripts/ejecutar-android.sh','utf8'),/android-maestro-recibos 180/u)
  assert.ok(contratoIosTransitivo().includes('recibos-ios.yaml'))
 })
+
+test('EPT-115: recordatorio mensual, factura PDF, cron y scheduler local tienen contratos explícitos', () => {
+  for (const file of ['src/services/recordatorio-job.ts', 'src/services/recordatorio-correo.ts', 'src/services/factura-pdf.ts',
+    'src/app/api/cron/recordatorio-mensual/route.ts', 'scripts/recordatorio-local.mjs']) {
+    assert.deepEqual(profile([file]), { db: true, mutations: false, ui: [] }, file)
+  }
+  // El servicio de correo compartido (vinculación de cuentas) sigue activando los contratos de núcleo.
+  assert.deepEqual(profile(['src/services/correo.server.ts']), { db: true, mutations: false, ui: ['core'] })
+  for (const file of ['recordatorio-calendario.mjs', 'factura_pdf.mjs', 'recordatorio-api.mjs']) assert.ok(dbScripts.includes(file), file)
+  assert.ok(supportFiles.includes('_recordatorio-fixture.mjs'))
+  assert.throws(() => profile(['src/services/recordatorio-desconocido.ts']))
+})
