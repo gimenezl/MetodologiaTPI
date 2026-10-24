@@ -30,7 +30,7 @@
 --      alumno, tarifa e importe. Contrato de un ítem aislado; la consistencia de
 --      un lote mensual de facturación es de EPT-104.
 --
--- Fechas finitas: las 9 columnas DATE y las 8 TIMESTAMPTZ de las ocho tablas (EPT-115 agregó 2 y 2)
+-- Fechas finitas: las 10 columnas DATE y las 8 TIMESTAMPTZ de las ocho tablas (EPT-115 agregó 2 y 2; EPT-116, 1 DATE)
 -- rechazan `infinity` y `-infinity` (secciones C3b/C3c, D2b/D2c, F2b/F4b, H1b,
 -- H2b, H3/H3b y el control de catálogo A12). `DEFAULT NOW()` no sustituye la
 -- restricción.
@@ -465,7 +465,7 @@ BEGIN
     FROM information_schema.columns c
     WHERE c.table_schema = 'public' AND c.table_name = ANY (v_esperadas)
       AND c.data_type IN ('date', 'timestamp with time zone');
-    PERFORM pg_temp.afirmar(v_n = 17, 'A12: 17 columnas temporales (9 DATE + 8 TIMESTAMPTZ; EPT-115 agrega 2 y 2 en envios_correo) (got ' || v_n || ')');
+    PERFORM pg_temp.afirmar(v_n = 18, 'A12: 18 columnas temporales (10 DATE + 8 TIMESTAMPTZ; EPT-115 agrega 2 y 2 en envios_correo y EPT-116 1 DATE: corte_fecha) (got ' || v_n || ')');
     SELECT pg_catalog.count(*) INTO v_n
     FROM information_schema.columns c
     WHERE c.table_schema = 'public' AND c.table_name = ANY (v_esperadas)
