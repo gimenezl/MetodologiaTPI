@@ -1,5 +1,5 @@
 // GENERADO por mobile/scripts/sync-compartido.mjs desde src/types/database.generated.ts. No editar a mano.
-// sha256 de la fuente: b09a6daa05dc3e3de37182997493272a57e2227723271b0c84131e90e282df9c
+// sha256 de la fuente: 7d660ac653ef1d6574ba1456d38549ac74b36738128ca617c27d8054328afceb
 export type Json =
   | string
   | number
@@ -673,31 +673,46 @@ export type Database = {
           enviado_en: string | null
           estado: Database["public"]["Enums"]["estado_envio_correo"]
           fecha_programada: string
+          frontera_smtp_en: string | null
           id: string
           intentos: number
           padre_id: string
+          periodo: string | null
+          reserva_hasta: string | null
+          reserva_token: string | null
           tipo: Database["public"]["Enums"]["tipo_envio_correo"]
           ultimo_error: string | null
+          ultimo_intento_fecha: string | null
         }
         Insert: {
           enviado_en?: string | null
           estado?: Database["public"]["Enums"]["estado_envio_correo"]
           fecha_programada: string
+          frontera_smtp_en?: string | null
           id?: string
           intentos?: number
           padre_id: string
+          periodo?: string | null
+          reserva_hasta?: string | null
+          reserva_token?: string | null
           tipo: Database["public"]["Enums"]["tipo_envio_correo"]
           ultimo_error?: string | null
+          ultimo_intento_fecha?: string | null
         }
         Update: {
           enviado_en?: string | null
           estado?: Database["public"]["Enums"]["estado_envio_correo"]
           fecha_programada?: string
+          frontera_smtp_en?: string | null
           id?: string
           intentos?: number
           padre_id?: string
+          periodo?: string | null
+          reserva_hasta?: string | null
+          reserva_token?: string | null
           tipo?: Database["public"]["Enums"]["tipo_envio_correo"]
           ultimo_error?: string | null
+          ultimo_intento_fecha?: string | null
         }
         Relationships: [
           {
@@ -705,6 +720,46 @@ export type Database = {
             columns: ["padre_id"]
             isOneToOne: false
             referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      envios_correo_facturas: {
+        Row: {
+          envio_id: string
+          factura_id: string
+          total: number
+        }
+        Insert: {
+          envio_id: string
+          factura_id: string
+          total: number
+        }
+        Update: {
+          envio_id?: string
+          factura_id?: string
+          total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "envios_correo_facturas_envio_id_fkey"
+            columns: ["envio_id"]
+            isOneToOne: false
+            referencedRelation: "envios_correo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "envios_correo_facturas_factura_id_fkey"
+            columns: ["factura_id"]
+            isOneToOne: false
+            referencedRelation: "estado_cuotas_alumno"
+            referencedColumns: ["factura_id"]
+          },
+          {
+            foreignKeyName: "envios_correo_facturas_factura_id_fkey"
+            columns: ["factura_id"]
+            isOneToOne: false
+            referencedRelation: "facturas"
             referencedColumns: ["id"]
           },
         ]
@@ -3869,6 +3924,33 @@ export type Database = {
       reactivar_alumno: {
         Args: { p_alumno_id: string; p_curso_id: string }
         Returns: string
+      }
+      recordatorio_datos_job: {
+        Args: { p_fecha: string; p_padre: string; p_token: string }
+        Returns: Json
+      }
+      recordatorio_estado_job: {
+        Args: { p_fecha: string; p_padre: string }
+        Returns: Json
+      }
+      recordatorio_frontera_job: {
+        Args: { p_fecha: string; p_padre: string; p_token: string }
+        Returns: boolean
+      }
+      recordatorio_plan_job: { Args: never; Returns: Json }
+      recordatorio_reservar_job: {
+        Args: { p_fecha: string; p_padre: string }
+        Returns: Json
+      }
+      recordatorio_resultado_job: {
+        Args: {
+          p_error: string
+          p_estado: string
+          p_fecha: string
+          p_padre: string
+          p_token: string
+        }
+        Returns: boolean
       }
       recuperar_recibo: { Args: { p_pago_id: string }; Returns: string }
       registrar_acceso_servicio: {

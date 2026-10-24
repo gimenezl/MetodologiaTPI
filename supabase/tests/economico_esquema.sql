@@ -30,7 +30,7 @@
 --      alumno, tarifa e importe. Contrato de un ítem aislado; la consistencia de
 --      un lote mensual de facturación es de EPT-104.
 --
--- Fechas finitas: las 7 columnas DATE y las 6 TIMESTAMPTZ de las ocho tablas
+-- Fechas finitas: las 9 columnas DATE y las 8 TIMESTAMPTZ de las ocho tablas (EPT-115 agregó 2 y 2)
 -- rechazan `infinity` y `-infinity` (secciones C3b/C3c, D2b/D2c, F2b/F4b, H1b,
 -- H2b, H3/H3b y el control de catálogo A12). `DEFAULT NOW()` no sustituye la
 -- restricción.
@@ -263,12 +263,12 @@ BEGIN
             'A1: existe public.' || v_tabla);
     END LOOP;
     -- EPT-101 creó `comprobantes_pago` (aprobada el 05/10/2026; su estructura y su
-    -- seguridad las prueba `economico_rls.sql`). `envios_correo_facturas` sigue
-    -- pendiente de decisión y no se crea.
+    -- seguridad las prueba `economico_rls.sql`). EPT-115 resolvió la decisión pendiente
+    -- y creó `envios_correo_facturas` (facturas incluidas en cada recordatorio).
     PERFORM pg_temp.afirmar(
         pg_catalog.to_regclass('public.comprobantes_pago') IS NOT NULL
-        AND pg_catalog.to_regclass('public.envios_correo_facturas') IS NULL,
-        'A1: existe comprobantes_pago (EPT-101) y no se creó envios_correo_facturas (pendiente de decisión)');
+        AND pg_catalog.to_regclass('public.envios_correo_facturas') IS NOT NULL,
+        'A1: existen comprobantes_pago (EPT-101) y envios_correo_facturas (EPT-115)');
 
     -- A2. Ninguna columna monetaria usa FLOAT/REAL/MONEY, y toda columna de
     -- importe es NUMERIC(12,2).
@@ -465,7 +465,7 @@ BEGIN
     FROM information_schema.columns c
     WHERE c.table_schema = 'public' AND c.table_name = ANY (v_esperadas)
       AND c.data_type IN ('date', 'timestamp with time zone');
-    PERFORM pg_temp.afirmar(v_n = 13, 'A12: 13 columnas temporales (7 DATE + 6 TIMESTAMPTZ) (got ' || v_n || ')');
+    PERFORM pg_temp.afirmar(v_n = 17, 'A12: 17 columnas temporales (9 DATE + 8 TIMESTAMPTZ; EPT-115 agrega 2 y 2 en envios_correo) (got ' || v_n || ')');
     SELECT pg_catalog.count(*) INTO v_n
     FROM information_schema.columns c
     WHERE c.table_schema = 'public' AND c.table_name = ANY (v_esperadas)
