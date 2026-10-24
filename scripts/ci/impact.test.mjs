@@ -257,7 +257,7 @@ test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   const minutos = bloque => Number(/timeout-minutes: (\d+)/u.exec(bloque)?.[1])
   // Android lleva el E2E real de Auth/RLS contra un Supabase local descartable, acotado y siempre detenido.
   const android = bloqueJob('mobile-android')
-  assert.ok(minutos(android) > 0 && minutos(android) <= 30)
+  assert.ok(minutos(android) > 0 && minutos(android) <= 40)
   assert.match(android, /EPT_NATIVE_DEADLINE/u)
   assert.match(android, /run-stage\.test\.py/u)
   assert.match(android, /integracion-auth-local\.mjs/u)

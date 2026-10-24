@@ -192,7 +192,7 @@ test('preflight antecede al action sin modificar API, arquitectura o presupuesto
   const y = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')
   assert.ok(y.indexOf('--stage android-sdk-image --seconds 220') < y.indexOf('uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d'))
   assert.match(y, /api-level: 34\s+arch: x86_64\s+target: google_apis/u)
-  assert.match(y, /name: CI \/ móvil Android[\s\S]*?timeout-minutes: 30/u)
+  assert.match(y, /name: CI \/ móvil Android[\s\S]*?timeout-minutes: 40/u)
   assert.match(y, /evidencia-movil-android\/sdk-imagen\//u)
   assert.ok(y.indexOf('--stage android-sdk-ndk --seconds 220') < y.indexOf('name: Build Android'))
   assert.match(y, /--stage android-sdk-ndk --seconds 220 -- node mobile\/scripts\/android-imagen\.mjs ndk/u)

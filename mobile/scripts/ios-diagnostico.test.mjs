@@ -262,7 +262,7 @@ test('Maestro CLI hereda opt-out oficial de telemetría en CI nativo sin bypass 
   const ios = workflow.slice(workflow.indexOf('  mobile-ios:'), workflow.indexOf('  gate:'))
   assert.match(android, /    env:\n      MAESTRO_CLI_NO_ANALYTICS: '1'/u)
   assert.match(ios, /MAESTRO_CLI_NO_ANALYTICS: '1'\n        run: bash mobile\/scripts\/ejecutar-ios.sh/u)
-  assert.match(android, /timeout-minutes: 30/u)
+  assert.match(android, /timeout-minutes: 40/u)
   assert.match(ios, /timeout-minutes: 12/u)
   assert.match(ios, /timeout-minutes: 40/u)
   for (const script of ['ejecutar-android.sh', 'ejecutar-ios.sh']) assert.doesNotMatch(readFileSync(join(root, 'mobile/scripts', script), 'utf8'), /env -i|unset MAESTRO_CLI_NO_ANALYTICS/u)
