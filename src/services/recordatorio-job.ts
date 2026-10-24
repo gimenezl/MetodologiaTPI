@@ -15,7 +15,7 @@ type Resultado = "enviado" | "fallido" | "incierto" | "omitido" | "sin_confirmar
 const LIMITE_PARA_INICIAR_MS = 15_000;
 const MAXIMO_POR_EJECUCION = 100;
 /** Un único destinatario: sin comas, punto y coma, dos puntos, barras ni espacios. */
-const CORREO_VALIDO = /^[^\s@<>()[\]\\,;:"]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9.-]{0,253}[A-Za-z0-9])?$/u;
+export const CORREO_VALIDO = /^[^\s@<>()[\]\\,;:"]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9.-]{0,253}[A-Za-z0-9])?$/u;
 /** Los adjuntos codificados en base64 deben caber en un mensaje SMTP habitual (≈ 25 MB). */
 const LIMITE_ADJUNTOS_BYTES = 15 * 1024 * 1024;
 
