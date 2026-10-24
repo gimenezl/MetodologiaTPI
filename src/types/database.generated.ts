@@ -3593,6 +3593,17 @@ export type Database = {
           revocada_por_nombre: string
         }[]
       }
+      historial_deuda_items: {
+        Args: {
+          p_alumno_id: string
+          p_desde?: string
+          p_hasta?: string
+          p_huella?: string
+          p_pagina?: number
+          p_tamano?: number
+        }
+        Returns: Json
+      }
       inactivar_alumno: { Args: { p_alumno_id: string }; Returns: string }
       inscribir_actividad_legada: {
         Args: { p_actividad_id: number; p_estudiante_id: string }

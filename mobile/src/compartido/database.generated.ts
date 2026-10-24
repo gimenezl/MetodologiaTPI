@@ -1,5 +1,5 @@
 // GENERADO por mobile/scripts/sync-compartido.mjs desde src/types/database.generated.ts. No editar a mano.
-// sha256 de la fuente: ae8f66282a0396abbf8e017207156bdc5b9beac7c107081d1a4c6b32b889afdb
+// sha256 de la fuente: b09a6daa05dc3e3de37182997493272a57e2227723271b0c84131e90e282df9c
 export type Json =
   | string
   | number
@@ -3594,6 +3594,17 @@ export type Database = {
           revocada_en: string
           revocada_por_nombre: string
         }[]
+      }
+      historial_deuda_items: {
+        Args: {
+          p_alumno_id: string
+          p_desde?: string
+          p_hasta?: string
+          p_huella?: string
+          p_pagina?: number
+          p_tamano?: number
+        }
+        Returns: Json
       }
       inactivar_alumno: { Args: { p_alumno_id: string }; Returns: string }
       inscribir_actividad_legada: {
