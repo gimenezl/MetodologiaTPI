@@ -104,6 +104,10 @@ CREATE POLICY "Bloqueo de acceso sin datos protegidos" ON public.envios_correo_f
     WITH CHECK (NOT (SELECT app_private.acceso_bloqueado()));
 GRANT SELECT ON public.envios_correo_facturas TO authenticated;
 
+-- Solo las funciones definidoras escriben el registro: la credencial de servidor no tiene
+-- DML directo (una fila ENVIADO/INCIERTO no puede volver a PENDIENTE por fuera de la máquina de estados).
+REVOKE ALL ON public.envios_correo FROM service_role;
+
 -- ----------------------------------------------------------------
 -- 4. Calendario
 -- ----------------------------------------------------------------
@@ -126,7 +130,7 @@ CREATE FUNCTION app_private.recordatorio_plan() RETURNS JSONB
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = '' AS $$
 DECLARE
     v_hoy DATE := app_private.recordatorio_hoy();
-    v_mes DATE := pg_catalog.date_trunc('month', app_private.recordatorio_hoy())::DATE;
+    v_mes DATE := pg_catalog.date_trunc('month', v_hoy)::DATE;
     v_candidatos JSONB;
 BEGIN
     IF NOT (SELECT habilitada FROM app_private.recordatorio_config WHERE id) THEN
@@ -140,6 +144,14 @@ BEGIN
            reserva_token = NULL, reserva_hasta = NULL
      WHERE tipo = 'RECORDATORIO_MENSUAL' AND estado = 'PENDIENTE'
        AND frontera_smtp_en IS NOT NULL AND reserva_hasta < pg_catalog.clock_timestamp();
+
+    -- Venció la ventana (día 10 inclusive) sin enviarse y sin cruzar la frontera: queda FALLIDO.
+    UPDATE public.envios_correo
+       SET estado = 'FALLIDO', ultimo_error = 'Venció el plazo del día 10 sin poder enviarse.',
+           reserva_token = NULL, reserva_hasta = NULL
+     WHERE tipo = 'RECORDATORIO_MENSUAL' AND estado = 'PENDIENTE' AND periodo IS NOT NULL
+       AND frontera_smtp_en IS NULL AND v_hoy > periodo + 9
+       AND (reserva_hasta IS NULL OR reserva_hasta < pg_catalog.clock_timestamp());
 
     -- Primer envío: solo el último día hábil del mes. Progreso durable de todo el lote.
     IF v_hoy = app_private.ultimo_habil(v_mes) THEN
@@ -219,7 +231,7 @@ BEGIN
     SELECT * INTO v_e FROM public.envios_correo
      WHERE padre_id = p_padre AND tipo = 'RECORDATORIO_MENSUAL' AND fecha_programada = p_fecha FOR UPDATE;
     IF NOT FOUND OR v_e.reserva_token IS DISTINCT FROM p_token OR v_e.estado <> 'PENDIENTE'
-       OR v_e.reserva_hasta < pg_catalog.clock_timestamp() THEN
+       OR v_e.frontera_smtp_en IS NOT NULL OR v_e.reserva_hasta < pg_catalog.clock_timestamp() THEN
         RAISE EXCEPTION USING ERRCODE = 'P6852', MESSAGE = 'La reserva del envío no está vigente.';
     END IF;
 

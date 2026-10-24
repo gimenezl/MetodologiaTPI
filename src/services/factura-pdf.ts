@@ -13,7 +13,7 @@ import { z } from "zod";
 import { importeRecibo } from "@/services/recibos-pdf";
 
 const dinero = z.string().regex(/^\d+(?:\.\d{1,2})?$/u);
-const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}/u);
+const fecha = z.string().regex(/^\d{4}-(?:0[1-9]|1[0-2])-\d{2}/u);
 const texto = z.string().min(1).max(4000);
 
 export const fuenteFacturaSchema = z.object({

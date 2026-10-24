@@ -112,6 +112,8 @@ assert.match(correo.asunto, /noviembre de 2026/u)
 assert.throws(() => verificarConjunto({ ...datos, total_facturado: '0.01' }), /no coinciden/u)
 assert.throws(() => verificarConjunto({ ...datos, hijos: [hijos[0], hijos[0]] }), /(repetidas|no coinciden)/u)
 assert.throws(() => verificarConjunto({ ...datos, hijos: [hijos[0], { ...hijos[1], periodo: '2026-12-01' }] }), /(otro período|no coinciden)/u)
+assert.throws(() => verificarConjunto({ ...datos, hijos: [hijos[0], { ...hijos[1], vencimiento: '2026-11-11' }] }), /vencimientos distintos/u)
+await assert.rejects(generarFacturaPdf({ ...factura(3), periodo: '2026-13-01' }))
 // Aritmética exacta: 0,10 + 0,20 no produce 0,30000000000000004
 const exacto = armarRecordatorio({
   ...datos,

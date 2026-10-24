@@ -50,6 +50,8 @@ export function verificarConjunto(d: DatosRecordatorio): void {
     throw new Error("Hay facturas repetidas en el recordatorio.");
   if (d.hijos.some((h) => h.periodo.slice(0, 10) !== d.periodo))
     throw new Error("Hay facturas de otro período en el recordatorio.");
+  if (new Set(d.hijos.map((h) => h.vencimiento.slice(0, 10))).size !== 1)
+    throw new Error("Las facturas del recordatorio tienen vencimientos distintos.");
 }
 
 export function nombreAdjunto(alumno: string, periodo: string, indice: number): string {

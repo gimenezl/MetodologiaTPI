@@ -8,12 +8,16 @@ type Candidato = { padre_id: string; fecha_programada: string };
 type Resultado = "enviado" | "fallido" | "incierto" | "omitido" | "sin_confirmar";
 
 /**
- * El lote cabe en el presupuesto de la ruta (maxDuration 60 s): no se inicia otro
- * padre pasados 30 s, y el peor caso por padre es ~20 s (SMTP 5+5+10 s).
+ * El lote cabe en el presupuesto de la ruta (maxDuration 60 s): no se inicia otro padre
+ * pasados 15 s. Peor caso por padre: hasta cuatro llamadas a Supabase/Auth de 5 s (reserva,
+ * datos, correo, frontera), la generación de PDF y un envío con tope total de 20 s.
  */
-const LIMITE_PARA_INICIAR_MS = 30_000;
+const LIMITE_PARA_INICIAR_MS = 15_000;
 const MAXIMO_POR_EJECUCION = 100;
-const CORREO_VALIDO = /^[^\s@<>()"]{1,64}@[^\s@<>()"]{1,255}$/u;
+/** Un único destinatario: sin comas, punto y coma, dos puntos, barras ni espacios. */
+const CORREO_VALIDO = /^[^\s@<>()[\]\\,;:"]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9.-]{0,253}[A-Za-z0-9])?$/u;
+/** Los adjuntos codificados en base64 deben caber en un mensaje SMTP habitual (≈ 25 MB). */
+const LIMITE_ADJUNTOS_BYTES = 15 * 1024 * 1024;
 
 type Args = { p_padre: string; p_fecha: string; p_token: string };
 
@@ -54,15 +58,17 @@ async function procesar(db: Cliente, smtp: ConfiguracionSmtp, c: Candidato): Pro
 
   const datos = await db.rpc("recordatorio_datos_job", args);
   if (datos.error) return "sin_confirmar";
-  const crudo = datos.data as { impedimento?: string };
-  if (crudo.impedimento) return fallar(crudo.impedimento);
+  const crudo = datos.data as { impedimento?: string } | null;
+  if (crudo?.impedimento) return fallar(crudo.impedimento);
   const analizado = datosRecordatorioSchema.safeParse(datos.data);
   if (!analizado.success) return fallar("Los datos canónicos del recordatorio son inválidos.");
   const d = analizado.data;
 
   const usuario = await db.auth.admin.getUserById(d.user_id);
+  // Un error de Auth no demuestra que el correo sea inválido: no consume el intento diario.
+  if (usuario.error) return "sin_confirmar";
   const correo = usuario.data.user?.email ?? "";
-  if (usuario.error || !CORREO_VALIDO.test(correo)) return fallar("El destinatario no tiene un correo válido.");
+  if (!CORREO_VALIDO.test(correo)) return fallar("El destinatario no tiene un correo válido.");
 
   let mensaje;
   let adjuntos;
@@ -78,6 +84,8 @@ async function procesar(db: Cliente, smtp: ConfiguracionSmtp, c: Candidato): Pro
   } catch {
     return fallar("No se pudo generar el correo o alguna factura en PDF.");
   }
+  if (adjuntos.reduce((s, a) => s + a.contenido.length, 0) > LIMITE_ADJUNTOS_BYTES)
+    return fallar("Las facturas adjuntas superan el tamaño máximo de un correo.");
 
   // Frontera: desde aquí una aceptación SMTP es posible. Si no se confirma la marca, no se envía.
   const cruce = await db.rpc("recordatorio_frontera_job", args);

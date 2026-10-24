@@ -245,13 +245,15 @@ try {
   const F = await crearPadre('f', [hijo4])         // hijo4 sin factura
   const Pr = await crearPadre('p', [hijo2]); modos.set(Pr.email, 'rechazar') // rechazo permanente (límite día 10)
   const Jc = await crearPadre('j', [hijo2])        // correo inválido
+  const Jm = await crearPadre('jm', [hijo2])       // dos destinatarios en un solo campo
   sql(`UPDATE auth.users SET email='sin-arroba-ept115' WHERE id=(SELECT user_id FROM public.perfiles WHERE id='${Jc.perfil}')`)
+  sql(`UPDATE auth.users SET email='ept115-jm-a@${DOMINIO},ept115-jm-b@${DOMINIO}' WHERE id=(SELECT user_id FROM public.perfiles WHERE id='${Jm.perfil}')`)
   reloj(EVENTO)
   const r2 = await cron()
   assert.equal(r2.sin_confirmar, 0)
   assert.equal(r2.estado, 200)
   assert.equal(r2.inciertos, 1)  // E
-  assert.equal(r2.fallidos, 4)   // D (rechazo), F (sin factura), Pr (rechazo), Jc (correo inválido)
+  assert.equal(r2.fallidos, 5)   // D (rechazo), F (sin factura), Pr (rechazo), Jc y Jm (correo inválido)
   assert.equal(r2.enviados, 0)
   assert.equal(envio(D.perfil, EVENTO).estado, 'FALLIDO')
   assert.equal(envio(E.perfil, EVENTO).estado, 'INCIERTO')
@@ -261,7 +263,7 @@ try {
   assert.equal((await mensajes(E.email)).length, 1, 'el INCIERTO sí fue aceptado por SMTP: quedó en el buzón')
   assert.equal((await mensajes(D.email)).length, 0); assert.equal((await mensajes(F.email)).length, 0)
   ok('progreso del lote: fallo claro (rechazo SMTP) → FALLIDO, aceptación con respuesta cortada → INCIERTO sin enviado_en, factura faltante/correo inválido → FALLIDO sin mensaje')
-  assert.equal(r2.enviados + r2.fallidos + r2.inciertos, 5)
+  assert.equal(r2.enviados + r2.fallidos + r2.inciertos, 6)
 
   // Mismo día: sin reintento ni de FALLIDO ni de INCIERTO
   const r2b = await cron()
@@ -302,6 +304,16 @@ try {
   assert.equal((await mensajes(Pr.email)).length, 0)
   ok('reintento diario hasta el día 10 inclusive (12 intentos), ninguno el día 11, identidad única')
 
+  // Pasada la ventana, una fila que nunca salió ni cruzó la frontera queda FALLIDO (no PENDIENTE para siempre)
+  reloj(EVENTO)
+  const V = await crearPadre('v', [hijo2])
+  sql(`SELECT app_private.recordatorio_plan();`)
+  assert.equal(envio(V.perfil, EVENTO).estado, 'PENDIENTE')
+  reloj('2026-11-11'); sql(`SELECT app_private.recordatorio_plan();`)
+  assert.equal(envio(V.perfil, EVENTO).estado, 'FALLIDO'); assert.match(envio(V.perfil, EVENTO).ultimo_error, /Venció el plazo/u)
+  assert.equal((await mensajes(V.email)).length, 0)
+  ok('vencida la ventana (día 11) una fila PENDIENTE sin frontera queda FALLIDO y sin mensaje')
+
   // ---------------------------------------------------------------- 9. Reservas: crash antes y después de la frontera
   reloj(EVENTO)
   const L = await crearPadre('l', [hijo2]); const M = await crearPadre('m', [hijo2])
@@ -323,6 +335,8 @@ try {
   const datosM = await rpc(local, local.SERVICE_ROLE_KEY, 'recordatorio_datos_job', { p_padre: M.perfil, p_fecha: EVENTO, p_token: rM.token })
   assert.equal(datosM.estado, 200)
   assert.equal((await rpc(local, local.SERVICE_ROLE_KEY, 'recordatorio_frontera_job', { p_padre: M.perfil, p_fecha: EVENTO, p_token: rM.token })).cuerpo, true)
+  // Cruzada la frontera, la auditoría de adjuntos ya no se puede reescribir
+  assert.notEqual((await rpc(local, local.SERVICE_ROLE_KEY, 'recordatorio_datos_job', { p_padre: M.perfil, p_fecha: EVENTO, p_token: rM.token })).estado, 200)
   sql(`UPDATE public.envios_correo SET reserva_hasta=clock_timestamp()-interval '1 second' WHERE padre_id IN ('${M.perfil}','${L.perfil}')`)
   const antes = await totalMensajes()
   const r4 = await cron()
@@ -404,6 +418,13 @@ try {
   for (const tabla of ['recordatorio_config', 'recordatorio_reloj']) assert.equal((await rest(local, sesionDir.access_token, tabla)).estado, 404)
   const escribir = await rest(local, sesionDir.access_token, 'envios_correo', { method: 'POST', body: { padre_id: A.perfil, tipo: 'RECORDATORIO_MENSUAL', fecha_programada: '2030-01-01' } })
   assert.ok([401, 403].includes(escribir.estado))
+  // La credencial de servidor tampoco escribe el registro por fuera de la máquina de estados
+  for (const r of [await rest(local, local.SERVICE_ROLE_KEY, `envios_correo?padre_id=eq.${A.perfil}`, { method: 'PATCH', body: { estado: 'PENDIENTE' } }),
+    await rest(local, local.SERVICE_ROLE_KEY, 'envios_correo', { method: 'POST', body: { padre_id: A.perfil, tipo: 'RECORDATORIO_MENSUAL', fecha_programada: '2030-01-01' } }),
+    await rest(local, local.SERVICE_ROLE_KEY, `envios_correo?padre_id=eq.${A.perfil}`, { method: 'DELETE' })]) {
+    assert.ok([401, 403].includes(r.estado), `service_role sin DML sobre envios_correo (${r.estado})`)
+  }
+  assert.equal(envio(A.perfil, EVENTO).estado, 'ENVIADO')
   ok('PostgREST: RPC solo de servidor; padre no ve auditoría; Dirección sí ve estado/error; config y reloj fuera de la API; sin DML de cliente')
 
   // ---------------------------------------------------------------- 14. Compuerta de entorno prevalece

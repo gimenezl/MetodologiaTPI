@@ -17,6 +17,12 @@ import nodemailer from 'nodemailer'
  *   EPT_SMTP_REMITENTE  remitente visible, p. ej. «Educar para Transformar <no-responder@dominio>» (obligatorio)
  */
 
+/**
+ * Tope total de un envío estructurado. `socketTimeout` es de inactividad: un servidor que
+ * responde con cuentagotas podría retener la petición más que la ruta (60 s).
+ */
+const LIMITE_ENVIO_TOTAL_MS = 20_000
+
 /** Plazos cortos: un servidor SMTP colgado no puede retener la petición. */
 const LIMITE_CONEXION_MS = 5_000
 const LIMITE_SALUDO_MS = 5_000
@@ -195,8 +201,9 @@ export async function enviarCorreoEstructurado(
     },
   }
   const transporte = crearTransporte(configuracion, observador)
+  let temporizador: ReturnType<typeof setTimeout> | undefined
   try {
-    const info = await transporte.sendMail({
+    const envio = transporte.sendMail({
       from: configuracion.remitente,
       to: datos.destinatario,
       subject: datos.asunto,
@@ -208,14 +215,26 @@ export async function enviarCorreoEstructurado(
         contentType: a.tipo,
       })),
     })
-    // Aceptado solo si el servidor aceptó al destinatario y no rechazó a ninguno.
-    if (info.accepted.length === 1 && info.rejected.length === 0) return { estado: 'ACEPTADO' }
-    return { estado: 'FALLO_CLARO', causa: 'El servidor SMTP rechazó al destinatario.' }
+    const plazo = new Promise<'PLAZO'>((resolver) => {
+      temporizador = setTimeout(() => resolver('PLAZO'), LIMITE_ENVIO_TOTAL_MS)
+    })
+    const info = await Promise.race([envio, plazo])
+    if (info === 'PLAZO') {
+      envio.catch(() => {})
+      transporte.close()
+      return datosIniciados
+        ? { estado: 'INCIERTO', causa: 'Se agotó el plazo del envío después de iniciar DATA.' }
+        : { estado: 'FALLO_CLARO', causa: 'Se agotó el plazo del envío antes de iniciar DATA.' }
+    }
+    // Sin excepción, el servidor ya recibió el mensaje: nunca es un fallo claro reintentable.
+    if (info.accepted.length >= 1) return { estado: 'ACEPTADO' }
+    return { estado: 'INCIERTO', causa: 'El servidor SMTP respondió sin aceptar a ningún destinatario.' }
   } catch (error) {
     const resultado = clasificarErrorSmtp(error, datosIniciados)
     console.error('[correo] envío no confirmado', { clase: resultado.estado })
     return resultado
   } finally {
+    if (temporizador) clearTimeout(temporizador)
     transporte.close()
   }
 }
