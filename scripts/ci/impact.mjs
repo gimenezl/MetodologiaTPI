@@ -7,13 +7,14 @@ import { ept96Paths, validateEpt96Assets } from './ept96-assets.mjs'
 import { families, aliases, validateUiRegistry } from './ui.mjs'
 import { requireMobileContract, touchesMobile, validateMobileWorkflowFile } from './mobile.mjs'
 
-export const pureTests = ['tarifas-lib', 'asistencias-lib', 'reportes-lib', 'reportes-economicos-lib', 'paginacion',
+export const pureTests = ['recibos-pdf', 'tarifas-lib', 'asistencias-lib', 'reportes-lib', 'reportes-economicos-lib', 'paginacion',
   'paginacion-paralela', 'inscripciones-legadas-lib', 'accesos-qr-cripto',
   'credenciales-qr-cripto', 'semantica-estatica', 'accesos-qr-servicio', 'redireccion-login',
   'comprobantes-lib', 'comprobantes-servicio']
 // Infraestructura que decide cómo se prueba la app móvil: su cambio exige recorrer los gates móviles completos.
 const MOBILE_INFRA = new Set(['scripts/ci/run-stage.py', 'scripts/ci/run-stage.test.py', 'scripts/ci/install-cli.sh', 'scripts/ci/mobile.mjs', 'scripts/ci/impact.mjs', 'scripts/ci/impact.test.mjs', '.github/workflows/ci.yml'])
 const CI_TESTS = new Set(['scripts/ci/impact.test.mjs'])
+const RECIBOS_EVIDENCIA = new Set(['recibo-sintetico.pdf','contacto-9-paginas.png','pagina-1.png','pagina-9.png'].map(f => `docs/parte3/EPT-113/evidencia/${f}`))
 // Cambios de infraestructura que pueden alterar el prototipo o su verificación: obligan a ejecutar su navegación real.
 const PROTOTIPO_INFRA = new Set(['scripts/ci/ept96-assets.mjs', 'scripts/ci/impact.mjs', 'scripts/ci/impact.test.mjs', '.github/workflows/ci.yml', 'package.json', 'package-lock.json'])
 export function changedPaths(raw) {
@@ -55,6 +56,7 @@ export function profile(paths, { root = process.cwd() } = {}) {
     if (file.startsWith('docs/parte3/EPT-95/')) throw new Error(`Ruta EPT-95 sin contrato: ${file}`)
     if (PROTOTIPO_INFRA.has(file)) prototipo = true
     if (/^scripts\/ci\/.*\.test\.mjs$/u.test(file) && !CI_TESTS.has(file)) throw new Error(`Prueba CI sin contrato: ${file}`)
+    if (RECIBOS_EVIDENCIA.has(file)) continue
     if (/^(?:docs\/.*\.md|(?:README|AGENTS)\.md|\.github\/pull_request_template\.md)$/u.test(file)) continue
     if (pureTests.some(name => file === `tests/${name}.spec.ts`)) continue
     if (/^supabase\/tests\/[^/]+\.(?:sql|mjs)$/u.test(file)) {

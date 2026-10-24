@@ -1,5 +1,5 @@
 // Registro compartido: ninguna suite nueva obtiene aprobación sin declarar cómo ejecutarla.
-export const sqlSuites = [
+export const sqlSuites = ['recibos_esquema.sql',
   'accesos_servicios_rls.sql', 'alumnos_academicos_rls.sql',
   'asistencias_actores_bloqueo_rls.sql', 'asistencias_identidad_escritura_rls.sql',
   'asistencias_superficie_seguridad_rls.sql', 'asistencias_vinculo_academico_rls.sql',
@@ -13,7 +13,7 @@ export const sqlSuites = [
   'tarifas_administracion_rls.sql', 'transporte_rls.sql',
   'usuarios_alta_atomica.sql', 'usuarios_permisos_rls.sql',
 ]
-export const dbScripts = [
+export const dbScripts = ['recibos_historial.mjs', 'recibos_concurrencia.mjs',
   'accesos_servicios_concurrencia.mjs', 'alumnos_academicos_concurrencia.mjs',
   'asistencias_revocaciones_concurrencia.mjs', 'comedor_concurrencia.mjs',
   'comprobantes_carga.mjs', 'comprobantes_concurrencia.mjs',

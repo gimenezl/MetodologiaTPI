@@ -1,0 +1,10 @@
+appId: org.educarparatransformar.app
+name: Acceso, recuperación y PDF nativo iOS (sin backend)
+---
+# Una sesión del driver; cada subflujo conserva su launchApp con clearState y todas sus aserciones.
+- runFlow: smoke-ios.yaml
+- takeScreenshot: ept113-ios-smoke-completado
+- runFlow: recuperacion-ios.yaml
+- takeScreenshot: ept113-ios-recuperacion-completado
+- runFlow: recibos-ios.yaml
+- takeScreenshot: ept113-ios-recibos-completado

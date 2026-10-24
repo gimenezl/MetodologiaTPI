@@ -265,7 +265,7 @@ try {
   comprobar(true, 'búsqueda directa recupera pago finalizado y muestra su resultado real')
   await contexto.close()
   }
-  comprobar(sql(`SELECT count(*) FROM public.recibos WHERE pago_id IN('${pagos.join("','")}');`) === '0', 'ninguna decisión emite recibos ni numeración de EPT-113')
+  comprobar(sql(`SELECT count(*) FROM public.recibos r JOIN public.pagos p ON p.id=r.pago_id WHERE p.id IN('${pagos.join("','")}') AND p.estado<>'APROBADO';`) === '0', 'solo los aprobados emiten un recibo institucional (EPT-113)')
 } catch (error) {
   errorPrimario = error
 } finally {

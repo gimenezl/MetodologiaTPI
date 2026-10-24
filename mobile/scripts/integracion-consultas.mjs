@@ -5,6 +5,9 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 
 function sql(contenedor, texto) {
   return execFileSync('docker', ['exec', '-i', contenedor, 'psql', '-X', '-q', '-A', '-t', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'], {
@@ -167,6 +170,8 @@ COMMIT;`)
   const reg = (actor, alumno, c, d, h) => q(actor, 'consultar_registro_comprobantes',
     { p_alumno_id: alumno.profileId, p_criterio: c, p_desde: d, p_hasta: h })
 
+  const registroPendienteMovil = await reg(padreMaestro, hijoMaestro, 'PERIODO_FACTURA', '2030-01-01', '2030-12-31')
+
   // 1. Inscripciones: padre, copadre y estudiante propio ven lo mismo; el hijo sin inscripciones, vacío.
   const deHijo = await insc(padre, hijo)
   assert.deepEqual(deHijo.map(i => `${i.categoria}:${i.estado}`).sort(),
@@ -261,8 +266,8 @@ COMMIT;`)
   for (const fila of [...porFactura, ...sinFecha]) {
     assert.deepEqual(Object.keys(fila).sort(), [
       'cantidad_archivos', 'creado_en', 'estado', 'fecha_transferencia', 'importe_informado_centavos',
-      'pago_id', 'periodos', 'total_calculado_centavos', 'ultima_carga_en',
-    ])
+      'pago_id', 'periodos', 'total_calculado_centavos', 'ultima_carga_en', 'items','recibo_id','verificado_en','motivo_rechazo',
+    ].sort())
   }
   for (const actor of [copadre, hijo, a.director]) {
     assert.deepEqual((await reg(actor, hijo, 'PERIODO_FACTURA', '2030-12-01', '2031-01-31')).map(r => r.pago_id), [id.p1])
@@ -312,5 +317,41 @@ COMMIT;`)
   // 10. Nada económico ni de inscripción cambió por consultar.
   assert.equal(huella(), antes, 'Las consultas modificaron datos económicos o inscripciones.')
 
+  // EPT-113. La aceptación la ejecuta Dirección real: aprobación -> identidad única -> lectura del padre/estudiante.
+  const aprobacion=await ctx.rpc(a.director,'verificar_pago',{p_pago_id:id.pM1,p_decision:'APROBADO',p_motivo:null})
+  assert.equal(aprobacion.status,200,JSON.stringify(aprobacion.data))
+  const recibos=await ctx.leer(padreMaestro,`/rest/v1/recibos?select=id,pago_id&pago_id=eq.${id.pM1}`)
+  assert.equal(recibos.status,200);assert.equal(recibos.data.length,1)
+  for(const actor of [padreMaestro,hijoMaestro]) {
+    const fuente=await ctx.rpc(actor,'consultar_recibo',{p_recibo_id:recibos.data[0].id})
+    assert.equal(fuente.status,200);assert.equal(fuente.data.importe_imputado,'50000.00')
+  }
+  // Caso rechazado real, conservando sus ítems inactivos; solo IDs aleatorios de este fixture.
+  sql(contenedor, `BEGIN;
+    INSERT INTO public.pagos(id,padre_id,alumno_id,total_calculado,importe_informado,fecha_transferencia,numero_operacion)
+    VALUES('${id.pM2}','${padreMaestro.profileId}','${hijoMaestro.profileId}',50000,50000,'2030-04-21','OP-CI-113-${id.pM2.slice(0,8)}');
+    INSERT INTO public.imputaciones_pago(pago_id,item_factura_id,alumno_id,importe,activa)
+    VALUES('${id.pM2}','${id.iM2}','${hijoMaestro.profileId}',50000,TRUE);
+    UPDATE public.items_factura SET estado_pago='EN_VERIFICACION' WHERE id='${id.iM2}';
+    INSERT INTO public.comprobantes_pago(id,pago_id,subido_por,ruta_archivo,tipo_mime,tamano_bytes)
+    VALUES('${id.pM2}','${id.pM2}','${padreMaestro.profileId}','${id.pM2}/${id.pM2}.pdf','application/pdf',1000); COMMIT;`)
+  const rechazo = await ctx.rpc(a.director, 'verificar_pago', { p_pago_id: id.pM2, p_decision: 'RECHAZADO', p_motivo: 'Prueba sintética de contrato móvil' })
+  assert.equal(rechazo.status, 200, JSON.stringify(rechazo.data))
+  const registroFinalMovil = await reg(padreMaestro, hijoMaestro, 'PERIODO_FACTURA', '2030-01-01', '2030-12-31')
+  verificarParserMovilReal([...registroPendienteMovil, ...registroFinalMovil])
   return { padre: padreMaestro, estudiante: hijoMaestro }
+}
+
+
+/** Ejecuta el parser de producción, no una copia JS ni un mock de la RPC. */
+function verificarParserMovilReal(filas) {
+  const carpeta = mkdtempSync(join(tmpdir(), 'ept113-rpc-movil-'))
+  const archivo = join(carpeta, 'registro.json')
+  const mobile = resolve(import.meta.dirname, '..')
+  try {
+    writeFileSync(archivo, JSON.stringify(filas), { encoding: 'utf8', mode: 0o600 })
+    execFileSync(process.execPath, [join(mobile, 'node_modules/jest/bin/jest.js'), '--ci', '--runInBand', '__tests__/consultas-rpc-real.test.ts'], {
+      cwd: mobile, env: { ...process.env, EPT_CONSULTAS_RPC_FIXTURE: archivo }, stdio: 'inherit', windowsHide: true, timeout: 30000,
+    })
+  } finally { rmSync(carpeta, { recursive: true, force: true }) }
 }

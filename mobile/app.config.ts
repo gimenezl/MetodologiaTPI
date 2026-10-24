@@ -35,6 +35,7 @@ const config: ExpoConfig = {
   experiments: { typedRoutes: false },
   extra: {
     // Flag booleana no secreta. Sin esta opción explícita, HTTP local se rechaza en runtime.
+    eptRecibosNativeQa: process.env.EPT_MOBILE_RECIBOS_NATIVE_QA === '1',
     eptAuthIntegration: process.env.EPT_MOBILE_AUTH_INTEGRATION === '1',
   },
 }

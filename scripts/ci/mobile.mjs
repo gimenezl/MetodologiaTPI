@@ -9,6 +9,8 @@ export const mobileExact = new Set([
   'mobile/README.md',
 ])
 
+// EPT-113: recibos.ts, DescargaRecibo, ruta QA y flujos Maestro se cubren por estos patrones;
+// impact.test.mjs exige sus rutas exactas y ambos ejecutores nativos. No se abre una excepción por extensión.
 // Familias de archivos: cada patrón es literal y acotado; no hay comodines sobre binarios arbitrarios.
 export const mobilePatterns = [
   // `+not-found` es el nombre reservado de Expo Router para rutas desconocidas (EPT-106).

@@ -27,6 +27,7 @@ function clienteControlado(): { cliente: ClienteEPT; pendientes: Pendiente[] } {
     rpc(nombre: string, args: Record<string, unknown>) {
       const p: Omit<Pendiente, 'resolver'> = { nombre, args }
       const constructor = {
+        range: () => constructor,
         abortSignal: (senal: AbortSignal) => { (p as Pendiente).senal = senal; return constructor },
         then: (resolver: (v: unknown) => unknown, rechazar?: (e: unknown) => unknown) =>
           new Promise<{ data: Fila[] | null; error: unknown }>(resuelto => {
@@ -74,7 +75,7 @@ const factura = (id: string, alumno: string, periodo: string, extra: Fila = {}):
 const pago = (id: string, extra: Fila = {}): Fila => ({
   pago_id: id, estado: 'PENDIENTE_VERIFICACION', fecha_transferencia: '2026-01-05', importe_informado_centavos: 5000000,
   total_calculado_centavos: 5000000, creado_en: '2026-01-04T12:00:00+00:00', cantidad_archivos: 2,
-  ultima_carga_en: '2026-01-06T12:00:00+00:00', periodos: ['2025-12-01', '2026-01-01'], ...extra,
+  items:[],recibo_id:null,verificado_en:null,motivo_rechazo:null,ultima_carga_en: '2026-01-06T12:00:00+00:00', periodos: ['2025-12-01', '2026-01-01'], ...extra,
 })
 
 describe('InscripcionesContenedor', () => {

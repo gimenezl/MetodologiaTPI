@@ -618,6 +618,8 @@ BEGIN
     -- EPT-111: actor derivado de auth.uid(); un pago inexistente no permite escribir.
     PERFORM pg_temp.rpc('public.verificar_pago', 'x', pg_catalog.format('public.verificar_pago(%L::UUID, %L, NULL)', pg_temp.u('01'), 'APROBADO'));
     PERFORM pg_temp.rpc('public.consultar_verificacion_pago', 'x', pg_catalog.format('public.consultar_verificacion_pago(%L::UUID)', pg_temp.u('01')));
+    PERFORM pg_temp.rpc('public.recuperar_recibo', 'x', pg_catalog.format('public.recuperar_recibo(%L::UUID)', pg_temp.u('01')));
+    PERFORM pg_temp.rpc('public.consultar_recibo', 'x', pg_catalog.format('public.consultar_recibo(%L::UUID)', pg_temp.u('01')));
     -- EPT-110: consultas de solo lectura (inscripciones, facturas por período y registro saneado de comprobantes).
     -- La batería consulta un alumno inexistente: todo actor, incluso Dirección, recibe cero filas y anon, 42501. El alcance real
     -- por actor, los bordes de período y la ausencia de rutas están en `consultas_periodo_inscripciones_rls.sql`.

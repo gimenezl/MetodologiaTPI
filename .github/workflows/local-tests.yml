@@ -19,7 +19,7 @@ permissions:
 jobs:
   local:
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ inputs.kind == 'full' && 30 || inputs.kind == 'db' && 12 || 8 }}
+    timeout-minutes: ${{ inputs.kind == 'full' && 30 || inputs.kind == 'db' && 12 || inputs.kind == 'ui' && 10 || 8 }}
     env:
       CI_MODE: ${{ inputs.kind }}
       CI_UI: ${{ inputs.selection }}

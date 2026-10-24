@@ -1,0 +1,77 @@
+appId: org.educarparatransformar.app
+name: Recibo institucional, descarga Bearer y compartir nativo contra backend real
+---
+# EPT-113: aprobación real preparada por Dirección en integracion-consultas.mjs.
+- launchApp:
+    clearState: true
+- tapOn:
+    id: 'correo'
+- inputText: ${MAESTRO_CONSULTAS_EMAIL}
+- tapOn:
+    id: 'contrasena'
+- inputText: ${MAESTRO_CONSULTAS_PASSWORD}
+- tapOn: 'Ingresar'
+- assertVisible: 'Hijos vinculados'
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
+- tapOn:
+    id: 'seccion-periodo'
+- tapOn:
+    id: 'periodo-desde'
+- eraseText
+- inputText: '01012030'
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: 'periodo-hasta'
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 100
+    timeout: 15000
+- tapOn:
+    id: 'periodo-hasta'
+- eraseText
+- inputText: '31122030'
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: 'periodo-consultar'
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 100
+    timeout: 15000
+- tapOn:
+    id: 'periodo-consultar'
+- scrollUntilVisible:
+    element:
+      id: 'recibo-descargar'
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 100
+    centerElement: true
+    timeout: 20000
+- tapOn:
+    id: 'recibo-descargar'
+- extendedWaitUntil:
+    visible: '.*recibo-.*\.pdf'
+    timeout: 60000
+- takeScreenshot: recibo-menu-nativo
+- back
+# Al volver a primer plano la consulta se recarga y el mensaje transitorio se desmonta: se verifica
+# que la acción vuelva a estar disponible (no «Preparando recibo…»), es decir, que el menú se resolvió.
+- scrollUntilVisible:
+    element:
+      id: 'recibo-descargar'
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 100
+    centerElement: true
+    timeout: 30000
+- assertVisible: 'Descargar recibo PDF'
+- takeScreenshot: recibo-temporal-eliminado

@@ -1,3 +1,4 @@
+import { HistorialPagos, type FiltrosHistorial } from '@/components/recibos/HistorialPagos'
 import type { Metadata } from 'next'
 import { requerirDirector } from '@/services/autorizacion'
 import { obtenerPagosPendientes } from '@/services/comprobantes-lectura.service'
@@ -19,7 +20,7 @@ export const dynamic = 'force-dynamic'
  * en cada lectura.
  */
 export default async function ComprobantesPage({ searchParams }: {
-  searchParams: Promise<{ pagina?: string; pago?: string }>
+  searchParams: Promise<{ pagina?: string; pago?: string } & FiltrosHistorial>
 }) {
   const autorizacion = await requerirDirector(
     'Solo Dirección puede ver los comprobantes de los pagos.'
@@ -37,6 +38,6 @@ export default async function ComprobantesPage({ searchParams }: {
   // Una lectura fallida no se disfraza de «sin pagos pendientes».
   if (!lectura.ok) return <PanelErrorComprobantes mensaje={lectura.mensaje} />
 
-  return <PagosPendientes pagos={lectura.datos.pagos} truncado={lectura.datos.truncado}
-    pagina={pagina} busqueda={Boolean(parametros.pago)} />
+  return <><PagosPendientes pagos={lectura.datos.pagos} truncado={lectura.datos.truncado}
+    pagina={pagina} busqueda={Boolean(parametros.pago)} /><HistorialPagos alumnos={[]} director filtros={parametros} ruta="/dashboard/comprobantes" /></>
 }

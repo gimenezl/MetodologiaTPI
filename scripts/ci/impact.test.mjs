@@ -13,6 +13,35 @@ import { validateMobileWorkflow } from './mobile.mjs'
 import { sqlSuites, sqlRole, dbScripts, fullScripts, supportFiles, excludedFiles, validateRegistry } from './suites.mjs'
 import { families, uiFiles, validateUiRegistry, fullProjects } from './ui.mjs'
 
+function contratoIosTransitivo(
+  runner = readFileSync('mobile/scripts/ejecutar-ios.sh', 'utf8'),
+  suite = readFileSync('mobile/maestro/suite-ios.yaml', 'utf8')
+) {
+  assert.match(runner, /mobile\/maestro\/suite-ios\.yaml/u)
+  assert.match(runner, /node mobile\/scripts\/ios-completitud\.mjs "\$SALIDA"/u)
+  const esperados = ['smoke-ios.yaml', 'recuperacion-ios.yaml', 'recibos-ios.yaml']
+  const flujos = [...suite.matchAll(/^- runFlow: (.+)$/gmu)].map(match => match[1])
+  assert.deepEqual(flujos, esperados, 'Los tres originales deben ejecutarse una vez y en orden')
+  for (const [index, flujo] of flujos.entries()) {
+    const marcador = ['smoke', 'recuperacion', 'recibos'][index]
+    assert.ok(suite.includes(`- runFlow: ${flujo}\n- takeScreenshot: ept113-ios-${marcador}-completado`))
+  }
+  return flujos
+}
+
+test('iOS: contrato transitivo Bash → suite → tres subflujos rechaza omisiones y duplicados', () => {
+  const runner = readFileSync('mobile/scripts/ejecutar-ios.sh', 'utf8')
+  const suite = readFileSync('mobile/maestro/suite-ios.yaml', 'utf8')
+  contratoIosTransitivo(runner, suite)
+  for (const roto of [suite.replace('- runFlow: recibos-ios.yaml', ''),
+    `${suite}\n- runFlow: smoke-ios.yaml`, suite.replace('smoke-ios.yaml', 'recibos-ios.yaml'),
+    suite.replace('ept113-ios-recibos-completado', 'marcador-ausente')]) {
+    assert.throws(() => contratoIosTransitivo(runner, roto))
+  }
+  assert.throws(() => contratoIosTransitivo(runner.replace('mobile/maestro/suite-ios.yaml', 'otro.yaml'), suite))
+  assert.throws(() => contratoIosTransitivo(runner.replace('ios-completitud.mjs', 'otro.mjs'), suite))
+})
+
 test('EPT-112: cinco reportes conservan contratos reales, pruebas puras y familia académica', () => {
   for (const file of ['src/lib/reportes-economicos.ts', 'src/services/reportes-economicos.service.ts',
     'src/app/api/reportes/economicos/[reporte]/route.ts', 'src/app/dashboard/reportes/economicos/[reporte]/page.tsx']) {
@@ -191,7 +220,7 @@ test('EPT-106: la recuperación de contraseña tiene rutas registradas y escenar
   // iOS no tiene backend ni correo: su escenario no puede presentarse como recuperación completa.
   const ios = yml.slice(yml.indexOf('  mobile-ios:')).split(/\n  [a-z-]+:/u)[0]
   assert.doesNotMatch(ios, /integracion-recuperacion|mailpit/iu)
-  assert.match(readFileSync('mobile/scripts/ejecutar-ios.sh', 'utf8'), /recuperacion-ios\.yaml/u)
+  assert.ok(contratoIosTransitivo().includes('recuperacion-ios.yaml'))
   const flujoIos = readFileSync('mobile/maestro/recuperacion-ios.yaml', 'utf8')
   assert.match(flujoIos, /NO prueba la recuperación completa/u)
   assert.doesNotMatch(flujoIos, /MAESTRO_RECUPERACION|Revisá tu correo|Contraseña actualizada/u)
@@ -228,7 +257,7 @@ test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   const minutos = bloque => Number(/timeout-minutes: (\d+)/u.exec(bloque)?.[1])
   // Android lleva el E2E real de Auth/RLS contra un Supabase local descartable, acotado y siempre detenido.
   const android = bloqueJob('mobile-android')
-  assert.ok(minutos(android) > 0 && minutos(android) <= 30)
+  assert.ok(minutos(android) > 0 && minutos(android) <= 40)
   assert.match(android, /EPT_NATIVE_DEADLINE/u)
   assert.match(android, /run-stage\.test\.py/u)
   assert.match(android, /integracion-auth-local\.mjs/u)
@@ -239,7 +268,7 @@ test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   assert.doesNotMatch(ios, /supabase-local|integracion-auth-local|EPT_MOBILE_AUTH_INTEGRATION/u)
   assert.match(ios, /EXPO_PUBLIC_SUPABASE_URL: https:\/\//u)
   assert.match(ios, /MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'/u)
-  assert.match(readFileSync('mobile/scripts/ejecutar-ios.sh', 'utf8'), /mobile\/maestro\/smoke-ios\.yaml/u)
+  assert.ok(contratoIosTransitivo().includes('smoke-ios.yaml'))
   assert.doesNotMatch(yml, /ci:ios-infrastructure-diagnostic/u)
 })
 test('EPT-102: el bloque del gate se ejecuta con bash -e y falla ante cualquier resultado móvil no exitoso', () => {
@@ -248,7 +277,10 @@ test('EPT-102: el bloque del gate se ejecuta con bash -e y falla ante cualquier 
   const fin = yml.indexOf('esac', inicio) + 'esac'.length
   assert.ok(inicio > 0 && fin > inicio)
   const bloque = yml.slice(inicio, fin).split('\n').map(l => l.replace(/^ {10}/u, '')).join('\n')
-  const correr = env => spawnSync('bash', ['-e', '-c', bloque], { env: { PATH: process.env.PATH, ...env }, encoding: 'utf8' }).status
+  const bash = process.platform === 'win32'
+    ? path.join(path.dirname(path.dirname(execFileSync('where.exe', ['git'], { encoding: 'utf8' }).trim().split(/\r?\n/u)[0])), 'bin/bash.exe')
+    : 'bash'
+  const correr = env => spawnSync(bash, ['-e', '-c', bloque], { env: { PATH: process.env.PATH, ...env }, encoding: 'utf8' }).status
   const ok = { PLAN: 'success', PLAN_MOBILE: 'true', MOBILE: 'success', ANDROID: 'success', IOS: 'success' }
   assert.equal(correr(ok), 0)
   for (const clave of ['MOBILE', 'ANDROID', 'IOS']) {
@@ -841,4 +873,16 @@ test('EPT-109: la carga de comprobantes tiene suites, familia UI y etapa de inte
   assert.doesNotMatch(readFileSync('mobile/maestro/smoke-ios.yaml', 'utf8'), /comprobante/iu)
   // El stack del runner ya incluye Storage: sin él no hay carga que probar.
   assert.doesNotMatch(readFileSync('mobile/scripts/supabase-local.mjs', 'utf8'), /--exclude'?,?\s*'[^']*storage-api/u)
+})
+
+test('EPT-113: PDF, historial, SQL, API, carreras y escenarios nativos tienen contratos explícitos',()=>{
+ for(const file of ['src/services/recibos-pdf.ts','src/services/recibos-acciones.ts','src/components/recibos/HistorialPagos.tsx','src/app/api/recibos/[reciboId]/pdf/route.ts']) assert.deepEqual(profile([file]),{db:true,mutations:false,ui:['recibos-historial']},file)
+ for(const nombre of ['recibo-sintetico.pdf','contacto-9-paginas.png','pagina-1.png','pagina-9.png'])assert.deepEqual(profile([`docs/parte3/EPT-113/evidencia/${nombre}`]),{db:false,mutations:false,ui:[]})
+ assert.throws(()=>profile(['docs/parte3/EPT-113/evidencia/desconocido.png']))
+ assert.ok(pureTests.includes('recibos-pdf'))
+ assert.ok(sqlSuites.includes('recibos_esquema.sql'))
+ for(const f of ['recibos_historial.mjs','recibos_concurrencia.mjs'])assert.ok(dbScripts.includes(f))
+ for(const f of ['mobile/src/servicios/recibos.ts','mobile/src/contenedores/consultas/DescargaRecibo.tsx','mobile/app/recibo-prueba.tsx','mobile/maestro/recibos.yaml','mobile/maestro/recibos-ios.yaml'])assert.deepEqual(profile([f]),{db:false,mutations:false,ui:[],mobile:true})
+ assert.match(readFileSync('mobile/scripts/ejecutar-android.sh','utf8'),/android-maestro-recibos 180/u)
+ assert.ok(contratoIosTransitivo().includes('recibos-ios.yaml'))
 })

@@ -42,7 +42,10 @@ jobs:
       - run: npm run lint
       - run: npx playwright test --config=playwright.pure.config.ts
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
+      # Normalmente tarda ~20 s. Si el mirror de apt se cuelga (visto en EPT-113), el plazo evita agotar
+      # los 8 min del job y cae a instalar solo el navegador: las librerías de sistema ya vienen en la imagen.
+      - name: Instalar Chromium
+        run: timeout 150 npx playwright install --with-deps chromium || npx playwright install chromium
       - run: npx playwright test --config=playwright.smoke.config.ts
       # Prototipo EPT-96: contiene HTML/CSS/JS ejecutable; se recorre en Chromium real, no solo se verifican hashes.
       - name: Prototipo EPT-96 (navegación real)
@@ -137,8 +140,10 @@ jobs:
     needs: plan
     if: needs.plan.outputs.mobile == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Medido: el recorrido completo tarda 1567–1752 s; con 30 min un runner lento agotaba el plazo en el último flujo.
+    timeout-minutes: 40
     env:
+      MAESTRO_CLI_NO_ANALYTICS: '1'
       CI: '1'
       EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
     steps:
@@ -154,7 +159,7 @@ jobs:
             package-lock.json
       - name: Presupuesto y progreso nativo
         run: |
-          echo "EPT_NATIVE_DEADLINE=$(( $(date +%s) + 1680 ))" >> "$GITHUB_ENV"
+          echo "EPT_NATIVE_DEADLINE=$(( $(date +%s) + 2280 ))" >> "$GITHUB_ENV"
           echo "EPT_STAGE_LOG_DIR=$RUNNER_TEMP/evidencia-movil-android/stages" >> "$GITHUB_ENV"
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
@@ -186,6 +191,8 @@ jobs:
         run: |
           python3 ../scripts/ci/run-stage.py --stage android-deps --seconds 180 -- npm ci
           python3 ../scripts/ci/run-stage.py --stage android-prebuild --seconds 90 -- npx --no-install expo prebuild --platform android --no-install
+      - name: Preparar NDK declarado, adquisición SDK aislada
+        run: python3 scripts/ci/run-stage.py --stage android-sdk-ndk --seconds 220 -- node mobile/scripts/android-imagen.mjs ndk
       - name: Build Android (release de prueba, x86_64)
         working-directory: mobile/android
         run: |
@@ -216,6 +223,8 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - name: Preparar imagen SDK verificada, descarga aislada
+        run: python3 scripts/ci/run-stage.py --stage android-sdk-image --seconds 220 -- node mobile/scripts/android-imagen.mjs
       - name: Ejecutar en emulador Android (API 34)
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
@@ -232,21 +241,25 @@ jobs:
         if: always()
         run: node mobile/scripts/supabase-local.mjs stop
       - name: Sanear artifacts nativos
+        id: sanear_android
         if: always()
         run: python3 scripts/ci/run-stage.py --sanitize-directory "$RUNNER_TEMP/evidencia-movil-android"
       - name: Subir evidencia Android
-        if: always()
+        if: always() && steps.sanear_android.outcome == 'success'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: movil-android-${{ github.sha }}
           path: |
             ${{ steps.apk.outputs.ruta }}
             ${{ runner.temp }}/evidencia-movil-android/stages/
+            ${{ runner.temp }}/evidencia-movil-android/sdk-imagen/
+            ${{ runner.temp }}/evidencia-movil-android/sdk-ndk/
             ${{ runner.temp }}/evidencia-movil-android/android-version.txt
             ${{ runner.temp }}/evidencia-movil-android/maestro-android/
             ${{ runner.temp }}/evidencia-movil-android/maestro-comprobante/
             ${{ runner.temp }}/evidencia-movil-android/maestro-consultas/
             ${{ runner.temp }}/evidencia-movil-android/maestro-consultas-estudiante/
+            ${{ runner.temp }}/evidencia-movil-android/maestro-recibos/
             ${{ runner.temp }}/evidencia-movil-android/maestro-recuperacion-solicitud/
             ${{ runner.temp }}/evidencia-movil-android/maestro-recuperacion-cambio/
           if-no-files-found: warn
@@ -261,6 +274,7 @@ jobs:
     # Android (Linux + Docker): los runners macOS ARM de GitHub no tienen Docker y un Supabase local allí no entra en presupuesto.
     env:
       CI: '1'
+      EPT_MOBILE_RECIBOS_NATIVE_QA: '1'
       DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
       EXPO_PUBLIC_SUPABASE_URL: https://placeholder-pruebas.supabase.co
       EXPO_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-solo-para-pruebas
@@ -309,6 +323,7 @@ jobs:
         timeout-minutes: 12
         env:
           MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'
+          MAESTRO_CLI_NO_ANALYTICS: '1'
         run: bash mobile/scripts/ejecutar-ios.sh "${{ steps.app.outputs.ruta }}"
       - name: Empaquetar evidencia iOS
         if: always()

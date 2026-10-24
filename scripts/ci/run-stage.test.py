@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from enum import IntEnum
 import os
 from pathlib import Path
@@ -18,6 +19,22 @@ KILL = getattr(stage.signal, "SIGKILL", IntEnum("SyntheticSignal", {"SIGKILL": 9
 
 
 class StageTests(unittest.TestCase):
+    def test_structured_bearer_and_urls_keep_json_and_xml_delimiters(self):
+        values = ["Bearer synthetic-only", "https://private.example.test/path?key=synthetic-only"]
+        for value in values:
+            for separators in [(" , ", ": "), (",", ":")]:
+                source = json.dumps({"data": value, "nested": [value]}, separators=separators)
+                result = json.loads(stage.redact(source, preserve_structure=True))
+                self.assertEqual(result, {"data": "[REDACTED]", "nested": ["[REDACTED]"]})
+            source = f'<node value="{value}">retained</node>'
+            self.assertEqual(stage.redact(source, preserve_structure=True), '<node value="[REDACTED]">retained</node>')
+        with tempfile.TemporaryDirectory() as directory:
+            artifact = Path(directory) / "structured.json"
+            artifact.write_text(json.dumps({"message": values}, separators=(",", ":")))
+            result = subprocess.run([sys.executable, str(SCRIPT), "--sanitize-directory", directory], capture_output=True, timeout=5)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(json.loads(artifact.read_text()), {"message": ["[REDACTED]", "[REDACTED]"]})
+
     @classmethod
     def setUpClass(cls):
         # Preserve redacted child-stage logs outside disposable fixture directories.
@@ -77,6 +94,15 @@ class StageTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0)
             self.assertNotIn("private-example", artifact.read_text())
             ET.parse(artifact)
+
+    def test_generated_recovery_passwords_preserve_artifact_structure(self):
+        values = {"MAESTRO_RECUPERACION_NUEVA": "synthetic-recovery-one!", "MAESTRO_RECUPERACION_NUEVA2": "synthetic-recovery-two!"}
+        with mock.patch.dict(os.environ, values):
+            for preserve in (False, True):
+                result = stage.redact(json.dumps(values), preserve_structure=preserve)
+                for value in values.values():
+                    self.assertNotIn(value, result)
+                self.assertEqual(json.loads(result), dict.fromkeys(values, "[REDACTED]"))
 
     def test_supabase_token_families_without_environment(self):
         import json

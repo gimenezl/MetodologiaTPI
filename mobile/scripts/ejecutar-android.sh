@@ -30,19 +30,28 @@ stage android-maestro 240 maestro test --format junit --output "$SALIDA/maestro-
   --test-output-dir "$SALIDA/maestro-android" mobile/maestro/verificacion.yaml
 estado=$?
 if [ "$estado" -eq 0 ]; then
+  stage android-stop-comprobante 20 node mobile/scripts/android-detener.mjs &&
   stage android-maestro-comprobante 240 maestro test --format junit --output "$SALIDA/maestro-comprobante.xml" \
     --test-output-dir "$SALIDA/maestro-comprobante" mobile/maestro/comprobante.yaml
   estado=$?
 fi
 if [ "$estado" -eq 0 ]; then
   # EPT-110: escenarios focales y separados (cada uno con su propio presupuesto, sin ampliar el monolito).
+  stage android-stop-consultas 20 node mobile/scripts/android-detener.mjs &&
   stage android-maestro-consultas 180 maestro test --format junit --output "$SALIDA/maestro-consultas.xml" \
     --test-output-dir "$SALIDA/maestro-consultas" mobile/maestro/consultas.yaml
   estado=$?
 fi
 if [ "$estado" -eq 0 ]; then
+  stage android-stop-consultas-estudiante 20 node mobile/scripts/android-detener.mjs &&
   stage android-maestro-consultas-estudiante 150 maestro test --format junit --output "$SALIDA/maestro-consultas-estudiante.xml" \
     --test-output-dir "$SALIDA/maestro-consultas-estudiante" mobile/maestro/consultas-estudiante.yaml
+  estado=$?
+fi
+if [ "$estado" -eq 0 ]; then
+  stage android-stop-recibos 20 node mobile/scripts/android-detener.mjs &&
+  stage android-maestro-recibos 180 maestro test --format junit --output "$SALIDA/maestro-recibos.xml" \
+    --test-output-dir "$SALIDA/maestro-recibos" mobile/maestro/recibos.yaml
   estado=$?
 fi
 if [ "$estado" -eq 0 ]; then

@@ -1,0 +1,29 @@
+appId: org.educarparatransformar.app
+name: PDF sintético y menú nativo iOS, sin backend ni autorización
+---
+- launchApp:
+    clearState: true
+- assertVisible: 'Iniciar sesión'
+- scrollUntilVisible:
+    element:
+      text: 'Verificar PDF nativo'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Verificar PDF nativo'
+- assertVisible: 'Verificación nativa de recibo'
+- tapOn: 'Compartir PDF sintético'
+- extendedWaitUntil:
+    visible: '.*recibo-.*'
+    timeout: 45000
+- takeScreenshot: recibo-ios-menu-nativo
+- tapOn:
+    text: 'Close'
+    optional: true
+- swipe:
+    start: 50%, 25%
+    end: 50%, 95%
+    duration: 400
+- extendedWaitUntil:
+    visible: 'Menú nativo cerrado. Temporal eliminado.'
+    timeout: 15000
+- takeScreenshot: recibo-ios-temporal-eliminado

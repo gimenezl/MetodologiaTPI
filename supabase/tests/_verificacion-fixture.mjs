@@ -64,7 +64,8 @@ export const cargaFixture = (a = actoresFijos) => `INSERT INTO public.cargas_com
   VALUES('${CARGA}','${a.padre}','${PAGO}','${CARGA}','2026-10-17',990,'OP-EPT111','image/png',1234,'${SHA}','${PAGO}/${CARGA}');`
 
 export function limpiarEconomia(a = actoresFijos) {
-  return `DELETE FROM public.comprobantes_pago WHERE pago_id IN(SELECT id FROM public.pagos WHERE alumno_id IN('${a.alumno}','${a.ajeno}'));
+  return `DELETE FROM public.recibos WHERE pago_id IN(SELECT id FROM public.pagos WHERE alumno_id IN('${a.alumno}','${a.ajeno}'));
+    DELETE FROM public.comprobantes_pago WHERE pago_id IN(SELECT id FROM public.pagos WHERE alumno_id IN('${a.alumno}','${a.ajeno}'));
     DELETE FROM public.cargas_comprobante WHERE pago_id IN(SELECT id FROM public.pagos WHERE alumno_id IN('${a.alumno}','${a.ajeno}'));
     DELETE FROM public.imputaciones_pago WHERE alumno_id IN('${a.alumno}','${a.ajeno}');
     DELETE FROM public.pagos WHERE alumno_id IN('${a.alumno}','${a.ajeno}');

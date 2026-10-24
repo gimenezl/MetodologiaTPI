@@ -1,6 +1,8 @@
 import { FileImage, FilePdf, Receipt } from '@phosphor-icons/react/dist/ssr'
 import { formatearFecha, formatearImporteArs } from '@/lib/tarifas'
 import type { PagoPendienteVista } from '@/services/comprobantes-lectura.service'
+import { DescargarRecibo } from '@/components/recibos/DescargarRecibo'
+import { RecuperarRecibo } from '@/components/recibos/RecuperarRecibo'
 import { DecisionPago } from './DecisionPago'
 
 const ZONA = 'America/Argentina/Buenos_Aires'
@@ -181,6 +183,7 @@ export function PagosPendientes({
                     </ul>
                   )}
                 </div>
+                {pago.estado==='APROBADO' ? (pago.reciboId ? <DescargarRecibo reciboId={pago.reciboId}/> : <RecuperarRecibo pagoId={pago.pagoId}/>) : null}
                 <DecisionPago pagoId={pago.pagoId} estadoInicial={pago.estado} motivoInicial={pago.motivoRechazo}
                   habilitado={pago.archivos.length > 0 && pago.items.length > 0} />
               </li>

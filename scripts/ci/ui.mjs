@@ -1,5 +1,6 @@
 // Archivos y dependencias explícitos: agregar un módulo exige registrar su prueba real.
 export const families = {
+  'recibos-historial': ['recibos-historial-auth'],
   niveles: ['niveles-ui', 'niveles-auth', 'niveles'],
   cursos: ['cursos-ui', 'cursos-auth', 'cursos'],
   alumnos: ['alumnos-ui', 'alumnos-contraste', 'alumnos-correcciones', 'alumnos-auth', 'alumnos'],
@@ -58,3 +59,5 @@ export function validateUiRegistry(files, pure) {
 }
 
 Object.assign(aliases, { 'reportes-economicos': 'reportes' })
+
+Object.assign(aliases, { recibos: 'recibos-historial', 'recibos-pdf': 'recibos-historial', 'recibos-acciones': 'recibos-historial' })
