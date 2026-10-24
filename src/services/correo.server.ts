@@ -61,17 +61,8 @@ function horaLocal(fecha: Date): string {
   }).format(fecha)
 }
 
-/**
- * Envía el código. Devuelve `true` si el servidor SMTP aceptó el mensaje.
- *
- * Nunca lanza: cualquier fallo de transporte se informa como `false` para que
- * quien llama anule el desafío.
- */
-export async function enviarCodigoDeVerificacion(
-  configuracion: ConfiguracionSmtp,
-  { destinatario, codigo, venceEn }: DatosDelCodigo
-): Promise<boolean> {
-  const transporte = nodemailer.createTransport({
+function crearTransporte(configuracion: ConfiguracionSmtp, observador?: Record<string, unknown>) {
+  return nodemailer.createTransport({
     host: configuracion.host,
     port: configuracion.port,
     secure: configuracion.secure,
@@ -82,10 +73,24 @@ export async function enviarCodigoDeVerificacion(
     connectionTimeout: LIMITE_CONEXION_MS,
     greetingTimeout: LIMITE_SALUDO_MS,
     socketTimeout: LIMITE_SOCKET_MS,
-    // Sin registro de la conversación SMTP: incluiría el destinatario.
-    logger: false,
-    debug: false,
+    // Sin registro de la conversación SMTP: incluiría el destinatario. Solo el envío
+    // estructurado observa la fase mediante un logger propio que no conserva nada.
+    logger: observador ?? false,
+    debug: observador !== undefined,
   })
+}
+
+/**
+ * Envía el código. Devuelve `true` si el servidor SMTP aceptó el mensaje.
+ *
+ * Nunca lanza: cualquier fallo de transporte se informa como `false` para que
+ * quien llama anule el desafío.
+ */
+export async function enviarCodigoDeVerificacion(
+  configuracion: ConfiguracionSmtp,
+  { destinatario, codigo, venceEn }: DatosDelCodigo
+): Promise<boolean> {
+  const transporte = crearTransporte(configuracion)
 
   const vence = horaLocal(venceEn)
   const texto = [
@@ -115,6 +120,101 @@ export async function enviarCodigoDeVerificacion(
       clase: error instanceof Error ? error.name : typeof error,
     })
     return false
+  } finally {
+    transporte.close()
+  }
+}
+
+// ================================================================
+// Envío estructurado (EPT-115, recordatorio mensual)
+// ================================================================
+
+export type AdjuntoCorreo = { nombre: string; contenido: Uint8Array; tipo: string }
+
+export type DatosDelCorreo = {
+  destinatario: string
+  asunto: string
+  texto: string
+  html: string
+  adjuntos: AdjuntoCorreo[]
+}
+
+/**
+ * - `ACEPTADO`: el servidor SMTP aceptó el mensaje. No prueba entrega final ni lectura.
+ * - `FALLO_CLARO`: hay evidencia de que NO hubo aceptación (falló antes de `DATA` o el
+ *   servidor rechazó el mensaje de forma explícita). Se puede reintentar.
+ * - `INCIERTO`: pudo haber aceptación sin resultado concluyente (corte o plazo vencido
+ *   después de enviar `DATA`). No se reintenta automáticamente.
+ */
+export type ResultadoEnvio =
+  | { estado: 'ACEPTADO' }
+  | { estado: 'FALLO_CLARO'; causa: string }
+  | { estado: 'INCIERTO'; causa: string }
+
+/** Texto acotado y sin datos sensibles: solo clase del error, código y comando. */
+function causaSaneada(error: unknown): string {
+  const e = error as { code?: unknown; command?: unknown; responseCode?: unknown }
+  const partes = [error instanceof Error ? error.name : typeof error]
+  if (typeof e?.code === 'string' && /^[A-Z0-9_]{1,40}$/u.test(e.code)) partes.push(e.code)
+  if (typeof e?.command === 'string' && /^[A-Z -]{1,20}$/u.test(e.command)) partes.push(e.command)
+  if (typeof e?.responseCode === 'number') partes.push(String(e.responseCode))
+  return `Fallo SMTP (${partes.join(' ')})`
+}
+
+/**
+ * Clasifica un error de Nodemailer; ante la duda, INCIERTO (se prioriza no duplicar).
+ *
+ * Nodemailer rotula `CONN` cualquier corte o plazo vencido, aun en medio de `DATA`, así
+ * que el comando del error NO sirve para saber si el mensaje pudo salir. La fase se
+ * observa aparte (`datosIniciados`: el cliente llegó a enviar `DATA`):
+ *   - antes de `DATA` nada pudo aceptarse → fallo claro;
+ *   - desde `DATA`, solo un rechazo SMTP explícito (4xx/5xx del servidor) es fallo claro;
+ *     un corte o plazo vencido no demuestra que el mensaje no se haya aceptado.
+ */
+export function clasificarErrorSmtp(error: unknown, datosIniciados: boolean): ResultadoEnvio {
+  const e = error as { responseCode?: unknown }
+  const causa = causaSaneada(error)
+  const respuesta = typeof e?.responseCode === 'number' ? e.responseCode : 0
+  if (!datosIniciados) return { estado: 'FALLO_CLARO', causa }
+  if (respuesta >= 400 && respuesta < 600) return { estado: 'FALLO_CLARO', causa }
+  return { estado: 'INCIERTO', causa }
+}
+
+/** Nunca lanza. No registra destinatario, adjuntos ni la conversación SMTP. */
+export async function enviarCorreoEstructurado(
+  configuracion: ConfiguracionSmtp,
+  datos: DatosDelCorreo
+): Promise<ResultadoEnvio> {
+  // Observa solo la fase (¿el cliente llegó a enviar DATA?); no conserva ni imprime nada del diálogo.
+  let datosIniciados = false
+  const sinSalida = () => {}
+  const observador = {
+    trace: sinSalida, info: sinSalida, warn: sinSalida, error: sinSalida, fatal: sinSalida,
+    debug: (entrada: { tnx?: string }, mensaje?: unknown) => {
+      if (entrada?.tnx === 'client' && mensaje === 'DATA') datosIniciados = true
+    },
+  }
+  const transporte = crearTransporte(configuracion, observador)
+  try {
+    const info = await transporte.sendMail({
+      from: configuracion.remitente,
+      to: datos.destinatario,
+      subject: datos.asunto,
+      text: datos.texto,
+      html: datos.html,
+      attachments: datos.adjuntos.map((a) => ({
+        filename: a.nombre,
+        content: Buffer.from(a.contenido),
+        contentType: a.tipo,
+      })),
+    })
+    // Aceptado solo si el servidor aceptó al destinatario y no rechazó a ninguno.
+    if (info.accepted.length === 1 && info.rejected.length === 0) return { estado: 'ACEPTADO' }
+    return { estado: 'FALLO_CLARO', causa: 'El servidor SMTP rechazó al destinatario.' }
+  } catch (error) {
+    const resultado = clasificarErrorSmtp(error, datosIniciados)
+    console.error('[correo] envío no confirmado', { clase: resultado.estado })
+    return resultado
   } finally {
     transporte.close()
   }

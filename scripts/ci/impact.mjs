@@ -74,6 +74,9 @@ export function profile(paths, { root = process.cwd() } = {}) {
       || /^src\/lib\/(?:errores|utils|validations|metodos-http|paginacion|redireccion-login|vinculos)\.ts$/u.test(file)
       || /^tests\/(?:auth\.setup|_(?:captura|contraste|semantica|sin-detalle-tecnico))\.ts$/u.test(file)) { core(); continue }
     if (file === 'src/services/facturacion-job.ts' || /^src\/app\/api\/(?:cron\/facturacion|facturacion)\//u.test(file)) { db = true; continue }
+    // EPT-115: recordatorio mensual (job, plantilla, factura PDF, cron y scheduler local) se prueba con Next, PostgREST y SMTP reales.
+    if (/^src\/services\/(?:recordatorio-job|recordatorio-correo|factura-pdf)\.ts$/u.test(file)
+      || file.startsWith('src/app/api/cron/recordatorio-mensual/') || file === 'scripts/recordatorio-local.mjs') { db = true; continue }
     if (file.startsWith('tests/')) {
       const found = Object.entries(families).filter(([, names]) => names.some(n => file === `tests/${n}.spec.ts`))
       if (found.length) { db = true; found.forEach(([name]) => ui.add(name)); continue }
