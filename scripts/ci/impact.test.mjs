@@ -887,6 +887,16 @@ test('EPT-113: PDF, historial, SQL, API, carreras y escenarios nativos tienen co
  assert.ok(contratoIosTransitivo().includes('recibos-ios.yaml'))
 })
 
+test('EPT-116: aviso de deuda, cron y scheduler local tienen contratos explícitos', () => {
+  for (const file of ['src/services/aviso-deuda-job.ts', 'src/services/aviso-deuda-correo.ts',
+    'src/app/api/cron/aviso-deuda/route.ts', 'scripts/aviso-deuda-local.mjs']) {
+    assert.deepEqual(profile([file]), { db: true, mutations: false, ui: [] }, file)
+  }
+  for (const file of ['aviso-deuda-calendario.mjs', 'aviso-deuda-api.mjs']) assert.ok(dbScripts.includes(file), file)
+  assert.ok(supportFiles.includes('_aviso-fixture.mjs'))
+  assert.throws(() => profile(['src/services/aviso-deuda-desconocido.ts']))
+})
+
 test('EPT-115: recordatorio mensual, factura PDF, cron y scheduler local tienen contratos explícitos', () => {
   for (const file of ['src/services/recordatorio-job.ts', 'src/services/recordatorio-correo.ts', 'src/services/factura-pdf.ts',
     'src/app/api/cron/recordatorio-mensual/route.ts', 'scripts/recordatorio-local.mjs']) {

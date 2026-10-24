@@ -1,5 +1,5 @@
 // GENERADO por mobile/scripts/sync-compartido.mjs desde src/types/database.generated.ts. No editar a mano.
-// sha256 de la fuente: 7d660ac653ef1d6574ba1456d38549ac74b36738128ca617c27d8054328afceb
+// sha256 de la fuente: 0c92d1a6331705636f7a2d4fcb34c8259328671e4f0fc5ff832c8b2b00f7de29
 export type Json =
   | string
   | number
@@ -670,47 +670,56 @@ export type Database = {
       }
       envios_correo: {
         Row: {
+          corte_fecha: string | null
           enviado_en: string | null
           estado: Database["public"]["Enums"]["estado_envio_correo"]
           fecha_programada: string
           frontera_smtp_en: string | null
           id: string
           intentos: number
+          omitido_motivo: string | null
           padre_id: string
           periodo: string | null
           reserva_hasta: string | null
           reserva_token: string | null
           tipo: Database["public"]["Enums"]["tipo_envio_correo"]
+          total_adeudado: number | null
           ultimo_error: string | null
           ultimo_intento_fecha: string | null
         }
         Insert: {
+          corte_fecha?: string | null
           enviado_en?: string | null
           estado?: Database["public"]["Enums"]["estado_envio_correo"]
           fecha_programada: string
           frontera_smtp_en?: string | null
           id?: string
           intentos?: number
+          omitido_motivo?: string | null
           padre_id: string
           periodo?: string | null
           reserva_hasta?: string | null
           reserva_token?: string | null
           tipo: Database["public"]["Enums"]["tipo_envio_correo"]
+          total_adeudado?: number | null
           ultimo_error?: string | null
           ultimo_intento_fecha?: string | null
         }
         Update: {
+          corte_fecha?: string | null
           enviado_en?: string | null
           estado?: Database["public"]["Enums"]["estado_envio_correo"]
           fecha_programada?: string
           frontera_smtp_en?: string | null
           id?: string
           intentos?: number
+          omitido_motivo?: string | null
           padre_id?: string
           periodo?: string | null
           reserva_hasta?: string | null
           reserva_token?: string | null
           tipo?: Database["public"]["Enums"]["tipo_envio_correo"]
+          total_adeudado?: number | null
           ultimo_error?: string | null
           ultimo_intento_fecha?: string | null
         }
@@ -760,6 +769,44 @@ export type Database = {
             columns: ["factura_id"]
             isOneToOne: false
             referencedRelation: "facturas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      envios_correo_intentos: {
+        Row: {
+          corte_fecha: string | null
+          detalle: string | null
+          envio_id: string
+          intento: number
+          registrado_en: string
+          resultado: string
+          total_adeudado: number | null
+        }
+        Insert: {
+          corte_fecha?: string | null
+          detalle?: string | null
+          envio_id: string
+          intento: number
+          registrado_en?: string
+          resultado: string
+          total_adeudado?: number | null
+        }
+        Update: {
+          corte_fecha?: string | null
+          detalle?: string | null
+          envio_id?: string
+          intento?: number
+          registrado_en?: string
+          resultado?: string
+          total_adeudado?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "envios_correo_intentos_envio_id_fkey"
+            columns: ["envio_id"]
+            isOneToOne: false
+            referencedRelation: "envios_correo"
             referencedColumns: ["id"]
           },
         ]
@@ -2893,6 +2940,42 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      aviso_deuda_datos_job: {
+        Args: { p_fecha: string; p_padre: string; p_token: string }
+        Returns: Json
+      }
+      aviso_deuda_estado_job: {
+        Args: { p_fecha: string; p_padre: string }
+        Returns: Json
+      }
+      aviso_deuda_frontera_job: {
+        Args: { p_fecha: string; p_padre: string; p_token: string }
+        Returns: boolean
+      }
+      aviso_deuda_omitir_job: {
+        Args: {
+          p_fecha: string
+          p_motivo: string
+          p_padre: string
+          p_token: string
+        }
+        Returns: boolean
+      }
+      aviso_deuda_plan_job: { Args: never; Returns: Json }
+      aviso_deuda_reservar_job: {
+        Args: { p_fecha: string; p_padre: string }
+        Returns: Json
+      }
+      aviso_deuda_resultado_job: {
+        Args: {
+          p_error: string
+          p_estado: string
+          p_fecha: string
+          p_padre: string
+          p_token: string
+        }
+        Returns: boolean
       }
       calcular_porcentaje_asistencia: {
         Args: { p_estudiante_id: string }
