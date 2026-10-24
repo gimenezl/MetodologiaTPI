@@ -10,6 +10,7 @@ import { contenedorDb, ejecutarCuotas } from './integracion-cuotas.mjs'
 import { ejecutarPagos } from './integracion-pagos.mjs'
 import { ejecutarComprobantes } from './integracion-comprobantes.mjs'
 import { ejecutarConsultas } from './integracion-consultas.mjs'
+import { ejecutarDeuda } from './integracion-deuda.mjs'
 import { esperarBearerExpirado, mensajeFalloEtapaAuth, validarLineaBaseExpiracion } from './integracion-auth-utils.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
@@ -334,6 +335,26 @@ async function ejecutar() {
   })
   ok('Consultas: inscripciones de solo lectura, facturas por período (bordes de mes y año), comprobantes por período de factura y por fecha de transferencia sin duplicar, registro saneado, original restringido, roles no autorizados, anónimo, bloqueo, identificadores ajenos, vínculo revocado y sin efectos económicos.')
 
+  // EPT-114: historial de deuda por ítem, con JWT/RLS/RPC reales, importes exactos y datos de 2030 fijos.
+  etapaActual = 'deuda'
+  const tokenDeuda = async actor => {
+    const vigente = actor.sesion_deuda
+    if (vigente && Date.now() - vigente.en < 45_000) return vigente.token
+    const token = (await iniciar(actor)).access_token
+    actor.sesion_deuda = { token, en: Date.now() }
+    return token
+  }
+  const deudaMaestro = await ejecutarDeuda({
+    contenedor: contenedorDb(workdir),
+    restAdmin,
+    escribir: async (actor, ruta, method, body) => respuesta(ruta, { token: await tokenDeuda(actor), method, body }),
+    rpc: async (actor, nombre, body) => respuesta(`/rest/v1/rpc/${nombre}`, { token: await tokenDeuda(actor), method: 'POST', body }),
+    anonima: async (ruta, method, body) => respuesta(ruta, { method, body }),
+    crearActor: (rol, opciones) => crearActor(rol, { userRole: 'PERSONAL', ...opciones }),
+    actores: { docente: roleActors.DOCENTE, personal: roleActors.PERSONAL, director: roleActors.DIRECTOR },
+  })
+  ok('Deuda por ítem: importes exactos como texto, subtotales por agrupación, total adeudado, filtro por período de factura, pago informado distinto del imputado, roles no autorizados, anónimo, bloqueo, identificadores ajenos, vínculo revocado, parser móvil real y sin efectos económicos.')
+
   etapaActual = 'refresh'
   const sesionRefreshable = await iniciar(padreA)
   const refrescada = exigirStatus(await respuesta('/auth/v1/token?grant_type=refresh_token', {
@@ -389,6 +410,7 @@ async function ejecutar() {
     ['MAESTRO_COMPROBANTE', maestroComprobante],
     ['MAESTRO_CONSULTAS', consultasMaestro.padre],
     ['MAESTRO_CONSULTAS_ESTUDIANTE', consultasMaestro.estudiante],
+    ['MAESTRO_DEUDA', deudaMaestro.padre],
   ]
   const invalid = { email: `ept105-invalid-${idSuffix()}@ept105.invalid`, password: `${randomBytes(30).toString('base64url')}A1!` }
   for (const [prefix, actor] of [...actorMaestro, ['MAESTRO_INVALIDO', invalid]]) {

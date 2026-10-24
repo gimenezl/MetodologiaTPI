@@ -1,0 +1,127 @@
+appId: org.educarparatransformar.app
+name: Deuda por ítem del padre contra backend real
+---
+# EPT-114. Un padre con dos hijos consulta, con Auth, RLS y RPC reales, el historial de deuda de cada hijo:
+# agrupado por cuota, deporte, recorrido y comedor, con el total adeudado y el filtro por período de factura.
+# Los datos usan períodos de 2030 (fijos) y los importes están calculados a mano en integracion-deuda.mjs:
+#   marzo 2030: cuota 50.000,00 (pagada) + fútbol 8.000,00;  abril 2030: cuota 50.000,00 + recorrido 12.000,00
+#   + comedor 7.000,00. Total adeudado 77.000,00; solo abril, 69.000,00. Escenario focal y separado del monolito.
+- launchApp:
+    clearState: true
+- tapOn:
+    id: 'correo'
+- inputText: ${MAESTRO_DEUDA_EMAIL}
+- tapOn:
+    id: 'contrasena'
+- inputText: ${MAESTRO_DEUDA_PASSWORD}
+- tapOn: 'Ingresar'
+- assertVisible: 'Hijos vinculados'
+
+# Las pestañas se deslizan: «Deuda por ítem» (antes de «Por período» e «Inscripciones») aparece con un deslizamiento.
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
+- tapOn:
+    id: 'seccion-deuda'
+- assertVisible: 'Filtrar por período de factura'
+
+# Todo el historial del primer hijo: total adeudado y agrupaciones (cada deporte y cada recorrido por separado).
+- scrollUntilVisible:
+    element:
+      text: 'Total adeudado'
+    direction: DOWN
+    timeout: 20000
+- assertVisible: 'ARS.77\.000,00'
+- scrollUntilVisible:
+    element:
+      text: 'Fútbol'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: 'Recorrido Sur.*'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: 'Comedor escolar'
+    direction: DOWN
+    timeout: 15000
+
+# El filtro es por período de factura (mes calendario): abril deja el total en 69.000,00 y quita fútbol (marzo).
+- scrollUntilVisible:
+    element:
+      id: 'deuda-desde'
+    direction: UP
+    speed: 80
+    timeout: 20000
+- tapOn:
+    id: 'deuda-desde'
+- inputText: '15042030'
+- hideKeyboard
+- tapOn:
+    id: 'deuda-hasta'
+- inputText: '30042030'
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: 'deuda-aplicar'
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: 'deuda-aplicar'
+- scrollUntilVisible:
+    element:
+      text: 'Total adeudado'
+    direction: DOWN
+    timeout: 20000
+- assertVisible: 'ARS.69\.000,00'
+- assertNotVisible: 'Fútbol'
+
+# Un rango invertido no deja resultados de otro rango y explica el error.
+- scrollUntilVisible:
+    element:
+      id: 'deuda-hasta'
+    direction: UP
+    speed: 80
+    timeout: 20000
+- tapOn:
+    id: 'deuda-hasta'
+- eraseText
+- inputText: '01042029'
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: 'deuda-aplicar'
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: 'deuda-aplicar'
+- assertVisible: 'La fecha desde no puede ser posterior a la fecha hasta.'
+
+# Volver a todo el historial recupera el total completo.
+- tapOn:
+    id: 'deuda-todo'
+- scrollUntilVisible:
+    element:
+      text: 'Total adeudado'
+    direction: DOWN
+    timeout: 20000
+- assertVisible: 'ARS.77\.000,00'
+
+# El hijo sin ítems facturados lo dice, sin inventar deuda.
+- scrollUntilVisible:
+    element:
+      text: 'Estudiante'
+    direction: UP
+    speed: 80
+    timeout: 20000
+- tapOn:
+    text: 'Vacío.*'
+- scrollUntilVisible:
+    element:
+      text: 'Todavía no hay ítems facturados'
+    direction: DOWN
+    timeout: 20000
+- assertVisible: 'ARS.0,00'

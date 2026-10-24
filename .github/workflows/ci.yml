@@ -259,6 +259,7 @@ jobs:
             ${{ runner.temp }}/evidencia-movil-android/maestro-comprobante/
             ${{ runner.temp }}/evidencia-movil-android/maestro-consultas/
             ${{ runner.temp }}/evidencia-movil-android/maestro-consultas-estudiante/
+            ${{ runner.temp }}/evidencia-movil-android/maestro-deuda/
             ${{ runner.temp }}/evidencia-movil-android/maestro-recibos/
             ${{ runner.temp }}/evidencia-movil-android/maestro-recuperacion-solicitud/
             ${{ runner.temp }}/evidencia-movil-android/maestro-recuperacion-cambio/

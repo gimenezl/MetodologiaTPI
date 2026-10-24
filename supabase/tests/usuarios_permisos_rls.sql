@@ -626,6 +626,10 @@ BEGIN
     PERFORM pg_temp.rpc('public.consultar_inscripciones_alumno', 'n', 'public.consultar_inscripciones_alumno(''00000000-0000-4000-8000-000000000110''::UUID)');
     PERFORM pg_temp.rpc('public.consultar_facturas_periodo', 'n', 'public.consultar_facturas_periodo(''00000000-0000-4000-8000-000000000110''::UUID, DATE ''2026-01-01'', DATE ''2026-12-31'')');
     PERFORM pg_temp.rpc('public.consultar_registro_comprobantes', 'n', 'public.consultar_registro_comprobantes(''00000000-0000-4000-8000-000000000110''::UUID, ''PERIODO_FACTURA'', DATE ''2026-01-01'', DATE ''2026-12-31'')');
+    -- EPT-114: historial de deuda por ítem. Sobre un alumno inexistente todo actor habilitado, incluso Dirección, recibe un
+    -- documento con cero ítems (v=0) y anon, 42501. El alcance real por actor, el cálculo exacto y la paginación están en
+    -- `deuda_items_rls.sql` y `deuda_items.mjs`.
+    PERFORM pg_temp.rpc('public.historial_deuda_items', 'v', 'public.historial_deuda_items(''00000000-0000-4000-8000-000000000114''::UUID)->>''total''');
     PERFORM pg_temp.rpc('public.configurar_horario_materia', 'x', pg_catalog.format('public.configurar_horario_materia(%L, 2::smallint, %L, %L, NULL)', ASIG, '09:00', '10:00'));
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria', 'n', 'public.consultar_compatibilidad_horaria()');
     PERFORM pg_temp.rpc('public.consultar_compatibilidad_horaria_alumno', 'n', pg_catalog.format('public.consultar_compatibilidad_horaria_alumno(%L)', EST));
