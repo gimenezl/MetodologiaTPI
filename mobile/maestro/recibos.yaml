@@ -20,6 +20,11 @@ name: Recibo institucional, descarga Bearer y compartir nativo contra backend re
     from:
       id: 'pestanas'
     direction: LEFT
+# EPT-114: la tira ganó una pestaña; un tercer deslizamiento al final es inofensivo y mantiene visibles las últimas.
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
 - tapOn:
     id: 'seccion-periodo'
 - tapOn:

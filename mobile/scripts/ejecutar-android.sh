@@ -49,6 +49,13 @@ if [ "$estado" -eq 0 ]; then
   estado=$?
 fi
 if [ "$estado" -eq 0 ]; then
+  # EPT-114: deuda por ítem, escenario focal y separado (presupuesto propio, sin ampliar el monolito).
+  stage android-stop-deuda 20 node mobile/scripts/android-detener.mjs &&
+  stage android-maestro-deuda 150 maestro test --format junit --output "$SALIDA/maestro-deuda.xml" \
+    --test-output-dir "$SALIDA/maestro-deuda" mobile/maestro/deuda.yaml
+  estado=$?
+fi
+if [ "$estado" -eq 0 ]; then
   stage android-stop-recibos 20 node mobile/scripts/android-detener.mjs &&
   stage android-maestro-recibos 180 maestro test --format junit --output "$SALIDA/maestro-recibos.xml" \
     --test-output-dir "$SALIDA/maestro-recibos" mobile/maestro/recibos.yaml

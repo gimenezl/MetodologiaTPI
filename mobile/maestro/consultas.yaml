@@ -24,6 +24,11 @@ name: Consultas del padre (período e inscripciones) contra backend real
     from:
       id: 'pestanas'
     direction: LEFT
+# EPT-114: la tira ganó una pestaña; un tercer deslizamiento al final es inofensivo y mantiene visibles las últimas.
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
 - tapOn:
     id: 'seccion-periodo'
 - assertVisible: 'Rango de fechas'
@@ -117,6 +122,11 @@ name: Consultas del padre (período e inscripciones) contra backend real
     from:
       id: 'pestanas'
     direction: LEFT
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
+# EPT-114: la tira ganó una pestaña; un tercer deslizamiento al final es inofensivo y mantiene visibles las últimas.
 - swipe:
     from:
       id: 'pestanas'
