@@ -12,7 +12,7 @@ const padreAjeno = id(202)
 // Factura: cuota 100.10 + deporte 0.00 + deporte 20.20 + transporte 30.30 + comedor 40.40 = 191.00 (19100 centavos).
 // Los actores operan con SET ROLE + JWT (como PostgREST); el propietario solo prepara fixtures y lee estado.
 /** Ejecuta una consulta escalar como `sub` (o anon) con COMMIT propio; devuelve `OK|valor` o `E<SQLSTATE>`. */
-function como(sub, consulta) {
+function como(sub, consulta, conMensaje = false) {
   const rol = sub ? 'authenticated' : 'anon'
   const claims = sub ? `{"sub":"${sub}","role":"authenticated"}` : '{"role":"anon"}'
   return sql(`DO $d$ DECLARE v TEXT; BEGIN
@@ -22,7 +22,7 @@ function como(sub, consulta) {
       EXECUTE 'RESET ROLE';
       PERFORM pg_catalog.set_config('ept117.res', 'OK|' || COALESCE(v, ''), false);
     EXCEPTION WHEN OTHERS THEN
-      PERFORM pg_catalog.set_config('ept117.res', 'E' || SQLSTATE, false);
+      PERFORM pg_catalog.set_config('ept117.res', 'E' || SQLSTATE || CASE WHEN ${conMensaje} THEN '|' || SQLERRM ELSE '' END, false);
     END $d$;
     SELECT pg_catalog.current_setting('ept117.res');`)
 }
@@ -31,8 +31,8 @@ const arr = (...ids) => `ARRAY[${ids.map((i) => `'${i}'`).join(',')}]::UUID[]`
 const cotizar = (sub, ...ids) => como(sub, `SELECT public.cotizar_pago(${arr(...ids)})::TEXT`)
 const registrar = (sub, clave, total, ...ids) =>
   como(sub, `SELECT public.registrar_pago('${clave}'::UUID,${arr(...ids)},${total}::BIGINT)::TEXT`)
-const verificar = (sub, pago, decision, motivo = null) =>
-  como(sub, `SELECT public.verificar_pago('${pago}'::UUID,'${decision}',${motivo ? `'${motivo}'` : 'NULL'})::TEXT`)
+const verificar = (sub, pago, decision, motivo = null, conMensaje = false) =>
+  como(sub, `SELECT public.verificar_pago('${pago}'::UUID,'${decision}',${motivo ? `'${motivo}'` : 'NULL'})::TEXT`, conMensaje)
 /** Saldo de la factura leído como el padre (RLS real): `saldo|pagado|estado|enVerificacion|inconsistente`. */
 const saldo = (factura) => como(padre, `SELECT saldo_centavos||'|'||pagado_centavos||'|'||estado||'|'||items_en_verificacion||'|'||inconsistente
   FROM public.estado_cuotas_alumno WHERE factura_id='${factura}'`).slice(3)
@@ -55,7 +55,7 @@ const limpiarPagos = `BEGIN;
 const limpiarPadres = `DELETE FROM public.perfiles WHERE id IN ('${padre}','${padreAjeno}');`
 function probar(nombre,fn) { fn(); pruebas++; console.log(`OK ${pruebas}: ${nombre}`) }
 try {
-  sql(limpieza)
+  sql(limpiarPagos); sql(limpieza); sql(limpiarPadres)
   sembrar()
   const p='2050-12-01'
   let snapshot
@@ -202,12 +202,12 @@ try {
     negativa(`SET LOCAL ROLE authenticated; PERFORM set_config('request.jwt.claims','{"sub":"${alumno2}","role":"authenticated"}',true); PERFORM public.facturacion_avisos_director()`,'42501')
   })
   // EPT-117. Ciclo de pago con centavos reales sobre la factura mensual ya emitida (191.00): actores con SET ROLE + JWT.
-  sql(limpiarPagos); sql(limpiarPadres)
   sql(`INSERT INTO public.perfiles(id,user_id,rol_id,nombre,apellido,dni)
       SELECT x.id::UUID,x.id::UUID,r.id,'Prueba','EPT117',x.dni FROM (VALUES ('${padre}','94117001'),('${padreAjeno}','94117002')) x(id,dni)
       JOIN public.roles r ON r.nombre='PADRE';
     INSERT INTO public.padres_hijos(padre_id,hijo_id) VALUES ('${padre}','${alumno}'),('${padreAjeno}','${alumno2}');`)
   const factura = sql(`SELECT id FROM public.facturas WHERE alumno_id='${alumno}' AND periodo='${p}'`)
+  assert.match(factura, /^[0-9a-f-]{36}$/u, 'precondición: la factura de 191.00 debe existir')
   probar('tipo exacto: ningún importe económico es float/real/money y los importes tienen escala 2', () => {
     assert.equal(sql(`SELECT count(*) FROM information_schema.columns WHERE table_schema='public'
       AND column_name ~ '(importe|total|monto|saldo|precio)' AND data_type IN ('real','double precision','money')`), '0')
@@ -224,6 +224,7 @@ try {
   const transporte = itemDe(factura, 'TRANSPORTE', '30.30')
   const comedor = itemDe(factura, 'COMEDOR', '40.40')
   const gratis = itemDe(factura, 'DEPORTE', '0.00')
+  for (const item of [cuota, deporte, transporte, comedor, gratis]) assert.match(item, /^[0-9a-f-]{36}$/u, 'precondición: ítem de la factura')
   let pago1
 
   probar('saldo inicial exacto y cotización parcial en centavos (cuota + comedor = 140.50)', () => {
@@ -266,10 +267,11 @@ try {
     assert.equal(cuenta('pagos', `alumno_id='${alumno}'`), 1)
   })
 
-  probar('aprobar el pago parcial: saldo restante exacto 50.50, importe informado distinto no sustituye el total', () => {
+  probar('aprobar el pago parcial: saldo restante exacto 50.50; comportamiento actual: el importe informado distinto no sustituye el total', () => {
     completarTransferencia(pago1, '140.49', 1)
-    assert.equal(verificar(padre, pago1, 'APROBADO'), 'E42501')
-    assert.equal(verificar(alumno, pago1, 'APROBADO'), 'E42501')
+    // 42501 por la guarda de rol (mensaje propio), no por un GRANT faltante.
+    assert.match(verificar(padre, pago1, 'APROBADO', null, true), /^E42501|Solo Dirección habilitada/u)
+    assert.match(verificar(alumno, pago1, 'APROBADO', null, true), /^E42501|Solo Dirección habilitada/u)
     assert.equal(verificar(null, pago1, 'APROBADO'), 'E42501')
     assert.equal(saldo(factura), '19100|0|PENDIENTE|2|false') // las negativas no aplican nada
     const a = json(verificar(director, pago1, 'APROBADO'))
@@ -320,11 +322,17 @@ try {
     assert.equal(como(padre, `SELECT count(*) FROM public.detalle_cuotas_items WHERE factura_id='${factura}'`), 'OK|5')
   })
 
-  probar('otra familia no ve ni modifica nada de esta factura (RLS real)', () => {
+  probar('otra familia no ve esta factura (RLS) y no tiene escritura directa sobre ítems (sin GRANT)', () => {
     assert.equal(como(padreAjeno, `SELECT count(*) FROM public.estado_cuotas_alumno WHERE factura_id='${factura}'`), 'OK|0')
     assert.equal(como(padreAjeno, `SELECT count(*) FROM public.detalle_cuotas_items WHERE factura_id='${factura}'`), 'OK|0')
     assert.equal(como(padreAjeno, `SELECT count(*) FROM public.pagos WHERE alumno_id='${alumno}'`), 'OK|0')
     assert.equal(como(padreAjeno, `UPDATE public.items_factura SET estado_pago='PENDIENTE' WHERE id='${cuota}' RETURNING id::TEXT`), 'E42501')
   })
   console.log(`PASS ${pruebas} escenarios de facturación DB.`)
-} finally { sql(limpiarPagos); sql(limpieza); sql(limpiarPadres); sql(`UPDATE app_private.facturacion_config SET habilitada=false`); }
+} finally {
+  const fallas=[]
+  for (const limpiar of [()=>sql(limpiarPagos),()=>sql(limpieza),()=>sql(limpiarPadres),()=>sql(`UPDATE app_private.facturacion_config SET habilitada=false`)]) {
+    try { limpiar() } catch (error) { fallas.push(error) }
+  }
+  if (fallas.length) throw new AggregateError(fallas,'Limpieza incompleta del fixture.')
+}

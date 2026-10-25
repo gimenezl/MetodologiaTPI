@@ -1,6 +1,6 @@
 # EPT-117 · Matriz de cobertura económica y de calendario
 
-Estado de cada criterio sobre la implementación real (`a591e53` + este PR). «Existente» = prueba ya integrada, **reejecutada** en este trabajo sobre el stack local descartable `ept117`; «Nueva» = caso añadido por EPT-117. Los resultados locales están en [`docs/evidence/EPT-117.md`](../../evidence/EPT-117.md); CI se registra allí por separado.
+Estado de cada criterio sobre la implementación real (`a591e53` + este PR). «Existente» = prueba ya integrada, **reejecutada** localmente sobre el stack descartable `ept117` salvo `CV` (`comprobantes_verificacion.mjs`, solo CI); «Nueva» = caso añadido por EPT-117. Los resultados locales están en [`docs/evidence/EPT-117.md`](../../evidence/EPT-117.md); CI se registra allí por separado.
 
 Archivos: `F` = `supabase/tests/facturacion.mjs`, `RC` = `supabase/tests/recordatorio-calendario.mjs`, `AC` = `aviso-deuda-calendario.mjs`, `FC` = `facturacion-concurrencia.mjs`, `PS` = `pagos_seleccion_rls.sql`, `PC` = `pagos_seleccion_concurrencia.mjs`, `CQ` = `cuotas_consulta_rls.sql`, `CV` = `comprobantes_verificacion.mjs` (+ `_concurrencia`), `DI` = `deuda_items.mjs`, `TL` = `tests/tarifas-lib.spec.ts`.
 
@@ -57,7 +57,7 @@ Archivos: `F` = `supabase/tests/facturacion.mjs`, `RC` = `supabase/tests/recorda
 |---|---|---|---|
 | Fin de mes hábil, sábado, domingo | Existente | `RC` caso 1 | `2026-09-30`, `2026-10-30`, `2027-01-29` |
 | Feriado de fin de mes y consecutivos | Existente | `RC` caso 2 | `2026-09-28` |
-| Fin de semana + feriados previos | **Nueva** | `RC` caso 6 | oct. 2026: feriado vie 30 → `2026-10-29`; con el 29 → `2026-10-28`; feriado en sábado 31 y feriado de otro mes no influyen |
+| Fin de semana + feriados previos | **Nueva** | `RC` caso 6 | oct. 2026: feriado vie 30 → `2026-10-29`; con el 29 → `2026-10-28`; feriado en sábado 31 y feriado a mitad de mes (15/10) no influyen; los de octubre no se filtran a noviembre (`2026-11-30`) |
 | Enero 2027 con feriado **sintético** vie 29 | **Nueva** | `RC` caso 5 | `2027-01-28`; con el 28 también → `2027-01-27` |
 | Febrero bisiesto / no bisiesto | Existente | `RC` caso 3; `F` caso 11 | `2024-02-29`, `2028-02-29`, `2027-02-26`, `2028-02-28` con feriado |
 | Diciembre → enero | Existente | `RC` caso 4 | `2026-12-31`, `2026-12-29`, `2027-01-29` |

@@ -53,7 +53,7 @@ try {
   assert.equal(habil('2027-01-15'), '2027-01-27')
   ok('enero de 2027 (domingo) con feriado sintético el viernes 29 retrocede al jueves 28; con el 28 también, al miércoles 27')
 
-  // Sábado 31/10/2026 + viernes feriado → jueves 29; un feriado en sábado o en otro mes no altera el resultado.
+  // Sábado 31/10/2026 + viernes feriado → jueves 29; un feriado en sábado o a mitad de mes no altera el resultado.
   sql(`INSERT INTO public.feriados(fecha,descripcion) VALUES ('2026-10-31','Prueba sintética EPT-117'),('2026-10-15','Prueba sintética EPT-117')`)
   assert.equal(habil('2026-10-01'), '2026-10-30')
   sql(`INSERT INTO public.feriados(fecha,descripcion) VALUES ('2026-10-30','Prueba sintética EPT-117')`)
@@ -61,7 +61,7 @@ try {
   sql(`INSERT INTO public.feriados(fecha,descripcion) VALUES ('2026-10-29','Prueba sintética EPT-117')`)
   assert.equal(habil('2026-10-01'), '2026-10-28')
   assert.equal(habil('2026-11-01'), '2026-11-30') // los feriados de octubre no se filtran a noviembre
-  ok('fin de semana más feriados previos: se retrocede día a día hasta el hábil; los feriados en sábado o de otro mes no influyen')
+  ok('fin de semana más feriados previos: se retrocede día a día hasta el hábil; los feriados en sábado o en un día no final no influyen; los de octubre no se filtran a noviembre')
 
   // Contrato de entradas inválidas: P6841 con su mensaje, no otro fallo (p. ej. desbordamiento de fechas).
   for (const argumento of ['NULL::DATE', "'infinity'::DATE", "'-infinity'::DATE"]) {
