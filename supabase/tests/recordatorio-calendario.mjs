@@ -7,8 +7,13 @@ import { entorno, sql } from './_recordatorio-fixture.mjs'
  * son de prueba y se retiran al terminar.
  */
 entorno()
-const FERIADOS = ['2026-09-30', '2026-09-29', '2026-12-31', '2026-12-30', '2028-02-29', '2027-01-29']
+const FERIADOS = ['2026-09-30', '2026-09-29', '2026-12-31', '2026-12-30', '2028-02-29', '2027-01-29', '2027-01-28',
+  '2026-10-31', '2026-10-30', '2026-10-29', '2026-10-15']
 const habil = (mes) => sql(`SELECT app_private.ultimo_habil('${mes}')`)
+/** SQLSTATE y mensaje con que la función rechaza una entrada (o NO_RECHAZADA si la acepta). */
+const rechazo = (argumento) => sql(`DO $$ BEGIN BEGIN PERFORM app_private.ultimo_habil(${argumento}); RAISE EXCEPTION 'NO_RECHAZADA';
+  EXCEPTION WHEN OTHERS THEN PERFORM pg_catalog.set_config('ept117.resultado', SQLSTATE || '|' || SQLERRM, false); END; END $$;
+  SELECT pg_catalog.current_setting('ept117.resultado');`)
 const civil = (instante) => sql(`SELECT app_private.recordatorio_fecha_civil('${instante}')`)
 let n = 0
 const ok = (t) => { n++; console.log(`OK ${n}: ${t}`) }
@@ -37,6 +42,32 @@ try {
   assert.equal(habil('2026-12-01'), '2026-12-29')
   assert.equal(habil('2027-01-01'), '2027-01-29')
   ok('diciembre y enero (cambio de año), con feriados de fin de año')
+
+  // EPT-117. Feriados SINTÉTICOS de prueba (no son fechas nacionales reales), insertados solo en el fixture local.
+  // Enero de 2027 termina en domingo: viernes 29 feriado → jueves 28; con el 28 también feriado → miércoles 27.
+  assert.equal(habil('2027-01-01'), '2027-01-29')
+  sql(`INSERT INTO public.feriados(fecha,descripcion) VALUES ('2027-01-29','Prueba sintética EPT-117')`)
+  assert.equal(habil('2027-01-01'), '2027-01-28')
+  assert.equal(habil('2027-01-31'), '2027-01-28') // el día del mes elegido como argumento no cambia el resultado
+  sql(`INSERT INTO public.feriados(fecha,descripcion) VALUES ('2027-01-28','Prueba sintética EPT-117')`)
+  assert.equal(habil('2027-01-15'), '2027-01-27')
+  ok('enero de 2027 (domingo) con feriado sintético el viernes 29 retrocede al jueves 28; con el 28 también, al miércoles 27')
+
+  // Sábado 31/10/2026 + viernes feriado → jueves 29; un feriado en sábado o en otro mes no altera el resultado.
+  sql(`INSERT INTO public.feriados(fecha,descripcion) VALUES ('2026-10-31','Prueba sintética EPT-117'),('2026-10-15','Prueba sintética EPT-117')`)
+  assert.equal(habil('2026-10-01'), '2026-10-30')
+  sql(`INSERT INTO public.feriados(fecha,descripcion) VALUES ('2026-10-30','Prueba sintética EPT-117')`)
+  assert.equal(habil('2026-10-01'), '2026-10-29')
+  sql(`INSERT INTO public.feriados(fecha,descripcion) VALUES ('2026-10-29','Prueba sintética EPT-117')`)
+  assert.equal(habil('2026-10-01'), '2026-10-28')
+  assert.equal(habil('2026-11-01'), '2026-11-30') // los feriados de octubre no se filtran a noviembre
+  ok('fin de semana más feriados previos: se retrocede día a día hasta el hábil; los feriados en sábado o de otro mes no influyen')
+
+  // Contrato de entradas inválidas: P6841 con su mensaje, no otro fallo (p. ej. desbordamiento de fechas).
+  for (const argumento of ['NULL::DATE', "'infinity'::DATE", "'-infinity'::DATE"]) {
+    assert.equal(rechazo(argumento), 'P6841|Mes inválido.', `${argumento} debe rechazarse con P6841`)
+  }
+  ok('mes nulo o no finito se rechaza con SQLSTATE P6841 y mensaje propio')
 
   // El día argentino cambia a las 03:00 UTC, no a las 00:00 UTC.
   assert.equal(civil('2026-10-31 02:30+00'), '2026-10-30')
