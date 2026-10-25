@@ -372,12 +372,14 @@ DECLARE
         'emitir_desafio_vinculo', 'anular_desafio_vinculo', 'verificar_desafio_vinculo',
         'datos_para_enlace', 'facturacion_avisos_director', 'facturacion_reintentar',
         'facturacion_plan_job', 'facturacion_iniciar_job', 'facturacion_capturar_job', 'facturacion_emitir_job', 'facturacion_estado_job',
-        'recordatorio_plan_job', 'recordatorio_reservar_job', 'recordatorio_datos_job', 'recordatorio_frontera_job', 'recordatorio_resultado_job', 'recordatorio_estado_job'
+        'recordatorio_plan_job', 'recordatorio_reservar_job', 'recordatorio_datos_job', 'recordatorio_frontera_job', 'recordatorio_resultado_job', 'recordatorio_estado_job',
+        'aviso_deuda_plan_job', 'aviso_deuda_reservar_job', 'aviso_deuda_datos_job', 'aviso_deuda_frontera_job', 'aviso_deuda_resultado_job', 'aviso_deuda_omitir_job', 'aviso_deuda_estado_job'
     ];
     v_servidor TEXT[] := ARRAY['emitir_desafio_vinculo', 'anular_desafio_vinculo',
                                'verificar_desafio_vinculo', 'datos_para_enlace',
                                'facturacion_plan_job', 'facturacion_iniciar_job', 'facturacion_capturar_job', 'facturacion_emitir_job', 'facturacion_estado_job',
-                               'recordatorio_plan_job', 'recordatorio_reservar_job', 'recordatorio_datos_job', 'recordatorio_frontera_job', 'recordatorio_resultado_job', 'recordatorio_estado_job'];
+                               'recordatorio_plan_job', 'recordatorio_reservar_job', 'recordatorio_datos_job', 'recordatorio_frontera_job', 'recordatorio_resultado_job', 'recordatorio_estado_job',
+        'aviso_deuda_plan_job', 'aviso_deuda_reservar_job', 'aviso_deuda_datos_job', 'aviso_deuda_frontera_job', 'aviso_deuda_resultado_job', 'aviso_deuda_omitir_job', 'aviso_deuda_estado_job'];
     v_internas TEXT[] := ARRAY['es_director_efectivo', 'contar_directores_efectivos',
                                'vincular_cuenta_de_alta', 'describir_vinculo', 'director_habilitado',
                                'reserva_para_servidor', 'normalizar_motivo_cambio', 'enmascarar_correo',

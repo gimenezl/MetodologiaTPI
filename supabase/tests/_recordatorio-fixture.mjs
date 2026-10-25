@@ -27,7 +27,7 @@ export function entorno() {
   const config = readFileSync(path.join(workdir, 'supabase/config.toml'), 'utf8')
   const proyecto = /^project_id\s*=\s*"([^"]+)"/mu.exec(config)?.[1]
   // ept115: stack local propio; ept104: el stack desechable del runner de CI (config.toml con ese project_id).
-  if (contenedor !== `supabase_db_${proyecto}` || !['ept115', 'ept104'].includes(proyecto)) throw new Error('Solo stack desechable propio (ept115 o ept104 en CI).')
+  if (contenedor !== `supabase_db_${proyecto}` || !['ept115', 'ept116', 'ept104'].includes(proyecto)) throw new Error('Solo stack desechable propio (ept115, ept116 o ept104 en CI).')
   const local = JSON.parse(execFileSync('npx', ['--yes', 'supabase@2.117.0', 'status', '-o', 'json', '--workdir', workdir],
     { shell: process.platform === 'win32', encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }))
   if (new URL(local.API_URL).hostname !== '127.0.0.1' || new URL(local.DB_URL).hostname !== '127.0.0.1') {
@@ -43,9 +43,13 @@ const perfilesFixture = `('${hijo1}','${hijo2}','${hijo3}','${hijo4}','${directo
 
 export const limpieza = `
 BEGIN;
+DELETE FROM public.envios_correo_intentos WHERE envio_id IN
+  (SELECT e.id FROM public.envios_correo e JOIN public.perfiles p ON p.id=e.padre_id WHERE p.dni LIKE '94115%');
 DELETE FROM public.envios_correo_facturas WHERE envio_id IN
   (SELECT e.id FROM public.envios_correo e JOIN public.perfiles p ON p.id=e.padre_id WHERE p.dni LIKE '94115%');
 DELETE FROM public.envios_correo WHERE padre_id IN (SELECT id FROM public.perfiles WHERE dni LIKE '94115%');
+DELETE FROM public.imputaciones_pago WHERE alumno_id IN ${alumnosFixture};
+DELETE FROM public.pagos WHERE alumno_id IN ${alumnosFixture};
 DELETE FROM public.items_factura WHERE alumno_id IN ${alumnosFixture};
 DELETE FROM public.facturas WHERE alumno_id IN ${alumnosFixture};
 DELETE FROM app_private.facturacion_avisos WHERE alumno_id IN ${alumnosFixture};
@@ -71,6 +75,7 @@ DELETE FROM public.cursos WHERE id IN ('${id(11)}','${id(12)}');
 DELETE FROM public.niveles WHERE nombre LIKE 'Nivel EPT115%';
 DELETE FROM app_private.recordatorio_reloj;
 UPDATE app_private.recordatorio_config SET habilitada=false;
+UPDATE app_private.aviso_deuda_config SET habilitada=false;
 COMMIT;`
 
 export function sembrar() {
