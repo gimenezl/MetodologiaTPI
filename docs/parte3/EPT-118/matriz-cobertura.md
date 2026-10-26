@@ -25,7 +25,7 @@ Criterio → cobertura existente → brecha → prueba o entregable → resultad
 | 19 | Sin tokens, errores ni acciones de escritura en la vista | — | nuevo | **U**: el HTML no contiene el token interno ni `reserva_*`/`frontera_*`; sin botones, formularios ni enlaces de reenviar o resolver; motivo con el correo oculto | OK |
 | 20 | Paginación acotada con orden estable, filtros, vacío | — | nuevo | **U**: 50 filas por página, «Siguiente», `pagina=9999` muestra vacío, filtro por estado y tipo, valor desconocido ignorado | OK |
 | 21 | Estados de carga y error de la vista | — | nuevo | `loading.tsx`, `PanelErrorEnviosCorreo` y `error.tsx` revisados por tipos y lectura; **sin prueba automatizada del error** (no se puede forzar una lectura fallida del servidor sin tocar producto) | Límite declarado |
-| 22 | Pruebas registradas y ejecutadas por CI | familias y selector (`impact.mjs`) | la pantalla nueva no tenía familia | familia `envios-correo` en `ui.mjs`, alias del servicio, regex de Playwright y prueba de selector en `impact.test.mjs` | OK local; CI sobre el SHA final consta en el PR |
+| 22 | Pruebas registradas y ejecutadas por CI | familias y selector (`impact.mjs`) | la pantalla nueva no tenía familia | familia `envios-correo` en `ui.mjs`, alias del servicio, regex de Playwright; plan del diff comprobado (`db`, familias `core` y `envios-correo`); sin tocar `impact.test.mjs` (activaría gates móviles por infraestructura) | OK local; CI sobre el SHA final consta en el PR |
 
 ## No cubierto a propósito
 

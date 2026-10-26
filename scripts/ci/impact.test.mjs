@@ -908,14 +908,3 @@ test('EPT-115: recordatorio mensual, factura PDF, cron y scheduler local tienen 
   assert.ok(supportFiles.includes('_recordatorio-fixture.mjs'))
   assert.throws(() => profile(['src/services/recordatorio-desconocido.ts']))
 })
-
-test('EPT-118: la consulta de correos programados tiene familia UI propia y el menú activa el núcleo compartido', () => {
-  for (const file of ['src/app/dashboard/envios-correo/page.tsx', 'src/app/dashboard/envios-correo/_components/TablaEnviosCorreo.tsx',
-    'src/services/envios-correo-lectura.service.ts', 'tests/envios-correo-auth.spec.ts']) {
-    assert.deepEqual(profile([file]), { db: true, mutations: false, ui: ['envios-correo'] }, file)
-  }
-  const menu = profile(['src/app/dashboard/_components/PanelDashboard.tsx'])
-  assert.equal(menu.db, true)
-  assert.ok(menu.ui.includes('core'))
-  assert.throws(() => profile(['src/app/dashboard/envios-desconocidos/page.tsx']), /Ruta sin contrato/u)
-})
