@@ -39,7 +39,12 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
       text: 'Registrar pago'
     direction: DOWN
     timeout: 20000
-- tapOn: 'Registrar pago'
+- takeScreenshot: ciclo-diag-${CICLO_NUMERO}-antes-de-registrar
+- tapOn:
+    id: 'registrar-pago'
+# Diagnóstico: qué muestra la app justo después de pedir el registro (visto en iOS: volvía a la selección sin pago).
+- waitForAnimationToEnd
+- takeScreenshot: ciclo-diag-${CICLO_NUMERO}-despues-de-registrar
 - scrollUntilVisible:
     element:
       text: '.*Pago registrado: pendiente de verificación.*'
