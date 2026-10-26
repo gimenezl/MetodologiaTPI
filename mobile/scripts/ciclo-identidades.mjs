@@ -31,6 +31,12 @@ export function crearIdentidades(plataforma, clave = process.env.EPT_CICLO_CLAVE
   return { hmac, uuidDe, credencialDe, ids }
 }
 
+/** 4525075 -> "45\.250,75": formato es-AR con el separador de miles escapado para usarlo como regex de Maestro. */
+const formatoRegex = centavos => {
+  const enteros = String(Math.floor(centavos / 100)).replace(/\B(?=(\d{3})+(?!\d))/gu, '\\.')
+  return `${enteros},${String(centavos % 100).padStart(2, '0')}`
+}
+
 const ddmmaaaa = iso => iso.split('-').reverse().join('')
 
 /** Variables que consumen los flujos Maestro del ciclo. */
@@ -43,5 +49,7 @@ export function entornoMaestro(plataforma, identidades, { desde, hasta }) {
     MAESTRO_CICLO_DESDE: ddmmaaaa(desde), MAESTRO_CICLO_HASTA: ddmmaaaa(hasta),
     MAESTRO_CICLO_NUMERO_A: `OP-CICLO-${plataforma.toUpperCase()}-A`, MAESTRO_CICLO_NUMERO_B: `OP-CICLO-${plataforma.toUpperCase()}-B`,
     MAESTRO_CICLO_IMPORTE_A: ESPERADO.itemAprobado.importe.replace('.', ','), MAESTRO_CICLO_IMPORTE_B: ESPERADO.itemRechazado.importe.replace('.', ','),
+    // Total que muestra la app (formato es-AR) como regex de Maestro.
+    MAESTRO_CICLO_TOTAL_A: formatoRegex(ESPERADO.itemAprobado.centavos), MAESTRO_CICLO_TOTAL_B: formatoRegex(ESPERADO.itemRechazado.centavos),
   }
 }

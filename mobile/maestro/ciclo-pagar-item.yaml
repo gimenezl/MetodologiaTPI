@@ -1,7 +1,8 @@
 appId: org.educarparatransformar.app
 name: Ciclo económico - pagar un ítem y cargar su comprobante
 ---
-# Subflujo (EPT-119). Variables: CICLO_ITEM, CICLO_NUMERO, CICLO_IMPORTE (importe informado, con coma decimal).
+# Subflujo (EPT-119). Variables: CICLO_ITEM, CICLO_NUMERO, CICLO_IMPORTE (importe informado, con coma decimal) y
+# CICLO_TOTAL (total calculado por el servidor, como regex: 45.250,75).
 # Empieza en la pestaña de cuotas del hijo. Registra el pago con el servidor y adjunta un comprobante real.
 - scrollUntilVisible:
     element:
@@ -39,10 +40,12 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
     timeout: 15000
 - tapOn:
     id: 'adjuntar-comprobante'
+# El total de la pantalla es el calculado por el servidor para ESTE ítem, no el que tipea el padre.
+- assertVisible: 'ARS.${CICLO_TOTAL}'
 - scrollUntilVisible:
     element:
       id: 'campo-fecha'
-    direction: UP
+    direction: DOWN
     timeout: 15000
 - tapOn:
     id: 'campo-fecha'

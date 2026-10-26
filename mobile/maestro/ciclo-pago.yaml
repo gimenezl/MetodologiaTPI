@@ -11,8 +11,12 @@ name: Ciclo económico (1/2) - padre consulta cuotas, registra dos pagos y carga
 - tapOn:
     id: 'contrasena'
 - inputText: ${MAESTRO_CICLO_PASSWORD}
+# En iOS el teclado tapa el botón: se oculta antes de tocarlo. El ingreso viaja por el túnel, así que se espera con plazo.
+- hideKeyboard
 - tapOn: 'Ingresar'
-- assertVisible: 'Hijos vinculados'
+- extendedWaitUntil:
+    visible: 'Hijos vinculados'
+    timeout: 60000
 - tapOn: 'Cuotas'
 - scrollUntilVisible:
     element:
@@ -26,6 +30,7 @@ name: Ciclo económico (1/2) - padre consulta cuotas, registra dos pagos y carga
       CICLO_ITEM: ${MAESTRO_CICLO_ITEM_A}
       CICLO_NUMERO: ${MAESTRO_CICLO_NUMERO_A}
       CICLO_IMPORTE: ${MAESTRO_CICLO_IMPORTE_A}
+      CICLO_TOTAL: ${MAESTRO_CICLO_TOTAL_A}
 - scrollUntilVisible:
     element:
       id: 'volver-cuotas-pago'
@@ -40,4 +45,5 @@ name: Ciclo económico (1/2) - padre consulta cuotas, registra dos pagos y carga
       CICLO_ITEM: ${MAESTRO_CICLO_ITEM_B}
       CICLO_NUMERO: ${MAESTRO_CICLO_NUMERO_B}
       CICLO_IMPORTE: ${MAESTRO_CICLO_IMPORTE_B}
+      CICLO_TOTAL: ${MAESTRO_CICLO_TOTAL_B}
 - takeScreenshot: ciclo-pago-completado

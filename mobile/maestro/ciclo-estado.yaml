@@ -11,8 +11,12 @@ name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decidi
 - tapOn:
     id: 'contrasena'
 - inputText: ${MAESTRO_CICLO_PASSWORD}
+# En iOS el teclado tapa el botón: se oculta antes de tocarlo. El ingreso viaja por el túnel, así que se espera con plazo.
+- hideKeyboard
 - tapOn: 'Ingresar'
-- assertVisible: 'Hijos vinculados'
+- extendedWaitUntil:
+    visible: 'Hijos vinculados'
+    timeout: 60000
 - swipe:
     from:
       id: 'pestanas'
