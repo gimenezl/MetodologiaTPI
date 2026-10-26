@@ -115,15 +115,17 @@ name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decidi
     centerElement: true
     timeout: 30000
 # Saldo: el rechazo no reduce la deuda (38.900,25 + 51.000,00 = 89.900,25) y la reserva de B se liberó.
-- scrollUntilVisible:
-    element:
-      id: 'pestanas'
-    direction: UP
-    timeout: 20000
+# Se relanza la app (la sesión persiste) para volver a la tira de pestañas tras el menú nativo del recibo.
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: 'Hijos vinculados'
+    timeout: 60000
 - swipe:
     from:
       id: 'pestanas'
-    direction: RIGHT
+    direction: LEFT
 - tapOn:
     id: 'seccion-deuda'
 - scrollUntilVisible:
@@ -131,5 +133,5 @@ name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decidi
       text: 'Total adeudado'
     direction: DOWN
     timeout: 20000
-- assertVisible: 'ARS.89\.900,25'
+- assertVisible: 'ARS.89.900,25'
 - takeScreenshot: ciclo-deuda-final

@@ -205,11 +205,21 @@ async function esperarCondicion(descripcion, evaluar, limiteMs = TIEMPO_ESPERA_A
 async function decidir() {
   const e = leerEstado()
   log('Esperando que la app registre los dos pagos con su comprobante…')
-  const pagos = await esperarCondicion('los dos pagos pendientes con comprobante registrados por la app', () => {
-    const a = pagoDeItem(e.id.iA), b = pagoDeItem(e.id.iB)
-    if (!a || !b) return null
-    return [a, b].every(p => datosPago(p).estado === 'PENDIENTE_VERIFICACION' && comprobantes(p) >= 1) ? { a, b } : null
-  })
+  // Qué dejó la app hasta ahora (sin datos sensibles): sirve para distinguir «no registró» de «registró sin comprobante».
+  const resumenApp = () => ['iA', 'iB'].map(k => {
+    const p = pagoDeItem(e.id[k])
+    return `${k}: ${p ? `${datosPago(p).estado}, comprobantes=${comprobantes(p)}` : 'sin pago'}`
+  }).join('; ')
+  let pagos
+  try {
+    pagos = await esperarCondicion('los dos pagos pendientes con comprobante registrados por la app', () => {
+      const a = pagoDeItem(e.id.iA), b = pagoDeItem(e.id.iB)
+      if (!a || !b) return null
+      return [a, b].every(p => datosPago(p).estado === 'PENDIENTE_VERIFICACION' && comprobantes(p) >= 1) ? { a, b } : null
+    })
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : 'Falló la espera'} Estado observado — ${resumenApp()}.`)
+  }
   // La app registró lo que corresponde: un pago por ítem, con el total calculado por el servidor.
   assert.equal(datosPago(pagos.a).total, ESPERADO.itemAprobado.importe, 'El total del pago A no es el calculado por el servidor.')
   assert.equal(datosPago(pagos.b).total, ESPERADO.itemRechazado.importe, 'El total del pago B no es el calculado por el servidor.')

@@ -22,6 +22,18 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
       text: '.*1 ítem seleccionado.*calculado por el sistema.*'
     direction: DOWN
     timeout: 15000
+# Los datos bancarios cargan de forma asíncrona y agrandan la pantalla: se espera a que existan ANTES de tocar el botón,
+# o el diseño se desplaza y el toque cae sobre otro ítem (visto en iOS: dejaba la selección vacía).
+- scrollUntilVisible:
+    element:
+      text: '.*Datos de prueba.*'
+    direction: DOWN
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: 'No se acepta pago en efectivo.'
+    direction: DOWN
+    timeout: 15000
 - scrollUntilVisible:
     element:
       text: 'Registrar pago'
