@@ -61,22 +61,35 @@ name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decidi
     timeout: 15000
 - tapOn:
     id: 'periodo-consultar'
-# Estados del mismo pago que decidió Dirección.
+# Estados del mismo pago que decidió Dirección. El orden de las entradas no se asume: se vuelve arriba antes de
+# buscar cada una (rechazado con su motivo, y luego aprobado con su recibo).
 - scrollUntilVisible:
     element:
-      text: 'Aprobado'
-    direction: DOWN
+      id: 'periodo-consultar'
+    direction: UP
+    speed: 80
     timeout: 20000
 - scrollUntilVisible:
     element:
       text: 'Rechazado'
     direction: DOWN
-    timeout: 15000
+    timeout: 20000
 - scrollUntilVisible:
     element:
       text: '.*Motivo del rechazo: Comprobante no corresponde al pago.*'
     direction: DOWN
     timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: 'periodo-consultar'
+    direction: UP
+    speed: 80
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: 'Aprobado'
+    direction: DOWN
+    timeout: 20000
 # El recibo es el del pago aprobado.
 - scrollUntilVisible:
     element:
