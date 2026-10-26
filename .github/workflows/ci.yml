@@ -223,7 +223,7 @@ jobs:
       - name: Preparar el ciclo económico conectado (Android)
         run: |
           echo "EPT_CICLO_CLAVE=$(printf '%s' "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_SHA-android" | sha256sum | cut -d' ' -f1)" >> "$GITHUB_ENV"
-          python3 scripts/ci/run-stage.py --stage ciclo-chromium --seconds 150 -- npx playwright install --with-deps chromium
+          timeout 150 npx playwright install --with-deps chromium || npx playwright install chromium
       - name: Fixture del ciclo económico (Android)
         run: python3 scripts/ci/run-stage.py --stage ciclo-preparar --seconds 90 -- node mobile/scripts/ciclo-economico.mjs preparar android
       - name: Habilitar KVM
@@ -314,7 +314,7 @@ jobs:
       - name: Dependencias web y Chromium
         run: |
           python3 scripts/ci/run-stage.py --stage web-deps --seconds 150 -- npm ci
-          python3 scripts/ci/run-stage.py --stage ciclo-chromium --seconds 150 -- npx playwright install --with-deps chromium
+          timeout 150 npx playwright install --with-deps chromium || npx playwright install chromium
       - name: Iniciar servidor web local
         run: python3 scripts/ci/run-stage.py --stage web-server --seconds 150 -- node mobile/scripts/servidor-web-local.mjs start
       # cloudflared fijado por versión y verificado por SHA-256 (resumen publicado por GitHub para ese recurso).
@@ -425,6 +425,9 @@ jobs:
         run: |
           destino="$RUNNER_TEMP/apreton"
           for _ in $(seq 1 90); do
+            # Si el backend ya falló no tiene sentido esperar su apretón de manos.
+            falla=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs" --jq "[.jobs[] | select(.name == \"CI / backend de prueba para iOS\" and .conclusion == \"failure\")] | length" 2>/dev/null || echo 0)
+            if [ "$falla" -ge 1 ]; then echo "El backend de prueba falló: no habrá apretón de manos." >&2; exit 1; fi
             if gh run download "$GITHUB_RUN_ID" -n "ios-apreton-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" -D "$destino" 2>/dev/null && [ -f "$destino/apreton.json" ]; then break; fi
             sleep 10
           done
