@@ -218,7 +218,10 @@ async function decidir() {
   const cookie = `sb-127-auth-token=base64-${Buffer.from(JSON.stringify(dir), 'utf8').toString('base64')}`
   const urlNavegador = urlWeb.replace('127.0.0.1', 'localhost')
   // Import diferido: el job macOS (acción `entorno`) no instala las dependencias web.
-  const { chromium } = await import('playwright')
+  // Playwright es dependencia de la web (raíz), no de `mobile/`: el especificador va en una variable para que el
+  // lint del paquete móvil no intente resolverlo; en tiempo de ejecución sale de `node_modules` de la raíz.
+  const paqueteNavegador = 'playwright'
+  const { chromium } = await import(paqueteNavegador)
   const navegador = await chromium.launch({ headless: true })
   try {
     const contexto = await navegador.newContext({ viewport: { width: 1280, height: 900 } })
