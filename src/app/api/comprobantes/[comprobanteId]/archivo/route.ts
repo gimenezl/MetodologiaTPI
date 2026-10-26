@@ -22,9 +22,10 @@ const cabeceras = {
  *
  * Solo lo ven quien lo cargó y Dirección: la autoridad es la política de Storage
  * y la de `comprobantes_pago`, que se aplican con la sesión del usuario (no con
- * la clave de servicio). Un copadre, un estudiante, personal, un docente, una
- * cuenta bloqueada y cualquier identificador ajeno reciben el MISMO 404, sin
- * distinguir «no existe» de «no es tuyo».
+ * la clave de servicio). Un copadre, un estudiante, personal, un docente y
+ * cualquier identificador ajeno reciben el MISMO 404, sin distinguir «no existe»
+ * de «no es tuyo». Una cuenta bloqueada no llega a esa consulta: la rechaza antes
+ * la autorización de sesión con 403 `ACCESO_BLOQUEADO` (probado en EPT-120, caso E01).
  *
  * La respuesta es una redirección a una URL firmada de 60 s. Una URL ya emitida
  * sigue sirviendo hasta que vence aunque la cuenta se bloquee después: Storage
