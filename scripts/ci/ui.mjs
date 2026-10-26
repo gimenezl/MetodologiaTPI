@@ -19,6 +19,7 @@ export const families = {
   tarifas: ['tarifas-ui', 'tarifas-auth'],
   usuarios: ['usuarios-auth', 'usuarios-permisos-auth'],
   comprobantes: ['comprobantes-auth'],
+  'envios-correo': ['envios-correo-auth'],
 }
 export const aliases = { 'asignaciones-materias': 'materias', 'mis-asignaciones': 'profesores',
   'horarios-academicos': 'horarios', cupos: 'inscripciones', legajos: 'usuarios',
@@ -59,5 +60,8 @@ export function validateUiRegistry(files, pure) {
 }
 
 Object.assign(aliases, { 'reportes-economicos': 'reportes' })
+
+// EPT-118: consulta de correos programados para Dirección (lectura del servicio y de la pantalla).
+Object.assign(aliases, { 'envios-correo-lectura': 'envios-correo' })
 
 Object.assign(aliases, { recibos: 'recibos-historial', 'recibos-pdf': 'recibos-historial', 'recibos-acciones': 'recibos-historial' })
