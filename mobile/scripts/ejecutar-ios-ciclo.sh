@@ -35,9 +35,23 @@ node mobile/scripts/archivos-prueba.mjs "$ARCHIVOS"
 xcrun simctl addmedia "$UDID" "$ARCHIVOS/comprobante-ci.png"
 
 set +e
-maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-ciclo-pago.xml" \
-  --debug-output "$SALIDA/ciclo-pago-debug" --flatten-debug-output \
-  --test-output-dir "$SALIDA/maestro-ciclo-pago" mobile/maestro/ciclo-pago.yaml
+# El driver XCUITest de Maestro a veces no arranca a tiempo («driver not ready»). Solo esa firma, que ocurre ANTES de
+# ejecutar ningún paso, se reintenta una vez; el fallo de un paso del flujo nunca se reintenta.
+correr_maestro() {
+  local etiqueta="$1" flujo="$2" intento resultado
+  for intento in 1 2; do
+    maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-$etiqueta.xml" \
+      --debug-output "$SALIDA/$etiqueta-debug" --flatten-debug-output \
+      --test-output-dir "$SALIDA/maestro-$etiqueta" "$flujo" 2>&1 | tee "$SALIDA/$etiqueta-intento$intento.out"
+    resultado="${PIPESTATUS[0]}"
+    if [ "$resultado" -eq 0 ]; then return 0; fi
+    grep -q 'driver not ready' "$SALIDA/$etiqueta-intento$intento.out" || return "$resultado"
+    echo "Driver de iOS no listo antes de ejecutar pasos: se reintenta una sola vez ($etiqueta)."
+  done
+  return "$resultado"
+}
+
+correr_maestro ciclo-pago mobile/maestro/ciclo-pago.yaml
 estado=$?
 if [ "$estado" -eq 0 ]; then
   # Dirección decide en la web (job Linux); se espera al estado real del pago, sin esperas fijas.
@@ -45,9 +59,7 @@ if [ "$estado" -eq 0 ]; then
   estado=$?
 fi
 if [ "$estado" -eq 0 ]; then
-  maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-ciclo-estado.xml" \
-    --debug-output "$SALIDA/ciclo-estado-debug" --flatten-debug-output \
-    --test-output-dir "$SALIDA/maestro-ciclo-estado" mobile/maestro/ciclo-estado.yaml
+  correr_maestro ciclo-estado mobile/maestro/ciclo-estado.yaml
   estado=$?
 fi
 if [ "$estado" -eq 0 ]; then

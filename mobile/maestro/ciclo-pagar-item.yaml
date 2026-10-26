@@ -47,12 +47,25 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
       id: 'campo-fecha'
     direction: DOWN
     timeout: 15000
+# El teclado tapa los campos siguientes: se lo oculta y se baja hasta cada campo antes de tocarlo.
 - tapOn:
     id: 'campo-fecha'
 - inputText: '14/10/2026'
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: 'campo-importe'
+    direction: DOWN
+    timeout: 15000
 - tapOn:
     id: 'campo-importe'
 - inputText: ${CICLO_IMPORTE}
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: 'campo-numero'
+    direction: DOWN
+    timeout: 15000
 - tapOn:
     id: 'campo-numero'
 - inputText: ${CICLO_NUMERO}
