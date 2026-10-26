@@ -17,6 +17,10 @@ name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decidi
 - extendedWaitUntil:
     visible: 'Hijos vinculados'
     timeout: 60000
+# iOS ofrece guardar la contraseña con un diálogo del sistema que tapa la pantalla: se descarta (en inglés o español).
+- tapOn:
+    text: 'Not Now|Ahora no'
+    optional: true
 - swipe:
     from:
       id: 'pestanas'

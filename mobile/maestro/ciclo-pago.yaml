@@ -17,6 +17,10 @@ name: Ciclo económico (1/2) - padre consulta cuotas, registra dos pagos y carga
 - extendedWaitUntil:
     visible: 'Hijos vinculados'
     timeout: 60000
+# iOS ofrece guardar la contraseña con un diálogo del sistema que tapa la pantalla: se descarta (en inglés o español).
+- tapOn:
+    text: 'Not Now|Ahora no'
+    optional: true
 - tapOn: 'Cuotas'
 - scrollUntilVisible:
     element:
@@ -33,11 +37,10 @@ name: Ciclo económico (1/2) - padre consulta cuotas, registra dos pagos y carga
       CICLO_TOTAL: ${MAESTRO_CICLO_TOTAL_A}
 - scrollUntilVisible:
     element:
-      id: 'volver-cuotas-pago'
+      text: 'Volver a las cuotas'
     direction: DOWN
     timeout: 15000
-- tapOn:
-    id: 'volver-cuotas-pago'
+- tapOn: 'Volver a las cuotas'
 # Pago B (se rechazará desde la web).
 - runFlow:
     file: ciclo-pagar-item.yaml
