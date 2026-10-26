@@ -5,7 +5,7 @@ import { deriveEpt95Png, designs, ept95Paths, validateEpt95Assets, validateEpt95
 import { capturas, ept96Paths, validarPng96, validateEpt96Assets } from './ept96-assets.mjs'
 import { test } from 'node:test'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, mkdirSync, writeFileSync, chmodSync, symlinkSync } from 'node:fs'
+import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, mkdirSync, writeFileSync, chmodSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { changedPaths, profile, pureTests, unsupportedPackage } from './impact.mjs'
@@ -240,7 +240,12 @@ test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
     ['gate sin plan', t => t.replace('PLAN_MOBILE: ${{ needs.plan.outputs.mobile }}', 'PLAN_MOBILE: false')],
     ['gate que tolera skips', t => t.replace('              test "$MOBILE" = success\n', '')],
     ['gate que encadena con &&', t => t.replace('test "$MOBILE" = success\n              test "$ANDROID" = success', 'test "$MOBILE" = success && test "$ANDROID" = success')],
-    ['needs sin móviles', t => t.replace('needs: [fast, database, ui, plan, mobile, mobile-android, mobile-ios]', 'needs: [fast, database, ui]')],
+    ['gate sin backend iOS', t => t.replace('IOS_BACKEND: ${{ needs.mobile-ios-backend.result }}', 'IOS_BACKEND: success')],
+    ['sin job del backend iOS', t => t.replace(/^  mobile-ios-backend:/mu, '  backend-x:')],
+    ['iOS sin ciclo económico', t => t.replaceAll('mobile/scripts/ejecutar-ios-ciclo.sh', 'mobile/scripts/x.sh')],
+    ['sin túnel efímero', t => t.replace('mobile/scripts/tunel-efimero.mjs start', 'mobile/scripts/x.mjs start')],
+    ['Dirección no decide en la web', t => t.replace('mobile/scripts/ciclo-economico.mjs decidir ios', 'mobile/scripts/x.mjs decidir ios')],
+    ['needs sin móviles', t => t.replace('needs: [fast, database, ui, plan, mobile, mobile-android, mobile-ios, mobile-ios-backend]', 'needs: [fast, database, ui]')],
     ['Android sin ejecución', t => t.replace('mobile/scripts/ejecutar-android.sh', 'mobile/scripts/x.sh')],
     ['iOS sin ejecución', t => t.replaceAll('mobile/scripts/ejecutar-ios.sh', 'mobile/scripts/x.sh')],
   ]
@@ -262,13 +267,25 @@ test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   assert.match(android, /run-stage\.test\.py/u)
   assert.match(android, /integracion-auth-local\.mjs/u)
   assert.match(android, /supabase-local\.mjs stop/u)
-  // iOS es un smoke nativo sin backend: los runners macOS no tienen Docker para un Supabase local.
+  // EPT-119: el simulador iOS no levanta backend (macOS no tiene Docker): usa el del job Linux por túnel HTTPS.
   const ios = bloqueJob('mobile-ios')
-  assert.ok(minutos(ios) > 0 && minutos(ios) <= 45)
-  assert.doesNotMatch(ios, /supabase-local|integracion-auth-local|EPT_MOBILE_AUTH_INTEGRATION/u)
+  assert.ok(minutos(ios) > 0 && minutos(ios) <= 50)
+  assert.doesNotMatch(ios, /supabase-local|integracion-auth-local|EPT_MOBILE_AUTH_INTEGRATION|SERVICE_ROLE/u)
   assert.match(ios, /EXPO_PUBLIC_SUPABASE_URL: https:\/\//u)
   assert.match(ios, /MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'/u)
+  assert.match(ios, /ejecutar-ios-ciclo\.sh/u)
   assert.ok(contratoIosTransitivo().includes('smoke-ios.yaml'))
+  // El backend efímero: stack local aislado, túneles verificados por SHA-256, nada privilegiado publicado y siempre destruido.
+  const backend = bloqueJob('mobile-ios-backend')
+  assert.ok(minutos(backend) > 0 && minutos(backend) <= 60)
+  assert.match(backend, /supabase-local\.mjs start ios/u)
+  assert.match(backend, /sha256sum -c -/u)
+  assert.match(backend, /tunel-efimero\.mjs stop/u)
+  assert.match(backend, /supabase-local\.mjs stop/u)
+  assert.match(backend, /if: always\(\)/u)
+  assert.doesNotMatch(backend, /SERVICE_ROLE|service_role/u)
+  assert.match(yml, /ios-apreton-/u)
+  assert.match(yml, /ios-fin-/u)
   assert.doesNotMatch(yml, /ci:ios-infrastructure-diagnostic/u)
 })
 test('EPT-102: el bloque del gate se ejecuta con bash -e y falla ante cualquier resultado móvil no exitoso', () => {
@@ -277,18 +294,21 @@ test('EPT-102: el bloque del gate se ejecuta con bash -e y falla ante cualquier 
   const fin = yml.indexOf('esac', inicio) + 'esac'.length
   assert.ok(inicio > 0 && fin > inicio)
   const bloque = yml.slice(inicio, fin).split('\n').map(l => l.replace(/^ {10}/u, '')).join('\n')
-  const bash = process.platform === 'win32'
-    ? path.join(path.dirname(path.dirname(execFileSync('where.exe', ['git'], { encoding: 'utf8' }).trim().split(/\r?\n/u)[0])), 'bin/bash.exe')
-    : 'bash'
-  const correr = env => spawnSync(bash, ['-e', '-c', bloque], { env: { PATH: process.env.PATH, ...env }, encoding: 'utf8' }).status
-  const ok = { PLAN: 'success', PLAN_MOBILE: 'true', MOBILE: 'success', ANDROID: 'success', IOS: 'success' }
+  // `where git` puede devolver mingw64/bin (sin bash.exe): la raíz de Git se deriva de --exec-path, igual que el resto del archivo.
+  const gitRoot = process.platform === 'win32'
+    ? path.resolve(execFileSync('git', ['--exec-path'], { encoding: 'utf8' }).trim(), '../../..') : ''
+  const bash = process.platform === 'win32' ? path.join(gitRoot, 'usr/bin/bash.exe') : 'bash'
+  if (process.platform === 'win32') assert.ok(existsSync(bash), `bash de Git for Windows no encontrado en ${bash}`)
+  const PATH = process.platform === 'win32' ? `${path.join(gitRoot, 'usr/bin')};${process.env.PATH}` : process.env.PATH
+  const correr = env => spawnSync(bash, ['-e', '-c', bloque], { env: { PATH, ...env }, encoding: 'utf8' }).status
+  const ok = { PLAN: 'success', PLAN_MOBILE: 'true', MOBILE: 'success', ANDROID: 'success', IOS: 'success', IOS_BACKEND: 'success' }
   assert.equal(correr(ok), 0)
-  for (const clave of ['MOBILE', 'ANDROID', 'IOS']) {
+  for (const clave of ['MOBILE', 'ANDROID', 'IOS', 'IOS_BACKEND']) {
     for (const valor of ['failure', 'cancelled', 'skipped']) assert.notEqual(correr({ ...ok, [clave]: valor }), 0, `${clave}=${valor} debe fallar`)
   }
-  const sinPlan = { PLAN_MOBILE: 'false', MOBILE: 'skipped', ANDROID: 'skipped', IOS: 'skipped' }
+  const sinPlan = { PLAN_MOBILE: 'false', MOBILE: 'skipped', ANDROID: 'skipped', IOS: 'skipped', IOS_BACKEND: 'skipped' }
   assert.equal(correr(sinPlan), 0)
-  for (const clave of ['MOBILE', 'ANDROID', 'IOS']) assert.notEqual(correr({ ...sinPlan, [clave]: 'success' }), 0, `${clave} no debe correr sin plan`)
+  for (const clave of ['MOBILE', 'ANDROID', 'IOS', 'IOS_BACKEND']) assert.notEqual(correr({ ...sinPlan, [clave]: 'success' }), 0, `${clave} no debe correr sin plan`)
   assert.notEqual(correr({ ...ok, PLAN_MOBILE: '' }), 0)
 })
 test('EPT-102: el paquete móvil no altera dependencias ni lockfile de Next', () => {
