@@ -1,0 +1,43 @@
+appId: org.educarparatransformar.app
+name: Ciclo económico (1/2) - padre consulta cuotas, registra dos pagos y carga sus comprobantes
+---
+# EPT-119. El backend (Supabase + Next) es real y es el mismo que usa Dirección en la web. Los ítems son
+# determinísticos: los fija ciclo-economico.mjs `preparar` y llegan por MAESTRO_CICLO_*.
+- launchApp:
+    clearState: true
+- tapOn:
+    id: 'correo'
+- inputText: ${MAESTRO_CICLO_EMAIL}
+- tapOn:
+    id: 'contrasena'
+- inputText: ${MAESTRO_CICLO_PASSWORD}
+- tapOn: 'Ingresar'
+- assertVisible: 'Hijos vinculados'
+- tapOn: 'Cuotas'
+- scrollUntilVisible:
+    element:
+      text: '.*Pagar ítems.*'
+    direction: DOWN
+    timeout: 20000
+# Pago A (se aprobará desde la web).
+- runFlow:
+    file: ciclo-pagar-item.yaml
+    env:
+      CICLO_ITEM: ${MAESTRO_CICLO_ITEM_A}
+      CICLO_NUMERO: ${MAESTRO_CICLO_NUMERO_A}
+      CICLO_IMPORTE: ${MAESTRO_CICLO_IMPORTE_A}
+- scrollUntilVisible:
+    element:
+      id: 'volver-cuotas-pago'
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: 'volver-cuotas-pago'
+# Pago B (se rechazará desde la web).
+- runFlow:
+    file: ciclo-pagar-item.yaml
+    env:
+      CICLO_ITEM: ${MAESTRO_CICLO_ITEM_B}
+      CICLO_NUMERO: ${MAESTRO_CICLO_NUMERO_B}
+      CICLO_IMPORTE: ${MAESTRO_CICLO_IMPORTE_B}
+- takeScreenshot: ciclo-pago-completado

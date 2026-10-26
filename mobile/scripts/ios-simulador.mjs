@@ -6,18 +6,19 @@ import { pathToFileURL } from 'node:url'
 export const RUNTIME = 'com.apple.CoreSimulator.SimRuntime.iOS-26-2'
 export const DEVICE = 'com.apple.CoreSimulator.SimDeviceType.iPhone-16e'
 const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu
-export function presupuestoLimpieza({ inicioStep, reloj = () => Date.now(), ahora = () => performance.now() }) {
+// El presupuesto del step es de 12 min (smoke sin backend); el ciclo económico conectado (EPT-119) declara el suyo.
+export function presupuestoLimpieza({ inicioStep, reloj = () => Date.now(), ahora = () => performance.now(), presupuestoMs = 720000 }) {
   const inicio = Number(inicioStep), transcurrido = reloj() - inicio
-  if (!/^\d+$/u.test(String(inicioStep)) || !Number.isSafeInteger(inicio) || transcurrido < 0 || transcurrido >= 720000) throw new Error('Inicio del step ausente, inválido o agotado')
+  if (!/^\d+$/u.test(String(inicioStep)) || !Number.isSafeInteger(inicio) || transcurrido < 0 || transcurrido >= presupuestoMs) throw new Error('Inicio del step ausente, inválido o agotado')
   // Tras validar la fecha compartida, el presupuesto restante solo decrece con reloj monotónico.
-  const limite = ahora() + 720000 - transcurrido - 2000
+  const limite = ahora() + presupuestoMs - transcurrido - 2000
   return () => {
     const restante = Math.floor(limite - ahora())
     if (restante <= 0) throw new Error('Presupuesto restante del step agotado; limpieza no confirmada')
     return restante
   }
 }
-export function gestionarSimulador({ accion, directory, run, attempt, inicioStep, reloj, ejecutar = spawnSync, ahora = () => performance.now() }) {
+export function gestionarSimulador({ accion, directory, run, attempt, inicioStep, reloj, ejecutar = spawnSync, ahora = () => performance.now(), presupuestoMs }) {
   if (!run || !attempt || !['crear', 'limpiar'].includes(accion)) throw new Error('Identidad de ejecución o acción inválida')
   const path = join(directory, 'simulador-propio.json')
   if (accion === 'crear') {
@@ -44,7 +45,7 @@ export function gestionarSimulador({ accion, directory, run, attempt, inicioStep
     return r.stdout
   }
   try {
-    restante = presupuestoLimpieza({ inicioStep, reloj, ahora })
+    restante = presupuestoLimpieza({ inicioStep, reloj, ahora, ...(presupuestoMs ? { presupuestoMs } : {}) })
     for (const accion of ['shutdown', 'delete']) {
       observar(accion, ['simctl', accion, own.udid])
       own[accion === 'shutdown' ? 'detenido' : 'borradoSolicitado'] = true
@@ -57,6 +58,6 @@ export function gestionarSimulador({ accion, directory, run, attempt, inicioStep
   finally { own.fin = new Date().toISOString(); writeFileSync(path, JSON.stringify(own), { mode: 0o600 }) }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const udid = gestionarSimulador({ accion: process.argv[2], directory: join(process.env.RUNNER_TEMP, 'evidencia-movil-ios'), run: process.env.GITHUB_RUN_ID, attempt: process.env.GITHUB_RUN_ATTEMPT, inicioStep: process.env.EPT_IOS_STEP_STARTED_AT })
+  const udid = gestionarSimulador({ accion: process.argv[2], directory: join(process.env.RUNNER_TEMP, 'evidencia-movil-ios'), run: process.env.GITHUB_RUN_ID, attempt: process.env.GITHUB_RUN_ATTEMPT, inicioStep: process.env.EPT_IOS_STEP_STARTED_AT, presupuestoMs: Number(process.env.EPT_IOS_PRESUPUESTO_MS) || undefined })
   if (udid) console.log(udid)
 }

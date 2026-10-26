@@ -1,0 +1,78 @@
+appId: org.educarparatransformar.app
+name: Ciclo económico - pagar un ítem y cargar su comprobante
+---
+# Subflujo (EPT-119). Variables: CICLO_ITEM, CICLO_NUMERO, CICLO_IMPORTE (importe informado, con coma decimal).
+# Empieza en la pestaña de cuotas del hijo. Registra el pago con el servidor y adjunta un comprobante real.
+- scrollUntilVisible:
+    element:
+      text: 'Pagar ítems'
+    direction: UP
+    timeout: 15000
+- tapOn: 'Pagar ítems'
+- scrollUntilVisible:
+    element:
+      id: 'item-${CICLO_ITEM}'
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    id: 'item-${CICLO_ITEM}'
+- scrollUntilVisible:
+    element:
+      text: '.*1 ítem seleccionado.*calculado por el sistema.*'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: 'Registrar pago'
+    direction: DOWN
+    timeout: 20000
+- tapOn: 'Registrar pago'
+- scrollUntilVisible:
+    element:
+      text: '.*Pago registrado: pendiente de verificación.*'
+    direction: UP
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      id: 'adjuntar-comprobante'
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: 'adjuntar-comprobante'
+- scrollUntilVisible:
+    element:
+      id: 'campo-fecha'
+    direction: UP
+    timeout: 15000
+- tapOn:
+    id: 'campo-fecha'
+- inputText: '14/10/2026'
+- tapOn:
+    id: 'campo-importe'
+- inputText: ${CICLO_IMPORTE}
+- tapOn:
+    id: 'campo-numero'
+- inputText: ${CICLO_NUMERO}
+- hideKeyboard
+- runFlow:
+    when:
+      platform: Android
+    file: ciclo-adjuntar-android.yaml
+- runFlow:
+    when:
+      platform: iOS
+    file: ciclo-adjuntar-ios.yaml
+- scrollUntilVisible:
+    element:
+      text: 'Enviar comprobante'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Enviar comprobante'
+- extendedWaitUntil:
+    visible: 'Comprobante recibido: pendiente de verificación.'
+    timeout: 60000
+- scrollUntilVisible:
+    element:
+      text: '.*${CICLO_NUMERO}.*'
+    direction: DOWN
+    timeout: 15000

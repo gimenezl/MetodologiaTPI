@@ -218,6 +218,14 @@ jobs:
       # canje PKCE, cambio, login y rechazo de la anterior). También prepara el actor del escenario del emulador.
       - name: Verificar recuperación de contraseña con correo real
         run: python3 scripts/ci/run-stage.py --stage recovery-integration --seconds 150 -- node --experimental-strip-types --no-warnings mobile/scripts/integracion-recuperacion.mjs
+      # EPT-119: ciclo económico conectado. La app registra pagos y comprobantes; Dirección decide desde la web real
+      # (Chromium) sobre los mismos registros; la app y los informes se reconcilian con importes esperados fijos.
+      - name: Preparar el ciclo económico conectado (Android)
+        run: |
+          echo "EPT_CICLO_CLAVE=$(printf '%s' "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_SHA-android" | sha256sum | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          python3 scripts/ci/run-stage.py --stage ciclo-chromium --seconds 150 -- npx playwright install --with-deps chromium
+      - name: Fixture del ciclo económico (Android)
+        run: python3 scripts/ci/run-stage.py --stage ciclo-preparar --seconds 90 -- node mobile/scripts/ciclo-economico.mjs preparar android
       - name: Habilitar KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -261,8 +269,112 @@ jobs:
             ${{ runner.temp }}/evidencia-movil-android/maestro-consultas-estudiante/
             ${{ runner.temp }}/evidencia-movil-android/maestro-deuda/
             ${{ runner.temp }}/evidencia-movil-android/maestro-recibos/
+            ${{ runner.temp }}/evidencia-movil-android/maestro-ciclo-pago/
+            ${{ runner.temp }}/evidencia-movil-android/maestro-ciclo-estado/
             ${{ runner.temp }}/evidencia-movil-android/maestro-recuperacion-solicitud/
             ${{ runner.temp }}/evidencia-movil-android/maestro-recuperacion-cambio/
+          if-no-files-found: warn
+          retention-days: 14
+  # EPT-119: los runners macOS ARM no tienen Docker, así que el backend de prueba (Supabase local + Next + Chromium de
+  # Dirección) corre en este job Linux y el simulador iOS lo alcanza por HTTPS mediante túneles efímeros (URL aleatoria,
+  # datos sintéticos, solo la clave anónima viaja). Ambos jobs se coordinan con el estado real del backend y con dos
+  # artefactos: `ios-apreton` (URLs públicas) e `ios-fin` (el simulador terminó). El stack se destruye siempre.
+  mobile-ios-backend:
+    name: CI / backend de prueba para iOS
+    needs: plan
+    if: needs.plan.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    env:
+      CI: '1'
+      EPT_CICLO_ESPERA_APP_MS: '2400000'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            mobile/package-lock.json
+            package-lock.json
+      - name: Clave común del ciclo y presupuesto
+        run: |
+          echo "EPT_CICLO_CLAVE=$(printf '%s' "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_SHA-ios" | sha256sum | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          echo "EPT_NATIVE_DEADLINE=$(( $(date +%s) + 3300 ))" >> "$GITHUB_ENV"
+          echo "EPT_STAGE_LOG_DIR=$RUNNER_TEMP/evidencia-backend-ios/stages" >> "$GITHUB_ENV"
+      - name: Instalar CLI Supabase aislada (2.117.0)
+        run: python3 scripts/ci/run-stage.py --stage cli-install --seconds 90 -- bash scripts/ci/install-cli.sh --isolated
+      - name: Iniciar proyecto Supabase local descartable
+        run: node mobile/scripts/supabase-local.mjs start ios
+      - name: Dependencias web y Chromium
+        run: |
+          python3 scripts/ci/run-stage.py --stage web-deps --seconds 150 -- npm ci
+          python3 scripts/ci/run-stage.py --stage ciclo-chromium --seconds 150 -- npx playwright install --with-deps chromium
+      - name: Iniciar servidor web local
+        run: python3 scripts/ci/run-stage.py --stage web-server --seconds 150 -- node mobile/scripts/servidor-web-local.mjs start
+      # cloudflared fijado por versión y verificado por SHA-256 (resumen publicado por GitHub para ese recurso).
+      - name: Instalar cloudflared 2026.10.1
+        run: |
+          curl --connect-timeout 10 --max-time 120 -fsSL -o "$RUNNER_TEMP/cloudflared" https://github.com/cloudflare/cloudflared/releases/download/2026.10.1/cloudflared-linux-amd64
+          echo "3bfc539f45d2620c71debb7a86be0efa737ed5ccbad9eb85c787116900e5c586  $RUNNER_TEMP/cloudflared" | sha256sum -c -
+          chmod 0700 "$RUNNER_TEMP/cloudflared"
+          echo "EPT_CLOUDFLARED=$RUNNER_TEMP/cloudflared" >> "$GITHUB_ENV"
+      - name: Fixture del ciclo económico (iOS)
+        run: python3 scripts/ci/run-stage.py --stage ciclo-preparar --seconds 90 -- node mobile/scripts/ciclo-economico.mjs preparar ios
+      - name: Abrir túneles efímeros
+        run: node mobile/scripts/tunel-efimero.mjs start "$RUNNER_TEMP/tunel"
+      - name: Publicar apretón de manos (solo URLs públicas y clave anónima)
+        run: |
+          mkdir -p "$RUNNER_TEMP/apreton"
+          node mobile/scripts/ciclo-economico.mjs publicar ios "$RUNNER_TEMP/tunel/urls.json" "$RUNNER_TEMP/apreton/apreton.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-apreton-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/apreton/apreton.json
+          retention-days: 1
+      - name: Dirección decide desde la web los pagos que registre la app iOS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node mobile/scripts/ciclo-economico.mjs decidir ios
+      - name: Conciliar estados, saldos, recibo e informes
+        run: python3 scripts/ci/run-stage.py --stage ciclo-verificar --seconds 150 -- node mobile/scripts/ciclo-economico.mjs verificar ios
+      # El simulador sigue leyendo el backend por el túnel: no se destruye hasta que avise que terminó.
+      - name: Esperar a que el simulador iOS termine
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          nombre="ios-fin-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          for _ in $(seq 1 120); do
+            total=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" --jq "[.artifacts[] | select(.name == \"${nombre}\")] | length")
+            if [ "$total" -ge 1 ]; then echo "El simulador iOS avisó que terminó."; exit 0; fi
+            sleep 10
+          done
+          echo "El simulador iOS no avisó su finalización a tiempo." >&2
+          exit 1
+      - name: Detener túneles, servidor web y stack
+        if: always()
+        run: |
+          node mobile/scripts/tunel-efimero.mjs stop "$RUNNER_TEMP/tunel" || true
+          node mobile/scripts/servidor-web-local.mjs stop || true
+          node mobile/scripts/supabase-local.mjs stop || true
+      - name: Sanear diagnóstico del backend
+        id: sanear_backend
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/evidencia-backend-ios"
+          cp -r "$EPT_STAGE_LOG_DIR" "$RUNNER_TEMP/evidencia-backend-ios/" 2>/dev/null || true
+          python3 scripts/ci/run-stage.py --sanitize-directory "$RUNNER_TEMP/evidencia-backend-ios"
+      - name: Subir diagnóstico del backend
+        if: always() && steps.sanear_backend.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: backend-ios-${{ github.sha }}
+          path: ${{ runner.temp }}/evidencia-backend-ios/
           if-no-files-found: warn
           retention-days: 14
   mobile-ios:
@@ -271,15 +383,16 @@ jobs:
     if: needs.plan.outputs.mobile == 'true'
     runs-on: macos-26
     timeout-minutes: 40
-    # iOS prueba el build nativo y el arranque de la app (smoke sin backend). El E2E real de Auth, roles y RLS corre en
-    # Android (Linux + Docker): los runners macOS ARM de GitHub no tienen Docker y un Supabase local allí no entra en presupuesto.
+    permissions:
+      contents: read
+      actions: read
+    # iOS corre el recorrido económico real contra el backend del job `mobile-ios-backend` (ver arriba) y conserva el
+    # smoke sin backend (acceso, recuperación y compartir PDF nativo).
     env:
       CI: '1'
       EPT_MOBILE_RECIBOS_NATIVE_QA: '1'
+      EPT_CICLO_IOS: '1'
       DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
-      EXPO_PUBLIC_SUPABASE_URL: https://placeholder-pruebas.supabase.co
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-solo-para-pruebas
-      EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -293,11 +406,31 @@ jobs:
         run: |
           xcodebuild -version | tee -a "$GITHUB_STEP_SUMMARY"
           node --version
+      - name: Clave común del ciclo
+        run: echo "EPT_CICLO_CLAVE=$(printf '%s' "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_SHA-ios" | shasum -a 256 | cut -d' ' -f1)" >> "$GITHUB_ENV"
       - name: Instalación y proyecto nativo (incluye pods)
         working-directory: mobile
+        # El prebuild no depende del backend: corre mientras el job Linux prepara Supabase, Next y los túneles.
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://placeholder-pruebas.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-solo-para-pruebas
+          EXPO_PUBLIC_API_BASE_URL: https://placeholder-pruebas.example.org
         run: |
           npm ci
           npx --no-install expo prebuild --platform ios
+      # Las URL públicas se incrustan en el bundle durante el build: se esperan aquí, ya con el prebuild hecho.
+      - name: Esperar el backend de prueba (túnel efímero)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          destino="$RUNNER_TEMP/apreton"
+          for _ in $(seq 1 90); do
+            if gh run download "$GITHUB_RUN_ID" -n "ios-apreton-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" -D "$destino" 2>/dev/null && [ -f "$destino/apreton.json" ]; then break; fi
+            sleep 10
+          done
+          test -f "$destino/apreton.json"
+          node mobile/scripts/tunel-efimero.mjs entorno "$destino/apreton.json"
+          node mobile/scripts/ciclo-economico.mjs entorno ios "$destino/apreton.json"
       - name: Build iOS para simulador (release de prueba, sin firma, arm64)
         working-directory: mobile/ios
         run: |
@@ -326,6 +459,25 @@ jobs:
           MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'
           MAESTRO_CLI_NO_ANALYTICS: '1'
         run: bash mobile/scripts/ejecutar-ios.sh "${{ steps.app.outputs.ruta }}"
+      - name: Ejecutar ciclo económico conectado en simulador iOS
+        timeout-minutes: 30
+        env:
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'
+          MAESTRO_CLI_NO_ANALYTICS: '1'
+        run: bash mobile/scripts/ejecutar-ios-ciclo.sh "${{ steps.app.outputs.ruta }}"
+      # El job Linux mantiene el backend vivo hasta ver este artefacto (siempre se sube, aunque el ciclo falle).
+      - name: Avisar al backend que el simulador terminó
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/fin"
+          echo "terminado" > "$RUNNER_TEMP/fin/fin.txt"
+      - name: Subir aviso de finalización
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-fin-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/fin/fin.txt
+          retention-days: 1
       - name: Empaquetar evidencia iOS
         if: always()
         run: |
@@ -348,7 +500,7 @@ jobs:
   gate:
     name: CI / gate
     if: always()
-    needs: [fast, database, ui, plan, mobile, mobile-android, mobile-ios]
+    needs: [fast, database, ui, plan, mobile, mobile-android, mobile-ios, mobile-ios-backend]
     runs-on: ubuntu-latest
     steps:
       - env:
@@ -365,6 +517,7 @@ jobs:
           MOBILE: ${{ needs.mobile.result }}
           ANDROID: ${{ needs.mobile-android.result }}
           IOS: ${{ needs.mobile-ios.result }}
+          IOS_BACKEND: ${{ needs.mobile-ios-backend.result }}
         run: |
           test "$FAST" = success
           case "$PLAN_MUTATIONS" in true|false) ;; *) exit 1 ;; esac
@@ -387,11 +540,13 @@ jobs:
               test "$MOBILE" = success
               test "$ANDROID" = success
               test "$IOS" = success
+              test "$IOS_BACKEND" = success
               ;;
             false)
               test "$MOBILE" = skipped
               test "$ANDROID" = skipped
               test "$IOS" = skipped
+              test "$IOS_BACKEND" = skipped
               ;;
             *) exit 1 ;;
           esac
