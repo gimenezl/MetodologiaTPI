@@ -27,7 +27,7 @@ export function entorno() {
   const config = readFileSync(path.join(workdir, 'supabase/config.toml'), 'utf8')
   const proyecto = /^project_id\s*=\s*"([^"]+)"/mu.exec(config)?.[1]
   // ept115: stack local propio; ept104: el stack desechable del runner de CI (config.toml con ese project_id).
-  if (contenedor !== `supabase_db_${proyecto}` || !['ept115', 'ept116', 'ept104'].includes(proyecto)) throw new Error('Solo stack desechable propio (ept115, ept116 o ept104 en CI).')
+  if (contenedor !== `supabase_db_${proyecto}` || !['ept115', 'ept116', 'ept118', 'ept104'].includes(proyecto)) throw new Error('Solo stack desechable propio (ept115, ept116, ept118 o ept104 en CI).')
   const local = JSON.parse(execFileSync('npx', ['--yes', 'supabase@2.117.0', 'status', '-o', 'json', '--workdir', workdir],
     { shell: process.platform === 'win32', encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }))
   if (new URL(local.API_URL).hostname !== '127.0.0.1' || new URL(local.DB_URL).hostname !== '127.0.0.1') {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { randomBytes } from 'node:crypto'
 import net from 'node:net'
-import { renameSync, existsSync } from 'node:fs'
+import { renameSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { extractText } from 'unpdf'
 import { entorno, sql, sembrar, tarifas, facturar, limpieza, vincular, desvincular, perfilDe, reloj, compuerta,
@@ -32,7 +32,13 @@ const fuenteOculta = `${fuente}.oculta-ept115`
 let n = 0
 const ok = (nombre) => { n++; console.log(`OK ${n}: ${nombre}`) }
 const correo = (corto) => `ept115-${corto}@${DOMINIO}`
-const modos = new Map() // correo → 'rechazar' | 'cortar'
+// correo → 'rechazar' (RCPT 550) | 'cortar' (aceptado arriba, respuesta final perdida) |
+// 'data-rechazo' (554 al comando DATA) | 'fin-4xx' / 'fin-5xx' (rechazo al terminar DATA, sin entregar el cuerpo) |
+// 'corte-medio' (se corta la conexión tras el 354, antes de que arriba reciba el cuerpo) |
+// 'corte-pre-data' (se corta la conexión en RCPT TO, antes de que el cliente envíe DATA)
+const modos = new Map()
+// Lo que el intermediario hizo de verdad: permite contrastar el estado durable con la realidad, no con error.code.
+const bitacora = []
 
 // ---------------------------------------------------------------- SMTP intermedio (por destinatario)
 function crearReenviadorSmtp(puertoDestino) {
@@ -40,18 +46,33 @@ function crearReenviadorSmtp(puertoDestino) {
   const srv = net.createServer((cliente) => {
     const arriba = net.connect(puertoDestino, '127.0.0.1')
     conexiones.add(cliente); conexiones.add(arriba)
-    let enDatos = false; let modo = null; let cortar = false; let cola = ''
+    let enDatos = false; let modo = null; let cortar = false; let cola = ''; let para = ''
+    const cerrarArriba = () => arriba.destroy()
     cliente.on('data', (d) => {
       const s = d.toString('latin1')
       if (!enDatos) {
         const m = /RCPT TO:<([^>]+)>/iu.exec(s)
         if (m) {
-          modo = modos.get(m[1].toLowerCase()) ?? null
+          para = m[1].toLowerCase()
+          modo = modos.get(para) ?? null
+          if (modo === 'corte-pre-data') { bitacora.push([para, 'corte-en-RCPT']); cliente.destroy(); cerrarArriba(); return }
           if (modo === 'rechazar') { cliente.write('550 5.1.1 Destinatario rechazado por la prueba\r\n'); return }
         }
-        if (/^DATA\r\n/iu.test(s)) enDatos = true
+        if (/^DATA\r\n/iu.test(s)) {
+          if (modo === 'data-rechazo') {
+            bitacora.push([para, 'DATA-rechazado']); cliente.write('554 5.3.0 DATA rechazado por la prueba\r\n'); cerrarArriba(); return
+          }
+          enDatos = true
+        }
       } else {
+        if (modo === 'corte-medio') { bitacora.push([para, 'corte-tras-354']); cliente.destroy(); cerrarArriba(); return }
         cola = (cola + s).slice(-8)
+        if ((modo === 'fin-4xx' || modo === 'fin-5xx') && cola.includes('\r\n.\r\n')) {
+          // El chunk con el terminador no se entrega: arriba nunca completa el mensaje.
+          bitacora.push([para, modo === 'fin-4xx' ? 'fin-451' : 'fin-554'])
+          cliente.write(modo === 'fin-4xx' ? '451 4.3.0 Rechazo temporal al terminar DATA\r\n' : '554 5.6.0 Rechazo permanente al terminar DATA\r\n')
+          cerrarArriba(); return
+        }
         if (modo === 'cortar' && cola.includes('\r\n.\r\n')) cortar = true
       }
       arriba.write(d)
@@ -205,6 +226,11 @@ try {
     'ARS 100,10', 'ARS 20,20', 'ARS 30,30', 'ARS 40,40', 'ARS 200,20', 'ARS 0,00']) assert.ok(mA.m.Text.includes(x), `cuerpo contiene ${x}`)
   assert.ok(mA.m.Text.includes('Total facturado: ARS 391,20') && mA.m.Text.includes('Saldo por abonar: ARS 391,20'))
   assert.ok(mA.m.Text.includes('10/11/2026'))
+  // Inspección visual (EPT-118): con EPT_PDF_MUESTRAS los PDF realmente recibidos en Mailpit se guardan fuera del repositorio.
+  if (process.env.EPT_PDF_MUESTRAS) {
+    mkdirSync(path.resolve(process.env.EPT_PDF_MUESTRAS), { recursive: true })
+    for (const a of mA.adjuntos) writeFileSync(path.join(path.resolve(process.env.EPT_PDF_MUESTRAS), `mailpit-${a.nombre.replace(/[^A-Za-z0-9._-]/gu, '_')}`), a.bytes)
+  }
   const textosA = await Promise.all(mA.adjuntos.map((a) => textoPdf(a.bytes)))
   assert.ok(textosA.some((t) => t.includes('Ana') && t.includes('ARS 191,00') && t.includes('Transporte') && t.includes('Comedor')))
   assert.ok(textosA.some((t) => t.includes('Bruno') && t.includes('ARS 200,20')))
@@ -398,6 +424,53 @@ try {
   assert.equal(traficoK.filter((x) => x.endsWith('/recordatorio_resultado_job')).length, 1)
   ok('respuesta de confirmación perdida: se consulta el estado primero, queda ENVIADO (no INCIERTO) y no se repite el despacho')
 
+  // ---------------------------------------------------------------- 12b. Clasificación SMTP durante DATA (EPT-118)
+  // Rechazo explícito 4xx/5xx en DATA → fallo claro reintentable; corte tras cruzar la frontera → INCIERTO sin reenvío.
+  // El intermediario registra lo que hizo y arriba (Mailpit) nunca recibe el mensaje: se contrasta con el estado durable.
+  reloj(EVENTO)
+  // `cp` es el caso simétrico de `cm`: otro corte sin respuesta, pero ANTES de DATA, que sí es un fallo claro.
+  const datos = { rd: 'data-rechazo', r4: 'fin-4xx', r5: 'fin-5xx', cm: 'corte-medio', cp: 'corte-pre-data' }
+  const X = {}
+  for (const [corto, modo] of Object.entries(datos)) { X[corto] = await crearPadre(`x${corto}`, [hijo2]); modos.set(X[corto].email, modo) }
+  sql(`SELECT app_private.recordatorio_plan();`)
+  const inicioBit = bitacora.length
+  const rx = await cron()
+  assert.deepEqual([rx.enviados, rx.fallidos, rx.inciertos, rx.sin_confirmar], [0, 4, 1, 0])
+  assert.deepEqual(bitacora.slice(inicioBit).map(([p, e]) => `${p}:${e}`).sort(), [
+    [X.rd.email, 'DATA-rechazado'], [X.r4.email, 'fin-451'], [X.r5.email, 'fin-554'], [X.cm.email, 'corte-tras-354'],
+    [X.cp.email, 'corte-en-RCPT'],
+  ].map(([p, e]) => `${p}:${e}`).sort())
+  for (const p of Object.values(X)) assert.equal((await mensajes(p.email)).length, 0, 'arriba nunca aceptó el mensaje')
+  for (const [corto, codigo] of [['rd', '554'], ['r4', '451'], ['r5', '554']]) {
+    const e = envio(X[corto].perfil, EVENTO)
+    assert.equal(e.estado, 'FALLIDO'); assert.equal(e.intentos, 1); assert.equal(e.enviado, false)
+    assert.match(e.ultimo_error, new RegExp(`^Fallo SMTP \\(.*\\b${codigo}\\)$`, 'u'))
+    assert.ok(!e.ultimo_error.includes(X[corto].email))
+  }
+  assert.match(envio(X.rd.perfil, EVENTO).ultimo_error, /\bDATA\b/u)
+  // Corte sin código de respuesta: la fase decide. Antes de DATA nada pudo aceptarse; tras el 354 sí pudo.
+  const ep = envio(X.cp.perfil, EVENTO)
+  assert.equal(ep.estado, 'FALLIDO'); assert.equal(ep.intentos, 1); assert.equal(ep.enviado, false)
+  assert.doesNotMatch(ep.ultimo_error, /\b[45]\d\d\)$/u)
+  const ec = envio(X.cm.perfil, EVENTO)
+  assert.equal(ec.estado, 'INCIERTO'); assert.equal(ec.frontera, true); assert.equal(ec.enviado, false); assert.equal(ec.intentos, 1)
+  ok('DATA: 554 al comando, 451 y 554 al terminar → FALLIDO con código saneado; corte antes de DATA → FALLIDO; corte tras el 354 → INCIERTO con frontera cruzada (la fase decide, no error.code)')
+  // Siguiente día: los FALLIDO reintentan con la misma identidad y salen una vez; el INCIERTO no se reenvía aunque arriba nunca lo recibió
+  reloj('2026-10-31')
+  for (const corto of ['rd', 'r4', 'r5', 'cm', 'cp']) modos.delete(X[corto].email)
+  const rx2 = await cron()
+  assert.equal(rx2.enviados, 4)
+  for (const corto of ['rd', 'r4', 'r5', 'cp']) {
+    const e = envio(X[corto].perfil, EVENTO)
+    assert.equal(e.estado, 'ENVIADO'); assert.equal(e.intentos, 2); assert.equal(e.enviado, true)
+    assert.equal((await mensajes(X[corto].email)).length, 1)
+    assert.equal(sql(`SELECT count(*) FROM public.envios_correo WHERE padre_id='${X[corto].perfil}'`), '1')
+  }
+  await cron(); await cron()
+  assert.equal(envio(X.cm.perfil, EVENTO).estado, 'INCIERTO'); assert.equal(envio(X.cm.perfil, EVENTO).intentos, 1)
+  assert.equal((await mensajes(X.cm.email)).length, 0, 'el INCIERTO no se reenvía automáticamente')
+  ok('siguiente intento: FALLIDO de DATA → ENVIADO (intentos=2, una fila, un mensaje); INCIERTO sin reenvío ni intento nuevo')
+
   // ---------------------------------------------------------------- 13. Permisos y exposición
   reloj(EVENTO)
   for (const [nombre, args] of [['recordatorio_plan_job', {}], ['recordatorio_reservar_job', { p_padre: A.perfil, p_fecha: EVENTO }],
@@ -427,6 +500,36 @@ try {
   assert.equal(envio(A.perfil, EVENTO).estado, 'ENVIADO')
   ok('PostgREST: RPC solo de servidor; padre no ve auditoría; Dirección sí ve estado/error; config y reloj fuera de la API; sin DML de cliente')
 
+  // Canal de Dirección (EPT-118): la misma lectura que usa la pantalla, con identidades reales de cada rol.
+  // Las columnas se leen del servicio real: si alguien agrega una columna interna al select, esta suite lo detecta.
+  const fuenteServicio = readFileSync(path.join(RAIZ, 'src/services/envios-correo-lectura.service.ts'), 'utf8')
+  const columnasPantalla = /\.from\('envios_correo'\)\s*\.select\('([^']+)'\)/u.exec(fuenteServicio)?.[1].replace(/\s+/gu, '')
+  assert.ok(columnasPantalla, 'no se encontró el select del servicio de lectura')
+  assert.doesNotMatch(columnasPantalla, /reserva|frontera|token|total_adeudado|omitido|\*/u)
+  const lecturaDir = await rest(local, sesionDir.access_token, `envios_correo?select=${columnasPantalla}&order=fecha_programada.desc,id.desc&limit=51`)
+  assert.equal(lecturaDir.estado, 200); assert.ok(lecturaDir.cuerpo.length > 5)
+  assert.ok(lecturaDir.cuerpo.some((f) => f.estado === 'INCIERTO') && lecturaDir.cuerpo.some((f) => f.estado === 'ENVIADO'))
+  assert.ok(!JSON.stringify(lecturaDir.cuerpo).includes('reserva_token'))
+  for (const [i, rol] of ['ESTUDIANTE', 'DOCENTE', 'PERSONAL'].entries()) {
+    const email = correo(`rol-${rol.toLowerCase()}`)
+    await crearCuentaConPerfil(local, { email, password, perfil: { nombre: `Rol ${rol}`, apellido: 'EPT118', dni: `9411581${i + 1}`,
+      rol_id: Number(sql(`SELECT id FROM public.roles WHERE nombre='${rol}'`)) } })
+    const sesion = await exigirSesion(local, email, password)
+    assert.deepEqual((await rest(local, sesion.access_token, `envios_correo?select=${columnasPantalla}`)).cuerpo, [], `${rol} sin filas`)
+    assert.deepEqual((await rest(local, sesion.access_token, 'envios_correo_intentos?select=envio_id')).cuerpo, [], `${rol} sin intentos`)
+  }
+  assert.deepEqual((await rest(local, undefined, `envios_correo?select=${columnasPantalla}`)).cuerpo?.length ?? 0, 0)
+  // Cuenta de Dirección bloqueada con un JWT todavía vigente: la base no entrega ninguna fila.
+  const emailDirB = correo('dir-bloq')
+  await crearCuentaConPerfil(local, { email: emailDirB, password, perfil: { nombre: 'Dir', apellido: 'Bloq EPT118', dni: '94115815',
+    rol_id: Number(sql(`SELECT id FROM public.roles WHERE nombre='DIRECTOR'`)) } })
+  const sesionDirB = await exigirSesion(local, emailDirB, password)
+  assert.ok((await rest(local, sesionDirB.access_token, `envios_correo?select=${columnasPantalla}&limit=5`)).cuerpo.length > 0)
+  sql(`UPDATE public.perfiles SET estado_acceso='BLOQUEADO' WHERE dni='94115815'`)
+  assert.deepEqual((await rest(local, sesionDirB.access_token, `envios_correo?select=${columnasPantalla}`)).cuerpo, [])
+  assert.deepEqual((await rest(local, sesionDirB.access_token, 'envios_correo_facturas?select=envio_id')).cuerpo, [])
+  ok('lectura de la pantalla de Dirección: DIRECTOR ve INCIERTO/ENVIADO sin reserva_token; estudiante, docente, personal, anónimo y Dirección bloqueada con JWT vigente no reciben filas')
+
   // ---------------------------------------------------------------- 14. Compuerta de entorno prevalece
   await servidor.detener()
   const antesGate = await totalMensajes()
@@ -445,9 +548,13 @@ try {
   await servidor.detener()
   await intermediario.cerrar()
   await smtp.cerrar()
-  try { sql(limpieza) } catch (e) { console.error('limpieza SQL', e.message) }
-  limpiarFixture({ prefijoDni: '941151', prefijoCorreo: 'ept115-', dominio: DOMINIO })
-  sql(`DELETE FROM public.perfiles WHERE dni='94115990'`)
-  sql(`DELETE FROM auth.users WHERE email LIKE 'ept115-%@${DOMINIO}' OR email='sin-arroba-ept115'`)
-  await limpiarBuzon()
+  // Cada paso es independiente: que uno falle no deja huérfanos los siguientes.
+  const paso = async (nombre, accion) => { try { await accion() } catch (e) { console.error(`limpieza ${nombre}`, e.message) } }
+  await paso('SQL', () => sql(limpieza))
+  await paso('fixture', () => limpiarFixture({ prefijoDni: '941151', prefijoCorreo: 'ept115-', dominio: DOMINIO }))
+  await paso('perfiles', () => sql(`DELETE FROM public.alumnos WHERE perfil_id IN (SELECT id FROM public.perfiles WHERE dni IN ('94115811','94115812','94115813'));
+       DELETE FROM public.profesores WHERE perfil_id IN (SELECT id FROM public.perfiles WHERE dni IN ('94115811','94115812','94115813'));
+       DELETE FROM public.perfiles WHERE dni IN ('94115990','94115811','94115812','94115813','94115815')`))
+  await paso('cuentas', () => sql(`DELETE FROM auth.users WHERE email LIKE 'ept115-%@${DOMINIO}' OR email='sin-arroba-ept115'`))
+  await paso('buzón', limpiarBuzon)
 }
