@@ -45,10 +45,16 @@ xcrun simctl listapps "$UDID" | grep -F 'org.educarparatransformar.app'
 
 set +e
 # Una sola sesion del driver; cada subflujo conserva clearState y sus aserciones.
-maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-ios.xml" \
-  --debug-output "$SALIDA/suite-debug" --flatten-debug-output \
-  --test-output-dir "$SALIDA/maestro-ios" mobile/maestro/suite-ios.yaml
-estado=$?
+# Solo la firma «driver not ready» (el driver XCUITest no arranca; ocurre antes de ejecutar ningún paso) se reintenta
+# una vez; el fallo de un paso del flujo nunca se reintenta (EPT-121, intermitencia de infraestructura).
+for intento in 1 2; do
+  maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-ios.xml" \
+    --debug-output "$SALIDA/suite-debug" --flatten-debug-output \
+    --test-output-dir "$SALIDA/maestro-ios" mobile/maestro/suite-ios.yaml 2>&1 | tee "$SALIDA/maestro-ios-intento$intento.out"
+  estado="${PIPESTATUS[0]}"
+  if [ "$estado" -eq 0 ] || ! grep -q 'driver not ready' "$SALIDA/maestro-ios-intento$intento.out"; then break; fi
+  echo "Driver de iOS no listo antes de ejecutar pasos: se reintenta una sola vez (smoke)."
+done
 node mobile/scripts/ios-completitud.mjs "$SALIDA"
 completitud=$?
 if [ "$estado" -eq 0 ] && [ "$completitud" -ne 0 ]; then estado=1; fi
