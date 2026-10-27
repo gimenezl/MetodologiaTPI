@@ -242,6 +242,9 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash mobile/scripts/ejecutar-android.sh ${{ steps.apk.outputs.ruta }}
+      - name: Resumir el log de autenticación (diagnóstico)
+        if: always()
+        run: node mobile/scripts/supabase-local.mjs logs-auth "$RUNNER_TEMP/evidencia-movil-android/stages/auth-resumen.txt" || true
       - name: Detener el servidor web local
         if: always()
         run: node mobile/scripts/servidor-web-local.mjs stop
@@ -356,6 +359,9 @@ jobs:
           done
           echo "El simulador iOS no avisó su finalización a tiempo." >&2
           exit 1
+      - name: Resumir el log de autenticación (diagnóstico)
+        if: always()
+        run: node mobile/scripts/supabase-local.mjs logs-auth "$RUNNER_TEMP/evidencia-backend-ios/auth-resumen.txt" || true
       - name: Detener túneles, servidor web y stack
         if: always()
         run: |

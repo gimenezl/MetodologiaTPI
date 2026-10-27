@@ -116,6 +116,17 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
     when:
       platform: iOS
     file: ciclo-adjuntar-ios.yaml
+# Diagnóstico (EPT-119): si al volver del selector de archivos la app muestra «No pudimos verificar el acceso», se deja
+# constancia y se prueba «Reintentar» para saber si la conexión se recupera. No oculta el fallo: el flujo sigue y, si el
+# formulario se perdió, falla en el paso siguiente.
+- runFlow:
+    when:
+      visible: 'No pudimos verificar el acceso'
+    commands:
+      - takeScreenshot: ciclo-diag-${CICLO_NUMERO}-acceso-no-verificado
+      - tapOn: 'Reintentar'
+      - waitForAnimationToEnd
+      - takeScreenshot: ciclo-diag-${CICLO_NUMERO}-tras-reintentar
 - scrollUntilVisible:
     element:
       text: 'Enviar comprobante'
