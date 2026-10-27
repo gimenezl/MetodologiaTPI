@@ -1,0 +1,5 @@
+# Hook local: bloquea el commit si el código staged no pasa ESLint o si fallan los tipos.
+npx --no-install lint-staged
+if git diff --cached --name-only | grep -qE '\.(ts|tsx)$'; then
+  npx --no-install tsc --noEmit
+fi
