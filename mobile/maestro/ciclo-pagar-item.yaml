@@ -73,7 +73,13 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
 - tapOn:
     id: 'adjuntar-comprobante'
 # El total de la pantalla es el calculado por el servidor para ESTE ítem, no el que tipea el padre.
-- assertVisible: 'ARS.${CICLO_TOTAL}'
+# En iOS la pantalla conserva el desplazamiento de la anterior y el total queda arriba, fuera de vista: se sube hasta
+# verlo (run 40448009349). Sigue siendo una aserción: si el total no aparece, el paso falla.
+- scrollUntilVisible:
+    element:
+      text: 'ARS.${CICLO_TOTAL}'
+    direction: UP
+    timeout: 15000
 - scrollUntilVisible:
     element:
       id: 'campo-fecha'
