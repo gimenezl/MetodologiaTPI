@@ -39,5 +39,3 @@
 *.docx  binary
 *.woff  binary
 *.woff2 binary
-
-.husky/* text eol=lf

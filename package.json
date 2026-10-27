@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test:e2e": "playwright test",
     "facturacion:local": "node scripts/facturacion-local.mjs",
-    "prepare": "husky || true"
+    "prepare": "husky scripts/ci/husky || true"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
