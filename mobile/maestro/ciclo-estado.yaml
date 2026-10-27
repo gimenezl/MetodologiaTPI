@@ -140,8 +140,8 @@ name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decidi
 # «Total adeudado» entra al borde de la pantalla antes que su importe: se baja hasta el importe y recién se lo afirma.
 - scrollUntilVisible:
     element:
-      text: '.*ARS.89\.900,25.*'
+      text: '.*(ARS.|pesos argentinos.)89\.900,25.*'
     direction: DOWN
     timeout: 15000
-- assertVisible: '.*ARS.89\.900,25.*'
+- assertVisible: '.*(ARS.|pesos argentinos.)89\.900,25.*'
 - takeScreenshot: ciclo-deuda-final
