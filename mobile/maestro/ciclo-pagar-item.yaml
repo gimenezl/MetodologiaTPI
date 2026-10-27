@@ -77,7 +77,7 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
 # verlo (run 40448009349). Sigue siendo una aserción: si el total no aparece, el paso falla.
 - scrollUntilVisible:
     element:
-      text: 'ARS.${CICLO_TOTAL}'
+      text: '.*ARS.${CICLO_TOTAL}.*'
     direction: UP
     timeout: 15000
 - scrollUntilVisible:

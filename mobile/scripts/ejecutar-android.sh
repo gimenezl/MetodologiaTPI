@@ -64,8 +64,9 @@ fi
 if [ "$estado" -eq 0 ]; then
   # EPT-119: ciclo económico conectado sobre los mismos registros: la app paga y carga; Dirección aprueba uno y
   # rechaza otro desde la web real; la app y los informes reflejan el mismo estado y los importes esperados.
+  # Medido en CI: dos pagos con selector de archivos tardan ~229-245 s (run 40400303102: 228,7 s; run 40451250155: timeout).
   stage android-stop-ciclo 20 node mobile/scripts/android-detener.mjs &&
-  stage android-maestro-ciclo-pago 240 maestro test --format junit --output "$SALIDA/maestro-ciclo-pago.xml" \
+  stage android-maestro-ciclo-pago 420 maestro test --format junit --output "$SALIDA/maestro-ciclo-pago.xml" \
     --test-output-dir "$SALIDA/maestro-ciclo-pago" mobile/maestro/ciclo-pago.yaml &&
   stage android-ciclo-decidir 240 node mobile/scripts/ciclo-economico.mjs decidir android &&
   stage android-stop-ciclo-estado 20 node mobile/scripts/android-detener.mjs &&
