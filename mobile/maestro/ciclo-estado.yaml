@@ -14,13 +14,17 @@ name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decidi
 # En iOS el teclado tapa el botón: se oculta antes de tocarlo. El ingreso viaja por el túnel, así que se espera con plazo.
 - hideKeyboard
 - tapOn: 'Ingresar'
+# iOS ofrece guardar la contraseña con un diálogo del sistema que oculta la app del árbol de accesibilidad: se espera a
+# cualquiera de los dos, se lo descarta (en inglés o español) y recién entonces se exige la pantalla.
 - extendedWaitUntil:
-    visible: 'Hijos vinculados'
+    visible: 'Hijos vinculados|Not Now|Ahora no'
     timeout: 60000
-# iOS ofrece guardar la contraseña con un diálogo del sistema que tapa la pantalla: se descarta (en inglés o español).
 - tapOn:
     text: 'Not Now|Ahora no'
     optional: true
+- extendedWaitUntil:
+    visible: 'Hijos vinculados'
+    timeout: 30000
 - swipe:
     from:
       id: 'pestanas'

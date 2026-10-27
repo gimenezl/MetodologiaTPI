@@ -14,13 +14,18 @@ name: Ciclo económico (1/2) - padre consulta cuotas, registra dos pagos y carga
 # En iOS el teclado tapa el botón: se oculta antes de tocarlo. El ingreso viaja por el túnel, así que se espera con plazo.
 - hideKeyboard
 - tapOn: 'Ingresar'
+# iOS ofrece guardar la contraseña con un diálogo del sistema que tapa la app y la oculta del árbol de accesibilidad
+# (visto en el run 40444677933: «Hijos vinculados» «no visible» con el diálogo encima). Se espera a cualquiera de los
+# dos, se descarta el diálogo si apareció (en inglés o español) y recién entonces se exige la pantalla.
 - extendedWaitUntil:
-    visible: 'Hijos vinculados'
+    visible: 'Hijos vinculados|Not Now|Ahora no'
     timeout: 60000
-# iOS ofrece guardar la contraseña con un diálogo del sistema que tapa la pantalla: se descarta (en inglés o español).
 - tapOn:
     text: 'Not Now|Ahora no'
     optional: true
+- extendedWaitUntil:
+    visible: 'Hijos vinculados'
+    timeout: 30000
 - tapOn: 'Cuotas'
 - scrollUntilVisible:
     element:
