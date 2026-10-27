@@ -39,6 +39,9 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
       text: 'Registrar pago'
     direction: DOWN
     timeout: 20000
+    # En iOS el botón quedaba cortado al borde de la pantalla: Maestro lo daba por visible y el toque caía fuera,
+    # sin registrar el pago (captura ciclo-diag-*). Se exige verlo completo antes de tocarlo.
+    visibilityPercentage: 100
 - takeScreenshot: ciclo-diag-${CICLO_NUMERO}-antes-de-registrar
 - tapOn:
     id: 'registrar-pago'
