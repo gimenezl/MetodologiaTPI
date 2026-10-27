@@ -43,8 +43,20 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
     # sin registrar el pago (captura ciclo-diag-*). Se exige verlo completo antes de tocarlo.
     visibilityPercentage: 100
 - takeScreenshot: ciclo-diag-${CICLO_NUMERO}-antes-de-registrar
-- tapOn:
-    id: 'registrar-pago'
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn:
+          id: 'registrar-pago'
+# En iOS (capturas ciclo-diag-* de los runs 40429736677 y 40440640919) el botón se ve recortado por el borde inferior
+# y el toque al centro de su caja no lo activaba: se toca la franja visible. Hallazgo abierto, ver registro-defectos.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          point: '50%,95%'
 # Diagnóstico: qué muestra la app justo después de pedir el registro (visto en iOS: volvía a la selección sin pago).
 - waitForAnimationToEnd
 - takeScreenshot: ciclo-diag-${CICLO_NUMERO}-despues-de-registrar
