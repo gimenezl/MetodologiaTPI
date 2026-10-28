@@ -89,7 +89,7 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
 - tapOn:
     id: 'campo-fecha'
 - inputText: '14/10/2026'
-- hideKeyboard
+- runFlow: ciclo-ocultar-teclado.yaml
 - scrollUntilVisible:
     element:
       id: 'campo-importe'
@@ -98,7 +98,7 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
 - tapOn:
     id: 'campo-importe'
 - inputText: ${CICLO_IMPORTE}
-- hideKeyboard
+- runFlow: ciclo-ocultar-teclado.yaml
 - scrollUntilVisible:
     element:
       id: 'campo-numero'
@@ -107,7 +107,7 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
 - tapOn:
     id: 'campo-numero'
 - inputText: ${CICLO_NUMERO}
-- hideKeyboard
+- runFlow: ciclo-ocultar-teclado.yaml
 - runFlow:
     when:
       platform: Android

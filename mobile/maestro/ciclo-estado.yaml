@@ -43,7 +43,7 @@ name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decidi
     id: 'periodo-desde'
 - eraseText
 - inputText: ${MAESTRO_CICLO_DESDE}
-- hideKeyboard
+- runFlow: ciclo-ocultar-teclado.yaml
 - scrollUntilVisible:
     element:
       id: 'periodo-hasta'
@@ -55,7 +55,7 @@ name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decidi
     id: 'periodo-hasta'
 - eraseText
 - inputText: ${MAESTRO_CICLO_HASTA}
-- hideKeyboard
+- runFlow: ciclo-ocultar-teclado.yaml
 - scrollUntilVisible:
     element:
       id: 'periodo-consultar'

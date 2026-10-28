@@ -1,0 +1,17 @@
+appId: org.educarparatransformar.app
+name: Ciclo económico - ocultar el teclado
+---
+# EPT-119. Android: hideKeyboard. iOS: el teclado numérico solo ofrece «Next» y Maestro no puede ocultarlo
+# («Couldn't hide the keyboard», run 40761468374); se toca una zona estática de la parte superior (a la derecha de la
+# flecha de volver) para que el campo pierda el foco.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - hideKeyboard
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          point: '70%,10%'
