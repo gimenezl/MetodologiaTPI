@@ -15,6 +15,7 @@ pkill -f maestro-driver-ios || true
 pkill -f 'xcodebuild.*maestro-driver' || true
 
 APP="$1"
+source "$(dirname "$0")/ios-reiniciar-simulador.sh"
 SALIDA="${RUNNER_TEMP:?RUNNER_TEMP requerido}/evidencia-movil-ios"
 mkdir -p "$SALIDA"
 
@@ -53,7 +54,8 @@ correr_maestro() {
     resultado="${PIPESTATUS[0]}"
     if [ "$resultado" -eq 0 ]; then return 0; fi
     grep -q 'driver not ready' "$SALIDA/$etiqueta-intento$intento.out" || return "$resultado"
-    echo "Driver de iOS no listo antes de ejecutar pasos: se reintenta una sola vez ($etiqueta)."
+    echo "Driver de iOS no listo antes de ejecutar pasos: se reinicia el simulador y se reintenta una sola vez ($etiqueta)."
+    reiniciar_simulador "$UDID" "$APP" || true
   done
   return "$resultado"
 }

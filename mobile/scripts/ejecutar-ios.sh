@@ -4,6 +4,10 @@
 # Uso: bash mobile/scripts/ejecutar-ios.sh <ruta-a-la-app>
 set -euo pipefail
 export EPT_IOS_STEP_STARTED_AT="$(node -e 'console.log(Date.now())')"
+# Medido en CI: el smoke completo tarda ~8 min y un arranque fallido del driver ~4,5 min; con un reinicio del simulador
+# y un reintento el peor caso razonable ronda los 14 min (antes 12 min sin reintento real).
+export EPT_IOS_PRESUPUESTO_MS=1200000
+source "$(dirname "$0")/ios-reiniciar-simulador.sh"
 
 APP="$1"
 SALIDA="${RUNNER_TEMP:?RUNNER_TEMP requerido}/evidencia-movil-ios"
@@ -53,7 +57,8 @@ for intento in 1 2; do
     --test-output-dir "$SALIDA/maestro-ios" mobile/maestro/suite-ios.yaml 2>&1 | tee "$SALIDA/maestro-ios-intento$intento.out"
   estado="${PIPESTATUS[0]}"
   if [ "$estado" -eq 0 ] || ! grep -q 'driver not ready' "$SALIDA/maestro-ios-intento$intento.out"; then break; fi
-  echo "Driver de iOS no listo antes de ejecutar pasos: se reintenta una sola vez (smoke)."
+  echo "Driver de iOS no listo antes de ejecutar pasos: se reinicia el simulador y se reintenta una sola vez (smoke)."
+  reiniciar_simulador "$UDID" "$APP" || true
 done
 node mobile/scripts/ios-completitud.mjs "$SALIDA"
 completitud=$?

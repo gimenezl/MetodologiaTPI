@@ -463,7 +463,7 @@ jobs:
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
       - name: Ejecutar smoke en simulador iOS (sin backend)
-        timeout-minutes: 12
+        timeout-minutes: 20
         env:
           MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'
           MAESTRO_CLI_NO_ANALYTICS: '1'

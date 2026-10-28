@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 export const RUNTIME = 'com.apple.CoreSimulator.SimRuntime.iOS-26-2'
 export const DEVICE = 'com.apple.CoreSimulator.SimDeviceType.iPhone-16e'
 const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu
-// El presupuesto del step es de 12 min (smoke sin backend); el ciclo económico conectado (EPT-119) declara el suyo.
+// El presupuesto del step es de 20 min (smoke sin backend, con un reinicio y un reintento del driver); el ciclo económico conectado (EPT-119) declara el suyo.
 export function presupuestoLimpieza({ inicioStep, reloj = () => Date.now(), ahora = () => performance.now(), presupuestoMs = 720000 }) {
   const inicio = Number(inicioStep), transcurrido = reloj() - inicio
   if (!/^\d+$/u.test(String(inicioStep)) || !Number.isSafeInteger(inicio) || transcurrido < 0 || transcurrido >= presupuestoMs) throw new Error('Inicio del step ausente, inválido o agotado')
