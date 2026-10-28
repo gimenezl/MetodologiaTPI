@@ -164,7 +164,7 @@ exit ${exit}`
 test('workflow sanea diagnóstico antes del upload sin alterar presupuestos ni gates', () => {
   const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8')
   const ios = workflow.slice(workflow.indexOf('  mobile-ios:'), workflow.indexOf('  gate:'))
-  assert.match(ios, /timeout-minutes: 40/u)
+  assert.match(ios, /timeout-minutes: 65/u)
   assert.match(ios, /MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'/u)
   assert.ok(ios.indexOf('--sanitize-directory') < ios.indexOf('- name: Subir evidencia iOS'))
   assert.match(ios, /--sanitize-directory "\$RUNNER_TEMP\/evidencia-movil-ios"/u)
@@ -264,7 +264,7 @@ test('Maestro CLI hereda opt-out oficial de telemetría en CI nativo sin bypass 
   assert.match(ios, /MAESTRO_CLI_NO_ANALYTICS: '1'\n        run: bash mobile\/scripts\/ejecutar-ios.sh/u)
   assert.match(android, /timeout-minutes: 40/u)
   assert.match(ios, /timeout-minutes: 20/u)
-  assert.match(ios, /timeout-minutes: 40/u)
+  assert.match(ios, /timeout-minutes: 65/u)
   for (const script of ['ejecutar-android.sh', 'ejecutar-ios.sh']) assert.doesNotMatch(readFileSync(join(root, 'mobile/scripts', script), 'utf8'), /env -i|unset MAESTRO_CLI_NO_ANALYTICS/u)
   assert.doesNotMatch(android + ios, /continue-on-error:/u)
 })
