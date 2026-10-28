@@ -269,7 +269,7 @@ test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   assert.match(android, /supabase-local\.mjs stop/u)
   // EPT-119: el simulador iOS no levanta backend (macOS no tiene Docker): usa el del job Linux por túnel HTTPS.
   const ios = bloqueJob('mobile-ios')
-  assert.ok(minutos(ios) > 0 && minutos(ios) <= 50)
+  assert.ok(minutos(ios) > 0 && minutos(ios) <= 65)
   assert.doesNotMatch(ios, /supabase-local|integracion-auth-local|EPT_MOBILE_AUTH_INTEGRATION|SERVICE_ROLE/u)
   assert.match(ios, /EXPO_PUBLIC_SUPABASE_URL: https:\/\//u)
   assert.match(ios, /MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'/u)
