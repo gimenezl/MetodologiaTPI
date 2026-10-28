@@ -52,10 +52,11 @@ set +e
 # Solo la firma «driver not ready» (el driver XCUITest no arranca; ocurre antes de ejecutar ningún paso) se reintenta
 # una vez; el fallo de un paso del flujo nunca se reintenta (EPT-121, intermitencia de infraestructura).
 for intento in 1 2; do
-  maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-ios.xml" \
+  vigilar_maestro 300 "$SALIDA/maestro-ios-intento$intento.out" \
+    maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-ios.xml" \
     --debug-output "$SALIDA/suite-debug" --flatten-debug-output \
-    --test-output-dir "$SALIDA/maestro-ios" mobile/maestro/suite-ios.yaml 2>&1 | tee "$SALIDA/maestro-ios-intento$intento.out"
-  estado="${PIPESTATUS[0]}"
+    --test-output-dir "$SALIDA/maestro-ios" mobile/maestro/suite-ios.yaml
+  estado=$?
   if [ "$estado" -eq 0 ] || ! grep -q 'driver not ready' "$SALIDA/maestro-ios-intento$intento.out"; then break; fi
   echo "Driver de iOS no listo antes de ejecutar pasos: se reinicia el simulador y se reintenta una sola vez (smoke)."
   reiniciar_simulador "$UDID" "$APP" || true

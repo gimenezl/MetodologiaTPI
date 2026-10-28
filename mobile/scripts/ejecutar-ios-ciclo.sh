@@ -48,10 +48,11 @@ set +e
 correr_maestro() {
   local etiqueta="$1" flujo="$2" intento resultado
   for intento in 1 2; do
-    maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-$etiqueta.xml" \
+    vigilar_maestro 300 "$SALIDA/$etiqueta-intento$intento.out" \
+      maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-$etiqueta.xml" \
       --debug-output "$SALIDA/$etiqueta-debug" --flatten-debug-output \
-      --test-output-dir "$SALIDA/maestro-$etiqueta" "$flujo" 2>&1 | tee "$SALIDA/$etiqueta-intento$intento.out"
-    resultado="${PIPESTATUS[0]}"
+      --test-output-dir "$SALIDA/maestro-$etiqueta" "$flujo"
+    resultado=$?
     if [ "$resultado" -eq 0 ]; then return 0; fi
     grep -q 'driver not ready' "$SALIDA/$etiqueta-intento$intento.out" || return "$resultado"
     echo "Driver de iOS no listo antes de ejecutar pasos: se reinicia el simulador y se reintenta una sola vez ($etiqueta)."
