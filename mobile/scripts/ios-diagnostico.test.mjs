@@ -298,12 +298,13 @@ test('recibo real conserva tres desplazamientos completos con cadencia medida, p
   assert.doesNotMatch(flow, /optional: true|retry:|retryTapIfNoChange:/u)
 })
 // EPT-116: el job DB pasa de 12 a 13 min por las suites del aviso de deuda (≈37 s medidos sobre una base de ≈568 s).
+// EPT-119/121: pasa a 15 min (13 min de presupuesto interno de las suites): cinco runs midieron 476–665 s de suites.
 test('presupuesto UI medido no cambia DB, full ni fallback', () => {
   const yml = readFileSync(join(root, '.github/workflows/local-tests.yml'), 'utf8')
   const expression = yml.match(/timeout-minutes: \$\{\{ (.+) \}\}/u)?.[1]
   assert.ok(expression)
   const seleccionar = new Function('inputs', `return (${expression})`)
-  for (const [kind, expected] of [['full', 30], ['db', 13], ['ui', 10], ['otro', 8]]) assert.equal(seleccionar({ kind }), expected)
+  for (const [kind, expected] of [['full', 30], ['db', 15], ['ui', 10], ['otro', 8]]) assert.equal(seleccionar({ kind }), expected)
   const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8')
   assert.match(workflow.slice(workflow.indexOf('  fast:'), workflow.indexOf('  plan:')), /timeout-minutes: 8/u)
 })
