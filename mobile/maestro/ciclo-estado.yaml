@@ -23,6 +23,7 @@ name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decidi
 - extendedWaitUntil:
     visible: 'Hijos vinculados'
     timeout: 30000
+- runFlow: ciclo-descartar-guardado.yaml
 - swipe:
     from:
       id: 'pestanas'

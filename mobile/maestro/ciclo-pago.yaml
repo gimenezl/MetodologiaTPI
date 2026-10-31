@@ -24,7 +24,9 @@ name: Ciclo económico (1/2) - padre consulta cuotas, registra dos pagos y carga
 - extendedWaitUntil:
     visible: 'Hijos vinculados'
     timeout: 30000
+- runFlow: ciclo-descartar-guardado.yaml
 - tapOn: 'Cuotas'
+- runFlow: ciclo-descartar-guardado.yaml
 - scrollUntilVisible:
     element:
       text: '.*Pagar ítems.*'

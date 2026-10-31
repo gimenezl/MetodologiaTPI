@@ -1,0 +1,12 @@
+appId: org.educarparatransformar.app
+name: Ciclo económico - descartar el aviso de guardar contraseña de iOS
+---
+# EPT-119. El aviso del sistema «Save Password?» puede aparecer varios segundos después del ingreso, ya navegando (run
+# 41246543644: salió con «Cuotas» abierto y ocultó el texto esperado). Se descarta si está presente, en inglés o español;
+# si no está, no hace nada. Se invoca en varios puntos tempranos de los flujos.
+- runFlow:
+    when:
+      visible: 'Not Now|Ahora no'
+    commands:
+      - tapOn:
+          text: 'Not Now|Ahora no'

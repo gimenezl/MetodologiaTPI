@@ -17,6 +17,7 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
     timeout: 20000
 - tapOn:
     id: 'item-${CICLO_ITEM}'
+- runFlow: ciclo-descartar-guardado.yaml
 - scrollUntilVisible:
     element:
       text: '.*1 ítem seleccionado.*calculado por el sistema.*'
@@ -42,6 +43,7 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
     # En iOS el botón quedaba cortado al borde de la pantalla: Maestro lo daba por visible y el toque caía fuera,
     # sin registrar el pago (captura ciclo-diag-*). Se exige verlo completo antes de tocarlo.
     visibilityPercentage: 100
+- runFlow: ciclo-descartar-guardado.yaml
 - takeScreenshot: ciclo-diag-${CICLO_NUMERO}-antes-de-registrar
 - tapOn:
     id: 'registrar-pago'
