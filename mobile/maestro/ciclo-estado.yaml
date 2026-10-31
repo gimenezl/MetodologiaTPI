@@ -5,9 +5,7 @@ name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decidi
 # de cero con la misma cuenta y lee el mismo estado: deuda = B + C, sin cambio por el rechazo.
 - launchApp:
     clearState: true
-- tapOn:
-    id: 'correo'
-- inputText: ${MAESTRO_CICLO_EMAIL}
+- runFlow: ciclo-correo.yaml
 - tapOn:
     id: 'contrasena'
 - inputText: ${MAESTRO_CICLO_PASSWORD}

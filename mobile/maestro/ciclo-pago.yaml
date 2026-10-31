@@ -5,9 +5,7 @@ name: Ciclo económico (1/2) - padre consulta cuotas, registra dos pagos y carga
 # determinísticos: los fija ciclo-economico.mjs `preparar` y llegan por MAESTRO_CICLO_*.
 - launchApp:
     clearState: true
-- tapOn:
-    id: 'correo'
-- inputText: ${MAESTRO_CICLO_EMAIL}
+- runFlow: ciclo-correo.yaml
 - tapOn:
     id: 'contrasena'
 - inputText: ${MAESTRO_CICLO_PASSWORD}
