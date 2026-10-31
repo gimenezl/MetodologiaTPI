@@ -10,7 +10,7 @@ export EPT_IOS_PRESUPUESTO_MS=1800000
 # Medido en CI (run 40425065082): tras el smoke, el runner XCTest tardó ~105 s en arrancar de 120 s disponibles y el
 # segundo intento venció. Solo este step recibe más margen; el smoke conserva los 120 s.
 export MAESTRO_DRIVER_STARTUP_TIMEOUT=240000
-# El runner del smoke anterior (mismo job) pudo quedar vivo y salir con «Early unexpected exit»: se lo descarta.
+# Un runner XCTest vivo de una ejecución previa del mismo job pudo salir con «Early unexpected exit»: se lo descarta.
 pkill -f maestro-driver-ios || true
 pkill -f 'xcodebuild.*maestro-driver' || true
 
