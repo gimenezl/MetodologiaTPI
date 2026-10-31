@@ -66,7 +66,7 @@ test('una sesión llama los tres originales en orden y conserva aislamiento y to
   assert.deepEqual([...wrapper.matchAll(/^- runFlow: (.+)$/gmu)].map(m => m[1]), FLUJOS.map(f => f === 'smoke' ? 'smoke-ios.yaml' : `${f}-ios.yaml`))
   for (const flujo of FLUJOS) assert.match(readFileSync(new URL(`../maestro/${flujo}-ios.yaml`, import.meta.url), 'utf8'), /- launchApp:\s+clearState: true/u)
   const runner = readFileSync(new URL('./ejecutar-ios.sh', import.meta.url), 'utf8')
-  assert.equal((runner.match(/^maestro --device/gmu) ?? []).length, 1)
+  assert.equal((runner.match(/^\s*maestro --device/gmu) ?? []).length, 1)
   assert.match(runner, /ios-completitud.mjs "\$SALIDA"/u)
   assert.match(runner, /if \[ "\$estado" -eq 0 \] && \[ "\$completitud" -ne 0 \]; then estado=1; fi/u)
   assert.ok(runner.indexOf('open -a') < runner.indexOf('simctl bootstatus'))

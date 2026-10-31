@@ -1,0 +1,147 @@
+appId: org.educarparatransformar.app
+name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decididos en la web
+---
+# EPT-119. Dirección ya decidió desde la web: A aprobado (con recibo) y B rechazado (con motivo). La app arranca
+# de cero con la misma cuenta y lee el mismo estado: deuda = B + C, sin cambio por el rechazo.
+- launchApp:
+    clearState: true
+- tapOn:
+    id: 'correo'
+- inputText: ${MAESTRO_CICLO_EMAIL}
+- tapOn:
+    id: 'contrasena'
+- inputText: ${MAESTRO_CICLO_PASSWORD}
+# En iOS el teclado tapa el botón: se oculta antes de tocarlo. El ingreso viaja por el túnel, así que se espera con plazo.
+- hideKeyboard
+- tapOn: 'Ingresar'
+# iOS ofrece guardar la contraseña con un diálogo del sistema que oculta la app del árbol de accesibilidad: se espera a
+# cualquiera de los dos, se lo descarta (en inglés o español) y recién entonces se exige la pantalla.
+- extendedWaitUntil:
+    visible: 'Hijos vinculados|Not Now|Ahora no'
+    timeout: 60000
+- tapOn:
+    text: 'Not Now|Ahora no'
+    optional: true
+- extendedWaitUntil:
+    visible: 'Hijos vinculados'
+    timeout: 30000
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
+- tapOn:
+    id: 'seccion-periodo'
+- tapOn:
+    id: 'periodo-desde'
+- eraseText
+- inputText: ${MAESTRO_CICLO_DESDE}
+- runFlow: ciclo-ocultar-teclado.yaml
+- scrollUntilVisible:
+    element:
+      id: 'periodo-hasta'
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 100
+    timeout: 15000
+- tapOn:
+    id: 'periodo-hasta'
+- eraseText
+- inputText: ${MAESTRO_CICLO_HASTA}
+- runFlow: ciclo-ocultar-teclado.yaml
+- scrollUntilVisible:
+    element:
+      id: 'periodo-consultar'
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 100
+    timeout: 15000
+- tapOn:
+    id: 'periodo-consultar'
+# Estados del mismo pago que decidió Dirección. El orden de las entradas no se asume: se vuelve arriba antes de
+# buscar cada una (rechazado con su motivo, y luego aprobado con su recibo).
+- scrollUntilVisible:
+    element:
+      id: 'periodo-consultar'
+    direction: UP
+    speed: 80
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: 'Rechazado'
+    direction: DOWN
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: '.*Motivo del rechazo: Comprobante no corresponde al pago.*'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: 'periodo-consultar'
+    direction: UP
+    speed: 80
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: 'Aprobado'
+    direction: DOWN
+    timeout: 20000
+# El recibo es el del pago aprobado.
+- scrollUntilVisible:
+    element:
+      id: 'recibo-descargar'
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 100
+    centerElement: true
+    timeout: 20000
+- tapOn:
+    id: 'recibo-descargar'
+- extendedWaitUntil:
+    visible: '.*recibo-.*\.pdf'
+    timeout: 60000
+- takeScreenshot: ciclo-recibo-menu-nativo
+- back
+- scrollUntilVisible:
+    element:
+      id: 'recibo-descargar'
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 100
+    centerElement: true
+    timeout: 30000
+# Saldo: el rechazo no reduce la deuda (38.900,25 + 51.000,00 = 89.900,25) y la reserva de B se liberó.
+# Se relanza la app (la sesión persiste) para volver a la tira de pestañas tras el menú nativo del recibo.
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: 'Hijos vinculados'
+    timeout: 60000
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
+- tapOn:
+    id: 'seccion-deuda'
+- scrollUntilVisible:
+    element:
+      text: 'Total adeudado'
+    direction: DOWN
+    timeout: 20000
+# «Total adeudado» entra al borde de la pantalla antes que su importe: se baja hasta el importe y recién se lo afirma.
+- scrollUntilVisible:
+    element:
+      text: '.*(ARS.|pesos argentinos.)89\.900,25.*'
+    direction: DOWN
+    timeout: 15000
+- assertVisible: '.*(ARS.|pesos argentinos.)89\.900,25.*'
+- takeScreenshot: ciclo-deuda-final

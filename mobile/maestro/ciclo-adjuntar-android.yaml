@@ -1,0 +1,21 @@
+appId: org.educarparatransformar.app
+name: Ciclo económico (Android) - elegir el comprobante con el selector del sistema
+---
+# Subflujo: el archivo sintético lo deja ejecutar-android.sh en Descargas (adb push).
+- scrollUntilVisible:
+    element:
+      text: 'Elegir un PDF o archivo'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Elegir un PDF o archivo'
+- runFlow:
+    when:
+      notVisible: 'comprobante-ci.pdf'
+    commands:
+      - tapOn:
+          text: 'Show roots'
+          optional: true
+      - tapOn:
+          text: 'Downloads'
+          optional: true
+- tapOn: 'comprobante-ci.pdf'

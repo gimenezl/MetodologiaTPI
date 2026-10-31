@@ -41,7 +41,8 @@ export function requireMobileContract(file) {
   if (file.startsWith('mobile/') && !isMobilePath(file)) throw new Error(`Ruta mobile sin contrato: ${file}`)
 }
 
-const JOBS = ['mobile', 'mobile-android', 'mobile-ios']
+// EPT-119: iOS corre contra un backend real en `mobile-ios-backend` (los runners macOS no tienen Docker).
+const JOBS = ['mobile', 'mobile-android', 'mobile-ios', 'mobile-ios-backend']
 
 /** El workflow debe declarar los tres jobs móviles y el gate debe exigirlos; si no, el plan no es creíble. */
 export function validateMobileWorkflow(yml) {
@@ -49,16 +50,22 @@ export function validateMobileWorkflow(yml) {
     if (!new RegExp(`^  ${job}:`, 'mu').test(yml)) throw new Error(`Falta el job ${job} en .github/workflows/ci.yml`)
   }
   for (const fragmento of ['mobile: ${{ steps.impact.outputs.mobile }}', 'MOBILE: ${{ needs.mobile.result }}',
-    'ANDROID: ${{ needs.mobile-android.result }}', 'IOS: ${{ needs.mobile-ios.result }}', 'PLAN_MOBILE: ${{ needs.plan.outputs.mobile }}',
-    'needs: [fast, database, ui, plan, mobile, mobile-android, mobile-ios]',
-    '              test "$MOBILE" = success\n              test "$ANDROID" = success\n              test "$IOS" = success\n']) {
+    'ANDROID: ${{ needs.mobile-android.result }}', 'IOS: ${{ needs.mobile-ios.result }}', 'IOS_BACKEND: ${{ needs.mobile-ios-backend.result }}',
+    'PLAN_MOBILE: ${{ needs.plan.outputs.mobile }}',
+    'needs: [fast, database, ui, plan, mobile, mobile-android, mobile-ios, mobile-ios-backend]',
+    '              test "$MOBILE" = success\n              test "$ANDROID" = success\n              test "$IOS" = success\n              test "$IOS_BACKEND" = success\n']) {
     if (!yml.includes(fragmento)) throw new Error(`El gate no exige el resultado móvil: falta «${fragmento}»`)
   }
   // `bash -e` no aborta ante un `&&` intermedio que falla: el gate no puede encadenar sus condiciones con `&&`.
-  if (/test "\$(?:MOBILE|ANDROID|IOS)" = \w+ &&/u.test(yml)) throw new Error('El gate encadena condiciones móviles con &&: bajo bash -e no abortan')
+  if (/test "\$(?:MOBILE|ANDROID|IOS|IOS_BACKEND)" = \w+ &&/u.test(yml)) throw new Error('El gate encadena condiciones móviles con &&: bajo bash -e no abortan')
   // Cada job nativo debe ejecutar la app, no solo compilarla.
   if (!yml.includes('mobile/scripts/ejecutar-android.sh') || !yml.includes('mobile/scripts/ejecutar-ios.sh')) {
     throw new Error('Los jobs Android e iOS deben ejecutar la aplicación (ejecutar-android.sh / ejecutar-ios.sh)')
+  }
+  // EPT-119: iOS debe recorrer el ciclo económico conectado y Dirección debe decidir en la web real.
+  for (const fragmento of ['mobile/scripts/ejecutar-ios-ciclo.sh', 'mobile/scripts/tunel-efimero.mjs start',
+    'mobile/scripts/ciclo-economico.mjs decidir ios']) {
+    if (!yml.includes(fragmento)) throw new Error(`Falta el ciclo económico conectado: «${fragmento}»`)
   }
   return true
 }

@@ -1,0 +1,143 @@
+appId: org.educarparatransformar.app
+name: Ciclo económico - pagar un ítem y cargar su comprobante
+---
+# Subflujo (EPT-119). Variables: CICLO_ITEM, CICLO_NUMERO, CICLO_IMPORTE (importe informado, con coma decimal) y
+# CICLO_TOTAL (total calculado por el servidor, como regex: 45.250,75).
+# Empieza en la pestaña de cuotas del hijo. Registra el pago con el servidor y adjunta un comprobante real.
+- scrollUntilVisible:
+    element:
+      text: 'Pagar ítems'
+    direction: UP
+    timeout: 15000
+- tapOn: 'Pagar ítems'
+- scrollUntilVisible:
+    element:
+      id: 'item-${CICLO_ITEM}'
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    id: 'item-${CICLO_ITEM}'
+- scrollUntilVisible:
+    element:
+      text: '.*1 ítem seleccionado.*calculado por el sistema.*'
+    direction: DOWN
+    timeout: 15000
+# Los datos bancarios cargan de forma asíncrona y agrandan la pantalla: se espera a que existan ANTES de tocar el botón,
+# o el diseño se desplaza y el toque cae sobre otro ítem (visto en iOS: dejaba la selección vacía).
+- scrollUntilVisible:
+    element:
+      text: '.*Datos de prueba.*'
+    direction: DOWN
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: 'No se acepta pago en efectivo.'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: 'Registrar pago'
+    direction: DOWN
+    timeout: 20000
+    # En iOS el botón quedaba cortado al borde de la pantalla: Maestro lo daba por visible y el toque caía fuera,
+    # sin registrar el pago (captura ciclo-diag-*). Se exige verlo completo antes de tocarlo.
+    visibilityPercentage: 100
+- takeScreenshot: ciclo-diag-${CICLO_NUMERO}-antes-de-registrar
+- tapOn:
+    id: 'registrar-pago'
+- waitForAnimationToEnd
+# En iOS el botón a veces queda recortado por el borde inferior y el toque al centro de su caja no lo activa (capturas
+# ciclo-diag-* de los runs 40429736677 y 40440640919), y otras veces se ve completo (run 40733098484): el toque por id
+# es el primero y, solo si el botón sigue en pantalla, se toca la franja visible inferior. Hallazgo abierto, ver
+# registro-defectos.
+- runFlow:
+    when:
+      platform: iOS
+      visible: 'Registrar pago'
+    commands:
+      - tapOn:
+          point: '50%,95%'
+# Diagnóstico: qué muestra la app justo después de pedir el registro (visto en iOS: volvía a la selección sin pago).
+- waitForAnimationToEnd
+- takeScreenshot: ciclo-diag-${CICLO_NUMERO}-despues-de-registrar
+- scrollUntilVisible:
+    element:
+      text: '.*Pago registrado: pendiente de verificación.*'
+    direction: UP
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      id: 'adjuntar-comprobante'
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: 'adjuntar-comprobante'
+# El total de la pantalla es el calculado por el servidor para ESTE ítem, no el que tipea el padre.
+# En iOS la pantalla conserva el desplazamiento de la anterior y el total queda arriba, fuera de vista: se sube hasta
+# verlo (run 40448009349). Sigue siendo una aserción: si el total no aparece, el paso falla.
+- scrollUntilVisible:
+    element:
+      text: '.*(ARS.|pesos argentinos.)${CICLO_TOTAL}.*'
+    direction: UP
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: 'campo-fecha'
+    direction: DOWN
+    timeout: 15000
+# El teclado tapa los campos siguientes: se lo oculta y se baja hasta cada campo antes de tocarlo.
+- tapOn:
+    id: 'campo-fecha'
+- inputText: '14/10/2026'
+- runFlow: ciclo-ocultar-teclado.yaml
+- scrollUntilVisible:
+    element:
+      id: 'campo-importe'
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: 'campo-importe'
+- inputText: ${CICLO_IMPORTE}
+- runFlow: ciclo-ocultar-teclado.yaml
+- scrollUntilVisible:
+    element:
+      id: 'campo-numero'
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: 'campo-numero'
+- inputText: ${CICLO_NUMERO}
+- runFlow: ciclo-ocultar-teclado.yaml
+- runFlow:
+    when:
+      platform: Android
+    file: ciclo-adjuntar-android.yaml
+- runFlow:
+    when:
+      platform: iOS
+    file: ciclo-adjuntar-ios.yaml
+# Diagnóstico (EPT-119): si al volver del selector de archivos la app muestra «No pudimos verificar el acceso», se deja
+# constancia y se prueba «Reintentar» para saber si la conexión se recupera. No oculta el fallo: el flujo sigue y, si el
+# formulario se perdió, falla en el paso siguiente.
+- runFlow:
+    when:
+      visible: 'No pudimos verificar el acceso'
+    commands:
+      - takeScreenshot: ciclo-diag-${CICLO_NUMERO}-acceso-no-verificado
+      - tapOn: 'Reintentar'
+      - waitForAnimationToEnd
+      - takeScreenshot: ciclo-diag-${CICLO_NUMERO}-tras-reintentar
+- scrollUntilVisible:
+    element:
+      text: 'Enviar comprobante'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Enviar comprobante'
+- extendedWaitUntil:
+    visible: 'Comprobante recibido: pendiente de verificación.'
+    timeout: 60000
+- scrollUntilVisible:
+    element:
+      text: '.*${CICLO_NUMERO}.*'
+    direction: DOWN
+    timeout: 15000

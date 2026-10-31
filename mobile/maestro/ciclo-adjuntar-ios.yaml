@@ -1,0 +1,20 @@
+appId: org.educarparatransformar.app
+name: Ciclo económico (iOS) - elegir el comprobante de la galería del simulador
+---
+# Subflujo: la imagen sintética se agrega a la fototeca con `xcrun simctl addmedia` antes de correr Maestro.
+# El selector de fotos de iOS es del sistema; se toma la primera (y única) imagen.
+- scrollUntilVisible:
+    element:
+      text: 'Elegir una imagen de la galería'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Elegir una imagen de la galería'
+- runFlow:
+    when:
+      visible: '.*Permitir acceso.*|.*Allow Access.*|.*Allow Full Access.*'
+    commands:
+      - tapOn:
+          text: '.*Permitir acceso.*|.*Allow Access.*|.*Allow Full Access.*'
+          optional: true
+- tapOn:
+    point: '20%,25%'

@@ -30,6 +30,8 @@ export const dbScripts = ['recibos_historial.mjs', 'recibos_concurrencia.mjs',
   'tarifas_autorizacion_concurrencia.mjs', 'tarifas_postgrest.mjs',
   'transporte_concurrencia.mjs', 'usuarios_bloqueo_auth.mjs',
   'usuarios_permisos_concurrencia.mjs', 'usuarios_reconciliacion.mjs', 'usuarios_vinculo_cuenta.mjs',
+  // EPT-120: matriz de acceso por rol y archivos privados (PostgREST, Storage y Next reales).
+  'acceso_economico_matriz.mjs',
 ]
 export const fullScripts = ['facturacion-mutaciones.mjs', 'correr-autenticadas.mjs']
 export const supportFiles = ['_arnes-ept59.mjs', '_arnes-produccion.mjs',
