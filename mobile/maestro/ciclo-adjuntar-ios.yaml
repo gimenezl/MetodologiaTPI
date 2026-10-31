@@ -16,5 +16,25 @@ name: Ciclo económico (iOS) - elegir el comprobante de la galería del simulado
       - tapOn:
           text: '.*Permitir acceso.*|.*Allow Access.*|.*Allow Full Access.*'
           optional: true
-- tapOn:
-    point: '20%,25%'
+# El selector es del sistema y en un simulador lento tarda en aparecer: tocar a ciegas dejaba el comprobante sin adjuntar y
+# «Enviar comprobante» deshabilitado (run 41242658220). Se espera a que muestre su barra y se elige la foto por etiqueta.
+- extendedWaitUntil:
+    visible: '.*(Cancel|Cancelar|Photos|Fotos|Recents|Recientes).*'
+    timeout: 45000
+- waitForAnimationToEnd
+- takeScreenshot: ciclo-diag-selector-de-fotos
+- runFlow:
+    when:
+      visible: '(Photo|Foto), .*'
+    commands:
+      - tapOn:
+          text: '(Photo|Foto), .*'
+          index: 0
+- runFlow:
+    when:
+      notVisible: '(Photo|Foto), .*'
+    commands:
+      - tapOn:
+          point: '20%,25%'
+- waitForAnimationToEnd
+- takeScreenshot: ciclo-diag-tras-elegir-foto
