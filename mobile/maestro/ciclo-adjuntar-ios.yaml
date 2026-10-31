@@ -23,18 +23,17 @@ name: Ciclo económico (iOS) - elegir el comprobante de la galería del simulado
     timeout: 45000
 - waitForAnimationToEnd
 - takeScreenshot: ciclo-diag-selector-de-fotos
+# La foto se elige por etiqueta (la tomó bien en el run 41249707284). El selector admite varios archivos: elegir solo la
+# marca, y hay que confirmar con «Add»/«Agregar» o la app no recibe nada y «Enviar comprobante» queda deshabilitado.
+- tapOn:
+    text: '(Photo|Foto), .*'
+    index: 0
+- takeScreenshot: ciclo-diag-foto-marcada
 - runFlow:
     when:
-      visible: '(Photo|Foto), .*'
+      visible: '(Add|Agregar|Done|Listo).*'
     commands:
       - tapOn:
-          text: '(Photo|Foto), .*'
-          index: 0
-- runFlow:
-    when:
-      notVisible: '(Photo|Foto), .*'
-    commands:
-      - tapOn:
-          point: '20%,25%'
+          text: '(Add|Agregar|Done|Listo).*'
 - waitForAnimationToEnd
 - takeScreenshot: ciclo-diag-tras-elegir-foto
