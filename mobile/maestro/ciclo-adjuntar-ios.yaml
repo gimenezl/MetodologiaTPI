@@ -29,6 +29,10 @@ name: Ciclo económico (iOS) - elegir el comprobante de la galería del simulado
       - tapOn:
           text: '(Photo|Foto), .*'
           index: 0
+      # Runs 41332269346, 41339990478 y 41347800159: tras tocar la foto el selector se cierra y la app no recibe el
+      # archivo, sin mensaje. Se registra el instante siguiente al toque y tras la animación para ver si hay un estado
+      # intermedio (preparación, error) antes de que la pantalla vuelva al formulario.
+      - takeScreenshot: ciclo-diag-justo-tras-tocar-foto
       - waitForAnimationToEnd
       - takeScreenshot: ciclo-diag-tras-elegir-foto
       - scrollUntilVisible:
