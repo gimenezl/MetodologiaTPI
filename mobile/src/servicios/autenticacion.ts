@@ -156,7 +156,10 @@ export class ControladorAutenticacion {
   async revalidar(): Promise<void> {
     if (this.recuperacionEnCurso()) return
     const revision = ++this.revision
-    this.publicar({ tipo: 'cargando' })
+    // Volver a primer plano (por ejemplo, al cerrar el selector de fotos del sistema) revalida el acceso. Con un
+    // usuario ya conocido se publica `revalidando`: `estadoVisible` conserva su vista y no se desmonta el formulario
+    // en curso, que perdía el archivo elegido (EPT-121). Sin usuario conocido sigue siendo `cargando`.
+    this.publicar(this.usuarioActual ? { tipo: 'revalidando', usuarioId: this.usuarioActual } : { tipo: 'cargando' })
     try {
       const { data, error } = await this.cliente.auth.getSession()
       if (revision !== this.revision) return

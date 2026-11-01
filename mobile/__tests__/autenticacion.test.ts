@@ -124,6 +124,26 @@ describe('ControladorAutenticacion', () => {
     detener()
   })
 
+  it('al volver a primer plano con un usuario ya autenticado revalida sin pasar por «cargando»', async () => {
+    const { controlador, cliente, estados } = preparar()
+    await controlador.ingresar('a@b.test', 'x')
+    ;(cliente.auth.getSession as jest.Mock).mockImplementation(async () => ({ data: { session: { user: { id: 'usuario-1' } } }, error: null }))
+    estados.length = 0
+    await controlador.revalidar()
+    expect(estados[0]).toEqual({ tipo: 'revalidando', usuarioId: 'usuario-1' })
+    expect(estados).not.toContainEqual({ tipo: 'cargando' })
+    expect(estados.at(-1)).toEqual({ tipo: 'autenticada', usuarioId: 'usuario-1', rol: 'PADRE' })
+  })
+
+  it('al volver a primer plano sin sesión vigente reemplaza la vista de inmediato', async () => {
+    const { controlador, cliente, estados } = preparar()
+    await controlador.ingresar('a@b.test', 'x')
+    ;(cliente.auth.getSession as jest.Mock).mockImplementation(async () => ({ data: { session: null }, error: null }))
+    estados.length = 0
+    await controlador.revalidar()
+    expect(estados.at(-1)).toEqual({ tipo: 'sin_sesion' })
+  })
+
   it('revalida la sesión de nuevo si cambia mientras getSession está pendiente', async () => {
     const { controlador, cliente, callback, estados } = preparar()
     const sesiones: ((valor: { data: { session: { user: { id: string } } | null }; error: null }) => void)[] = []
