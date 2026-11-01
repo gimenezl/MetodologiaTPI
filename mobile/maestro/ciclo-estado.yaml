@@ -127,10 +127,24 @@ name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decidi
 - tapOn:
     id: 'recibo-descargar'
 - extendedWaitUntil:
-    visible: '.*recibo-.*\.pdf'
+    # El menú nativo de iOS abrevia el nombre («recibo-7f81…»), por eso no se exige la extensión.
+    visible: '.*recibo-[0-9a-f]{8}.*'
     timeout: 60000
 - takeScreenshot: ciclo-recibo-menu-nativo
-- back
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: 50%, 25%
+          end: 50%, 95%
+          duration: 400
+      - waitForAnimationToEnd
 - scrollUntilVisible:
     element:
       id: 'recibo-descargar'
