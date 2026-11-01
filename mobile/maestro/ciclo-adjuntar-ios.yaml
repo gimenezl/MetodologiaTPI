@@ -1,39 +1,43 @@
 appId: org.educarparatransformar.app
 name: Ciclo económico (iOS) - elegir el comprobante de la galería del simulador
 ---
-# Subflujo: la imagen sintética se agrega a la fototeca con `xcrun simctl addmedia` antes de correr Maestro.
-# El selector de fotos de iOS es del sistema; se toma la primera (y única) imagen.
-- scrollUntilVisible:
-    element:
-      text: 'Elegir una imagen de la galería'
-    direction: DOWN
-    timeout: 15000
-- tapOn: 'Elegir una imagen de la galería'
-- runFlow:
-    when:
-      visible: '.*Permitir acceso.*|.*Allow Access.*|.*Allow Full Access.*'
+# Subflujo: la imagen sintética se agrega a la fototeca con `xcrun simctl addmedia` antes de correr Maestro (queda como la
+# más nueva, primera del selector). El selector de fotos es del sistema y en un simulador lento tarda en cargar: en el run
+# 41263277152 mostraba «Loading…» cuando se tocó y el archivo nunca llegó a la app («Enviar comprobante» deshabilitado).
+# Se espera a la grilla, se elige y se comprueba que la app lo recibió; si no, se reabre el selector (reintento acotado).
+- retry:
+    maxRetries: 2
     commands:
+      - scrollUntilVisible:
+          element:
+            text: 'Elegir una imagen de la galería'
+          direction: DOWN
+          timeout: 15000
+      - tapOn: 'Elegir una imagen de la galería'
+      - runFlow:
+          when:
+            visible: '.*Permitir acceso.*|.*Allow Access.*|.*Allow Full Access.*'
+          commands:
+            - tapOn:
+                text: '.*Permitir acceso.*|.*Allow Access.*|.*Allow Full Access.*'
+                optional: true
+      - extendedWaitUntil:
+          visible: '(Photo|Foto), .*'
+          timeout: 90000
+      - waitForAnimationToEnd
+      - takeScreenshot: ciclo-diag-selector-de-fotos
       - tapOn:
-          text: '.*Permitir acceso.*|.*Allow Access.*|.*Allow Full Access.*'
-          optional: true
-# El selector es del sistema y en un simulador lento tarda en aparecer: tocar a ciegas dejaba el comprobante sin adjuntar y
-# «Enviar comprobante» deshabilitado (run 41242658220). Se espera a que muestre su barra y se elige la foto por etiqueta.
-- extendedWaitUntil:
-    visible: '.*(Cancel|Cancelar|Photos|Fotos|Recents|Recientes).*'
-    timeout: 45000
-- waitForAnimationToEnd
-- takeScreenshot: ciclo-diag-selector-de-fotos
-# La foto se elige por etiqueta (la tomó bien en el run 41249707284). El selector admite varios archivos: elegir solo la
-# marca, y hay que confirmar con «Add»/«Agregar» o la app no recibe nada y «Enviar comprobante» queda deshabilitado.
-- tapOn:
-    text: '(Photo|Foto), .*'
-    index: 0
-- takeScreenshot: ciclo-diag-foto-marcada
-- runFlow:
-    when:
-      visible: '(Add|Agregar|Done|Listo).*'
-    commands:
-      - tapOn:
-          text: '(Add|Agregar|Done|Listo).*'
-- waitForAnimationToEnd
-- takeScreenshot: ciclo-diag-tras-elegir-foto
+          text: '(Photo|Foto), .*'
+          index: 0
+      - waitForAnimationToEnd
+      - takeScreenshot: ciclo-diag-tras-elegir-foto
+      - scrollUntilVisible:
+          element:
+            id: 'enviar-comprobante'
+          direction: DOWN
+          timeout: 20000
+      - extendedWaitUntil:
+          visible:
+            id: 'enviar-comprobante'
+            enabled: true
+          timeout: 45000
