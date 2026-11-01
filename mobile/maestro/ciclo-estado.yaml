@@ -5,21 +5,30 @@ name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decidi
 # de cero con la misma cuenta y lee el mismo estado: deuda = B + C, sin cambio por el rechazo.
 - launchApp:
     clearState: true
-- runFlow: ciclo-correo.yaml
-- tapOn:
-    id: 'contrasena'
-- inputText: ${MAESTRO_CICLO_PASSWORD}
-# En iOS el teclado tapa el botón: se oculta antes de tocarlo. El ingreso viaja por el túnel, así que se espera con plazo.
-- hideKeyboard
-- tapOn: 'Ingresar'
-# iOS ofrece guardar la contraseña con un diálogo del sistema que oculta la app del árbol de accesibilidad: se espera a
-# cualquiera de los dos, se lo descarta (en inglés o español) y recién entonces se exige la pantalla.
+# En iOS `clearState` no borra el llavero: la app puede arrancar con la sesión del padre todavía abierta (run 41272126683),
+# lo que además prueba que la sesión persiste. Se ingresa solo si aparece la pantalla de acceso.
 - extendedWaitUntil:
-    visible: 'Hijos vinculados|Not Now|Ahora no'
+    visible: 'Iniciar sesión|Hijos vinculados'
     timeout: 60000
-- tapOn:
-    text: 'Not Now|Ahora no'
-    optional: true
+- runFlow:
+    when:
+      visible: 'Iniciar sesión'
+    commands:
+      - runFlow: ciclo-correo.yaml
+      - tapOn:
+          id: 'contrasena'
+      - inputText: ${MAESTRO_CICLO_PASSWORD}
+      # En iOS el teclado tapa el botón: se oculta antes de tocarlo. El ingreso viaja por el túnel, así que se espera con plazo.
+      - hideKeyboard
+      - tapOn: 'Ingresar'
+      # iOS ofrece guardar la contraseña con un diálogo del sistema que oculta la app del árbol de accesibilidad: se espera
+      # a cualquiera de los dos y se lo descarta (en inglés o español) antes de exigir la pantalla.
+      - extendedWaitUntil:
+          visible: 'Hijos vinculados|Not Now|Ahora no'
+          timeout: 60000
+      - tapOn:
+          text: 'Not Now|Ahora no'
+          optional: true
 # El aviso «Save Password?» puede aparecer justo aquí y ocultar la pantalla (run 41269332950): si la espera falla, el
 # reintento lo descarta y vuelve a esperar.
 - retry:
