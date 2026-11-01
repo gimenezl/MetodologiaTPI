@@ -37,6 +37,11 @@ xcrun simctl bootstatus "$UDID" -b
 xcrun simctl install "$UDID" "$APP"
 xcrun simctl listapps "$UDID" | grep -F 'org.educarparatransformar.app'
 
+# El log del simulador de los runs 41336873800 y 41339990478 trae 0,7–1 millón de líneas de `apsd` (notificaciones push,
+# sin certificado en el simulador) en cada flujo. No se demostró que cause las pérdidas del selector de fotos; se lo
+# detiene para quitar esa carga y ese ruido, y el resultado queda en la evidencia. Si falla, el ciclo sigue igual.
+xcrun simctl spawn "$UDID" launchctl bootout system/com.apple.apsd > "$SALIDA/ios-apsd-detener.txt" 2>&1 || echo "bootout apsd: código $?" >> "$SALIDA/ios-apsd-detener.txt"
+
 # Comprobante sintético en la fototeca del simulador (selector de fotos del sistema).
 ARCHIVOS="$(mktemp -d)"
 node mobile/scripts/archivos-prueba.mjs "$ARCHIVOS"
