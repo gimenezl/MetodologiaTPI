@@ -141,7 +141,9 @@ jobs:
     if: needs.plan.outputs.mobile == 'true'
     runs-on: ubuntu-latest
     # Medido: el recorrido completo tarda 1567–1752 s; con 30 min un runner lento agotaba el plazo en el último flujo.
-    timeout-minutes: 40
+    # Con el ciclo económico (EPT-119) el recorrido superó los 38 min de plazo nativo (run 41318064949: el último flujo
+    # recibió 27 s); se amplía a 48 min de plazo nativo dentro de 50 min de job.
+    timeout-minutes: 50
     env:
       MAESTRO_CLI_NO_ANALYTICS: '1'
       CI: '1'
@@ -159,7 +161,7 @@ jobs:
             package-lock.json
       - name: Presupuesto y progreso nativo
         run: |
-          echo "EPT_NATIVE_DEADLINE=$(( $(date +%s) + 2280 ))" >> "$GITHUB_ENV"
+          echo "EPT_NATIVE_DEADLINE=$(( $(date +%s) + 2880 ))" >> "$GITHUB_ENV"
           echo "EPT_STAGE_LOG_DIR=$RUNNER_TEMP/evidencia-movil-android/stages" >> "$GITHUB_ENV"
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
@@ -505,6 +507,7 @@ jobs:
       - name: Sanear artifacts iOS
         id: sanear_ios
         if: always()
+        timeout-minutes: 8
         run: python3 scripts/ci/run-stage.py --sanitize-directory "$RUNNER_TEMP/evidencia-movil-ios"
       - name: Subir evidencia iOS
         if: always() && steps.sanear_ios.outcome == 'success'

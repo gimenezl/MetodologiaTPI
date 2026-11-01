@@ -61,7 +61,8 @@ correr_maestro() {
   return "$resultado"
 }
 
-correr_maestro ciclo-pago mobile/maestro/ciclo-pago.yaml
+# Límite total por flujo: un flujo que no termina se corta con su evidencia en vez de consumir el step entero.
+EPT_MAESTRO_TOTAL_S=1080 correr_maestro ciclo-pago mobile/maestro/ciclo-pago.yaml
 estado=$?
 if [ "$estado" -eq 0 ]; then
   # Dirección decide en la web (job Linux); se espera al estado real del pago, sin esperas fijas.
@@ -69,7 +70,7 @@ if [ "$estado" -eq 0 ]; then
   estado=$?
 fi
 if [ "$estado" -eq 0 ]; then
-  correr_maestro ciclo-estado mobile/maestro/ciclo-estado.yaml
+  EPT_MAESTRO_TOTAL_S=480 correr_maestro ciclo-estado mobile/maestro/ciclo-estado.yaml
   estado=$?
 fi
 if [ "$estado" -eq 0 ]; then
