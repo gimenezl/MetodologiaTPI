@@ -139,12 +139,19 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
       - tapOn: 'Reintentar'
       - waitForAnimationToEnd
       - takeScreenshot: ciclo-diag-${CICLO_NUMERO}-tras-reintentar
+# La vista previa de la imagen carga de forma asíncrona y agranda la pantalla: se espera a que se asiente, se exige ver el
+# botón completo y se lo toca por id, igual que «Registrar pago» (el envío no se disparaba en el run 41255830208).
+- waitForAnimationToEnd
 - scrollUntilVisible:
     element:
-      text: 'Enviar comprobante'
+      id: 'enviar-comprobante'
     direction: DOWN
-    timeout: 15000
-- tapOn: 'Enviar comprobante'
+    timeout: 20000
+    visibilityPercentage: 100
+- waitForAnimationToEnd
+- takeScreenshot: ciclo-diag-${CICLO_NUMERO}-antes-de-enviar
+- tapOn:
+    id: 'enviar-comprobante'
 - extendedWaitUntil:
     visible: 'Comprobante recibido: pendiente de verificación.'
     timeout: 60000
