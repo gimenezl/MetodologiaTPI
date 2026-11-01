@@ -95,7 +95,8 @@ name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decidi
     timeout: 20000
 - scrollUntilVisible:
     element:
-      text: 'Rechazado'
+      # En iOS la insignia se expone como «Estado: Rechazado»: el texto exacto solo coincide en Android.
+      text: '.*Rechazado.*'
     direction: DOWN
     timeout: 20000
 - scrollUntilVisible:
@@ -111,7 +112,7 @@ name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decidi
     timeout: 20000
 - scrollUntilVisible:
     element:
-      text: 'Aprobado'
+      text: '.*Aprobado.*'
     direction: DOWN
     timeout: 20000
 # El recibo es el del pago aprobado.
