@@ -18,18 +18,28 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
 - tapOn:
     id: 'item-${CICLO_ITEM}'
 - runFlow: ciclo-descartar-guardado.yaml
-- scrollUntilVisible:
-    element:
-      text: '.*1 ítem seleccionado.*calculado por el sistema.*'
-    direction: DOWN
-    timeout: 15000
+# El aviso del sistema «Save Password?» puede llegar tarde y bloquear esta espera (runs 41246543644 y 41252955570): si falla,
+# el reintento lo descarta y vuelve a esperar. Solo se envuelven esperas idempotentes, nunca toques que cambian el estado.
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow: ciclo-descartar-guardado.yaml
+      - scrollUntilVisible:
+          element:
+            text: '.*1 ítem seleccionado.*calculado por el sistema.*'
+          direction: DOWN
+          timeout: 15000
 # Los datos bancarios cargan de forma asíncrona y agrandan la pantalla: se espera a que existan ANTES de tocar el botón,
 # o el diseño se desplaza y el toque cae sobre otro ítem (visto en iOS: dejaba la selección vacía).
-- scrollUntilVisible:
-    element:
-      text: '.*Datos de prueba.*'
-    direction: DOWN
-    timeout: 20000
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow: ciclo-descartar-guardado.yaml
+      - scrollUntilVisible:
+          element:
+            text: '.*Datos de prueba.*'
+          direction: DOWN
+          timeout: 20000
 - scrollUntilVisible:
     element:
       text: 'No se acepta pago en efectivo.'

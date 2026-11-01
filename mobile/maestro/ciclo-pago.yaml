@@ -27,11 +27,17 @@ name: Ciclo económico (1/2) - padre consulta cuotas, registra dos pagos y carga
 - runFlow: ciclo-descartar-guardado.yaml
 - tapOn: 'Cuotas'
 - runFlow: ciclo-descartar-guardado.yaml
-- scrollUntilVisible:
-    element:
-      text: '.*Pagar ítems.*'
-    direction: DOWN
-    timeout: 20000
+# El aviso del sistema «Save Password?» puede llegar tarde y bloquear esta espera (runs 41246543644 y 41252955570): si falla,
+# el reintento lo descarta y vuelve a esperar. Solo se envuelven esperas idempotentes, nunca toques que cambian el estado.
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow: ciclo-descartar-guardado.yaml
+      - scrollUntilVisible:
+          element:
+            text: '.*Pagar ítems.*'
+          direction: DOWN
+          timeout: 20000
 # Pago A (se aprobará desde la web).
 - runFlow:
     file: ciclo-pagar-item.yaml

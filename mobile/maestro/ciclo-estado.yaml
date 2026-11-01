@@ -36,8 +36,14 @@ name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decidi
     from:
       id: 'pestanas'
     direction: LEFT
-- tapOn:
-    id: 'seccion-periodo'
+# El aviso del sistema «Save Password?» puede llegar tarde y bloquear esta espera (runs 41246543644 y 41252955570): si falla,
+# el reintento lo descarta y vuelve a esperar. Solo se envuelven esperas idempotentes, nunca toques que cambian el estado.
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow: ciclo-descartar-guardado.yaml
+      - tapOn:
+          id: 'seccion-periodo'
 - tapOn:
     id: 'periodo-desde'
 - eraseText
