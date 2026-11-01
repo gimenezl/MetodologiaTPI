@@ -165,6 +165,20 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
 - takeScreenshot: ciclo-diag-${CICLO_NUMERO}-antes-de-enviar
 - tapOn:
     id: 'enviar-comprobante'
+# Resultado del envío: éxito o «incierto». Con un envío incierto (run 41274933125: «No pudimos confirmar el envío») la app no
+# reenvía para no duplicar y ofrece «Verificar resultado»; se sigue ese mismo camino y se dejan capturas. Sigue siendo
+# obligatorio terminar en «Comprobante recibido»: si el comprobante no quedó registrado, el flujo falla.
+- extendedWaitUntil:
+    visible: '.*(Comprobante recibido: pendiente de verificación|No pudimos confirmar el envío).*'
+    timeout: 90000
+- runFlow:
+    when:
+      visible: '.*No pudimos confirmar el envío.*'
+    commands:
+      - takeScreenshot: ciclo-diag-${CICLO_NUMERO}-envio-incierto
+      - tapOn: 'Verificar resultado'
+      - waitForAnimationToEnd
+      - takeScreenshot: ciclo-diag-${CICLO_NUMERO}-tras-verificar-envio
 - extendedWaitUntil:
     # En iOS el aviso agrupa título y mensaje en un solo elemento: el texto exacto no coincidía aunque se veía (run 41266251654).
     visible: '.*Comprobante recibido: pendiente de verificación.*'
