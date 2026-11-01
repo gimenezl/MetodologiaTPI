@@ -166,7 +166,8 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
 - tapOn:
     id: 'enviar-comprobante'
 - extendedWaitUntil:
-    visible: 'Comprobante recibido: pendiente de verificación.'
+    # En iOS el aviso agrupa título y mensaje en un solo elemento: el texto exacto no coincidía aunque se veía (run 41266251654).
+    visible: '.*Comprobante recibido: pendiente de verificación.*'
     timeout: 60000
 - scrollUntilVisible:
     element:
