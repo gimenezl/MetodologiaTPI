@@ -54,6 +54,7 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
     # sin registrar el pago (captura ciclo-diag-*). Se exige verlo completo antes de tocarlo.
     visibilityPercentage: 100
 - runFlow: ciclo-descartar-guardado.yaml
+- runFlow: ciclo-bajar-un-poco.yaml
 - takeScreenshot: ciclo-diag-${CICLO_NUMERO}-antes-de-registrar
 - tapOn:
     id: 'registrar-pago'
@@ -139,8 +140,20 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
       - tapOn: 'Reintentar'
       - waitForAnimationToEnd
       - takeScreenshot: ciclo-diag-${CICLO_NUMERO}-tras-reintentar
-# La vista previa de la imagen carga de forma asíncrona y agranda la pantalla: se espera a que se asiente, se exige ver el
-# botón completo y se lo toca por id, igual que «Registrar pago» (el envío no se disparaba en el run 41255830208).
+# En iOS Maestro da el botón por visible apenas asoma y deja de desplazar aunque la pantalla pueda bajar más (en el run
+# 41260287996 quedó recortado en el borde), y el botón sigue deshabilitado mientras la imagen se procesa y su vista previa
+# se dibuja (agranda la pantalla). Se baja del todo, se espera a que esté habilitado, se reubica y recién se lo toca.
+- scrollUntilVisible:
+    element:
+      id: 'enviar-comprobante'
+    direction: DOWN
+    timeout: 20000
+- runFlow: ciclo-bajar-un-poco.yaml
+- extendedWaitUntil:
+    visible:
+      id: 'enviar-comprobante'
+      enabled: true
+    timeout: 90000
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element:
@@ -148,7 +161,7 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
     direction: DOWN
     timeout: 20000
     visibilityPercentage: 100
-- waitForAnimationToEnd
+- runFlow: ciclo-bajar-un-poco.yaml
 - takeScreenshot: ciclo-diag-${CICLO_NUMERO}-antes-de-enviar
 - tapOn:
     id: 'enviar-comprobante'
