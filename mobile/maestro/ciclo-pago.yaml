@@ -21,9 +21,15 @@ name: Ciclo económico (1/2) - padre consulta cuotas, registra dos pagos y carga
 - tapOn:
     text: 'Not Now|Ahora no'
     optional: true
-- extendedWaitUntil:
-    visible: 'Hijos vinculados'
-    timeout: 30000
+# El aviso «Save Password?» puede aparecer justo aquí y ocultar la pantalla (run 41269332950): si la espera falla, el
+# reintento lo descarta y vuelve a esperar.
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow: ciclo-descartar-guardado.yaml
+      - extendedWaitUntil:
+          visible: 'Hijos vinculados'
+          timeout: 30000
 - runFlow: ciclo-descartar-guardado.yaml
 - tapOn: 'Cuotas'
 - runFlow: ciclo-descartar-guardado.yaml
