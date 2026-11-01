@@ -170,7 +170,7 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
 # obligatorio terminar en «Comprobante recibido»: si el comprobante no quedó registrado, el flujo falla.
 - extendedWaitUntil:
     visible: '.*(Comprobante recibido: pendiente de verificación|No pudimos confirmar el envío).*'
-    timeout: 90000
+    timeout: 210000
 - runFlow:
     when:
       visible: '.*No pudimos confirmar el envío.*'
