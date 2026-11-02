@@ -1,0 +1,2 @@
+# Los hooks de Husky se ejecutan con sh: en Windows no pueden quedar con CRLF.
+* text eol=lf

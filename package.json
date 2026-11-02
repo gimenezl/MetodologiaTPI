@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:e2e": "playwright test",
-    "facturacion:local": "node scripts/facturacion-local.mjs"
+    "facturacion:local": "node scripts/facturacion-local.mjs",
+    "prepare": "husky scripts/ci/husky || true"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -39,7 +40,12 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "^16.3.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs}": "eslint --no-warn-ignored"
   }
 }
