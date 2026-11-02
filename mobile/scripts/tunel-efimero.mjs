@@ -18,6 +18,7 @@ import { join } from 'node:path'
 const [accion, directorio] = process.argv.slice(2)
 const PUERTOS = { supabase: 54321, api: 3000 }
 const PATRON_URL = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/u
+const PATRON_URL_COMPLETA = /^https:\/\/[a-z0-9-]+\.trycloudflare\.com\/?$/u
 
 const exigir = (condicion, mensaje) => { if (!condicion) throw new Error(mensaje) }
 const esperar = ms => new Promise(r => setTimeout(r, ms))
@@ -95,7 +96,8 @@ function entorno() {
   exigir(githubEnv && directorio, 'Falta GITHUB_ENV o la ruta del apretón de manos.')
   const h = JSON.parse(readFileSync(directorio, 'utf8'))
   for (const [clave, valor] of [['supabase', h.supabase], ['api', h.api]]) {
-    exigir(PATRON_URL.test(valor) && new URL(valor).pathname === '/', `El apretón de manos trae una URL inesperada (${clave}).`)
+    // Anclado: un valor con sufijo, consulta o saltos de línea no debe llegar a GITHUB_ENV.
+    exigir(typeof valor === 'string' && PATRON_URL_COMPLETA.test(valor) && new URL(valor).pathname === '/', `El apretón de manos trae una URL inesperada (${clave}).`)
   }
   exigir(typeof h.anon === 'string' && h.anon.split('.').length === 3, 'El apretón de manos no trae una clave anónima con forma de JWT.')
   const rol = JSON.parse(Buffer.from(h.anon.split('.')[1], 'base64url').toString('utf8')).role

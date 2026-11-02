@@ -164,6 +164,13 @@ export class ControladorAutenticacion {
       const { data, error } = await this.cliente.auth.getSession()
       if (revision !== this.revision) return
       if (error) throw error
+      // Una recuperación de contraseña pudo empezar mientras se leía la sesión: `procesarSesion` no publicaría nada y
+      // `revalidando` quedaría sin terminar. `cargando` es el estado que la pantalla de acceso ya reintenta al
+      // liberarse la recuperación.
+      if (this.recuperacionEnCurso()) {
+        this.publicar({ tipo: 'cargando' })
+        return
+      }
       await this.procesarSesion(data.session?.user.id ?? null, revision)
     } catch {
       if (revision === this.revision) this.publicar({ tipo: 'sin_sesion' })

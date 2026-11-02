@@ -50,6 +50,16 @@ barrera real es que el backend es descartable, sintético y vive minutos; la aut
 que es exactamente lo que EPT-120 prueba. Quien conozca la URL durante esa ventana tiene el mismo alcance que cualquier
 cliente de un proyecto Supabase con la clave anónima pública.
 
+**Alcance real, revisado de forma independiente.** Como las credenciales se pueden calcular a partir de datos públicos,
+quien obtenga las URLs del túnel durante la ventana (hasta ≈ 55 min) puede iniciar sesión como la Dirección sintética
+del stack y llegar a las rutas del servidor web, que corre con la clave de servicio de **ese stack descartable** (sin
+datos reales; no hay secretos del repositorio en el job). El secreto efectivo es la URL aleatoria del túnel, que viaja
+en el mismo artefacto: mezclar más entropía por ese canal no eleva la barrera. Endurecer de verdad exige un secreto
+del repositorio (no existe hoy ninguno; en PR de forks quedaría vacío) o un canal entre jobs que no sea un artefacto.
+Es un riesgo aceptado para esta campaña por la autorización del túnel efímero con datos sintéticos; **la decisión de
+mantenerlo o endurecerlo es del dueño del repositorio**. Se anclaron las validaciones del destino del túnel en el job de
+macOS (`tunel-efimero.mjs entorno`).
+
 ## Fixtures y namespaces
 
 Un namespace por plataforma (`ciclo-<plataforma>-*@ept119.invalid`, nivel `Nivel ciclo <plataforma> …`), identificadores

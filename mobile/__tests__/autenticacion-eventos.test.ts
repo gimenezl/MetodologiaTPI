@@ -108,6 +108,21 @@ describe('eventos de Auth y recuperación de contraseña', () => {
     detener()
   })
 
+  it('revalidar() no deja «revalidando» sin terminar si una recuperación empieza mientras se lee la sesión', async () => {
+    const { controlador, cliente, estados, emitir, detener, recuperacion } = await preparar({ activa: false })
+    await emitir('SIGNED_IN')
+    estados.length = 0
+    let resolver: (v: unknown) => void = () => undefined
+    ;(cliente.auth.getSession as jest.Mock).mockImplementation(() => new Promise(resuelve => { resolver = resuelve }))
+    const revalidacion = controlador.revalidar()
+    expect(estados).toEqual([{ tipo: 'revalidando', usuarioId: 'u-1' }])
+    recuperacion.activa = true
+    resolver({ data: { session: { user: { id: 'u-1' } } }, error: null })
+    await revalidacion
+    expect(estados.at(-1)).toEqual({ tipo: 'cargando' })
+    detener()
+  })
+
   it('un cambio de usuario real (otra cuenta) se refleja sin conservar la cuenta anterior', async () => {
     const { cliente, estados, emitir, detener } = await preparar()
     await emitir('SIGNED_IN', 'u-1')
