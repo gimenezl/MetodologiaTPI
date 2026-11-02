@@ -12,13 +12,15 @@
 //   node mobile/scripts/tunel-efimero.mjs stop <directorio-salida>
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { capacidad } from './proxy-tunel-ci.mjs'
 
 const [accion, directorio] = process.argv.slice(2)
-const PUERTOS = { supabase: 54321, api: 3000 }
+const PUERTOS = { supabase: 15432, api: 13000 }
 const PATRON_URL = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/u
-const PATRON_URL_COMPLETA = /^https:\/\/[a-z0-9-]+\.trycloudflare\.com\/?$/u
+const PATRON_URL_COMPLETA = /^https:\/\/[a-z0-9-]+\.trycloudflare\.com\/ci\/[a-f0-9]{64}$/u
 
 const exigir = (condicion, mensaje) => { if (!condicion) throw new Error(mensaje) }
 const esperar = ms => new Promise(r => setTimeout(r, ms))
@@ -28,7 +30,8 @@ async function iniciarTunel(nombre, puerto, privado) {
   exigir(binario && existsSync(binario), 'Falta el binario de cloudflared verificado (EPT_CLOUDFLARED).')
   const registro = join(privado, `${nombre}.log`)
   const fd = openSync(registro, 'a', 0o600)
-  const hijo = spawn(binario, ['tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${puerto}`], {
+  // A supervisor bounds exposure even when later workflow cleanup is skipped.
+  const hijo = spawn('timeout', ['--signal=TERM', '--kill-after=10s', '50m', binario, 'tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${puerto}`], {
     stdio: ['ignore', fd, fd], detached: true, env: { PATH: process.env.PATH, HOME: process.env.HOME },
   })
   hijo.unref()
@@ -62,9 +65,20 @@ async function iniciar() {
   exigir(anon, 'Falta la clave anónima pública (EXPO_PUBLIC_SUPABASE_ANON_KEY).')
   const privado = join(directorio, '.privado')
   mkdirSync(privado, { recursive: true, mode: 0o700 })
+  const seed = process.env.EPT_CICLO_CLAVE
+  const tokens = Object.fromEntries(Object.keys(PUERTOS).map(nombre => [nombre, capacidad(seed, nombre)]))
+  for (const token of Object.values(tokens)) console.log(`::add-mask::${token}`)
+  const proxy = spawn('timeout', ['--signal=TERM', '--kill-after=10s', '50m', process.execPath, fileURLToPath(new URL('./proxy-tunel-ci.mjs', import.meta.url))], {
+    stdio: 'ignore', detached: true, env: { PATH: process.env.PATH, EPT_CICLO_CLAVE: seed },
+  })
+  proxy.unref()
+  writeFileSync(join(privado, 'proxy.pid'), String(proxy.pid), { mode: 0o600 })
+  await responde(`http://127.0.0.1:${PUERTOS.supabase}/ci/${tokens.supabase}`, '/auth/v1/health', { apikey: anon })
+  await responde(`http://127.0.0.1:${PUERTOS.api}/ci/${tokens.api}`, '/login')
+  exigir(proxy.exitCode === null, 'El proxy de CI terminó antes de abrir los túneles.')
   const urls = {}
   for (const [nombre, puerto] of Object.entries(PUERTOS)) {
-    urls[nombre] = await iniciarTunel(nombre, puerto, privado)
+    urls[nombre] = `${await iniciarTunel(nombre, puerto, privado)}/ci/${tokens[nombre]}`
     console.log(`::add-mask::${new URL(urls[nombre]).hostname}`)
   }
   await responde(urls.supabase, '/auth/v1/health', { apikey: anon })
@@ -74,18 +88,48 @@ async function iniciar() {
   console.log('Túneles efímeros listos (Supabase y servidor web de prueba).')
 }
 
-function detener() {
+function grupoTieneProcesosVivos(pid) {
+  try { process.kill(-pid, 0) } catch (error) {
+    if (error?.code === 'ESRCH') return false
+    throw error
+  }
+  // Linux containers can leave a dead orphan as a zombie until PID 1 reaps it.
+  // Zombies have no open sockets; they must not be mistaken for live tunnels.
+  const procesos = readdirSync('/proc').filter(n => /^\d+$/u.test(n))
+  for (const proceso of procesos) {
+    let stat
+    try { stat = readFileSync(`/proc/${proceso}/stat`, 'utf8') } catch (error) {
+      if (error?.code === 'ENOENT' || error?.code === 'ESRCH') continue
+      throw error
+    }
+    const campos = /^\d+ \(.*\) (\S) \d+ (\d+) /u.exec(stat)
+    exigir(campos, 'No se pudo inspeccionar un proceso del sistema.')
+    if (campos && Number(campos[2]) === pid && campos[1] !== 'Z' && campos[1] !== 'X') return true
+  }
+  return false
+}
+
+async function detener() {
   const privado = join(directorio ?? '', '.privado')
-  for (const nombre of Object.keys(PUERTOS)) {
+  for (const nombre of [...Object.keys(PUERTOS), 'proxy']) {
     const ruta = join(privado, `${nombre}.pid`)
-    if (!existsSync(ruta)) continue
+    if (!existsSync(ruta)) {
+      exigir(!existsSync(join(directorio ?? '', 'urls.json')), `Falta el PID del túnel ${nombre}.`)
+      continue
+    }
     const pid = Number(readFileSync(ruta, 'utf8'))
-    rmSync(ruta, { force: true })
-    if (Number.isInteger(pid) && pid > 1) {
+    exigir(Number.isInteger(pid) && pid > 1, `PID inválido para el túnel ${nombre}.`)
+    {
       for (const objetivo of [-pid, pid]) {
         try { process.kill(objetivo, 'SIGTERM') } catch { /* ya terminó */ }
       }
+      const fin = Date.now() + 10_000
+      while (Date.now() < fin && grupoTieneProcesosVivos(pid)) {
+        await esperar(100)
+      }
+      exigir(!grupoTieneProcesosVivos(pid), `No se pudo comprobar el cierre del túnel ${nombre}.`)
     }
+    rmSync(ruta, { force: true })
   }
   console.log('Túneles efímeros detenidos.')
 }
@@ -97,12 +141,15 @@ function entorno() {
   const h = JSON.parse(readFileSync(directorio, 'utf8'))
   for (const [clave, valor] of [['supabase', h.supabase], ['api', h.api]]) {
     // Anclado: un valor con sufijo, consulta o saltos de línea no debe llegar a GITHUB_ENV.
-    exigir(typeof valor === 'string' && PATRON_URL_COMPLETA.test(valor) && new URL(valor).pathname === '/', `El apretón de manos trae una URL inesperada (${clave}).`)
+    exigir(typeof valor === 'string' && PATRON_URL_COMPLETA.test(valor), `El apretón de manos trae una URL inesperada (${clave}).`)
   }
   exigir(typeof h.anon === 'string' && h.anon.split('.').length === 3, 'El apretón de manos no trae una clave anónima con forma de JWT.')
   const rol = JSON.parse(Buffer.from(h.anon.split('.')[1], 'base64url').toString('utf8')).role
   exigir(rol === 'anon', 'La clave del apretón de manos no es la clave anónima: se rechaza.')
-  for (const valor of [h.supabase, h.api]) console.log(`::add-mask::${new URL(valor).hostname}`)
+  for (const valor of [h.supabase, h.api]) {
+    console.log(`::add-mask::${new URL(valor).hostname}`)
+    console.log(`::add-mask::${new URL(valor).pathname.split('/').at(-1)}`)
+  }
   appendFileSync(githubEnv, [
     `EXPO_PUBLIC_SUPABASE_URL=${h.supabase}`, `EXPO_PUBLIC_SUPABASE_ANON_KEY=${h.anon}`, `EXPO_PUBLIC_API_BASE_URL=${h.api}`,
   ].join('\n') + '\n', { mode: 0o600 })
@@ -111,7 +158,7 @@ function entorno() {
 
 try {
   if (accion === 'start') await iniciar()
-  else if (accion === 'stop') detener()
+  else if (accion === 'stop') await detener()
   else if (accion === 'entorno') entorno()
   else throw new Error('Acción desconocida para el túnel efímero.')
 } catch (error) {
