@@ -281,14 +281,13 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
   # EPT-119: los runners macOS ARM no tienen Docker, así que el backend de prueba (Supabase local + Next + Chromium de
-  # Dirección) corre en este job Linux y el simulador iOS lo alcanza por HTTPS mediante túneles efímeros (URL aleatoria,
-  # datos sintéticos, solo la clave anónima viaja). Ambos jobs se coordinan con el estado real del backend y con dos
-  # artefactos: `ios-apreton` (URLs públicas) e `ios-fin` (el simulador terminó). El stack se destruye siempre.
+  # Dirección) corre en Linux e iOS lo alcanza por HTTPS mediante túneles efímeros. El handshake y la semilla
+  # de identidades se cifran para el runner iOS; los artefactos públicos no contienen el destino ni contraseñas.
+  # La evidencia que incorpora destinos no se publica hasta comprobar el cierre del proceso de los túneles.
   mobile-ios-backend:
     name: CI / backend de prueba para iOS
     needs: plan
-    # Temporal: fail closed until the protected iOS tunnel is verified.
-    if: ${{ false }}
+    if: needs.plan.outputs.mobile == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -308,9 +307,11 @@ jobs:
           cache-dependency-path: |
             mobile/package-lock.json
             package-lock.json
-      - name: Clave común del ciclo y presupuesto
+      - name: Clave privada del ciclo y presupuesto
         run: |
-          echo "EPT_CICLO_CLAVE=$(printf '%s' "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_SHA-ios" | sha256sum | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          clave=$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")
+          echo "::add-mask::$clave"
+          echo "EPT_CICLO_CLAVE=$clave" >> "$GITHUB_ENV"
           echo "EPT_NATIVE_DEADLINE=$(( $(date +%s) + 3300 ))" >> "$GITHUB_ENV"
           echo "EPT_STAGE_LOG_DIR=$RUNNER_TEMP/evidencia-backend-ios/stages" >> "$GITHUB_ENV"
       - name: Instalar CLI Supabase aislada (2.117.0)
@@ -334,14 +335,26 @@ jobs:
         run: python3 scripts/ci/run-stage.py --stage ciclo-preparar --seconds 90 -- node mobile/scripts/ciclo-economico.mjs preparar ios
       - name: Abrir túneles efímeros
         run: node mobile/scripts/tunel-efimero.mjs start "$RUNNER_TEMP/tunel"
-      - name: Publicar apretón de manos (solo URLs públicas y clave anónima)
+      - name: Esperar la clave pública efímera del simulador
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          destino="$RUNNER_TEMP/clave-ios-publica"
+          for _ in $(seq 1 120); do
+            if gh run download "$GITHUB_RUN_ID" -n "ios-clave-publica-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" -D "$destino" 2>/dev/null && [ -f "$destino/public.pem" ]; then break; fi
+            sleep 5
+          done
+          test -f "$destino/public.pem"
+      - name: Publicar apretón de manos cifrado
         run: |
           mkdir -p "$RUNNER_TEMP/apreton"
-          node mobile/scripts/ciclo-economico.mjs publicar ios "$RUNNER_TEMP/tunel/urls.json" "$RUNNER_TEMP/apreton/apreton.json"
+          node mobile/scripts/ciclo-economico.mjs publicar ios "$RUNNER_TEMP/tunel/urls.json" "$RUNNER_TEMP/apreton-privado.json"
+          node mobile/scripts/ci-canal-privado.mjs seal "$RUNNER_TEMP/clave-ios-publica/public.pem" "$RUNNER_TEMP/apreton-privado.json" "$RUNNER_TEMP/apreton/apreton.enc"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ios-apreton-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/apreton/apreton.json
+          path: ${{ runner.temp }}/apreton/apreton.enc
+          if-no-files-found: error
           retention-days: 1
       - name: Dirección decide desde la web los pagos que registre la app iOS
         env:
@@ -365,10 +378,25 @@ jobs:
       - name: Resumir el log de autenticación (diagnóstico)
         if: always()
         run: node mobile/scripts/supabase-local.mjs logs-auth "$RUNNER_TEMP/evidencia-backend-ios/auth-resumen.txt" || true
-      - name: Detener túneles, servidor web y stack
+      - name: Detener y comprobar túneles
+        id: detener_tuneles
+        if: always()
+        run: node mobile/scripts/tunel-efimero.mjs stop "$RUNNER_TEMP/tunel"
+      - name: Publicar cierre de túneles verificado
+        if: always() && steps.detener_tuneles.outcome == 'success'
+        run: |
+          mkdir -p "$RUNNER_TEMP/tuneles-cerrados"
+          echo cerrado > "$RUNNER_TEMP/tuneles-cerrados/estado.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always() && steps.detener_tuneles.outcome == 'success'
+        with:
+          name: ios-tuneles-cerrados-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/tuneles-cerrados/estado.txt
+          if-no-files-found: error
+          retention-days: 1
+      - name: Detener servidor web y stack
         if: always()
         run: |
-          node mobile/scripts/tunel-efimero.mjs stop "$RUNNER_TEMP/tunel" || true
           node mobile/scripts/servidor-web-local.mjs stop || true
           node mobile/scripts/supabase-local.mjs stop || true
       - name: Sanear diagnóstico del backend
@@ -389,8 +417,7 @@ jobs:
   mobile-ios:
     name: CI / móvil iOS
     needs: plan
-    # Temporal: fail closed until the protected iOS tunnel is verified.
-    if: ${{ false }}
+    if: needs.plan.outputs.mobile == 'true'
     runs-on: macos-26
     # Medido (run 40753469845): ~20 min hasta terminar el smoke (build, espera del backend y smoke) y hasta 30 min más de ciclo;
     # con 40 min el job se cancelaba en pleno ciclo y no subía evidencia.
@@ -418,8 +445,16 @@ jobs:
         run: |
           xcodebuild -version | tee -a "$GITHUB_STEP_SUMMARY"
           node --version
-      - name: Clave común del ciclo
-        run: echo "EPT_CICLO_CLAVE=$(printf '%s' "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_SHA-ios" | shasum -a 256 | cut -d' ' -f1)" >> "$GITHUB_ENV"
+      - name: Crear clave efímera para el backend
+        run: |
+          mkdir -p "$RUNNER_TEMP/clave-ios-publica"
+          node mobile/scripts/ci-canal-privado.mjs keygen "$RUNNER_TEMP/clave-ios-privada.pem" "$RUNNER_TEMP/clave-ios-publica/public.pem"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-clave-publica-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/clave-ios-publica/public.pem
+          if-no-files-found: error
+          retention-days: 1
       - name: Instalación y proyecto nativo (incluye pods)
         working-directory: mobile
         # El prebuild no depende del backend: corre mientras el job Linux prepara Supabase, Next y los túneles.
@@ -440,12 +475,14 @@ jobs:
             # Si el backend ya falló no tiene sentido esperar su apretón de manos.
             falla=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs" --jq "[.jobs[] | select(.name == \"CI / backend de prueba para iOS\" and .conclusion == \"failure\")] | length" 2>/dev/null || echo 0)
             if [ "$falla" -ge 1 ]; then echo "El backend de prueba falló: no habrá apretón de manos." >&2; exit 1; fi
-            if gh run download "$GITHUB_RUN_ID" -n "ios-apreton-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" -D "$destino" 2>/dev/null && [ -f "$destino/apreton.json" ]; then break; fi
+            if gh run download "$GITHUB_RUN_ID" -n "ios-apreton-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" -D "$destino" 2>/dev/null && [ -f "$destino/apreton.enc" ]; then break; fi
             sleep 10
           done
-          test -f "$destino/apreton.json"
+          test -f "$destino/apreton.enc"
+          node mobile/scripts/ci-canal-privado.mjs open "$RUNNER_TEMP/clave-ios-privada.pem" "$destino/apreton.enc" "$destino/apreton.json"
           node mobile/scripts/tunel-efimero.mjs entorno "$destino/apreton.json"
-          node mobile/scripts/ciclo-economico.mjs entorno ios "$destino/apreton.json"
+      - name: Preparar credenciales de la fixture iOS
+        run: node mobile/scripts/ciclo-economico.mjs entorno ios "$RUNNER_TEMP/apreton/apreton.json"
       - name: Build iOS para simulador (release de prueba, sin firma, arm64)
         working-directory: mobile/ios
         run: |
@@ -499,8 +536,21 @@ jobs:
           MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'
           MAESTRO_CLI_NO_ANALYTICS: '1'
         run: bash mobile/scripts/ejecutar-ios.sh "${{ steps.app.outputs.ruta }}"
-      - name: Empaquetar evidencia iOS
+      - name: Esperar cierre de túneles antes de publicar evidencia
+        id: cierre_tuneles
         if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          destino="$RUNNER_TEMP/tuneles-cerrados"
+          for _ in $(seq 1 120); do
+            if gh run download "$GITHUB_RUN_ID" -n "ios-tuneles-cerrados-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" -D "$destino" 2>/dev/null && [ -f "$destino/estado.txt" ]; then exit 0; fi
+            sleep 5
+          done
+          echo 'No se confirmó el cierre de los túneles: no se publica la evidencia iOS.' >&2
+          exit 1
+      - name: Empaquetar evidencia iOS
+        if: always() && steps.cierre_tuneles.outcome == 'success'
         run: |
           mkdir -p "$RUNNER_TEMP/evidencia-movil-ios"
           if [ -n "${{ steps.app.outputs.ruta }}" ]; then ditto -c -k --keepParent "${{ steps.app.outputs.ruta }}" "$RUNNER_TEMP/evidencia-movil-ios/aplicacion-ios-simulador.zip"; fi
@@ -508,7 +558,7 @@ jobs:
           node mobile/scripts/diagnostico-ios.mjs || true
       - name: Sanear artifacts iOS
         id: sanear_ios
-        if: always()
+        if: always() && steps.cierre_tuneles.outcome == 'success'
         timeout-minutes: 8
         run: python3 scripts/ci/run-stage.py --sanitize-directory "$RUNNER_TEMP/evidencia-movil-ios"
       - name: Subir evidencia iOS
