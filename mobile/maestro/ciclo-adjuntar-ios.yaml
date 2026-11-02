@@ -8,6 +8,16 @@ name: Ciclo económico (iOS) - elegir el comprobante de la galería del simulado
 - retry:
     maxRetries: 2
     commands:
+      # Run 41368935103: tras tocar la foto el selector seguía abierto (captura «justo-tras-tocar-foto») y los
+      # reintentos no encontraban el botón porque el selector tapaba la pantalla. Se cierra un selector que haya
+      # quedado abierto antes de cada intento.
+      - runFlow:
+          when:
+            visible: 'Collections|Colecciones'
+          commands:
+            - tapOn:
+                point: '10%,11%'
+            - waitForAnimationToEnd
       - scrollUntilVisible:
           element:
             text: 'Elegir una imagen de la galería'
@@ -34,6 +44,22 @@ name: Ciclo económico (iOS) - elegir el comprobante de la galería del simulado
       # intermedio (preparación, error) antes de que la pantalla vuelva al formulario.
       - takeScreenshot: ciclo-diag-justo-tras-tocar-foto
       - waitForAnimationToEnd
+      # Si el toque sobre el elemento no seleccionó la foto, se toca la primera celda de la grilla (la imagen sintética es
+      # la más nueva): primero sin banner de acceso y, si el selector sigue abierto, con el banner.
+      - runFlow:
+          when:
+            visible: 'Collections|Colecciones'
+          commands:
+            - tapOn:
+                point: '16%,24%'
+            - waitForAnimationToEnd
+            - runFlow:
+                when:
+                  visible: 'Collections|Colecciones'
+                commands:
+                  - tapOn:
+                      point: '16%,43%'
+                  - waitForAnimationToEnd
       - takeScreenshot: ciclo-diag-tras-elegir-foto
       - scrollUntilVisible:
           element:
