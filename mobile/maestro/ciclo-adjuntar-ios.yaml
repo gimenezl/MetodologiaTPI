@@ -8,6 +8,9 @@ name: Ciclo económico (iOS) - elegir el comprobante de la galería del simulado
 - retry:
     maxRetries: 2
     commands:
+      # El aviso de guardar contraseña puede aparecer incluso sobre el selector de fotos (run 41540448831).
+      # Primero se descarta; de otro modo oculta tanto «Collections» como el botón de la galería.
+      - runFlow: ciclo-descartar-guardado.yaml
       # Run 41368935103: tras tocar la foto el selector seguía abierto (captura «justo-tras-tocar-foto») y los
       # reintentos no encontraban el botón porque el selector tapaba la pantalla. Se cierra un selector que haya
       # quedado abierto antes de cada intento.
@@ -24,6 +27,7 @@ name: Ciclo económico (iOS) - elegir el comprobante de la galería del simulado
           direction: DOWN
           timeout: 15000
       - tapOn: 'Elegir una imagen de la galería'
+      - runFlow: ciclo-descartar-guardado.yaml
       - runFlow:
           when:
             visible: '.*Permitir acceso.*|.*Allow Access.*|.*Allow Full Access.*'
