@@ -287,7 +287,8 @@ jobs:
   mobile-ios-backend:
     name: CI / backend de prueba para iOS
     needs: plan
-    if: needs.plan.outputs.mobile == 'true'
+    # Temporal: fail closed until the protected iOS tunnel is verified.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -388,7 +389,8 @@ jobs:
   mobile-ios:
     name: CI / móvil iOS
     needs: plan
-    if: needs.plan.outputs.mobile == 'true'
+    # Temporal: fail closed until the protected iOS tunnel is verified.
+    if: ${{ false }}
     runs-on: macos-26
     # Medido (run 40753469845): ~20 min hasta terminar el smoke (build, espera del backend y smoke) y hasta 30 min más de ciclo;
     # con 40 min el job se cancelaba en pleno ciclo y no subía evidencia.
