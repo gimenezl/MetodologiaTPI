@@ -31,13 +31,15 @@ name: Ciclo económico (1/2) - padre consulta cuotas, registra dos pagos y carga
           visible: 'Hijos vinculados'
           timeout: 30000
 - runFlow: ciclo-descartar-guardado.yaml
-- tapOn: 'Cuotas'
-- runFlow: ciclo-descartar-guardado.yaml
 # El aviso del sistema «Save Password?» puede llegar tarde y bloquear esta espera (runs 41246543644 y 41252955570): si falla,
 # el reintento lo descarta y vuelve a esperar. Solo se envuelven esperas idempotentes, nunca toques que cambian el estado.
 - retry:
     maxRetries: 2
     commands:
+      - runFlow: ciclo-descartar-guardado.yaml
+      # Run 41375337250 (reintento): la app quedó en «Hijos vinculados» y nunca apareció «Pagar ítems». Tocar la pestaña
+      # «Cuotas» de nuevo es idempotente (no cambia datos), por eso va dentro del reintento.
+      - tapOn: 'Cuotas'
       - runFlow: ciclo-descartar-guardado.yaml
       - scrollUntilVisible:
           element:
