@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# EPT-119: ciclo económico conectado en un simulador de iPhone propio. El backend (Supabase + Next + Dirección en la
+# web) corre en el job Linux y llega por túnel HTTPS; aquí solo vive el simulador con la app real.
+# Uso: bash mobile/scripts/ejecutar-ios-ciclo.sh <ruta-a-la-app>
+set -euo pipefail
+export EPT_IOS_STEP_STARTED_AT="$(node -e 'console.log(Date.now())')"
+# Presupuesto propio del step (30 min): incluye la espera de la decisión de Dirección en la web.
+export EPT_IOS_PRESUPUESTO_MS=1800000
+
+# Medido en CI (run 40425065082): tras el smoke, el runner XCTest tardó ~105 s en arrancar de 120 s disponibles y el
+# segundo intento venció. Solo este step recibe más margen; el smoke conserva los 120 s.
+export MAESTRO_DRIVER_STARTUP_TIMEOUT=240000
+# Un runner XCTest vivo de una ejecución previa del mismo job pudo salir con «Early unexpected exit»: se lo descarta.
+pkill -f maestro-driver-ios || true
+pkill -f 'xcodebuild.*maestro-driver' || true
+
+APP="$1"
+source "$(dirname "$0")/ios-reiniciar-simulador.sh"
+SALIDA="${RUNNER_TEMP:?RUNNER_TEMP requerido}/evidencia-movil-ios"
+mkdir -p "$SALIDA"
+
+UDID="$(node mobile/scripts/ios-simulador.mjs crear)"
+echo "Simulador del ciclo: $UDID" | tee "$SALIDA/ios-simulador-ciclo.txt"
+
+finalizar() {
+  resultado=$?
+  node mobile/scripts/ios-simulador.mjs limpiar || resultado=1
+  exit "$resultado"
+}
+trap finalizar EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+
+xcrun simctl boot "$UDID"
+open -a "$DEVELOPER_DIR/Applications/Simulator.app" --args -CurrentDeviceUDID "$UDID"
+xcrun simctl bootstatus "$UDID" -b
+xcrun simctl install "$UDID" "$APP"
+xcrun simctl listapps "$UDID" | grep -F 'org.educarparatransformar.app'
+
+# El log del simulador de los runs 41336873800 y 41339990478 trae 0,7–1 millón de líneas de `apsd` (notificaciones push,
+# sin certificado en el simulador) en cada flujo. No se demostró que cause las pérdidas del selector de fotos; se lo
+# detiene para quitar esa carga y ese ruido, y el resultado queda en la evidencia. Si falla, el ciclo sigue igual.
+xcrun simctl spawn "$UDID" launchctl bootout system/com.apple.apsd > "$SALIDA/ios-apsd-detener.txt" 2>&1 || echo "bootout apsd: código $?" >> "$SALIDA/ios-apsd-detener.txt"
+
+# Comprobante sintético en la fototeca del simulador (selector de fotos del sistema).
+ARCHIVOS="$(mktemp -d)"
+node mobile/scripts/archivos-prueba.mjs "$ARCHIVOS"
+xcrun simctl addmedia "$UDID" "$ARCHIVOS/comprobante-ci.png"
+
+set +e
+# El driver XCUITest de Maestro a veces no arranca a tiempo («driver not ready»). Solo esa firma, que ocurre ANTES de
+# ejecutar ningún paso, se reintenta una vez; el fallo de un paso del flujo nunca se reintenta.
+correr_maestro() {
+  local etiqueta="$1" flujo="$2" intento resultado
+  for intento in 1 2; do
+    vigilar_maestro 300 "$SALIDA/$etiqueta-intento$intento.out" \
+      maestro --device "$UDID" test --format junit --output "$SALIDA/maestro-$etiqueta.xml" \
+      --debug-output "$SALIDA/$etiqueta-debug" --flatten-debug-output \
+      --test-output-dir "$SALIDA/maestro-$etiqueta" "$flujo"
+    resultado=$?
+    if [ "$resultado" -eq 0 ]; then return 0; fi
+    grep -q 'driver not ready' "$SALIDA/$etiqueta-intento$intento.out" || return "$resultado"
+    echo "Driver de iOS no listo antes de ejecutar pasos: se reinicia el simulador y se reintenta una sola vez ($etiqueta)."
+    reiniciar_simulador "$UDID" "$APP" || true
+  done
+  return "$resultado"
+}
+
+# Límite total por flujo: un flujo que no termina se corta con su evidencia en vez de consumir el step entero.
+EPT_MAESTRO_TOTAL_S=1080 correr_maestro ciclo-pago mobile/maestro/ciclo-pago.yaml
+estado=$?
+if [ "$estado" -eq 0 ]; then
+  # Dirección decide en la web (job Linux); se espera al estado real del pago, sin esperas fijas.
+  node mobile/scripts/ciclo-espera-remota.mjs ios
+  estado=$?
+fi
+if [ "$estado" -eq 0 ]; then
+  EPT_MAESTRO_TOTAL_S=480 correr_maestro ciclo-estado mobile/maestro/ciclo-estado.yaml
+  estado=$?
+fi
+if [ "$estado" -eq 0 ]; then
+  node mobile/scripts/ios-completitud.mjs "$SALIDA" ciclo
+  estado=$?
+fi
+node mobile/scripts/diagnostico-ios.mjs "$UDID" pantalla || true
+set -e
+exit "$estado"

@@ -1,0 +1,22 @@
+appId: org.educarparatransformar.app
+name: Ciclo económico - escribir el correo
+---
+# EPT-119. En iOS el simulador lento perdió casi todo el texto (el campo quedó con «c», run 41238563011). Se escribe el
+# correo y, solo en iOS, se verifica que quedó completo; si no, se borra y se reescribe una vez antes de seguir.
+- tapOn:
+    id: 'correo'
+- inputText: ${MAESTRO_CICLO_EMAIL}
+- runFlow:
+    when:
+      platform: iOS
+      notVisible: ${MAESTRO_CICLO_EMAIL}
+    commands:
+      - tapOn:
+          id: 'correo'
+      - eraseText: 80
+      - inputText: ${MAESTRO_CICLO_EMAIL}
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - assertVisible: ${MAESTRO_CICLO_EMAIL}

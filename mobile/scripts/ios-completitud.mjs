@@ -30,4 +30,24 @@ export function comprobarCompletitud(directory) {
   writeFileSync(join(directory, 'completitud-ios.json'), JSON.stringify({ esperado: FLUJOS, completados: flujos }), { mode: 0o600 })
   return flujos
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) comprobarCompletitud(process.argv[2])
+// EPT-119: el ciclo económico conectado debe haber terminado completo y en orden (pago y luego estado final).
+export const CAPTURAS_CICLO = ['ciclo-pago-completado', 'ciclo-deuda-final']
+export function comprobarCiclo(directory) {
+  const comandos = archivos(directory).filter(p => basename(p) === 'commands.json' && lstatSync(p).size <= 8388608)
+    .map(p => JSON.parse(readFileSync(p, 'utf8'))).filter(Array.isArray)
+  let anterior = -1
+  const capturas = CAPTURAS_CICLO.map(nombre => {
+    const encontrados = comandos.flatMap(c => c.filter(x => x.command?.takeScreenshotCommand?.path === nombre))
+    if (encontrados.length !== 1 || encontrados[0].metadata?.status !== 'COMPLETED' || !(encontrados[0].metadata.timestamp > anterior)) {
+      throw new Error('El ciclo económico iOS no terminó, se repitió o quedó fuera de orden')
+    }
+    anterior = encontrados[0].metadata.timestamp
+    return { captura: nombre, timestamp: anterior }
+  })
+  writeFileSync(join(directory, 'completitud-ciclo-ios.json'), JSON.stringify({ esperado: CAPTURAS_CICLO, completadas: capturas }), { mode: 0o600 })
+  return capturas
+}
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  if (process.argv[3] === 'ciclo') comprobarCiclo(process.argv[2])
+  else comprobarCompletitud(process.argv[2])
+}

@@ -1,0 +1,11 @@
+appId: org.educarparatransformar.app
+name: Ciclo económico - bajar un poco más (iOS)
+---
+# EPT-119. scrollUntilVisible se detiene cuando el elemento asoma en el árbol de accesibilidad de iOS, aunque quede recortado
+# por el borde inferior. Un desplazamiento más lo trae completo; si ya estaba al final no cambia nada. Solo iOS.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - scroll
+      - waitForAnimationToEnd

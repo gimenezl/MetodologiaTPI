@@ -130,6 +130,33 @@ test.describe.serial('DIRECTOR autenticado — correos programados', () => {
     await page.goto('/dashboard')
     await expect(page.getByRole('link', { name: 'Correos programados' }).first()).toBeVisible()
   })
+
+  // EPT-121: el estado de error y su reintento no tenían cobertura automatizada (matriz de EPT-118). Se provoca una
+  // falla REAL de lectura —se retira el SELECT del rol `authenticated`— sin tocar el producto, y se restaura siempre.
+  test('una lectura fallida muestra un error sin detalle técnico y «Reintentar» recupera la lista', async ({ page }) => {
+    const privilegio = () => sql(`SELECT has_table_privilege('authenticated', 'public.envios_correo', 'SELECT');`) === 't'
+    expect(privilegio(), 'precondición: el rol authenticated debe poder leer la tabla').toBe(true)
+    await page.goto('/dashboard/envios-correo')
+    await expect(page.locator('tr[data-estado="INCIERTO"]', { hasText: MARCA })).toHaveCount(1) // la lista existe antes de la falla
+    sql('REVOKE SELECT ON public.envios_correo FROM authenticated;')
+    try {
+      await page.goto('/dashboard/envios-correo')
+      const principal = page.getByRole('main')
+      await expect(principal.getByRole('heading', { level: 1, name: 'Correos programados' })).toBeVisible()
+      await expect(principal.getByText('No pudimos cargar los correos programados', { exact: true })).toBeVisible()
+      await expect(principal.getByText('Volvé a intentarlo en unos minutos.')).toBeVisible()
+      await expect(principal.getByRole('link', { name: 'Reintentar' })).toBeVisible()
+      // Una lectura fallida no se disfraza de lista vacía ni deja filas viejas.
+      await expect(principal.locator('tbody tr')).toHaveCount(0)
+      await expect(page.getByText('No hay más correos programados')).toHaveCount(0)
+      await exigirPantallaSinDetalleTecnico(page, 'error de lectura de correos programados')
+    } finally {
+      sql('GRANT SELECT ON public.envios_correo TO authenticated;')
+    }
+    expect(privilegio(), 'el privilegio se restauró').toBe(true)
+    await page.getByRole('link', { name: 'Reintentar' }).click()
+    await expect(page.locator('tr[data-estado="INCIERTO"]', { hasText: MARCA })).toHaveCount(1)
+  })
 })
 
 test.describe('DIRECTOR autenticado — sin sesión propia (correos programados)', () => {

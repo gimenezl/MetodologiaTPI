@@ -19,7 +19,8 @@ validateRegistry(readdirSync('supabase/tests'))
 const env = { ...process.env, EPT_SUPABASE_WORKDIR: process.cwd(),
   EPT_SUPABASE_DB_CONTAINER: 'supabase_db_ept104', EPT_TEST_SMTP_PORT: '54325',
   EPT_PUERTO_APP: '3101', EPT_BASE_URL: 'http://localhost:3101' }
-const deadline = Date.now() + (mode === 'full' ? 25 : mode === 'db' ? 11 : 7) * 60_000
+// Medido en 5 runs de CI: las suites DB suman 476–665 s (dos a 14 s del límite de 11 min), incluida la matriz de EPT-120 (22–32 s).
+const deadline = Date.now() + (mode === 'full' ? 25 : mode === 'db' ? 13 : 7) * 60_000
 const results = []
 function run(command, args, options = {}) {
   const started = Date.now(), remaining = deadline - started

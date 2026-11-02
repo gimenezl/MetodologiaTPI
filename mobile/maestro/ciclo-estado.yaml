@@ -1,0 +1,182 @@
+appId: org.educarparatransformar.app
+name: Ciclo económico (2/2) - la app refleja la aprobación y el rechazo decididos en la web
+---
+# EPT-119. Dirección ya decidió desde la web: A aprobado (con recibo) y B rechazado (con motivo). La app arranca
+# de cero con la misma cuenta y lee el mismo estado: deuda = B + C, sin cambio por el rechazo.
+- launchApp:
+    clearState: true
+# En iOS `clearState` no borra el llavero: la app puede arrancar con la sesión del padre todavía abierta (run 41272126683),
+# lo que además prueba que la sesión persiste. Se ingresa solo si aparece la pantalla de acceso.
+- extendedWaitUntil:
+    visible: 'Iniciar sesión|Hijos vinculados'
+    timeout: 60000
+- runFlow:
+    when:
+      visible: 'Iniciar sesión'
+    commands:
+      - runFlow: ciclo-correo.yaml
+      - tapOn:
+          id: 'contrasena'
+      - inputText: ${MAESTRO_CICLO_PASSWORD}
+      # En iOS el teclado tapa el botón: se oculta antes de tocarlo. El ingreso viaja por el túnel, así que se espera con plazo.
+      - hideKeyboard
+      - tapOn: 'Ingresar'
+      # iOS ofrece guardar la contraseña con un diálogo del sistema que oculta la app del árbol de accesibilidad: se espera
+      # a cualquiera de los dos y se lo descarta (en inglés o español) antes de exigir la pantalla.
+      - extendedWaitUntil:
+          visible: 'Hijos vinculados|Not Now|Ahora no'
+          timeout: 60000
+      - tapOn:
+          text: 'Not Now|Ahora no'
+          optional: true
+# El aviso «Save Password?» puede aparecer justo aquí y ocultar la pantalla (run 41269332950): si la espera falla, el
+# reintento lo descarta y vuelve a esperar.
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow: ciclo-descartar-guardado.yaml
+      - extendedWaitUntil:
+          visible: 'Hijos vinculados'
+          timeout: 30000
+- runFlow: ciclo-descartar-guardado.yaml
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
+# El aviso del sistema «Save Password?» puede llegar tarde y bloquear esta espera (runs 41246543644 y 41252955570): si falla,
+# el reintento lo descarta y vuelve a esperar. Solo se envuelven esperas idempotentes, nunca toques que cambian el estado.
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow: ciclo-descartar-guardado.yaml
+      - tapOn:
+          id: 'seccion-periodo'
+- tapOn:
+    id: 'periodo-desde'
+- eraseText
+- inputText: ${MAESTRO_CICLO_DESDE}
+- runFlow: ciclo-ocultar-teclado.yaml
+- scrollUntilVisible:
+    element:
+      id: 'periodo-hasta'
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 100
+    timeout: 15000
+- tapOn:
+    id: 'periodo-hasta'
+- eraseText
+- inputText: ${MAESTRO_CICLO_HASTA}
+- runFlow: ciclo-ocultar-teclado.yaml
+- scrollUntilVisible:
+    element:
+      id: 'periodo-consultar'
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 100
+    timeout: 15000
+- tapOn:
+    id: 'periodo-consultar'
+# Estados del mismo pago que decidió Dirección. El orden de las entradas no se asume: se vuelve arriba antes de
+# buscar cada una (rechazado con su motivo, y luego aprobado con su recibo).
+- scrollUntilVisible:
+    element:
+      id: 'periodo-consultar'
+    direction: UP
+    speed: 80
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      # En iOS la insignia se expone como «Estado: Rechazado»: el texto exacto solo coincide en Android.
+      text: '.*Rechazado.*'
+    direction: DOWN
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: '.*Motivo del rechazo: Comprobante no corresponde al pago.*'
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: 'periodo-consultar'
+    direction: UP
+    speed: 80
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: '.*Aprobado.*'
+    direction: DOWN
+    timeout: 20000
+# El recibo es el del pago aprobado.
+- scrollUntilVisible:
+    element:
+      id: 'recibo-descargar'
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 100
+    centerElement: true
+    timeout: 20000
+- tapOn:
+    id: 'recibo-descargar'
+- extendedWaitUntil:
+    # El menú nativo de iOS abrevia el nombre («recibo-7f81…»), por eso no se exige la extensión.
+    visible: '.*recibo-[0-9a-f]{8}.*'
+    timeout: 60000
+- takeScreenshot: ciclo-recibo-menu-nativo
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: 50%, 25%
+          end: 50%, 95%
+          duration: 400
+      - waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: 'recibo-descargar'
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 100
+    centerElement: true
+    timeout: 30000
+# Saldo: el rechazo no reduce la deuda (38.900,25 + 51.000,00 = 89.900,25) y la reserva de B se liberó.
+# Se relanza la app (la sesión persiste) para volver a la tira de pestañas tras el menú nativo del recibo.
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: 'Hijos vinculados'
+    timeout: 60000
+- swipe:
+    from:
+      id: 'pestanas'
+    direction: LEFT
+- tapOn:
+    id: 'seccion-deuda'
+- scrollUntilVisible:
+    element:
+      text: 'Total adeudado'
+    direction: DOWN
+    timeout: 20000
+# «Total adeudado» entra al borde de la pantalla antes que su importe: se baja hasta el importe y recién se lo afirma.
+- scrollUntilVisible:
+    element:
+      text: '.*(ARS.|pesos argentinos.)89\.900,25.*'
+    direction: DOWN
+    timeout: 15000
+- assertVisible: '.*(ARS.|pesos argentinos.)89\.900,25.*'
+- takeScreenshot: ciclo-deuda-final

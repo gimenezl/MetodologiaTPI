@@ -124,6 +124,38 @@ describe('ControladorAutenticacion', () => {
     detener()
   })
 
+  it('al volver a primer plano con un usuario ya autenticado revalida sin pasar por «cargando»', async () => {
+    const { controlador, cliente, estados } = preparar()
+    await controlador.ingresar('a@b.test', 'x')
+    ;(cliente.auth.getSession as jest.Mock).mockImplementation(async () => ({ data: { session: { user: { id: 'usuario-1' } } }, error: null }))
+    estados.length = 0
+    await controlador.revalidar()
+    expect(estados[0]).toEqual({ tipo: 'revalidando', usuarioId: 'usuario-1' })
+    expect(estados).not.toContainEqual({ tipo: 'cargando' })
+    expect(estados.at(-1)).toEqual({ tipo: 'autenticada', usuarioId: 'usuario-1', rol: 'PADRE' })
+  })
+
+  it('al volver a primer plano sin sesión vigente reemplaza la vista de inmediato', async () => {
+    const { controlador, cliente, estados } = preparar()
+    await controlador.ingresar('a@b.test', 'x')
+    ;(cliente.auth.getSession as jest.Mock).mockImplementation(async () => ({ data: { session: null }, error: null }))
+    estados.length = 0
+    await controlador.revalidar()
+    // La vista conservada dura solo hasta saber que no hay sesión: nunca pasa por `autenticada` de nuevo.
+    expect(estados).toEqual([{ tipo: 'revalidando', usuarioId: 'usuario-1' }, { tipo: 'sin_sesion' }])
+  })
+
+  it('al volver a primer plano, un acceso que dejó de estar habilitado reemplaza la vista', async () => {
+    const { controlador, cliente, estados } = preparar()
+    await controlador.ingresar('a@b.test', 'x')
+    ;(cliente.auth.getSession as jest.Mock).mockImplementation(async () => ({ data: { session: { user: { id: 'usuario-1' } } }, error: null }))
+    ;(cliente.rpc as jest.Mock).mockImplementation(async (nombre: string) => ({ data: nombre === 'mi_estado_acceso' ? 'BLOQUEADO' : 'PADRE', error: null }))
+    estados.length = 0
+    await controlador.revalidar()
+    expect(estados.at(-1)).toEqual({ tipo: 'bloqueada' })
+    expect(estados).not.toContainEqual(expect.objectContaining({ tipo: 'autenticada' }))
+  })
+
   it('revalida la sesión de nuevo si cambia mientras getSession está pendiente', async () => {
     const { controlador, cliente, callback, estados } = preparar()
     const sesiones: ((valor: { data: { session: { user: { id: string } } | null }; error: null }) => void)[] = []

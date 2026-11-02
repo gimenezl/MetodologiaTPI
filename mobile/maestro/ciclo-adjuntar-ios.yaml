@@ -1,0 +1,73 @@
+appId: org.educarparatransformar.app
+name: Ciclo económico (iOS) - elegir el comprobante de la galería del simulador
+---
+# Subflujo: la imagen sintética se agrega a la fototeca con `xcrun simctl addmedia` antes de correr Maestro (queda como la
+# más nueva, primera del selector). El selector de fotos es del sistema y en un simulador lento tarda en cargar: en el run
+# 41263277152 mostraba «Loading…» cuando se tocó y el archivo nunca llegó a la app («Enviar comprobante» deshabilitado).
+# Se espera a la grilla, se elige y se comprueba que la app lo recibió; si no, se reabre el selector (reintento acotado).
+- retry:
+    maxRetries: 2
+    commands:
+      # Run 41368935103: tras tocar la foto el selector seguía abierto (captura «justo-tras-tocar-foto») y los
+      # reintentos no encontraban el botón porque el selector tapaba la pantalla. Se cierra un selector que haya
+      # quedado abierto antes de cada intento.
+      - runFlow:
+          when:
+            visible: 'Collections|Colecciones'
+          commands:
+            - tapOn:
+                point: '10%,11%'
+            - waitForAnimationToEnd
+      - scrollUntilVisible:
+          element:
+            text: 'Elegir una imagen de la galería'
+          direction: DOWN
+          timeout: 15000
+      - tapOn: 'Elegir una imagen de la galería'
+      - runFlow:
+          when:
+            visible: '.*Permitir acceso.*|.*Allow Access.*|.*Allow Full Access.*'
+          commands:
+            - tapOn:
+                text: '.*Permitir acceso.*|.*Allow Access.*|.*Allow Full Access.*'
+                optional: true
+      - extendedWaitUntil:
+          visible: '(Photo|Foto), .*'
+          timeout: 90000
+      - waitForAnimationToEnd
+      - takeScreenshot: ciclo-diag-selector-de-fotos
+      - tapOn:
+          text: '(Photo|Foto), .*'
+          index: 0
+      # Runs 41332269346, 41339990478 y 41347800159: tras tocar la foto el selector se cierra y la app no recibe el
+      # archivo, sin mensaje. Se registra el instante siguiente al toque y tras la animación para ver si hay un estado
+      # intermedio (preparación, error) antes de que la pantalla vuelva al formulario.
+      - takeScreenshot: ciclo-diag-justo-tras-tocar-foto
+      - waitForAnimationToEnd
+      # Si el toque sobre el elemento no seleccionó la foto, se toca la primera celda de la grilla (la imagen sintética es
+      # la más nueva): primero sin banner de acceso y, si el selector sigue abierto, con el banner.
+      - runFlow:
+          when:
+            visible: 'Collections|Colecciones'
+          commands:
+            - tapOn:
+                point: '16%,24%'
+            - waitForAnimationToEnd
+            - runFlow:
+                when:
+                  visible: 'Collections|Colecciones'
+                commands:
+                  - tapOn:
+                      point: '16%,43%'
+                  - waitForAnimationToEnd
+      - takeScreenshot: ciclo-diag-tras-elegir-foto
+      - scrollUntilVisible:
+          element:
+            id: 'enviar-comprobante'
+          direction: DOWN
+          timeout: 20000
+      - extendedWaitUntil:
+          visible:
+            id: 'enviar-comprobante'
+            enabled: true
+          timeout: 45000

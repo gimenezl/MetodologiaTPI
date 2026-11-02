@@ -126,23 +126,58 @@ function preparar(plataformaObjetivo) {
   console.log(`Stack descartable Supabase preparado; plataforma=${plataformaObjetivo}; migraciones=${migrationNames}; JWT=120s.`)
 }
 
+
+/** El stack solo se toca si es el de ESTE run (directorio temporal propio, marca de propietario y project_id efímero). */
+function proyectoPropio() {
+  const workdir = process.env.EPT_MOBILE_SUPABASE_WORKDIR
+  const configPath = workdir ? join(workdir, 'supabase', 'config.toml') : ''
+  const directorioPropio = Boolean(workdir) && resolve(workdir) === workdir &&
+    resolve(workdir).startsWith(`${resolve(tmpdir())}${process.platform === 'win32' ? '\\' : '/'}`) &&
+    workdir.split(/[\\/]/u).at(-1)?.startsWith('ept105-supabase-')
+  const marker = workdir ? join(workdir, 'owner.json') : ''
+  const owner = directorioPropio && existsSync(marker) ? JSON.parse(readFileSync(marker, 'utf8')) : {}
+  const esProyectoPropio = directorioPropio && Boolean(process.env.GITHUB_RUN_ID) &&
+    owner.run === process.env.GITHUB_RUN_ID && owner.attempt === process.env.GITHUB_RUN_ATTEMPT && existsSync(configPath) &&
+    /^project_id\s*=\s*"ept105-[a-f0-9]{12}"/mu.test(readFileSync(configPath, 'utf8'))
+  return { workdir, configPath, esProyectoPropio }
+}
+
+/**
+ * EPT-119 (diagnóstico): resumen del log del servicio de autenticación del stack propio, sin cuerpos, cabeceras ni
+ * credenciales. Por línea conserva solo hora, nivel, método, ruta, estado, duración y el mensaje de error, y pasa por
+ * la misma redacción que el resto de los diagnósticos.
+ */
+function registrarAuth(destino) {
+  const { configPath, esProyectoPropio } = proyectoPropio()
+  exigir(esProyectoPropio, 'Solo se registra el stack propio de este run.')
+  const proyecto = /^project_id\s*=\s*"(ept105-[a-f0-9]{12})"/mu.exec(readFileSync(configPath, 'utf8'))?.[1]
+  const contenedor = `supabase_auth_${proyecto}`
+  const r = spawnSync('docker', ['logs', '--since', '40m', contenedor], { encoding: 'utf8', windowsHide: true, maxBuffer: 16 * 1024 * 1024, timeout: 30_000 })
+  const lineas = `${r.stdout ?? ''}\n${r.stderr ?? ''}`.split(/\r?\n/u).flatMap((linea) => {
+    try {
+      const j = JSON.parse(linea)
+      const resumen = [j.time, j.level, j.method, j.path, j.status, j.duration, j.msg ?? j.error]
+        .filter((v) => v !== undefined && v !== null && v !== '').map(String).join(' ')
+      return resumen ? [resumen] : []
+    } catch {
+      return []
+    }
+  })
+  const salida = redactedCliOutput({ stdout: lineas.slice(-1500).join('\n') })
+  mkdirSync(join(destino, '..'), { recursive: true })
+  writeFileSync(destino, `Log de autenticación resumido (exit=${r.status ?? 'sin estado'}; líneas=${lineas.length}).\n${salida}\n`, { mode: 0o600 })
+}
+
 try {
   if (accion === 'start') preparar(plataforma)
   else if (accion === 'stop') {
-    const workdir = process.env.EPT_MOBILE_SUPABASE_WORKDIR
-    const configPath = workdir ? join(workdir, 'supabase', 'config.toml') : ''
-    const directorioPropio = Boolean(workdir) && resolve(workdir) === workdir &&
-      resolve(workdir).startsWith(`${resolve(tmpdir())}${process.platform === 'win32' ? '\\' : '/'}`) &&
-      workdir.split(/[\\/]/u).at(-1)?.startsWith('ept105-supabase-')
-    const marker = workdir ? join(workdir, 'owner.json') : ''
-    const owner = directorioPropio && existsSync(marker) ? JSON.parse(readFileSync(marker, 'utf8')) : {}
-    const esProyectoPropio = directorioPropio && Boolean(process.env.GITHUB_RUN_ID) &&
-      owner.run === process.env.GITHUB_RUN_ID && owner.attempt === process.env.GITHUB_RUN_ATTEMPT && existsSync(configPath) &&
-      /^project_id\s*=\s*"ept105-[a-f0-9]{12}"/mu.test(readFileSync(configPath, 'utf8'))
+    const { workdir, esProyectoPropio } = proyectoPropio()
     if (esProyectoPropio) {
       cli(['stop', '--workdir', workdir, '--no-backup'], { timeout: 60_000 })
     }
     console.log('Stack descartable Supabase detenido.')
+  } else if (accion === 'logs-auth') {
+    registrarAuth(process.argv[3])
   } else if (accion === 'status') {
     const local = entornoDeEstado()
     const url = new URL(local.API_URL ?? '')

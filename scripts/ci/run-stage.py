@@ -13,10 +13,18 @@ import threading
 import time
 
 
-def redact(text, preserve_structure=False):
-    for name, value in sorted(os.environ.items(), key=lambda pair: len(pair[1]), reverse=True):
-        if value and re.search(r"(?:SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL|EMAIL|AUTHORIZATION)(?:$|_)|_URL$|^MAESTRO_RECUPERACION_NUEVA2?$", name, re.I):
-            text = text.replace(value, "[REDACTED]")
+_SENSITIVE_ENV = re.compile(r"(?:SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL|EMAIL|AUTHORIZATION)(?:$|_)|_URL$|^MAESTRO_RECUPERACION_NUEVA2?$", re.I)
+
+
+def sensitive_values():
+    # Computed per call because tests mutate the environment; the sanitizer computes it once per directory instead of
+    # once per line (EPT-121: sanitizing the iOS evidence exceeded its 8 min cap; this cost is the suspected cause).
+    return [value for name, value in sorted(os.environ.items(), key=lambda pair: len(pair[1]), reverse=True) if value and _SENSITIVE_ENV.search(name)]
+
+
+def redact(text, preserve_structure=False, values=None):
+    for value in (sensitive_values() if values is None else values):
+        text = text.replace(value, "[REDACTED]")
     text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
     # CLI table/JSON output can contain newly minted keys absent from the environment.
     text = re.sub(r"(?<![A-Za-z0-9_-])sb_(?:secret|publishable)_[A-Za-z0-9_-]+(?![A-Za-z0-9_-])", "[REDACTED_SUPABASE_KEY]", text)
@@ -83,9 +91,10 @@ def main():
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     if args.sanitize_directory:
+        values = sensitive_values()
         for file in args.sanitize_directory.rglob("*"):
             if file.is_file() and not file.is_symlink() and file.suffix in {".log", ".txt", ".xml", ".yaml", ".yml", ".json"}:
-                file.write_text("\n".join(redact(line, preserve_structure=True) for line in file.read_text(errors="replace").splitlines()) + "\n", encoding="utf-8")
+                file.write_text("\n".join(redact(line, preserve_structure=True, values=values) for line in file.read_text(errors="replace").splitlines()) + "\n", encoding="utf-8")
         return 0
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     try:
