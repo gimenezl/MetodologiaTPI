@@ -256,7 +256,12 @@ test('EPT-102: el workflow exige JS, Android e iOS en el gate', () => {
   }
   // Los jobs nativos no heredan el plan web: usan el plan móvil y corren sobre el SHA del PR.
   assert.match(yml, /mobile-android:\n    name: CI \/ móvil Android\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
-  assert.match(yml, /mobile-ios:\n    name: CI \/ móvil iOS\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u)
+  const iosActivo = /mobile-ios:\n    name: CI \/ móvil iOS\n    needs: plan\n    if: needs\.plan\.outputs\.mobile == 'true'/u
+  const iosProtegido = /mobile-ios:\n    name: CI \/ móvil iOS\n    needs: plan\n    # Temporal: fail closed until the protected iOS tunnel is verified\.\n    if: \$\{\{ false \}\}/u
+  assert.ok(iosActivo.test(yml) || iosProtegido.test(yml), 'iOS debe usar el plan móvil o el freno temporal explícito')
+  if (iosProtegido.test(yml)) {
+    assert.match(yml, /mobile-ios-backend:\n    name: CI \/ backend de prueba para iOS\n    needs: plan\n    # Temporal: fail closed until the protected iOS tunnel is verified\.\n    if: \$\{\{ false \}\}/u)
+  }
   assert.match(yml, /runs-on: macos-26/u)
   const bloqueJob = nombre => yml.slice(yml.indexOf(`  ${nombre}:`)).split(/\n  [a-z-]+:/u)[0]
   const minutos = bloque => Number(/timeout-minutes: (\d+)/u.exec(bloque)?.[1])
