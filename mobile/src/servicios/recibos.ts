@@ -5,7 +5,7 @@ import * as Sharing from "expo-sharing";
 import { entornoDelBundle } from "@/configuracion/entorno";
 import { obtenerSesionDelDispositivo } from "@/servicios/sesion";
 import type { ClienteEPT } from "@/servicios/supabase";
-import { validarBaseUrl } from "@/servicios/transporte-http";
+import { resolverRuta, validarBaseUrl } from "@/servicios/transporte-http";
 
 const MAXIMO = 5 * 1024 * 1024;
 let ocupado = false;
@@ -101,7 +101,7 @@ export async function compartirRecibo(
     const token = sesion.token;
     if (!(await Sharing.isAvailableAsync()))
       throw new Error("Este dispositivo no permite compartir archivos.");
-    const destino = new URL(`/api/recibos/${reciboId}/pdf`, base);
+    const destino = resolverRuta(base, `/api/recibos/${reciboId}/pdf`);
     // expo/fetch implementa error de redirección ANTES de reenviar en Android/iOS.
     const respuesta = await fetchNativo(destino.toString(), {
       headers: { Authorization: `Bearer ${token}` },
