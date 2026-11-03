@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 
 import { PantallaConVolver } from '@/catalogo'
-import { registrarSelector, useDiagnosticoSelector } from './diagnostico-selector'
 
 import {
   MENSAJE_DESCARTE,
@@ -136,12 +135,6 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
     generarClave = generarClaveCarga,
   } = props
 
-  const diagnosticoSelector = useDiagnosticoSelector()
-  useEffect(() => {
-    registrarSelector('montado')
-    return () => registrarSelector('desmontado')
-  }, [])
-
   const [interno, setInterno] = useState<EstadoComprobante>(COMPROBANTE_VACIO)
   const estado = props.estado ?? interno
   const estadoRef = useRef(estado)
@@ -226,16 +219,13 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
       if (enviandoRef.current) return
       const dueno = contextoRef.current
       setAvisoSeleccion(null)
-      registrarSelector('inicio')
       const r = await accion()
-      registrarSelector(r.tipo === 'elegido' || r.tipo === 'cancelado' ? r.tipo : 'otro')
-      if (contextoRef.current !== dueno) { registrarSelector('descartado'); return }
+      if (contextoRef.current !== dueno) return
       switch (r.tipo) {
         case 'elegido':
           setErrores(e => ({ ...e, archivo: undefined }))
           // Un archivo distinto es otro contenido: la clave del intento anterior ya no le corresponde.
           publicar({ archivo: r.archivo, claveCarga: null, fase: 'edicion', mensaje: null })
-          registrarSelector('aplicado')
           break
         case 'cancelado':
           break
@@ -588,7 +578,6 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
   return conVolver(
     <FormularioComprobanteVista
       etiquetaAlumno={etiquetaAlumno}
-      diagnosticoSelector={diagnosticoSelector}
       pago={pagoElegido}
       fecha={estado.fecha}
       importe={estado.importe}

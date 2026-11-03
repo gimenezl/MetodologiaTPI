@@ -103,7 +103,6 @@ export interface ErroresCampos {
 }
 
 export interface FormularioComprobanteVistaProps {
-  diagnosticoSelector?: string | null
   etiquetaAlumno: string
   pago: PagoPendienteDelPadre
   fecha: string
@@ -348,9 +347,6 @@ export function FormularioComprobanteVista(props: FormularioComprobanteVistaProp
       ) : null}
       {props.mensaje ? <Aviso tipo="error" mensaje={props.mensaje} anuncio="alerta" /> : null}
 
-      {props.diagnosticoSelector !== null && props.diagnosticoSelector !== undefined && (
-        <Text testID="diagnostico-selector-ci">{props.diagnosticoSelector}</Text>
-      )}
       <Boton
         etiqueta="Enviar comprobante"
         onPress={props.onEnviar}
