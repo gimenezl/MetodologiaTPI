@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { once } from 'node:events'
+import { readFileSync } from 'node:fs'
 import { capacidad, crearProxy } from './proxy-tunel-ci.mjs'
 
 test('gateway denies direct and forged privileged requests before forwarding', async () => {
@@ -32,4 +33,16 @@ test('gateway denies direct and forged privileged requests before forwarding', a
 test('gateway rejects missing or malformed secret configuration', () => {
   assert.throws(() => capacidad('public-run-data', 'supabase'))
   assert.throws(() => capacidad('1'.repeat(64), 'unknown'))
+})
+
+test('CI runs the external denial and shutdown check before opening fixture tunnels', () => {
+  const workflow = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')
+  const install = workflow.indexOf('- name: Instalar cloudflared 2026.10.1')
+  const check = workflow.indexOf('- name: Verificar denegación externa y cierre de túnel sintético', install)
+  const fixture = workflow.indexOf('- name: Fixture del ciclo económico (iOS)', check)
+  const stage = workflow.slice(check, fixture)
+  assert.ok(install >= 0 && check > install && fixture > check)
+  assert.match(stage, /EPT_TUNNEL_LIVE: '1'/u)
+  assert.match(stage, /node --test mobile\/scripts\/proxy-tunel-live\.test\.mjs/u)
+  assert.doesNotMatch(stage, /continue-on-error|\|\|\s*true/u)
 })

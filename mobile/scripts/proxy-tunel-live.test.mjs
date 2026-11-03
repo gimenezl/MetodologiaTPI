@@ -10,7 +10,7 @@ import { request as httpsRequest } from 'node:https'
 import { once } from 'node:events'
 import { capacidad, crearProxy } from './proxy-tunel-ci.mjs'
 
-test('real tunnel rejects unauthenticated traffic and closes', { skip: process.env.EPT_TUNNEL_LIVE !== '1', timeout: 120_000 }, async () => {
+test('real tunnel rejects unauthenticated traffic and the local process terminates', { skip: process.env.EPT_TUNNEL_LIVE !== '1', timeout: 180_000 }, async () => {
   assert.ok(process.env.EPT_CLOUDFLARED)
   const seed = randomBytes(32).toString('hex')
   let forwarded = 0
@@ -18,7 +18,8 @@ test('real tunnel rejects unauthenticated traffic and closes', { skip: process.e
   await once(target, 'listening')
   const proxy = crearProxy({ seed, nombre: 'supabase', targetPort: target.address().port }).listen(0, '127.0.0.1')
   await once(proxy, 'listening')
-  const child = spawn(process.env.EPT_CLOUDFLARED, ['tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${proxy.address().port}`], { stdio: ['ignore', 'pipe', 'pipe'] })
+  // The supervisor remains responsible for stopping cloudflared if this test is interrupted.
+  const child = spawn('timeout', ['--signal=TERM', '--kill-after=5s', '160s', process.env.EPT_CLOUDFLARED, 'tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${proxy.address().port}`], { stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   let logs = ''
   let url
   let fetchRetry
@@ -78,9 +79,21 @@ test('real tunnel rejects unauthenticated traffic and closes', { skip: process.e
     assert.equal(await authorized.text(), 'synthetic-only')
     assert.equal(forwarded, 1)
   } finally {
-    child.kill('SIGTERM')
+    const signalGroup = signal => {
+      try { process.kill(-child.pid, signal) } catch (error) { if (error.code !== 'ESRCH') throw error }
+    }
+    const groupExists = () => {
+      try { process.kill(-child.pid, 0); return true } catch (error) {
+        if (error.code === 'ESRCH') return false
+        throw error
+      }
+    }
+    if (child.exitCode === null && child.signalCode === null) signalGroup('SIGTERM')
     if (child.exitCode === null && child.signalCode === null) await Promise.race([once(child, 'exit'), new Promise(r => setTimeout(r, 5_000))])
-    if (child.exitCode === null && child.signalCode === null) { child.kill('SIGKILL'); await once(child, 'exit') }
+    if (groupExists()) signalGroup('SIGKILL')
+    const deadline = Date.now() + 5_000
+    while (groupExists() && Date.now() < deadline) await new Promise(r => setTimeout(r, 100))
+    const groupClosed = !groupExists()
     let stillAvailable = false
     if (url) {
       try {
@@ -89,6 +102,8 @@ test('real tunnel rejects unauthenticated traffic and closes', { skip: process.e
       } catch { /* inaccessible after shutdown */ }
     }
     await Promise.all([new Promise(r => proxy.close(r)), new Promise(r => target.close(r))])
-    assert.equal(stillAvailable, false, 'The disposable tunnel still accepts requests after shutdown.')
+    assert.equal(groupClosed, true, 'The disposable tunnel process group did not terminate.')
+    // Failure to reach an endpoint cannot prove global closure; process termination is the local evidence.
+    assert.equal(stillAvailable, false, 'The disposable tunnel still accepts requests after local shutdown.')
   }
 })

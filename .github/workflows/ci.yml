@@ -331,6 +331,10 @@ jobs:
           echo "3bfc539f45d2620c71debb7a86be0efa737ed5ccbad9eb85c787116900e5c586  $RUNNER_TEMP/cloudflared" | sha256sum -c -
           chmod 0700 "$RUNNER_TEMP/cloudflared"
           echo "EPT_CLOUDFLARED=$RUNNER_TEMP/cloudflared" >> "$GITHUB_ENV"
+      - name: Verificar denegación externa y cierre de túnel sintético
+        env:
+          EPT_TUNNEL_LIVE: '1'
+        run: node --test mobile/scripts/proxy-tunel-live.test.mjs
       - name: Fixture del ciclo económico (iOS)
         run: python3 scripts/ci/run-stage.py --stage ciclo-preparar --seconds 90 -- node mobile/scripts/ciclo-economico.mjs preparar ios
       - name: Abrir túneles efímeros
