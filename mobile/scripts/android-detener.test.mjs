@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { detenerAppAndroid } from './android-detener.mjs'
+import { readFileSync } from 'node:fs'
 
 const encabezado = 'ACTIVITY MANAGER ACTIVITIES (dumpsys activity activities)'
 const resultado = (status = 0, stdout = '') => ({ status, stdout })
@@ -21,6 +22,24 @@ test('actividad retenida bloquea aunque pidof ya esté vacío; converge solo al 
     return resultado()
   } })
   assert.equal(observaciones, 2)
+})
+test('tarea en eliminación bloquea aun sin proceso ni ActivityRecord', async () => {
+  let observaciones = 0
+  await detenerAppAndroid({ esperar: async () => {}, ejecutar: (args) => {
+    if (args.includes('pidof')) return resultado(1)
+    if (args.includes('dumpsys')) return resultado(0, encabezado + (++observaciones === 1 ? '\nTask{c2b36bf #20 A=10192:org.educarparatransformar.app}' : ''))
+    return resultado()
+  } })
+  assert.equal(observaciones, 2)
+})
+test('recuperación observa la detención antes del clearState de Maestro', () => {
+  const script = readFileSync(new URL('./recuperacion-android.sh', import.meta.url), 'utf8')
+  const flow = readFileSync(new URL('../maestro/recuperacion-solicitud.yaml', import.meta.url), 'utf8')
+  const stop = script.indexOf('stage android-stop-recuperacion-solicitud 20 node mobile/scripts/android-detener.mjs')
+  const start = script.indexOf('stage android-maestro-recuperacion-solicitud 150 maestro test')
+  assert.ok(stop >= 0 && start > stop)
+  assert.match(flow, /launchApp:\s*\n\s*clearState: true/u)
+  assert.match(flow, /assertVisible: 'Iniciar sesión'/u)
 })
 test('estado retenido agota plazo y falla cerrado sin repetir force-stop', async () => {
   let tiempo = 0, detenciones = 0

@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url'
 
 const APP = 'org.educarparatransformar.app'
 
-/** No relanza: espera la desaparición observada de proceso y actividad antes de pm clear. */
+/** No relanza: espera la desaparición observada de proceso, actividad y tarea antes de pm clear. */
 export async function detenerAppAndroid({ ejecutar = (args) => spawnSync('adb', args, { encoding: 'utf8', timeout: 4000 }), ahora = () => performance.now(), esperar = () => pausa(100), limiteMs = 15000 } = {}) {
   const exigir = (args, permitidos = [0]) => {
     const resultado = ejecutar(args)
@@ -17,11 +17,12 @@ export async function detenerAppAndroid({ ejecutar = (args) => spawnSync('adb', 
     const proceso = exigir(['shell', 'pidof', APP], [0, 1])
     const actividad = exigir(['shell', 'dumpsys', 'activity', 'activities']).stdout ?? ''
     if (!actividad.includes('ACTIVITY MANAGER ACTIVITIES')) throw new Error('Diagnóstico de actividades Android no disponible')
-    const activa = actividad.split(/\r?\n/u).some((linea) => linea.includes('ActivityRecord{') && linea.includes(APP))
-    if (proceso.status === 1 && !proceso.stdout?.trim() && !activa) return
+    const retenida = actividad.split(/\r?\n/u).some((linea) =>
+      (linea.includes('ActivityRecord{') || linea.includes('Task{')) && linea.includes(APP))
+    if (proceso.status === 1 && !proceso.stdout?.trim() && !retenida) return
     await esperar()
   } while (ahora() < limite)
-  throw new Error('La actividad o el proceso Android siguen presentes; no se inicia otro flujo')
+  throw new Error('La actividad, tarea o proceso Android siguen presentes; no se inicia otro flujo')
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
