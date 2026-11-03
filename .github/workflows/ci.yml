@@ -435,6 +435,7 @@ jobs:
       CI: '1'
       EPT_MOBILE_RECIBOS_NATIVE_QA: '1'
       EPT_CICLO_IOS: '1'
+      EXPO_PUBLIC_DIAGNOSTICO_SELECTOR: '1'
       DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

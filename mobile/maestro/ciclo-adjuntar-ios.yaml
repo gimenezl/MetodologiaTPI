@@ -5,6 +5,14 @@ name: Ciclo económico (iOS) - elegir el comprobante de la galería del simulado
 # más nueva, primera del selector). El selector de fotos es del sistema y en un simulador lento tarda en cargar: en el run
 # 41263277152 mostraba «Loading…» cuando se tocó y el archivo nunca llegó a la app («Enviar comprobante» deshabilitado).
 # Se espera a la grilla, se elige y se comprueba que la app lo recibió; si no, se reabre el selector (reintento acotado).
+- scrollUntilVisible:
+    element:
+      id: 'diagnostico-selector-ci'
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: 'diagnostico-selector-ci'
+    text: '(^|.*,)(montado)(,.*|$)'
 - retry:
     maxRetries: 2
     commands:
@@ -24,7 +32,7 @@ name: Ciclo económico (iOS) - elegir el comprobante de la galería del simulado
       - scrollUntilVisible:
           element:
             text: 'Elegir una imagen de la galería'
-          direction: DOWN
+          direction: UP
           timeout: 15000
       - tapOn: 'Elegir una imagen de la galería'
       - runFlow: ciclo-descartar-guardado.yaml
@@ -64,6 +72,11 @@ name: Ciclo económico (iOS) - elegir el comprobante de la galería del simulado
                   - tapOn:
                       point: '16%,43%'
                   - waitForAnimationToEnd
+      - scrollUntilVisible:
+          element:
+            id: 'diagnostico-selector-ci'
+          direction: DOWN
+          timeout: 15000
       - takeScreenshot: ciclo-diag-tras-elegir-foto
       - scrollUntilVisible:
           element:
