@@ -17,6 +17,7 @@ export async function detenerAppAndroid({ ejecutar = (args) => spawnSync('adb', 
     const proceso = exigir(['shell', 'pidof', APP], [0, 1])
     const actividad = exigir(['shell', 'dumpsys', 'activity', 'activities']).stdout ?? ''
     if (!actividad.includes('ACTIVITY MANAGER ACTIVITIES')) throw new Error('Diagnóstico de actividades Android no disponible')
+    // Una Task sin ActivityRecord puede permanecer en Recents; su mera presencia no prueba una eliminación pendiente.
     const activa = actividad.split(/\r?\n/u).some((linea) => linea.includes('ActivityRecord{') && linea.includes(APP))
     if (proceso.status === 1 && !proceso.stdout?.trim() && !activa) return
     await esperar()

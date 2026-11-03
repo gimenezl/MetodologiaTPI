@@ -10,11 +10,17 @@ name: Ciclo económico - pagar un ítem y cargar su comprobante
     direction: UP
     timeout: 15000
 - tapOn: 'Pagar ítems'
-- scrollUntilVisible:
-    element:
-      id: 'item-${CICLO_ITEM}'
-    direction: DOWN
-    timeout: 20000
+# El diálogo nativo puede aparecer después de abrir la selección y cubrir la pantalla. La búsqueda es idempotente;
+# se descarta el diálogo en cada intento, sin repetir el toque que cambia la selección.
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow: ciclo-descartar-guardado.yaml
+      - scrollUntilVisible:
+          element:
+            id: 'item-${CICLO_ITEM}'
+          direction: DOWN
+          timeout: 20000
 - tapOn:
     id: 'item-${CICLO_ITEM}'
 - runFlow: ciclo-descartar-guardado.yaml

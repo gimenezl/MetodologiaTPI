@@ -5,6 +5,12 @@ name: Ciclo económico (1/2) - padre consulta cuotas, registra dos pagos y carga
 # determinísticos: los fija ciclo-economico.mjs `preparar` y llegan por MAESTRO_CICLO_*.
 - launchApp:
     clearState: true
+# El arranque en frío puede seguir mostrando la pantalla nativa después de que launchApp retorna.
+# Esperar el campo real no sustituye el ingreso ni las comprobaciones del ciclo.
+- extendedWaitUntil:
+    visible:
+      id: 'correo'
+    timeout: 60000
 - runFlow: ciclo-correo.yaml
 - tapOn:
     id: 'contrasena'

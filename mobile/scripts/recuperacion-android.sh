@@ -9,6 +9,8 @@ set -euo pipefail
 SALIDA="${1:?directorio de evidencia requerido}"
 stage() { python3 scripts/ci/run-stage.py --stage "$1" --seconds "$2" -- "${@:3}"; }
 
+# No hacer pm clear desde Maestro mientras la tarea del flujo anterior aún se destruye.
+stage android-stop-recuperacion-solicitud 20 node mobile/scripts/android-detener.mjs
 stage android-maestro-recuperacion-solicitud 150 maestro test --format junit --output "$SALIDA/maestro-recuperacion-solicitud.xml" \
   --test-output-dir "$SALIDA/maestro-recuperacion-solicitud" mobile/maestro/recuperacion-solicitud.yaml
 
