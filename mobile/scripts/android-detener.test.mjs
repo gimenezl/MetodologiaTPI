@@ -23,11 +23,20 @@ test('actividad retenida bloquea aunque pidof ya esté vacío; converge solo al 
   } })
   assert.equal(observaciones, 2)
 })
-test('tarea en eliminación bloquea aun sin proceso ni ActivityRecord', async () => {
+test('una tarea retenida en Recents no bloquea cuando ya no tiene proceso ni actividad', async () => {
   let observaciones = 0
   await detenerAppAndroid({ esperar: async () => {}, ejecutar: (args) => {
     if (args.includes('pidof')) return resultado(1)
-    if (args.includes('dumpsys')) return resultado(0, encabezado + (++observaciones === 1 ? '\nTask{c2b36bf #20 A=10192:org.educarparatransformar.app}' : ''))
+    if (args.includes('dumpsys')) { observaciones++; return resultado(0, `${encabezado}\nTask{c2b36bf #20 A=10192:org.educarparatransformar.app}`) }
+    return resultado()
+  } })
+  assert.equal(observaciones, 1)
+})
+test('tarea que aún contiene la actividad sí bloquea hasta que desaparece', async () => {
+  let observaciones = 0
+  await detenerAppAndroid({ esperar: async () => {}, ejecutar: (args) => {
+    if (args.includes('pidof')) return resultado(1)
+    if (args.includes('dumpsys')) return resultado(0, `${encabezado}\nTask{c2b36bf #20 A=10192:org.educarparatransformar.app}${++observaciones === 1 ? '\nActivityRecord{org.educarparatransformar.app/.MainActivity}' : ''}`)
     return resultado()
   } })
   assert.equal(observaciones, 2)
