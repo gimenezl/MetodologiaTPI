@@ -193,25 +193,6 @@ async function elegirArchivo() {
 }
 
 describe('ComprobanteContenedor', () => {
-  it('el diagnóstico CI informa cancelación sin incluir datos del archivo o usuario', async () => {
-    const anterior = process.env.EXPO_PUBLIC_EPT_CI_SELECTOR_DIAGNOSTICO
-    process.env.EXPO_PUBLIC_EPT_CI_SELECTOR_DIAGNOSTICO = '1'
-    const salida = jest.spyOn(console, 'info').mockImplementation(() => {})
-    try {
-      const mundo = crearMundo()
-      mundo.seleccion.siguiente = { tipo: 'cancelado' }
-      await abrirFormulario(mundo)
-      await fireEvent.press(screen.getByTestId('elegir-imagen'))
-      await waitFor(() => expect(salida).toHaveBeenCalledWith('EPT_CI_SELECTOR:cancelado'))
-      expect(salida).toHaveBeenCalledWith('EPT_CI_SELECTOR:inicio')
-      expect(salida).not.toHaveBeenCalledWith('EPT_CI_SELECTOR:aplicado')
-      expect(screen.queryByTestId('archivo-elegido')).toBeNull()
-    } finally {
-      if (anterior === undefined) delete process.env.EXPO_PUBLIC_EPT_CI_SELECTOR_DIAGNOSTICO
-      else process.env.EXPO_PUBLIC_EPT_CI_SELECTOR_DIAGNOSTICO = anterior
-      salida.mockRestore()
-    }
-  })
   it('lista los pagos pendientes del padre y no ofrece nada si no hay ninguno', async () => {
     const vacio = crearMundo({ pagos: [] })
     await render(

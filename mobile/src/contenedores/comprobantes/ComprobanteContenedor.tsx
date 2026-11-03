@@ -10,7 +10,6 @@ import {
   validarNumeroOperacion,
 } from '@/compartido/comprobantes-contrato'
 import type { AlmacenamientoSeguro } from '@/servicios/almacenamiento-seguro'
-import { trazarSelectorCI } from '@/servicios/diagnostico-selector-ci'
 import {
   descartarCargaPendiente,
   guardarCargaPendiente,
@@ -131,10 +130,6 @@ const MENSAJE_SUBIDA = 'No pudimos subir el archivo. Revisá tu conexión e inte
  *  - una respuesta atrasada nunca se aplica a otro hijo ni a otra cuenta.
  */
 export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactElement {
-  useEffect(() => {
-    trazarSelectorCI('montado')
-    return () => trazarSelectorCI('desmontado')
-  }, [])
   const {
     cliente, usuarioId, alumnoId, etiquetaAlumno, almacenamiento, transporte, selector, subir, onVolver,
     generarClave = generarClaveCarga,
@@ -224,16 +219,10 @@ export function ComprobanteContenedor(props: ComprobanteContenedorProps): ReactE
       if (enviandoRef.current) return
       const dueno = contextoRef.current
       setAvisoSeleccion(null)
-      trazarSelectorCI('inicio')
       const r = await accion()
-      trazarSelectorCI(r.tipo)
-      if (contextoRef.current !== dueno) {
-        trazarSelectorCI('descartado-contexto')
-        return
-      }
+      if (contextoRef.current !== dueno) return
       switch (r.tipo) {
         case 'elegido':
-          trazarSelectorCI('aplicado')
           setErrores(e => ({ ...e, archivo: undefined }))
           // Un archivo distinto es otro contenido: la clave del intento anterior ya no le corresponde.
           publicar({ archivo: r.archivo, claveCarga: null, fase: 'edicion', mensaje: null })
