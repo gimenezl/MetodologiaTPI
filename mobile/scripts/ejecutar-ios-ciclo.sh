@@ -24,6 +24,10 @@ echo "Simulador del ciclo: $UDID" | tee "$SALIDA/ios-simulador-ciclo.txt"
 
 finalizar() {
   resultado=$?
+  if [ -n "${CAPTURA_SELECTOR_PID:-}" ]; then
+    kill -TERM "$CAPTURA_SELECTOR_PID" 2>/dev/null || true
+    wait "$CAPTURA_SELECTOR_PID" || resultado=1
+  fi
   node mobile/scripts/ios-simulador.mjs limpiar || resultado=1
   exit "$resultado"
 }
@@ -47,6 +51,10 @@ ARCHIVOS="$(mktemp -d)"
 node mobile/scripts/archivos-prueba.mjs "$ARCHIVOS"
 xcrun simctl addmedia "$UDID" "$ARCHIVOS/comprobante-ci.png"
 
+# Capturar solo marcadores explícitamente autorizados, nunca líneas completas del log.
+node mobile/scripts/ios-captura-selector.mjs "$UDID" &
+CAPTURA_SELECTOR_PID=$!
+
 set +e
 # El driver XCUITest de Maestro a veces no arranca a tiempo («driver not ready»). Solo esa firma, que ocurre ANTES de
 # ejecutar ningún paso, se reintenta una vez; el fallo de un paso del flujo nunca se reintenta.
@@ -69,6 +77,14 @@ correr_maestro() {
 # Límite total por flujo: un flujo que no termina se corta con su evidencia en vez de consumir el step entero.
 EPT_MAESTRO_TOTAL_S=1080 correr_maestro ciclo-pago mobile/maestro/ciclo-pago.yaml
 estado=$?
+kill -TERM "$CAPTURA_SELECTOR_PID" 2>/dev/null
+wait "$CAPTURA_SELECTOR_PID"
+estado_captura=$?
+CAPTURA_SELECTOR_PID=''
+if [ "$estado_captura" -ne 0 ] || ! node -e 'const s=require(process.argv[1]); if (!s.cerrado || s.error || s.signal !== "SIGTERM") process.exit(1)' "$SALIDA/selector-ci-estado.json" || ! grep -qx 'EPT_CI_SELECTOR:montado' "$SALIDA/selector-ci.log"; then
+  echo 'Diagnóstico de selector no verificable: falta el control positivo de captura.'
+  estado=1
+fi
 if [ "$estado" -eq 0 ]; then
   # Dirección decide en la web (job Linux); se espera al estado real del pago, sin esperas fijas.
   node mobile/scripts/ciclo-espera-remota.mjs ios
