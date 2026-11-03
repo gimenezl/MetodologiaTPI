@@ -9,6 +9,7 @@ import { createServer } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { once } from 'node:events'
 import { capacidad, crearProxy } from './proxy-tunel-ci.mjs'
+import { describeTunnelFailure } from './tunel-error-seguro.mjs'
 
 test('real tunnel rejects unauthenticated traffic and the local process terminates', { skip: process.env.EPT_TUNNEL_LIVE !== '1', timeout: 180_000 }, async () => {
   assert.ok(process.env.EPT_CLOUDFLARED)
@@ -35,41 +36,42 @@ test('real tunnel rejects unauthenticated traffic and the local process terminat
     assert.notEqual(new URL(url).hostname, 'api.trycloudflare.com', 'The log did not contain a generated tunnel hostname.')
     fetchRetry = async (path, retryMs = 30_000) => {
       const end = Date.now() + retryMs
-      let code = 'unknown'
-      let dnsStatus = 'unavailable'
+      let direct = null
+      let dns = 'unavailable'
+      let fallback = null
       while (Date.now() < end) {
         try { return await fetch(`${url}${path}`, { signal: AbortSignal.timeout(3_000) }) } catch (error) {
           const candidate = error?.cause?.code
-          if (typeof candidate === 'string' && /^[A-Z_]{1,30}$/u.test(candidate)) code = candidate
+          direct = error
           if (candidate === 'ENOTFOUND') {
             // Some Docker environments block wildcard DNS. Resolve through a
             // public DNS-over-HTTPS resolver without logging the tunnel name.
             try {
               const host = new URL(url).hostname
-              const dns = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=A`, {
+              const dnsResponse = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=A`, {
                 headers: { accept: 'application/dns-json' }, signal: AbortSignal.timeout(3_000),
               })
-              const result = await dns.json()
-              dnsStatus = `status-${Number(result.Status)}-addresses-${result.Answer?.filter(record => record.type === 1).length ?? 0}`
+              const result = await dnsResponse.json()
+              dns = result.Answer?.some(record => record.type === 1) ? 'resolved' : 'no_address'
               const address = result.Answer?.find(record => record.type === 1)?.data
               if (address && /^\d{1,3}(?:\.\d{1,3}){3}$/u.test(address)) {
-                return await new Promise((resolve, reject) => {
+                try { return await new Promise((resolve, reject) => {
                   const req = httpsRequest(`${url}${path}`, { lookup: (_host, _opts, callback) => callback(null, address, 4), timeout: 3_000 }, res => {
                     const chunks = []
                     res.on('data', chunk => chunks.push(chunk))
                     res.on('end', () => resolve({ status: res.statusCode, text: async () => Buffer.concat(chunks).toString('utf8') }))
                   })
-                  req.on('timeout', () => req.destroy())
+                  req.on('timeout', () => req.destroy(Object.assign(new Error('HTTPS timeout'), { code: 'ETIMEDOUT' })))
                   req.on('error', reject)
                   req.end()
-                })
+                }) } catch (error) { fallback = error }
               }
-            } catch { /* retry without disclosing hostname */ }
+            } catch { dns = 'error' }
           }
           await new Promise(r => setTimeout(r, 500))
         }
       }
-      throw new Error(`The disposable tunnel did not respond (${code}; ${dnsStatus}).`)
+      throw new Error(`The disposable tunnel did not respond (${describeTunnelFailure({ direct, dns, fallback })}).`)
     }
     const denied = await fetchRetry('/rest/v1/synthetic')
     assert.equal(denied.status, 403)
