@@ -15,15 +15,16 @@ intentó levantar Supabase en macOS con Colima/QEMU y luego con binarios nativos
  │ Supabase local aislado (project_id aleatorio, JWT 120 s)  │        │ prebuild Expo (sin backend)           │
  │ Next (next dev) con las claves SOLO en su entorno         │        │ espera el apretón de manos             │
  │ Chromium: Dirección decide en la web real                 │ HTTPS  │ build iOS con las URL públicas         │
- │ cloudflared ×2 (54321 y 3000) ────────────────────────────┼───────▶│ simulador iPhone + app nativa real     │
+  │ proxy por capacidad + cloudflared ×2 ────────────────────┼───────▶│ simulador iPhone + app nativa real     │
  │ ciclo-economico.mjs: preparar / decidir / verificar       │        │ Maestro: ciclo-pago → espera → estado  │
  └──────────────────── artefacto ios-apreton ────────────────┴────────┴──── artefacto ios-fin ◀───────────────┘
 ```
 
 * **Android** no usa túnel: el emulador y el backend viven en el mismo job Linux (`10.0.2.2`); el ciclo corre allí
   con su propio stack y namespace (`EPT_CICLO_CLAVE` con sufijo `-android`).
-* **Coordinación entre jobs iOS.** El job Linux publica `ios-apreton` (URL de los dos túneles, clave anónima y rango de
-  períodos). El job macOS lo espera, compila la app con esas URL (Expo las incrusta en el bundle) y, al terminar,
+* **Coordinación entre jobs iOS.** El job macOS publica una clave pública efímera en un artifact del mismo run. Linux
+  cifra para esa clave las URL, las capacidades, la clave anónima y la semilla aleatoria de la fixture; solo publica el
+  ciphertext. El job macOS lo descifra, compila la app con esas URL (Expo las incrusta en el bundle) y, al terminar,
   sube `ios-fin`; el backend no se destruye hasta verlo. Entre ambos, la coordinación real es el **estado del backend**:
   el simulador registra dos pagos con comprobante, Dirección los decide en la web y la app espera (sin esperas fijas) a
   ver `APROBADO` y `RECHAZADO` con la sesión real del padre.
@@ -34,31 +35,22 @@ intentó levantar Supabase en macOS con Colima/QEMU y luego con binarios nativos
 |---|---|
 | URL aleatoria | Túneles rápidos de Cloudflare (`*.trycloudflare.com`), efímeros y sin cuenta ni configuración persistente. |
 | Binario verificado | `cloudflared 2026.10.1` fijado por versión y SHA-256 (`sha256sum -c -`, resumen publicado por GitHub para ese recurso). |
-| Superficie mínima | Solo el API de Supabase local (54321) y el servidor Next (3000). Sin Studio, sin base de datos expuesta. |
+| Acceso al túnel | Los túneles apuntan a proxies loopback, no directamente a Supabase ni a Next. Cada proxy exige una capacidad independiente de 256 bits antes de reenviar solicitudes. |
 | Sin `service_role` | No viaja en el apretón de manos ni llega a la app (`entorno.ts` rechaza claves privilegiadas). El script del túnel no la lee; Next la recibe solo en su entorno local. El apretón de manos exige que la clave sea `role: anon`. |
 | Datos sintéticos | Cuentas `@ept119.invalid`, importes fijos, sin datos ni comprobantes reales. |
-| Duración | Minutos; el stack, el servidor y los túneles se detienen con `if: always()`. |
+| Duración | `timeout` limita los procesos a 50 minutos; el cleanup comprueba los grupos y la evidencia iOS que incorpora capacidades solo se publica después de confirmar el cierre. La cancelación y la infraestructura del runner requieren verificación real. |
 | Logs | El host del túnel se enmascara (`::add-mask::`); los registros del proceso del túnel quedan fuera de los artefactos y los diagnósticos se sanean con `run-stage.py --sanitize-directory`. |
 | Producto sin debilitar | La app usa HTTPS normal: no se habilita ATS ni cleartext, no se tocan Bearer, cookies, CSRF ni la validación de destinos. |
 
 ### Límite declarado (honesto)
 
-El repositorio es **público**: los artefactos `ios-apreton` y `ios-fin` los puede descargar cualquier cuenta de GitHub
-mientras dura el run. Por eso el apretón de manos solo contiene URL públicas y la clave anónima, y las cuentas
-sintéticas se derivan de `EPT_CICLO_CLAVE` (run + intento + SHA, datos públicos): **no son secretas**. La
-barrera real es que el backend es descartable, sintético y vive minutos; la autorización de los datos sigue siendo RLS,
-que es exactamente lo que EPT-120 prueba. Quien conozca la URL durante esa ventana tiene el mismo alcance que cualquier
-cliente de un proyecto Supabase con la clave anónima pública.
-
-**Alcance real, revisado de forma independiente.** Como las credenciales se pueden calcular a partir de datos públicos,
-quien obtenga las URLs del túnel durante la ventana (hasta ≈ 55 min) puede iniciar sesión como la Dirección sintética
-del stack y llegar a las rutas del servidor web, que corre con la clave de servicio de **ese stack descartable** (sin
-datos reales; no hay secretos del repositorio en el job). El secreto efectivo es la URL aleatoria del túnel, que viaja
-en el mismo artefacto: mezclar más entropía por ese canal no eleva la barrera. Endurecer de verdad exige un secreto
-del repositorio (no existe hoy ninguno; en PR de forks quedaría vacío) o un canal entre jobs que no sea un artefacto.
-Es un riesgo aceptado para esta campaña por la autorización del túnel efímero con datos sintéticos; **la decisión de
-mantenerlo o endurecerlo es del dueño del repositorio**. Se anclaron las validaciones del destino del túnel en el job de
-macOS (`tunel-efimero.mjs entorno`).
+El repositorio es **público** y sus artifacts pueden descargarse. Los artifacts v4 del mismo run son inmutables, pero
+la autenticidad de la clave pública depende de la integridad y permisos de los jobs del run: el cifrado por sí solo no
+autentica su origen. Las capacidades se incrustan en el build iOS de prueba y no son credenciales de producción; ese
+bundle debe mantenerse privado mientras el túnel exista. Las claves locales de Supabase no son una barrera adecuada:
+el proxy exige su capacidad incluso si una solicitud aporta una credencial privilegiada conocida. Cloudflare y los
+propios runners forman parte de la frontera de confianza. No se debe presentar el diseño como verificado hasta probar
+el recorrido nativo y los casos de cancelación en CI con esta versión exacta.
 
 ## Fixtures y namespaces
 

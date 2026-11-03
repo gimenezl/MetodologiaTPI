@@ -11,6 +11,7 @@ import type { ClienteEPT } from "@/servicios/supabase";
 const mockEscribir = jest.fn(),
   mockBorrar = jest.fn(),
   mockCrear = jest.fn();
+let mockApiBaseUrl = "https://api.example.org";
 jest.mock("expo/fetch", () => ({ fetch: jest.fn() }));
 jest.mock("expo-sharing", () => ({
   isAvailableAsync: jest.fn(async () => true),
@@ -19,7 +20,7 @@ jest.mock("expo-sharing", () => ({
 jest.mock("@/configuracion/entorno", () => ({
   entornoDelBundle: () => ({
     ok: true,
-    entorno: { apiBaseUrl: "https://api.example.org" },
+    entorno: { apiBaseUrl: mockApiBaseUrl },
   }),
 }));
 jest.mock("expo-file-system", () => ({
@@ -98,6 +99,7 @@ const cliente = (
   }) as unknown as ClienteEPT;
 beforeEach(() => {
   jest.clearAllMocks();
+  mockApiBaseUrl = "https://api.example.org";
   jest.mocked(fetchNativo).mockResolvedValue(respuesta() as never);
   jest.mocked(Sharing.shareAsync).mockResolvedValue();
   jest.mocked(Sharing.isAvailableAsync).mockResolvedValue(true);
@@ -147,6 +149,14 @@ test("usa expo/fetch con rechazo nativo de redirects, sin cookies; comparte y li
     expect.objectContaining({ mimeType: "application/pdf" }),
   );
   expect(mockBorrar).toHaveBeenCalledTimes(2);
+});
+test("conserva el prefijo de la URL base al descargar un recibo", async () => {
+  mockApiBaseUrl = "https://api.example.org/ci/test-capability";
+  await compartirRecibo(cliente(), id, new AbortController().signal, () => {});
+  expect(fetchNativo).toHaveBeenCalledWith(
+    `https://api.example.org/ci/test-capability/api/recibos/${id}/pdf`,
+    expect.objectContaining({ redirect: "error", credentials: "omit" }),
+  );
 });
 test("cambio de cuenta o logout antes de compartir descarta bytes", async () => {
   await expect(
