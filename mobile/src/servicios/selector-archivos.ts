@@ -3,6 +3,8 @@ import { File } from 'expo-file-system'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
 
+import { registrarSelector } from '@/contenedores/comprobantes/diagnostico-selector'
+
 import {
   MENSAJE_ARCHIVO,
   TAMANO_MAXIMO_BYTES,
@@ -107,7 +109,9 @@ async function inspeccionar(uri: string, tamanoDeclarado: number | null): Promis
   const tamano = archivo.size ?? tamanoDeclarado ?? 0
   if (tamano === 0) return { tamano, firma: null, demasiado: false }
   if (tamano > LECTURA_MAXIMA_BYTES) return { tamano, firma: null, demasiado: true }
+  registrarSelector('leer_inicio')
   const firma = tipoPorFirma(new Uint8Array(await archivo.arrayBuffer()).subarray(0, 16))
+  registrarSelector('leer_retorno')
   return { tamano, firma, demasiado: false }
 }
 
@@ -116,7 +120,9 @@ async function reducirImagen(uri: string, ancho?: number | null, alto?: number |
   let w = ancho ?? 0
   let h = alto ?? 0
   if (!w || !h) {
+    registrarSelector('medida_inicio')
     const medida = await ImageManipulator.manipulate(uri).renderAsync()
+    registrarSelector('medida_retorno')
     w = medida.width
     h = medida.height
   }
@@ -124,8 +130,12 @@ async function reducirImagen(uri: string, ancho?: number | null, alto?: number |
   if (Math.max(w, h) > LADO_MAXIMO_PX) {
     contexto.resize(w >= h ? { width: LADO_MAXIMO_PX } : { height: LADO_MAXIMO_PX })
   }
+  registrarSelector('render_inicio')
   const imagen = await contexto.renderAsync()
+  registrarSelector('render_retorno')
+  registrarSelector('guardar_inicio')
   const resultado = await imagen.saveAsync({ compress: CALIDAD_JPEG, format: SaveFormat.JPEG })
+  registrarSelector('guardar_retorno')
   return resultado.uri
 }
 
@@ -266,7 +276,10 @@ export function crearSelectorArchivos(): SelectorArchivos {
     },
     async elegirImagen() {
       try {
-        return await desdeImagePicker(await ImagePicker.launchImageLibraryAsync(OPCIONES_IMAGEN))
+        registrarSelector('picker_inicio')
+        const resultado = await ImagePicker.launchImageLibraryAsync(OPCIONES_IMAGEN)
+        registrarSelector('picker_retorno')
+        return await desdeImagePicker(resultado)
       } catch {
         return { tipo: 'error' }
       }
