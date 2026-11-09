@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 
-import { borde, color, espacio, estiloDeTexto, radio, tactil } from '@/tokens'
+import { borde, color, espacio, estiloDeTexto, tactil } from '@/tokens'
 
 export type VarianteBoton = 'primario' | 'secundario' | 'enlace'
 
