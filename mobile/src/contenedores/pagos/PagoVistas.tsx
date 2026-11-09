@@ -11,7 +11,7 @@ import {
   type MotivoNoSeleccionable,
   type PagoRegistrado,
 } from '@/servicios/pagos'
-import { color, espacio, estiloDeTexto } from '@/tokens'
+import { borde, color, espacio, estiloDeTexto } from '@/tokens'
 
 const ESTADO_ITEM = { PENDIENTE: 'Pendiente', EN_VERIFICACION: 'En verificación', PAGADO: 'Pagado' } as const
 
@@ -33,8 +33,12 @@ export type EstadoBanco = { tipo: 'cargando' } | { tipo: 'error' } | { tipo: 'ok
 
 function FilaBanco({ rotulo, valor }: { rotulo: string; valor: string }): ReactElement {
   return (
-    <View accessible accessibilityLabel={`${rotulo}: ${valor}`} style={{ gap: espacio.xs }}>
-      <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>{rotulo}</Text>
+    <View
+      accessible
+      accessibilityLabel={`${rotulo}: ${valor}`}
+      style={{ gap: espacio.xs, paddingTop: espacio.md, borderTopWidth: borde.fino, borderTopColor: color.neutro200 }}
+    >
+      <Text style={[estiloDeTexto('seccion'), { color: color.neutro600 }]}>{rotulo}</Text>
       <Text selectable style={[estiloDeTexto('importe'), { color: color.neutro800 }]}>
         {valor}
       </Text>
@@ -45,7 +49,7 @@ function FilaBanco({ rotulo, valor }: { rotulo: string; valor: string }): ReactE
 export function DatosTransferencia({ banco, onReintentar }: { banco: EstadoBanco; onReintentar: () => void }): ReactElement {
   return (
     <Tarjeta>
-      <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>
+      <Text accessibilityRole="header" style={[estiloDeTexto('subtitulo'), { color: color.neutro800 }]}>
         Datos para la transferencia
       </Text>
       {banco.tipo === 'cargando' ? <EstadoPantalla tipo="cargando" mensaje="Consultando los datos bancarios…" /> : null}
@@ -104,10 +108,12 @@ export function PagoSeleccionVista(props: PagoSeleccionVistaProps): ReactElement
         Pagar ítems
       </Text>
       <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Estudiante: {props.etiquetaAlumno}</Text>
-      <Text style={[estiloDeTexto('subtitulo'), { color: color.neutro800 }]}>Elegí los ítems a pagar</Text>
-      <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
-        Los ítems pagados o en verificación no se pueden seleccionar.
-      </Text>
+      <View style={{ gap: espacio.xs }}>
+        <Text style={[estiloDeTexto('subtitulo'), { color: color.neutro800 }]}>Elegí los ítems a pagar</Text>
+        <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
+          Los ítems pagados o en verificación no se pueden seleccionar.
+        </Text>
+      </View>
 
       {carga.tipo === 'cargando' ? <EstadoPantalla tipo="cargando" mensaje="Consultando ítems…" /> : null}
       {carga.tipo === 'error' ? (
@@ -128,15 +134,15 @@ export function PagoSeleccionVista(props: PagoSeleccionVistaProps): ReactElement
       {carga.tipo === 'ok'
         ? carga.grupos.map(grupo => (
             <Tarjeta key={grupo.facturaId}>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: espacio.sm }}>
-                <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>
-                  Cuota de {etiquetaPeriodo(grupo.periodo)}
-                </Text>
-                <InsigniaEstado dominio="factura" estado={insigniaDeEstado(grupo.estado)} />
-              </View>
-              <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
-                Vencimiento: {formatearFecha(grupo.vencimiento)}
+              <Text accessibilityRole="header" style={[estiloDeTexto('subtitulo'), { color: color.neutro800 }]}>
+                Cuota de {etiquetaPeriodo(grupo.periodo)}
               </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: espacio.sm }}>
+                <InsigniaEstado dominio="factura" estado={insigniaDeEstado(grupo.estado)} />
+                <Text style={[estiloDeTexto('cuerpo'), { color: grupo.estado === 'VENCIDA' ? color.peligroTexto : color.neutro700 }]}>
+                  {grupo.estado === 'VENCIDA' ? 'Vencida el' : 'Vence el'} {formatearFecha(grupo.vencimiento)}
+                </Text>
+              </View>
               {grupo.items.map(item => (
                 <FilaSeleccionable
                   key={item.itemId}
@@ -180,7 +186,7 @@ export function PagoSeleccionVista(props: PagoSeleccionVistaProps): ReactElement
           <Aviso
             tipo="error"
             titulo="No pudimos calcular el total"
-            mensaje="No registramos nada. Revisá tu conexión e intentá nuevamente."
+            mensaje="No registramos nada. Revisá tu conexión y tocá Reintentar."
             anuncio="alerta"
           />
           <Boton etiqueta="Reintentar" variante="secundario" onPress={props.onReintentarCotizacion} testID="reintentar-cotizacion" />
@@ -252,10 +258,10 @@ export function PagoResultadoVista(props: PagoResultadoVistaProps): ReactElement
         ) : null}
         <Tarjeta>
           <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Estudiante: {props.etiquetaAlumno}</Text>
-          <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Total a transferir</Text>
+          <Text style={[estiloDeTexto('seccion'), { color: color.neutro600 }]}>Total a transferir</Text>
           <Importe centavos={pago.totalCentavos} total />
           <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
-            Ítems: {cantidad}
+            {cantidad === 1 ? '1 ítem' : `${cantidad} ítems`}
           </Text>
           <InsigniaEstado
             dominio="pago"
@@ -281,6 +287,11 @@ export function PagoResultadoVista(props: PagoResultadoVistaProps): ReactElement
           ))}
         </Tarjeta>
         <DatosTransferencia banco={{ tipo: 'ok', datos: pago.banco }} onReintentar={() => undefined} />
+        {pago.estado === 'PENDIENTE_VERIFICACION' && props.onAdjuntarComprobante ? (
+          <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
+            Siguiente paso: transferí el total y adjuntá el comprobante.
+          </Text>
+        ) : null}
         {pago.estado === 'PENDIENTE_VERIFICACION' && props.onAdjuntarComprobante ? (
           <Boton
             etiqueta="Adjuntar comprobante"

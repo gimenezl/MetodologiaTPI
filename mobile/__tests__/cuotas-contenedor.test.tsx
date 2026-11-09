@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native'
 
 import { CONTEXTO_CUOTAS_VACIO, CuotasContenedor, type ContextoCuotas } from '@/contenedores/cuotas/CuotasContenedor'
 import type { ClienteEPT } from '@/servicios/supabase'
@@ -94,6 +94,9 @@ describe('CuotasContenedor', () => {
     expect(screen.getByText('Pagadas (1)')).toBeTruthy()
     expect(screen.getByText(/Vencida el 10\/11\/2026/u)).toBeTruthy()
     expect(screen.getAllByText('Vencida').length).toBeGreaterThan(0)
+    // Un solo número arriba: suma de saldos (58.000,00 + 57.999,00) y cuántas están vencidas.
+    expect(within(screen.getByTestId('saldo-pendiente')).getByText('ARS 115.999,00')).toBeTruthy()
+    expect(screen.getByText('2 cuotas pendientes · 1 vencida')).toBeTruthy()
     expect(screen.queryByTestId('cuota-f3')).toBeNull()
     await fireEvent.press(screen.getByTestId('pestana-pagadas'))
     expect(screen.getByTestId('cuota-f3')).toBeTruthy()

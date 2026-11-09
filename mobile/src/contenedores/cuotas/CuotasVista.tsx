@@ -1,14 +1,14 @@
 import type { ReactElement } from 'react'
-import { Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 
-import { Aviso, Boton, EstadoPantalla, Importe, InsigniaEstado, Tarjeta } from '@/catalogo'
+import { Aviso, Boton, EstadoPantalla, Importe, InsigniaEstado, Segmentado, Tarjeta } from '@/catalogo'
 import {
   etiquetaPeriodo,
   formatearFecha,
   insigniaDeEstado,
   type Cuota,
 } from '@/servicios/cuotas'
-import { borde, color, espacio, estiloDeTexto } from '@/tokens'
+import { borde, color, espacio, estiloDeTexto, tactil } from '@/tokens'
 
 export interface AlumnoSelector {
   id: string
@@ -42,16 +42,36 @@ export interface CuotasVistaProps {
   onComprobantes?: () => void
 }
 
-function FilaDato({ rotulo, children }: { rotulo: string; children: ReactElement | string }): ReactElement {
+function EnlaceDetalle({
+  cuota,
+  periodo,
+  onAbrirDetalle,
+}: {
+  cuota: Cuota
+  periodo: string
+  onAbrirDetalle: (id: string) => void
+}): ReactElement {
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: espacio.sm }}>
-      <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>{rotulo}</Text>
-      {typeof children === 'string' ? (
-        <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro800 }]}>{children}</Text>
-      ) : (
-        children
-      )}
-    </View>
+    <Pressable
+      testID={`detalle-${cuota.facturaId}`}
+      accessibilityRole="button"
+      accessibilityLabel={`Ver detalle de la cuota de ${periodo}`}
+      onPress={() => onAbrirDetalle(cuota.facturaId)}
+      style={{
+        minHeight: tactil.minimo,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderTopWidth: borde.fino,
+        borderTopColor: color.neutro200,
+        paddingTop: espacio.xs,
+      }}
+    >
+      <Text style={[estiloDeTexto('boton'), { color: color.primario700 }]}>Ver detalle</Text>
+      <Text importantForAccessibility="no" accessibilityElementsHidden style={[estiloDeTexto('titulo'), { color: color.primario700 }]}>
+        ›
+      </Text>
+    </Pressable>
   )
 }
 
@@ -64,26 +84,29 @@ export function TarjetaCuota({ cuota, onAbrirDetalle }: { cuota: Cuota; onAbrirD
       style={vencida ? { borderLeftWidth: borde.enfasis * 3, borderLeftColor: color.peligroTexto, borderRadius: 12 } : undefined}
     >
       <Tarjeta>
-        <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>
+        <Text accessibilityRole="header" style={[estiloDeTexto('subtitulo'), { color: color.neutro800 }]}>
           Cuota de {periodo}
         </Text>
-        <InsigniaEstado dominio="factura" estado={insigniaDeEstado(cuota.estado)} />
-        {vencida ? (
-          <Text style={[estiloDeTexto('cuerpo'), { color: color.peligroTexto }]}>
-            Vencida el {formatearFecha(cuota.vencimiento)}. Regularizá el saldo pendiente.
+        <View style={{ gap: espacio.xs }}>
+          <Text style={[estiloDeTexto('seccion'), { color: color.neutro600 }]}>Saldo</Text>
+          <Importe centavos={cuota.saldoCentavos} total />
+          {cuota.saldoCentavos !== cuota.totalCentavos ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: espacio.xs }}>
+              <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro600 }]}>De un total de</Text>
+              <Importe centavos={cuota.totalCentavos} />
+            </View>
+          ) : null}
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: espacio.sm }}>
+          <InsigniaEstado dominio="factura" estado={insigniaDeEstado(cuota.estado)} />
+          <Text style={[estiloDeTexto('cuerpo'), { color: vencida ? color.peligroTexto : color.neutro700 }]}>
+            {vencida ? 'Vencida el' : 'Vence el'} {formatearFecha(cuota.vencimiento)}
           </Text>
-        ) : null}
-        <FilaDato rotulo="Vencimiento">{formatearFecha(cuota.vencimiento)}</FilaDato>
-        <FilaDato rotulo="Importe">
-          <Importe centavos={cuota.totalCentavos} />
-        </FilaDato>
-        <FilaDato rotulo="Saldo">
-          <Importe centavos={cuota.saldoCentavos} />
-        </FilaDato>
+        </View>
         {cuota.itemsEnVerificacion > 0 ? (
           <Aviso
             tipo="informativo"
-            mensaje={`${cuota.itemsEnVerificacion === 1 ? 'Un ítem tiene' : `${cuota.itemsEnVerificacion} ítems tienen`} un pago en verificación. El saldo baja recién cuando la institución lo aprueba.`}
+            mensaje={`${cuota.itemsEnVerificacion === 1 ? 'Un ítem tiene' : `${cuota.itemsEnVerificacion} ítems tienen`} un pago en verificación. El saldo baja cuando la institución lo apruebe.`}
             anuncio="estado"
           />
         ) : null}
@@ -95,15 +118,28 @@ export function TarjetaCuota({ cuota, onAbrirDetalle }: { cuota: Cuota; onAbrirD
             anuncio="estado"
           />
         ) : null}
-        <Boton
-          etiqueta="Ver detalle"
-          variante="secundario"
-          onPress={() => onAbrirDetalle(cuota.facturaId)}
-          etiquetaAccesible={`Ver detalle de la cuota de ${periodo}`}
-          testID={`detalle-${cuota.facturaId}`}
-        />
+        <EnlaceDetalle cuota={cuota} periodo={periodo} onAbrirDetalle={onAbrirDetalle} />
       </Tarjeta>
     </View>
+  )
+}
+
+/** Un solo número arriba: lo que falta pagar entre las cuotas pendientes (suma de los saldos ya informados). */
+function ResumenSaldo({ cuotas }: { cuotas: Cuota[] }): ReactElement | null {
+  if (cuotas.length === 0 || cuotas.some(cuota => cuota.inconsistente)) return null
+  const saldo = cuotas.reduce((suma, cuota) => suma + cuota.saldoCentavos, 0)
+  const vencidas = cuotas.filter(cuota => cuota.estado === 'VENCIDA').length
+  const detalle = `${cuotas.length} ${cuotas.length === 1 ? 'cuota pendiente' : 'cuotas pendientes'}${
+    vencidas > 0 ? ` · ${vencidas} ${vencidas === 1 ? 'vencida' : 'vencidas'}` : ''
+  }`
+  return (
+    <Tarjeta>
+      <View testID="saldo-pendiente" style={{ gap: espacio.xs }}>
+        <Text style={[estiloDeTexto('seccion'), { color: color.neutro600 }]}>Saldo pendiente</Text>
+        <Importe centavos={saldo} total />
+        <Text style={[estiloDeTexto('cuerpo'), { color: vencidas > 0 ? color.peligroTexto : color.neutro700 }]}>{detalle}</Text>
+      </View>
+    </Tarjeta>
   )
 }
 
@@ -122,42 +158,25 @@ export function CuotasVista(props: CuotasVistaProps): ReactElement {
 
   const cantidadPendientes = resultado.tipo === 'ok' ? resultado.pendientes.length : null
   const cantidadPagadas = resultado.tipo === 'ok' ? resultado.pagadas.length : null
-  const lista = resultado.tipo === 'ok' ? (pestana === 'pendientes' ? resultado.pendientes : resultado.pagadas) : []
+  const origen = resultado.tipo === 'ok' ? (pestana === 'pendientes' ? resultado.pendientes : resultado.pagadas) : []
+  // Las vencidas primero (el orden relativo del resto se conserva).
+  const lista = [...origen].sort((a, b) => Number(b.estado === 'VENCIDA') - Number(a.estado === 'VENCIDA'))
 
   return (
-    <View style={{ gap: espacio.md }}>
+    <View style={{ gap: espacio.lg }}>
       {mostrarSelector && alumnos.length > 0 ? (
-        <View accessibilityRole="tablist" style={{ gap: espacio.sm }}>
+        <View style={{ gap: espacio.sm }}>
           <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Estudiante</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacio.sm }}>
-            {alumnos.map(alumno => (
-              <Boton
-                key={alumno.id}
-                etiqueta={alumno.etiqueta}
-                variante={alumno.id === alumnoId ? 'primario' : 'secundario'}
-                onPress={() => props.onSeleccionarAlumno(alumno.id)}
-                pistaAccesible={alumno.id === alumnoId ? 'Seleccionado' : 'Mostrar las cuotas de este estudiante'}
-                testID={`hijo-${alumno.id}`}
-              />
-            ))}
-          </View>
+          <Segmentado
+            deslizable={alumnos.length > 2}
+            activa={alumnoId ?? ''}
+            onCambiar={props.onSeleccionarAlumno}
+            opciones={alumnos.map(alumno => ({ clave: alumno.id, etiqueta: alumno.etiqueta, testID: `hijo-${alumno.id}` }))}
+          />
         </View>
       ) : null}
 
-      <View accessibilityRole="tablist" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacio.sm }}>
-        <Boton
-          etiqueta={cantidadPendientes === null ? 'Pendientes' : `Pendientes (${cantidadPendientes})`}
-          variante={pestana === 'pendientes' ? 'primario' : 'secundario'}
-          onPress={() => props.onCambiarPestana('pendientes')}
-          testID="pestana-pendientes"
-        />
-        <Boton
-          etiqueta={cantidadPagadas === null ? 'Pagadas' : `Pagadas (${cantidadPagadas})`}
-          variante={pestana === 'pagadas' ? 'primario' : 'secundario'}
-          onPress={() => props.onCambiarPestana('pagadas')}
-          testID="pestana-pagadas"
-        />
-      </View>
+      {resultado.tipo === 'ok' && pestana === 'pendientes' ? <ResumenSaldo cuotas={resultado.pendientes} /> : null}
 
       {props.permitirPago && props.onPagar && resultado.tipo === 'ok' && resultado.pendientes.length > 0 ? (
         <Boton
@@ -178,12 +197,29 @@ export function CuotasVista(props: CuotasVistaProps): ReactElement {
         />
       ) : null}
 
+      <Segmentado
+        activa={pestana}
+        onCambiar={clave => props.onCambiarPestana(clave === 'pagadas' ? 'pagadas' : 'pendientes')}
+        opciones={[
+          {
+            clave: 'pendientes',
+            etiqueta: cantidadPendientes === null ? 'Pendientes' : `Pendientes (${cantidadPendientes})`,
+            testID: 'pestana-pendientes',
+          },
+          {
+            clave: 'pagadas',
+            etiqueta: cantidadPagadas === null ? 'Pagadas' : `Pagadas (${cantidadPagadas})`,
+            testID: 'pestana-pagadas',
+          },
+        ]}
+      />
+
       {resultado.tipo === 'cargando' ? <EstadoPantalla tipo="cargando" mensaje="Consultando cuotas…" /> : null}
       {resultado.tipo === 'error' ? (
         <EstadoPantalla
           tipo="error"
           titulo="No pudimos cargar las cuotas"
-          descripcion="No mostramos datos hasta poder validarlos. Intentá nuevamente."
+          descripcion="No mostramos datos hasta poder validarlos. Revisá tu conexión e intentá nuevamente."
           onReintentar={props.onReintentar}
         />
       ) : null}
@@ -193,17 +229,18 @@ export function CuotasVista(props: CuotasVistaProps): ReactElement {
           titulo={pestana === 'pendientes' ? 'No hay cuotas pendientes' : 'Todavía no hay cuotas pagadas'}
           descripcion={
             pestana === 'pendientes'
-              ? 'Las cuotas con saldo aparecerán acá una vez emitidas por la institución.'
-              : 'Cuando la institución apruebe un pago, la cuota saldada aparecerá en esta pestaña.'
+              ? 'Las cuotas con saldo aparecerán acá cuando la institución las emita.'
+              : 'Cuando la institución apruebe un pago, la cuota saldada aparecerá acá.'
           }
         />
       ) : null}
       {resultado.tipo === 'ok'
         ? lista.map(cuota => <TarjetaCuota key={cuota.facturaId} cuota={cuota} onAbrirDetalle={props.onAbrirDetalle} />)
         : null}
+
       {resultado.tipo === 'ok' && resultado.fechaCorte ? (
-        <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro600 }]}>
-          Estados calculados al {formatearFecha(resultado.fechaCorte)} (hora de Argentina).
+        <Text style={[estiloDeTexto('pie'), { color: color.neutro600 }]}>
+          Estados al {formatearFecha(resultado.fechaCorte)} (hora de Argentina).
         </Text>
       ) : null}
     </View>

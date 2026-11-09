@@ -10,7 +10,7 @@ import {
   type DetalleCuota,
   type ItemCuota,
 } from '@/servicios/cuotas'
-import { color, espacio, estiloDeTexto } from '@/tokens'
+import { borde, color, espacio, estiloDeTexto } from '@/tokens'
 
 export type ResultadoDetalle =
   | { tipo: 'cargando' }
@@ -49,7 +49,7 @@ function FilaItem({ item }: { item: ItemCuota }): ReactElement {
       )}
       {item.pagadoCentavos > 0 && item.pagadoCentavos < item.importeCentavos ? (
         <Text style={[estiloDeTexto('cuerpo'), { color: color.advertenciaTexto }]}>
-          Imputación parcial registrada: revisá este ítem con la institución.
+          Pago parcial registrado. Consultá este ítem con la institución.
         </Text>
       ) : null}
     </View>
@@ -65,7 +65,7 @@ export function DetalleCuotaVista({ resultado, onVolver, onReintentar }: Detalle
         <EstadoPantalla
           tipo="error"
           titulo="No pudimos cargar el detalle"
-          descripcion="No mostramos datos hasta poder validarlos. Intentá nuevamente."
+          descripcion="No mostramos datos hasta poder validarlos. Revisá tu conexión e intentá nuevamente."
           onReintentar={onReintentar}
         />
       ) : null}
@@ -73,7 +73,7 @@ export function DetalleCuotaVista({ resultado, onVolver, onReintentar }: Detalle
         <EstadoPantalla
           tipo="vacio"
           titulo="Esta cuota no está disponible"
-          descripcion="No existe o ya no tenés acceso a ella. Volvé al listado para ver las cuotas vigentes."
+          descripcion="No existe o ya no tenés acceso. Volvé al listado para ver tus cuotas."
         />
       ) : null}
       {resultado.tipo === 'ok' ? (
@@ -82,23 +82,31 @@ export function DetalleCuotaVista({ resultado, onVolver, onReintentar }: Detalle
             <Text accessibilityRole="header" style={[estiloDeTexto('titulo'), { color: color.neutro800 }]}>
               Cuota de {etiquetaPeriodo(resultado.detalle.cuota.periodo)}
             </Text>
-            <InsigniaEstado dominio="factura" estado={insigniaDeEstado(resultado.detalle.cuota.estado)} />
-            {resultado.detalle.cuota.estado === 'VENCIDA' ? (
-              <Text style={[estiloDeTexto('cuerpo'), { color: color.peligroTexto }]}>
-                Vencida el {formatearFecha(resultado.detalle.cuota.vencimiento)}.
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: espacio.sm }}>
+              <InsigniaEstado dominio="factura" estado={insigniaDeEstado(resultado.detalle.cuota.estado)} />
+              <Text
+                style={[
+                  estiloDeTexto('cuerpo'),
+                  { color: resultado.detalle.cuota.estado === 'VENCIDA' ? color.peligroTexto : color.neutro700 },
+                ]}
+              >
+                {resultado.detalle.cuota.estado === 'VENCIDA' ? 'Vencida el' : 'Vence el'}{' '}
+                {formatearFecha(resultado.detalle.cuota.vencimiento)}
               </Text>
-            ) : (
-              <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
-                Vencimiento: {formatearFecha(resultado.detalle.cuota.vencimiento)}
-              </Text>
-            )}
+            </View>
             <View style={{ gap: espacio.xs }}>
-              <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Importe total</Text>
-              <Importe centavos={resultado.detalle.cuota.totalCentavos} total />
-              <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Pagado con pagos aprobados</Text>
-              <Importe centavos={resultado.detalle.cuota.pagadoCentavos} />
-              <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Saldo</Text>
-              <Importe centavos={resultado.detalle.cuota.saldoCentavos} />
+              <Text style={[estiloDeTexto('seccion'), { color: color.neutro600 }]}>Saldo</Text>
+              <Importe centavos={resultado.detalle.cuota.saldoCentavos} total />
+            </View>
+            <View style={{ gap: espacio.sm, borderTopWidth: borde.fino, borderTopColor: color.neutro200, paddingTop: espacio.md }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: espacio.sm }}>
+                <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Total de la cuota</Text>
+                <Importe centavos={resultado.detalle.cuota.totalCentavos} />
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: espacio.sm }}>
+                <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Pagado (pagos aprobados)</Text>
+                <Importe centavos={resultado.detalle.cuota.pagadoCentavos} />
+              </View>
             </View>
             {resultado.detalle.cuota.inconsistente ? (
               <Aviso
