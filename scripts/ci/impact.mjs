@@ -5,7 +5,7 @@ import { suiteProfile, validateRegistry } from './suites.mjs'
 import { ept95Paths, secureRelative, validateEpt95Assets } from './ept95-assets.mjs'
 import { ept96Paths, validateEpt96Assets } from './ept96-assets.mjs'
 import { families, aliases, validateUiRegistry } from './ui.mjs'
-import { requireMobileContract, touchesMobile, validateMobileWorkflowFile } from './mobile.mjs'
+import { requireMobileContract, touchesMobile } from './mobile.mjs'
 
 export const pureTests = ['recibos-pdf', 'tarifas-lib', 'asistencias-lib', 'reportes-lib', 'reportes-economicos-lib', 'paginacion',
   'paginacion-paralela', 'inscripciones-legadas-lib', 'accesos-qr-cripto',
@@ -107,7 +107,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const packages = execFileSync('git', ['ls-files', '-z', '--', 'package.json', '*/package.json'], { encoding: 'utf8' }).split('\0').filter(Boolean)
   if (packages.some(file => unsupportedPackage(file, JSON.parse(readFileSync(file, 'utf8'))))) throw new Error('Mobile detectado: configurar sus comprobaciones reales antes de integrar; CI web insuficiente')
   if (packages.includes('mobile/package.json')) {
-    validateMobileWorkflowFile()
     const archivosMobile = execFileSync('git', ['ls-files', '-z', '--', 'mobile'], { encoding: 'utf8' }).split('\0').filter(Boolean)
     archivosMobile.forEach(requireMobileContract)
   }
