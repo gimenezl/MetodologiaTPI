@@ -128,3 +128,18 @@ Alineado con: Dirección como única autoridad de escritura sobre vínculos (011
 `service_role` para actores (EPT-105/EPT-134), cuenta bloqueada sin acceso (EPT-59), revinculación
 que restituye el mismo acceso (EPT-119-121), y EPT-115/116, que ya declararon el alta de vínculos
 fuera de su alcance y la remitieron a EPT-164. No contradice ningún contrato vigente.
+
+## 9. Decisiones registradas (2026-11-09)
+
+Lucas aprobó la recomendación de este documento.
+
+| # | Decisión |
+| --- | --- |
+| D1 | **Aprobada:** (a) pantalla de Dirección en la web con RPC para vincular y desvincular como flujo definitivo, y (b) datos de demostración solo para pruebas. |
+| D2 | Se adopta la recomendación: sin constancia presencial en la primera versión. |
+| D3 | Se adopta la recomendación: varios adultos por estudiante. |
+| D4 | Se adopta la recomendación: rastro de auditoría con actor y fecha; el alcance se confirma en la tarjeta de implementación. |
+| D5 | Pendiente: estimación y presupuesto de (a), a cargo de Lucas. No bloquea esta definición. |
+| D6 | Se adopta la recomendación: EPT-124 no espera a (a) y usa datos de prueba acotados. |
+
+La implementación de (a) es trabajo posterior en una tarjeta propia.
