@@ -609,7 +609,7 @@ test('EPT-96 valida el paquete real y clasifica sus rutas como contenido activo 
 })
 
 test('EPT-96: el gate de CI exige el paso del prototipo cuando el plan lo marca', () => {
-  const yml = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/gu, '\n')
+  const yml = readFileSync('.github/workflows/ci-completo.yml', 'utf8').replace(/\r\n/gu, '\n')
   for (const fragmento of ["prototipo: ${{ steps.impact.outputs.prototipo }}", "prototipo_paso: ${{ steps.prototipo.outcome }}", 'id: prototipo',
     "if: steps.impact.outputs.prototipo == 'true'", 'run: node docs/parte3/EPT-96/pruebas/prototipo.mjs', 'PLAN_PROTOTIPO: ${{ needs.fast.outputs.prototipo }}',
     'true) test "$PASO_PROTOTIPO" = success', 'false) test "$PASO_PROTOTIPO" = skipped']) assert.ok(yml.includes(fragmento), fragmento)
