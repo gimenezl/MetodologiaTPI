@@ -3,6 +3,7 @@ import { Text, View } from "react-native";
 import { Aviso, Boton } from "@/catalogo";
 import { compartirRecibo } from "@/servicios/recibos";
 import type { ClienteEPT } from "@/servicios/supabase";
+import { color, espacio, estiloDeTexto } from "@/tokens";
 
 export function DescargaRecibo({
   cliente,
@@ -60,10 +61,10 @@ export function DescargaRecibo({
           cargando: false,
           bytes: 0,
           error: c.signal.aborted
-            ? "Descarga cancelada. Puedes reintentar."
+            ? "Se canceló la descarga. Podés volver a intentarlo."
             : e instanceof Error
               ? e.message
-              : "No se pudo descargar. Reintenta.",
+              : "No pudimos descargar el recibo. Revisá tu conexión e intentá de nuevo.",
         });
     } finally {
       clearTimeout(timeout);
@@ -71,7 +72,7 @@ export function DescargaRecibo({
     }
   };
   return (
-    <View>
+    <View style={{ gap: espacio.sm }}>
       <Boton
         etiqueta={
           estado.cargando ? "Preparando recibo…" : "Descargar recibo PDF"
@@ -82,7 +83,10 @@ export function DescargaRecibo({
       />
       {estado.cargando ? (
         <>
-          <Text accessibilityLiveRegion="polite">
+          <Text
+            accessibilityLiveRegion="polite"
+            style={[estiloDeTexto("pie"), { color: color.neutro600 }]}
+          >
             Recibidos {estado.bytes} bytes
           </Text>
           <Boton
@@ -93,7 +97,10 @@ export function DescargaRecibo({
         </>
       ) : null}
       {cerrado ? (
-        <Text accessibilityLiveRegion="polite">
+        <Text
+          accessibilityLiveRegion="polite"
+          style={[estiloDeTexto("cuerpo"), { color: color.neutro700 }]}
+        >
           Menú de descarga cerrado. Temporal eliminado.
         </Text>
       ) : null}
