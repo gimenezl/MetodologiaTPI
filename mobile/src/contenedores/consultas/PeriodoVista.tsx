@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react'
 import { Text, View } from 'react-native'
 
-import { Aviso, Boton, CampoTexto, EstadoPantalla, Importe, InsigniaEstado, Tarjeta } from '@/catalogo'
+import { Aviso, Boton, CampoTexto, EstadoPantalla, Importe, InsigniaEstado, Segmentado, Tarjeta } from '@/catalogo'
 import {
   insigniaDePago,
   isoAEntrada,
@@ -48,8 +48,8 @@ export interface PeriodoVistaProps {
 }
 
 const EXPLICACION: Record<CriterioComprobantes, string> = {
-  PERIODO_FACTURA: 'Se buscan los pagos que cubren facturas cuyo mes cae dentro del rango.',
-  FECHA_TRANSFERENCIA: 'Se buscan los pagos por la fecha de transferencia que informó la familia.',
+  PERIODO_FACTURA: 'Pagos que cubren facturas de esos meses.',
+  FECHA_TRANSFERENCIA: 'Pagos según la fecha de transferencia que informaste.',
 }
 
 function Dato({ rotulo, children }: { rotulo: string; children: ReactElement | string }): ReactElement {
@@ -118,11 +118,36 @@ export function TarjetaRegistro({ registro, cliente }: { registro: RegistroCompr
           <Importe centavos={registro.totalCalculadoCentavos} />
         </Dato>
         {registro.importeInformadoCentavos!==null ? <Dato rotulo="Diferencia (informado menos imputado o seleccionado)"><Importe centavos={registro.importeInformadoCentavos-registro.totalCalculadoCentavos}/></Dato> : null}
-        <Text accessibilityRole="header">{registro.estado === 'APROBADO' ? 'Ítems abonados' : 'Ítems seleccionados, no abonados'}</Text>
-        {(registro.items ?? []).map(i=><View key={i.itemId}><Text>{i.concepto} · {etiquetaPeriodo(i.periodo)}</Text><Importe centavos={i.importeCentavos} /><Text>Factura: {i.facturaId}{!i.activa ? ' · Imputación histórica inactiva' : ''}</Text></View>)}
-        {registro.motivoRechazo ? <Text>Motivo del rechazo: {registro.motivoRechazo}</Text> : null}
-        {registro.verificadoEn ? <Text>Verificación: {registro.verificadoEn}</Text> : null}
-        {registro.estado === 'APROBADO' ? (registro.reciboId && cliente ? <DescargaRecibo key={registro.reciboId} cliente={cliente} reciboId={registro.reciboId} /> : <Text>Recibo preparándose. Consulta nuevamente o contacta a Dirección.</Text>) : null}
+        <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>
+          {registro.estado === 'APROBADO' ? 'Ítems abonados' : 'Ítems seleccionados, no abonados'}
+        </Text>
+        {(registro.items ?? []).map(i => (
+          <View key={i.itemId} style={{ gap: espacio.xs, paddingVertical: espacio.sm, borderTopWidth: 1, borderTopColor: color.neutro200 }}>
+            <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro800 }]}>
+              {i.concepto} · {etiquetaPeriodo(i.periodo)}
+            </Text>
+            <Importe centavos={i.importeCentavos} />
+            <Text style={[estiloDeTexto('pie'), { color: color.neutro600 }]}>
+              Factura: {i.facturaId}
+              {!i.activa ? ' · Imputación histórica inactiva' : ''}
+            </Text>
+          </View>
+        ))}
+        {registro.motivoRechazo ? (
+          <Aviso tipo="advertencia" titulo="Rechazado: falta corregir" mensaje={`Motivo del rechazo: ${registro.motivoRechazo}`} anuncio="estado" />
+        ) : null}
+        {registro.verificadoEn ? (
+          <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Verificación: {registro.verificadoEn}</Text>
+        ) : null}
+        {registro.estado === 'APROBADO' ? (
+          registro.reciboId && cliente ? (
+            <DescargaRecibo key={registro.reciboId} cliente={cliente} reciboId={registro.reciboId} />
+          ) : (
+            <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
+              Recibo preparándose. Consultá de nuevo más tarde o contactá a Dirección.
+            </Text>
+          )
+        ) : null}
         <Dato rotulo="Comprobantes">{textoArchivos(registro.cantidadArchivos)}</Dato>
         {registro.ultimaCarga ? <Dato rotulo="Último archivo cargado el">{isoAEntrada(registro.ultimaCarga)}</Dato> : null}
         <Dato rotulo="Facturas que cubre">
@@ -227,7 +252,7 @@ export function PeriodoVista(props: PeriodoVistaProps): ReactElement {
           onChangeText={props.onCambiarDesde}
           teclado="numerico"
           placeholder="DD/MM/AAAA"
-          ayuda="Día, mes y año. Los extremos están incluidos."
+          ayuda="Día, mes y año, extremos incluidos."
           error={errores.desde}
           accionTeclado="siguiente"
           testID="periodo-desde"
@@ -248,24 +273,15 @@ export function PeriodoVista(props: PeriodoVistaProps): ReactElement {
         <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>
           Qué fecha se usa para los comprobantes
         </Text>
-        <View accessibilityRole="tablist" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacio.sm }}>
-          <Boton
-            etiqueta="Período de factura"
-            variante={props.criterio === 'PERIODO_FACTURA' ? 'primario' : 'secundario'}
-            onPress={() => props.onCambiarCriterio('PERIODO_FACTURA')}
-            testID="criterio-factura"
-          />
-          <Boton
-            etiqueta="Fecha de transferencia"
-            variante={props.criterio === 'FECHA_TRANSFERENCIA' ? 'primario' : 'secundario'}
-            onPress={() => props.onCambiarCriterio('FECHA_TRANSFERENCIA')}
-            testID="criterio-transferencia"
-          />
-        </View>
+        <Segmentado
+          opciones={[
+            { clave: 'PERIODO_FACTURA', etiqueta: 'Período de factura', testID: 'criterio-factura' },
+            { clave: 'FECHA_TRANSFERENCIA', etiqueta: 'Fecha de transferencia', testID: 'criterio-transferencia' },
+          ]}
+          activa={props.criterio}
+          onCambiar={clave => props.onCambiarCriterio(clave as CriterioComprobantes)}
+        />
         <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>{EXPLICACION[props.criterio]}</Text>
-        <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro600 }]}>
-          Las facturas siempre se filtran por su período (mes calendario). La fecha en que se cargó cada archivo es solo informativa y no filtra.
-        </Text>
         <Boton etiqueta="Consultar" onPress={props.onConsultar} testID="periodo-consultar" />
       </Tarjeta>
 

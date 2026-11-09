@@ -103,7 +103,7 @@ export function InscripcionesVista(props: InscripcionesVistaProps): ReactElement
       <Aviso
         tipo="informativo"
         titulo="Solo consulta"
-        mensaje="Estas inscripciones ya están registradas en el sistema de la institución. Desde la aplicación no se pueden agregar, modificar ni cancelar."
+        mensaje="Acá solo las ves: la institución es quien las agrega, modifica o cancela."
         anuncio="estado"
       />
 
@@ -139,7 +139,7 @@ export function InscripcionesVista(props: InscripcionesVistaProps): ReactElement
         : null}
       {resultado.tipo === 'ok' ? (
         <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro600 }]}>
-          Los nombres de deportes, grupos y recorridos son los vigentes hoy en el catálogo: el sistema no conserva cómo se llamaban cuando te inscribiste.
+          Los nombres son los vigentes hoy en el catálogo.
         </Text>
       ) : null}
     </View>

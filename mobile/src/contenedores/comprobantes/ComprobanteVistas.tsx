@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react'
 import { ActivityIndicator, Image, Text, View } from 'react-native'
 
-import { Aviso, Boton, CampoTexto, EstadoPantalla, Importe, InsigniaEstado, Tarjeta } from '@/catalogo'
+import { Aviso, Avatar, Boton, CampoTexto, EstadoPantalla, Importe, InsigniaEstado, Tarjeta } from '@/catalogo'
 import type { CargaComprobante, PagoPendienteDelPadre } from '@/servicios/comprobantes'
 import type { ArchivoElegido } from '@/servicios/selector-archivos'
 import { color, espacio, estiloDeTexto } from '@/tokens'
@@ -42,7 +42,10 @@ export function ListaPagosVista(props: ListaPagosVistaProps): ReactElement {
       <Text accessibilityRole="header" style={[estiloDeTexto('titulo'), { color: color.neutro800 }]}>
         Comprobantes de transferencia
       </Text>
-      <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Estudiante: {props.etiquetaAlumno}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacio.sm }}>
+        <Avatar nombre={props.etiquetaAlumno} tamano={36} />
+        <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700, flexShrink: 1 }]}>Estudiante: {props.etiquetaAlumno}</Text>
+      </View>
 
       {carga.tipo === 'cargando' ? <EstadoPantalla tipo="cargando" mensaje="Cargando tus pagos pendientes…" /> : null}
       {carga.tipo === 'error' ? (
@@ -57,19 +60,21 @@ export function ListaPagosVista(props: ListaPagosVistaProps): ReactElement {
         <EstadoPantalla
           tipo="vacio"
           titulo="No hay pagos pendientes de verificación"
-          descripcion="Cuando registres un pago por transferencia, podrás adjuntar acá su comprobante."
+          descripcion="Cuando registres un pago por transferencia, vas a poder adjuntar acá su comprobante."
         />
       ) : null}
       {carga.tipo === 'ok'
         ? carga.pagos.map(pago => (
             <View key={pago.pagoId} testID={`pago-pendiente-${pago.pagoId}`}>
               <Tarjeta>
-                <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>
-                  Pago {codigoCorto(pago.pagoId)}
-                </Text>
-                <InsigniaEstado dominio="pago" estado="pendiente" />
                 <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Total a transferir</Text>
                 <Importe centavos={pago.totalCentavos} total />
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: espacio.sm }}>
+                  <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>
+                    Pago {codigoCorto(pago.pagoId)}
+                  </Text>
+                  <InsigniaEstado dominio="pago" estado="pendiente" />
+                </View>
                 <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
                   {pago.archivos === 0
                     ? 'Sin comprobantes cargados.'
@@ -215,11 +220,11 @@ export function FormularioComprobanteVista(props: FormularioComprobanteVistaProp
         Adjuntar comprobante
       </Text>
       <Tarjeta>
-        <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Estudiante: {props.etiquetaAlumno}</Text>
-        <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Pago {codigoCorto(pago.pagoId)}</Text>
         <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Total calculado por la institución</Text>
         <Importe centavos={pago.totalCentavos} total />
         <InsigniaEstado dominio="pago" estado="pendiente" />
+        <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Estudiante: {props.etiquetaAlumno}</Text>
+        <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Pago {codigoCorto(pago.pagoId)}</Text>
       </Tarjeta>
 
       <Aviso
@@ -247,6 +252,7 @@ export function FormularioComprobanteVista(props: FormularioComprobanteVistaProp
         </Tarjeta>
       ) : (
         <View style={{ gap: espacio.md }}>
+          <Text style={[estiloDeTexto('pie'), { color: color.primario700 }]}>Paso 1 de 2</Text>
           <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>
             Datos de la transferencia
           </Text>
@@ -263,7 +269,7 @@ export function FormularioComprobanteVista(props: FormularioComprobanteVistaProp
           />
           <CampoTexto
             etiqueta="Importe transferido"
-            ayuda="Puede diferir del total calculado: la institución lo revisa. Por ejemplo 15000,50."
+            ayuda="Lo que transferiste, por ejemplo 15000,50. La institución lo compara con el total."
             valor={props.importe}
             onChangeText={props.onCambiarImporte}
             error={errores.importe}
@@ -285,11 +291,12 @@ export function FormularioComprobanteVista(props: FormularioComprobanteVistaProp
         </View>
       )}
 
+      <Text style={[estiloDeTexto('pie'), { color: color.primario700 }]}>{datos ? 'Único paso' : 'Paso 2 de 2'}</Text>
       <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>
         Archivo del comprobante
       </Text>
       <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
-        Imagen JPG o PNG, o PDF, de hasta 5 MB.
+        Foto JPG o PNG, o PDF, de hasta 5 MB.
       </Text>
 
       {archivo ? (
@@ -310,6 +317,7 @@ export function FormularioComprobanteVista(props: FormularioComprobanteVistaProp
           <Text testID="archivo-elegido" style={[estiloDeTexto('cuerpo'), { color: color.neutro800 }]}>
             {archivo.nombre} · {formatearTamano(archivo.tamanoBytes)}
           </Text>
+          <Text style={[estiloDeTexto('cuerpo'), { color: color.exitoTexto }]}>✓ Archivo listo para enviar</Text>
           <Boton
             etiqueta="Quitar archivo"
             variante="secundario"
@@ -323,6 +331,9 @@ export function FormularioComprobanteVista(props: FormularioComprobanteVistaProp
       {props.avisoSeleccion ? <Aviso tipo={props.avisoSeleccion.tipo} mensaje={props.avisoSeleccion.mensaje} anuncio="alerta" /> : null}
 
       <View style={{ gap: espacio.sm }}>
+        <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
+          {archivo ? 'Cambiar el archivo' : 'Elegí cómo adjuntarlo'}
+        </Text>
         <Boton etiqueta="Tomar foto" variante="secundario" onPress={props.onTomarFoto} deshabilitado={bloqueado} testID="tomar-foto" />
         <Boton etiqueta="Elegir una imagen de la galería" variante="secundario" onPress={props.onElegirImagen} deshabilitado={bloqueado} testID="elegir-imagen" />
         <Boton etiqueta="Elegir un PDF o archivo" variante="secundario" onPress={props.onElegirArchivo} deshabilitado={bloqueado} testID="elegir-archivo" />
@@ -355,6 +366,11 @@ export function FormularioComprobanteVista(props: FormularioComprobanteVistaProp
         pistaAccesible={archivo ? 'Envía el archivo para su verificación' : 'Elegí primero un archivo'}
         testID="enviar-comprobante"
       />
+      {!archivo && !props.enviando ? (
+        <Text style={[estiloDeTexto('pie'), { color: color.neutro600, textAlign: 'center' }]}>
+          Elegí un archivo para poder enviar.
+        </Text>
+      ) : null}
       <Boton etiqueta="Volver" variante="enlace" onPress={props.onVolver} deshabilitado={bloqueado} testID="volver-lista-comprobantes" />
     </View>
   )
@@ -393,6 +409,20 @@ export function ResultadoComprobanteVista(props: ResultadoComprobanteVistaProps)
         {carga.repetido ? (
           <Aviso tipo="informativo" mensaje="Este comprobante ya estaba registrado: no se duplicó." anuncio="estado" />
         ) : null}
+        <Tarjeta>
+          <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>
+            Qué sigue
+          </Text>
+          <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
+            1. La institución revisa el comprobante. No es inmediato.
+          </Text>
+          <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
+            2. Mientras tanto, el pago figura «En verificación».
+          </Text>
+          <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
+            3. Si lo aprueban, se acredita y podés descargar el recibo. Si no, te indican qué corregir.
+          </Text>
+        </Tarjeta>
         <Tarjeta>
           <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
             Fecha de la transferencia: {fechaParaMostrar(carga.fechaTransferencia)}
