@@ -92,13 +92,13 @@ export function TarjetaItemDeuda({ item }: { item: ItemDeuda }): ReactElement {
         </Text>
         {item.detalle ? <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>{item.detalle}</Text> : null}
         <EstadoItem item={item} />
-        <Dato rotulo="Vencimiento">{formatearFecha(item.vencimiento)}</Dato>
-        <Dato rotulo="Importe">{formatearCentavosExactos(item.importe)}</Dato>
-        <Dato rotulo="Pagado">{formatearCentavosExactos(item.pagado)}</Dato>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: espacio.sm }}>
           <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Saldo</Text>
           <Cifra valor={item.saldo} />
         </View>
+        <Dato rotulo="Vencimiento">{formatearFecha(item.vencimiento)}</Dato>
+        <Dato rotulo="Importe">{formatearCentavosExactos(item.importe)}</Dato>
+        <Dato rotulo="Pagado">{formatearCentavosExactos(item.pagado)}</Dato>
         {item.enVerificacion && item.vencido ? (
           <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
             Venció el {formatearFecha(item.vencimiento)}. Hay un pago en verificación: la deuda no baja hasta que se apruebe.
@@ -182,6 +182,27 @@ export function DeudaVista(props: DeudaVistaProps): ReactElement {
         />
       ) : null}
 
+      {estado.tipo === 'ok' ? (
+        <View testID="deuda-resumen">
+          <Tarjeta>
+            <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>
+              Total adeudado
+            </Text>
+            <View testID="deuda-total">
+              <Cifra valor={estado.datos.totales.adeudado} total />
+            </View>
+            <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
+              {rangoAplicado
+                ? `Facturas de ${etiquetaPeriodo(`${rangoAplicado.desde.slice(0, 8)}01`)} a ${etiquetaPeriodo(`${rangoAplicado.hasta.slice(0, 8)}01`)} (período de factura).`
+                : 'Todo el historial de facturas.'}
+            </Text>
+            <Dato rotulo="Ítems con saldo">{`${estado.datos.totales.itemsConSaldo} de ${estado.datos.totales.items}`}</Dato>
+            <Dato rotulo="Facturas con saldo">{`${estado.datos.totales.facturasConSaldo} de ${estado.datos.totales.facturas}`}</Dato>
+            <Dato rotulo="Saldo vigente al">{isoAEntrada(estado.datos.fechaCorte)}</Dato>
+          </Tarjeta>
+        </View>
+      ) : null}
+
       <Tarjeta>
         <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>
           Filtrar por período de factura
@@ -192,7 +213,7 @@ export function DeudaVista(props: DeudaVistaProps): ReactElement {
           onChangeText={props.onCambiarDesde}
           teclado="numerico"
           placeholder="DD/MM/AAAA"
-          ayuda="Se toma el mes de la fecha. Los extremos están incluidos."
+          ayuda="Se toma el mes de la fecha, extremos incluidos."
           error={errores.desde}
           accionTeclado="siguiente"
           testID="deuda-desde"
@@ -210,10 +231,10 @@ export function DeudaVista(props: DeudaVistaProps): ReactElement {
         />
         {errores.rango ? <Aviso tipo="error" mensaje={errores.rango} anuncio="alerta" /> : null}
         <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro600 }]}>
-          Se filtran las facturas por el mes de su período, no por la fecha de transferencia. El saldo es el vigente: ya considera los pagos aprobados en cualquier fecha. Con los dos campos vacíos se muestra todo el historial.
+          Se filtra por el mes de la factura, no por la fecha de transferencia. Sin fechas se ve todo el historial.
         </Text>
         <Boton etiqueta="Aplicar filtro" onPress={props.onAplicarFiltro} testID="deuda-aplicar" />
-        <Boton etiqueta="Ver todo el historial" variante="secundario" onPress={props.onVerTodo} testID="deuda-todo" />
+        <Boton etiqueta="Ver todo el historial" variante="enlace" onPress={props.onVerTodo} testID="deuda-todo" />
       </Tarjeta>
 
       {estado.tipo === 'cargando' ? <EstadoPantalla tipo="cargando" mensaje="Consultando la deuda…" /> : null}
@@ -239,23 +260,6 @@ export function DeudaVista(props: DeudaVistaProps): ReactElement {
 
       {estado.tipo === 'ok' ? (
         <View style={{ gap: espacio.md }} testID="deuda-resultado">
-          <Tarjeta>
-            <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>
-              Total adeudado
-            </Text>
-            <View testID="deuda-total">
-              <Cifra valor={estado.datos.totales.adeudado} total />
-            </View>
-            <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>
-              {rangoAplicado
-                ? `Facturas de ${etiquetaPeriodo(`${rangoAplicado.desde.slice(0, 8)}01`)} a ${etiquetaPeriodo(`${rangoAplicado.hasta.slice(0, 8)}01`)} (período de factura).`
-                : 'Todo el historial de facturas.'}
-            </Text>
-            <Dato rotulo="Ítems con saldo">{`${estado.datos.totales.itemsConSaldo} de ${estado.datos.totales.items}`}</Dato>
-            <Dato rotulo="Facturas con saldo">{`${estado.datos.totales.facturasConSaldo} de ${estado.datos.totales.facturas}`}</Dato>
-            <Dato rotulo="Saldo vigente al">{isoAEntrada(estado.datos.fechaCorte)}</Dato>
-          </Tarjeta>
-
           {estado.datos.totales.hayInconsistencias ? (
             <Aviso
               tipo="advertencia"
@@ -296,7 +300,7 @@ export function DeudaVista(props: DeudaVistaProps): ReactElement {
           ) : null}
 
           <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro600 }]}>
-            Los nombres de deportes y recorridos son los del catálogo actual. Cada ítem se paga completo; un ítem en verificación todavía figura como deuda.
+            Un ítem en verificación figura como deuda hasta que se apruebe el pago.
           </Text>
         </View>
       ) : null}

@@ -101,8 +101,9 @@ describe('Mi cuenta: cambiar contraseña', () => {
     expect(screen.getAllByTestId('volver-flecha')).toHaveLength(1)
     await fireEvent.press(screen.getByTestId('volver-flecha'))
     expect(screen.getByText('Cuenta verificada')).toBeTruthy()
-    // Desde «Mi cuenta» la flecha sigue llevando a la sección principal.
-    await fireEvent.press(screen.getByTestId('volver-flecha'))
+    // La barra inferior lleva de «Mi cuenta» de vuelta al inicio.
+    expect(screen.queryByTestId('volver-flecha')).toBeNull()
+    await fireEvent.press(screen.getByTestId('tab-inicio'))
     expect(screen.getByText('Mi información académica')).toBeTruthy()
   })
 

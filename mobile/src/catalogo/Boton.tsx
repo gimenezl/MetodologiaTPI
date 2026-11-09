@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 
-import { borde, color, espacio, estiloDeTexto, radio, tactil } from '@/tokens'
+import { borde, color, espacio, estiloDeTexto, tactil } from '@/tokens'
 
 export type VarianteBoton = 'primario' | 'secundario' | 'enlace'
 
@@ -63,11 +63,11 @@ export function Boton({
               ? color.primario50
               : color.superficie
         return {
-          minHeight: tactil.minimo,
+          minHeight: tactil.minimo + 4,
           paddingVertical: espacio.md,
           paddingHorizontal: espacio.xl,
-          borderRadius: radio.md,
-          borderWidth: borde.control,
+          borderRadius: 14,
+          borderWidth: primario ? 0 : borde.insignia,
           borderColor: deshabilitado ? color.neutro300 : primario && pressed ? color.primario600 : color.primario500,
           backgroundColor: fondo,
           alignItems: 'center',

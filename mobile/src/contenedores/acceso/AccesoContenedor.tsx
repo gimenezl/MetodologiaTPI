@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { AppState, Linking, ScrollView, Text, View } from 'react-native'
 
-import { Aviso, Boton, CampoTexto, EstadoPantalla, Formulario, MarcoPantalla, PantallaConVolver, Tarjeta } from '@/catalogo'
+import { Aviso, BarraInferior, Boton, CampoTexto, EncabezadoPantalla, EstadoPantalla, Formulario, MarcoPantalla, PantallaConVolver, Segmentado, Tarjeta } from '@/catalogo'
 import { entornoDelBundle } from '@/configuracion/entorno'
 import { limpiarRecibosTemporales } from '@/servicios/recibos'
 import { obtenerTransporteApi } from '@/servicios/api'
@@ -20,6 +20,7 @@ import { CONTEXTO_CUOTAS_VACIO, CuotasContenedor, type ContextoCuotas } from '..
 import { CONTEXTO_DEUDA_VACIO, DeudaContenedor, type ContextoDeuda } from '../deuda/DeudaContenedor'
 import { CambioContrasenaContenedor } from '../recuperacion/CambioContrasenaContenedor'
 import { cargarDatosRol, type DatosRol } from './datos-rol'
+import { InicioEstudiante, InicioPadre } from './InicioVistas'
 
 const INICIAL: EstadoAutenticacion = { tipo: 'cargando' }
 
@@ -65,6 +66,7 @@ export function AccesoContenedor({ alRecuperarContrasena, alVerificarRecibo }: A
   const [contextoInscripciones, setContextoInscripciones] = useState<{ clave: string; contexto: ContextoInscripciones } | null>(null)
   const [cambioContrasena, setCambioContrasena] = useState<{ clave: string } | null>(null)
   const [errorEnlaceWeb, setErrorEnlaceWeb] = useState(false)
+  const [ultimoHistorial, setUltimoHistorial] = useState<NombreSeccion>('periodo')
   const estadoRealActual = useRef<EstadoAutenticacion>(INICIAL)
   useEffect(() => {
     estadoRealActual.current = estadoReal
@@ -183,42 +185,62 @@ export function AccesoContenedor({ alRecuperarContrasena, alVerificarRecibo }: A
     const contextoPeriodoActual = contextoPeriodo?.clave === clave ? contextoPeriodo.contexto : null
     const contextoDeudaActual = contextoDeuda?.clave === clave ? contextoDeuda.contexto : CONTEXTO_DEUDA_VACIO
     const contextoInscripcionesActual = contextoInscripciones?.clave === clave ? contextoInscripciones.contexto : CONTEXTO_INSCRIPCIONES_VACIO
+    const enHistorial = seccionActual === 'periodo' || seccionActual === 'deuda' || seccionActual === 'inscripciones'
+    const destinoActivo = enHistorial ? 'historial' : seccionActual === 'principal' ? 'inicio' : seccionActual
+    const ir = (nombre: NombreSeccion) => {
+      if (nombre === 'periodo' || nombre === 'deuda' || nombre === 'inscripciones') setUltimoHistorial(nombre)
+      setSeccion({ clave, nombre })
+    }
+    const historialActual: NombreSeccion = enHistorial ? seccionActual : ultimoHistorial
+    // Durante un pago o la carga de un comprobante la barra se oculta: salir a mitad del flujo es un error común.
+    const ocultarBarra = Boolean(contextoActual.pago || contextoActual.comprobante)
+    const encabezado = seccionActual === 'principal'
+      ? { titulo: estado.rol === 'PADRE' ? 'Tu familia' : 'Mi información', descripcion: estado.rol === 'PADRE' ? 'Un resumen de tus hijos y lo que podés hacer.' : undefined }
+      : seccionActual === 'cuotas'
+        ? { titulo: 'Tus cuotas', descripcion: estado.rol === 'PADRE' ? 'Mirá lo que debés, pagá por transferencia y subí el comprobante.' : 'Lo que debés y lo que ya está pagado.' }
+        : seccionActual === 'cuenta'
+          ? { titulo: 'Tu cuenta', descripcion: undefined }
+          : { titulo: 'Historial', descripcion: 'Facturas, deuda por ítem e inscripciones.' }
+    if (soloWeb) {
+      return (
+        <MarcoPantalla>
+          <Formulario titulo="Continuá desde el sistema web" accionPrincipal={{ etiqueta: 'Cerrar sesión', onPress: () => void controlador.salir() }}>
+            <Aviso tipo="informativo" titulo="Esta cuenta usa el sistema web" mensaje="Por seguridad, los perfiles de Dirección, Docencia y Personal no tienen funciones habilitadas en la aplicación móvil." anuncio="estado" />
+            <Boton etiqueta="Abrir sistema institucional" variante="enlace" onPress={() => {
+              setErrorEnlaceWeb(false)
+              const destino = entorno.ok ? new URL(entorno.entorno.apiBaseUrl).origin : ''
+              void Linking.openURL(destino).catch(() => setErrorEnlaceWeb(true))
+            }} />
+            {errorEnlaceWeb ? <Aviso tipo="error" mensaje="No se pudo abrir el sistema institucional. Intentá nuevamente." anuncio="alerta" /> : null}
+            {alVerificarRecibo ? <Boton etiqueta="Verificar PDF nativo" variante="enlace" onPress={alVerificarRecibo}/> : null}
+          </Formulario>
+        </MarcoPantalla>
+      )
+    }
+    const sinDatos = !resultado
+      ? <EstadoPantalla tipo="cargando" mensaje="Cargando información autorizada…" />
+      : 'error' in resultado || !datosRol
+        ? <EstadoPantalla tipo="error" titulo="No pudimos cargar la información" descripcion="La sesión sigue sin mostrar datos hasta poder validarlos." onReintentar={() => void controlador.revalidar()} />
+        : null
+    const alumnos = datosRol ? alumnosDeConsulta(datosRol, seccionActual === 'cuotas' ? 'Mis cuotas' : seccionActual === 'deuda' ? 'Mi deuda' : seccionActual === 'periodo' ? 'Mis facturas' : 'Mis inscripciones') : []
     return (
       <MarcoPantalla>
-        <Formulario titulo={soloWeb ? 'Continuá desde el sistema web' : 'Tu cuenta móvil'} accionPrincipal={{ etiqueta: 'Cerrar sesión', onPress: () => void controlador.salir() }}>
-          {soloWeb ? (
-            <>
-              <Aviso tipo="informativo" titulo="Esta cuenta usa el sistema web" mensaje="Por seguridad, los perfiles de Dirección, Docencia y Personal no tienen funciones habilitadas en la aplicación móvil." anuncio="estado" />
-              <Boton etiqueta="Abrir sistema institucional" variante="enlace" onPress={() => {
-                setErrorEnlaceWeb(false)
-                const destino = entorno.ok ? new URL(entorno.entorno.apiBaseUrl).origin : ''
-                void Linking.openURL(destino).catch(() => setErrorEnlaceWeb(true))
-              }} />
-              {errorEnlaceWeb ? <Aviso tipo="error" mensaje="No se pudo abrir el sistema institucional. Intentá nuevamente." anuncio="alerta" /> : null}
-            </>
-          ) : (
-            <>
-              {/* Deslizable de izquierda a derecha: en pantallas angostas o con texto ampliado no entran todas. «Mi cuenta» conserva su lugar; las consultas (EPT-110) van a continuación. */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                testID="pestanas"
-                accessibilityRole="tablist"
-                contentContainerStyle={{ flexDirection: 'row', gap: espacio.sm, paddingRight: espacio.lg }}
-                style={{ flexGrow: 0 }}
-              >
-                <Boton etiqueta={estado.rol === 'PADRE' ? 'Hijos vinculados' : 'Mi información'} variante={seccionActual === 'principal' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'principal' })} />
-                <Boton etiqueta="Cuotas" variante={seccionActual === 'cuotas' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'cuotas' })} testID="seccion-cuotas" />
-                <Boton etiqueta="Mi cuenta" variante={seccionActual === 'cuenta' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'cuenta' })} />
-                {/* Antes de las consultas de EPT-110: «Por período» e «Inscripciones» siguen al final de la tira, igual que en sus escenarios Maestro. */}
-                <Boton etiqueta="Deuda por ítem" variante={seccionActual === 'deuda' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'deuda' })} testID="seccion-deuda" />
-                <Boton etiqueta="Por período" variante={seccionActual === 'periodo' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'periodo' })} testID="seccion-periodo" />
-                <Boton etiqueta="Inscripciones" variante={seccionActual === 'inscripciones' ? 'primario' : 'secundario'} onPress={() => setSeccion({ clave, nombre: 'inscripciones' })} testID="seccion-inscripciones" />
-              </ScrollView>
-              <PantallaConVolver
-                activo={seccionActual !== 'principal' && !enSubpantalla && !cambiandoContrasena}
-                onVolver={() => setSeccion({ clave, nombre: 'principal' })}
-              >
+        <View style={{ flex: 1 }}>
+          <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: espacio.xl, gap: espacio.lg }}>
+            {!cambiandoContrasena && !enSubpantalla ? <EncabezadoPantalla titulo={encabezado.titulo} descripcion={encabezado.descripcion} /> : null}
+            {enHistorial ? (
+              <Segmentado
+                deslizable
+                activa={historialActual}
+                onCambiar={clave => ir(clave as NombreSeccion)}
+                opciones={[
+                  { clave: 'periodo', etiqueta: 'Facturas', testID: 'seccion-periodo' },
+                  { clave: 'deuda', etiqueta: 'Deuda por ítem', testID: 'seccion-deuda' },
+                  { clave: 'inscripciones', etiqueta: 'Inscripciones', testID: 'seccion-inscripciones' },
+                ]}
+              />
+            ) : null}
+            <PantallaConVolver activo={false} onVolver={() => ir('principal')}>
               {seccionActual === 'cuenta' ? (
                 cambiandoContrasena ? (
                   <CambioContrasenaContenedor
@@ -241,94 +263,73 @@ export function AccesoContenedor({ alRecuperarContrasena, alVerificarRecibo }: A
                       <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>Seguridad</Text>
                       <Boton etiqueta="Cambiar contraseña" variante="secundario" testID="cambiar-contrasena" onPress={() => setCambioContrasena({ clave })} />
                     </Tarjeta>
+                    <Boton etiqueta="Cerrar sesión" variante="secundario" testID="cerrar-sesion" onPress={() => void controlador.salir()} />
                   </>
                 )
-              ) : seccionActual === 'periodo' || seccionActual === 'inscripciones' || seccionActual === 'deuda' ? (
-                !resultado ? (
-                  <EstadoPantalla tipo="cargando" mensaje="Cargando información autorizada…" />
-                ) : 'error' in resultado || !datosRol ? (
-                  <EstadoPantalla tipo="error" titulo="No pudimos cargar la información" descripcion="La sesión sigue sin mostrar datos hasta poder validarlos." onReintentar={() => void controlador.revalidar()} />
-                ) : seccionActual === 'deuda' ? (
-                  <DeudaContenedor
-                    key={estado.usuarioId}
-                    cliente={cliente}
-                    mostrarSelector={datosRol.rol === 'PADRE'}
-                    alumnos={alumnosDeConsulta(datosRol, 'Mi deuda')}
-                    contexto={contextoDeudaActual}
-                    onContexto={contexto => setContextoDeuda({ clave, contexto })}
-                  />
-                ) : seccionActual === 'periodo' ? (
-                  <PeriodoContenedor
-                    key={estado.usuarioId}
-                    cliente={cliente}
-                    mostrarSelector={datosRol.rol === 'PADRE'}
-                    alumnos={alumnosDeConsulta(datosRol, 'Mis facturas')}
-                    contexto={contextoPeriodoActual ?? contextoPeriodoVacio()}
-                    onContexto={contexto => setContextoPeriodo({ clave, contexto })}
-                  />
-                ) : (
-                  <InscripcionesContenedor
-                    key={estado.usuarioId}
-                    cliente={cliente}
-                    mostrarSelector={datosRol.rol === 'PADRE'}
-                    alumnos={alumnosDeConsulta(datosRol, 'Mis inscripciones')}
-                    contexto={contextoInscripcionesActual}
-                    onContexto={contexto => setContextoInscripciones({ clave, contexto })}
-                  />
-                )
-              ) : seccionActual === 'cuotas' ? (
-                !resultado ? (
-                  <EstadoPantalla tipo="cargando" mensaje="Cargando información autorizada…" />
-                ) : 'error' in resultado || !datosRol ? (
-                  <EstadoPantalla tipo="error" titulo="No pudimos cargar la información" descripcion="La sesión sigue sin mostrar datos hasta poder validarlos." onReintentar={() => void controlador.revalidar()} />
-                ) : (
-                  <CuotasContenedor
-                    key={estado.usuarioId}
-                    contexto={contextoActual}
-                    onContexto={contexto => setContextoCuotas({ clave, contexto })}
-                    cliente={cliente}
-                    pagos={datosRol.rol === 'PADRE' ? { usuarioId: estado.usuarioId, almacenamiento: almacenamientoPagos } : undefined}
-                    comprobantes={datosRol.rol === 'PADRE' ? comprobantes : undefined}
-                    mostrarSelector={datosRol.rol === 'PADRE'}
-                    alumnos={datosRol.rol === 'PADRE'
-                      ? datosRol.hijos.map(hijo => ({ id: hijo.id, etiqueta: [hijo.nombre, hijo.apellido].filter(Boolean).join(' ') || 'Estudiante' }))
-                      : [{ id: datosRol.alumno.id, etiqueta: 'Mis cuotas' }]}
-                  />
-                )
-              ) : !resultado ? (
-                <EstadoPantalla tipo="cargando" mensaje="Cargando información autorizada…" />
-              ) : 'error' in resultado ? (
-                <EstadoPantalla tipo="error" titulo="No pudimos cargar la información" descripcion="La sesión sigue sin mostrar datos hasta poder validarlos." onReintentar={() => void controlador.revalidar()} />
+              ) : sinDatos ? (
+                sinDatos
+              ) : seccionActual === 'deuda' ? (
+                <DeudaContenedor
+                  key={estado.usuarioId}
+                  cliente={cliente}
+                  mostrarSelector={datosRol?.rol === 'PADRE'}
+                  alumnos={alumnos}
+                  contexto={contextoDeudaActual}
+                  onContexto={contexto => setContextoDeuda({ clave, contexto })}
+                />
+              ) : seccionActual === 'periodo' ? (
+                <PeriodoContenedor
+                  key={estado.usuarioId}
+                  cliente={cliente}
+                  mostrarSelector={datosRol?.rol === 'PADRE'}
+                  alumnos={alumnos}
+                  contexto={contextoPeriodoActual ?? contextoPeriodoVacio()}
+                  onContexto={contexto => setContextoPeriodo({ clave, contexto })}
+                />
+              ) : seccionActual === 'inscripciones' ? (
+                <InscripcionesContenedor
+                  key={estado.usuarioId}
+                  cliente={cliente}
+                  mostrarSelector={datosRol?.rol === 'PADRE'}
+                  alumnos={alumnos}
+                  contexto={contextoInscripcionesActual}
+                  onContexto={contexto => setContextoInscripciones({ clave, contexto })}
+                />
+              ) : seccionActual === 'cuotas' && datosRol ? (
+                <CuotasContenedor
+                  key={estado.usuarioId}
+                  contexto={contextoActual}
+                  onContexto={contexto => setContextoCuotas({ clave, contexto })}
+                  cliente={cliente}
+                  pagos={datosRol.rol === 'PADRE' ? { usuarioId: estado.usuarioId, almacenamiento: almacenamientoPagos } : undefined}
+                  comprobantes={datosRol.rol === 'PADRE' ? comprobantes : undefined}
+                  mostrarSelector={datosRol.rol === 'PADRE'}
+                  alumnos={alumnos}
+                />
               ) : datosRol?.rol === 'PADRE' ? (
-                <>
-                  <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>Hijos vinculados</Text>
-                  {datosRol.hijos.length === 0 ? (
-                    <EstadoPantalla tipo="vacio" titulo="Todavía no hay estudiantes vinculados" descripcion="Cuando la institución registre un vínculo familiar autorizado, aparecerá en esta sección." />
-                  ) : datosRol.hijos.map(hijo => (
-                    <Tarjeta key={hijo.id}>
-                      <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>{[hijo.nombre, hijo.apellido].filter(Boolean).join(' ')}</Text>
-                      <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Legajo: {hijo.legajo_nro ?? 'No disponible'}</Text>
-                      <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Estado: {hijo.estado ?? 'No disponible'}</Text>
-                      <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Curso: {[hijo.curso_denominacion, hijo.curso_division].filter(Boolean).join(' ') || 'Sin curso informado'}</Text>
-                      <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Nivel: {hijo.nivel_nombre ?? 'No disponible'}</Text>
-                    </Tarjeta>
-                  ))}
-                </>
+                <InicioPadre datos={datosRol} acciones={{ onCuotas: () => ir('cuotas'), onHistorial: () => ir('periodo'), onDeuda: () => ir('deuda') }} />
               ) : datosRol?.rol === 'ESTUDIANTE' ? (
-                <Tarjeta>
-                  <Text accessibilityRole="header" style={[estiloDeTexto('seccion'), { color: color.neutro800 }]}>Mi información académica</Text>
-                  <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Estudiante: {[datosRol.alumno.nombre, datosRol.alumno.apellido].filter(Boolean).join(' ') || 'No disponible'}</Text>
-                  <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Legajo: {datosRol.alumno.legajo_nro ?? 'No disponible'}</Text>
-                  <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Estado: {datosRol.alumno.estado ?? 'No disponible'}</Text>
-                  <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Curso: {[datosRol.alumno.curso_denominacion, datosRol.alumno.curso_division].filter(Boolean).join(' ') || 'Sin curso informado'}</Text>
-                  <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Nivel: {datosRol.alumno.nivel_nombre ?? 'No disponible'}</Text>
-                </Tarjeta>
+                <InicioEstudiante datos={datosRol} acciones={{ onCuotas: () => ir('cuotas'), onHistorial: () => ir('periodo'), onDeuda: () => ir('deuda') }} />
               ) : null}
-              </PantallaConVolver>
-            </>
+            </PantallaConVolver>
+            {alVerificarRecibo ? <Boton etiqueta="Verificar PDF nativo" variante="enlace" onPress={alVerificarRecibo}/> : null}
+          </ScrollView>
+          {ocultarBarra ? null : (
+            <BarraInferior
+              activo={destinoActivo}
+              onCambiar={destino => {
+                setCambioContrasena(null)
+                ir(destino === 'inicio' ? 'principal' : destino === 'historial' ? historialActual : (destino as NombreSeccion))
+              }}
+              destinos={[
+                { clave: 'inicio', etiqueta: 'Inicio', glifo: '⌂', testID: 'tab-inicio' },
+                { clave: 'cuotas', etiqueta: 'Cuotas', glifo: '$', testID: 'seccion-cuotas' },
+                { clave: 'historial', etiqueta: 'Historial', glifo: '☰', testID: 'tab-historial' },
+                { clave: 'cuenta', etiqueta: 'Mi cuenta', glifo: '◉', testID: 'tab-cuenta' },
+              ]}
+            />
           )}
-        {alVerificarRecibo ? <Boton etiqueta="Verificar PDF nativo" variante="enlace" onPress={alVerificarRecibo}/> : null}
-      </Formulario>
+        </View>
       </MarcoPantalla>
     )
   }
@@ -336,7 +337,11 @@ export function AccesoContenedor({ alRecuperarContrasena, alVerificarRecibo }: A
   return (
     <MarcoPantalla>
       <Formulario titulo="Iniciar sesión" resumenErrores={errorIngreso ? 'No se pudo validar el ingreso.' : undefined} accionPrincipal={{ etiqueta: 'Ingresar', onPress: () => void ingresar(), cargando: enviando }}>
-        <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Usá la cuenta que ya utilizás en el sistema institucional.</Text>
+        <View style={{ gap: espacio.xs, paddingVertical: espacio.md }}>
+          <Text accessibilityRole="header" style={[estiloDeTexto('tituloEncabezado'), { color: color.primario600 }]}>Educar para Transformar</Text>
+          <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro600 }]}>Las cuotas, pagos y recibos de tu familia, en un solo lugar.</Text>
+        </View>
+        <Text style={[estiloDeTexto('cuerpo'), { color: color.neutro700 }]}>Ingresá con la misma cuenta que usás en el sistema institucional.</Text>
         <CampoTexto etiqueta="Correo electrónico" valor={correo} onChangeText={texto => { setCorreo(texto); setErrorCorreo(undefined) }} teclado="correo" accionTeclado="siguiente" placeholder="nombre@institucion.edu.ar" testID="correo" error={errorCorreo} deshabilitado={enviando} />
         <CampoTexto etiqueta="Contraseña" valor={contrasena} onChangeText={texto => { setContrasena(texto); setErrorContrasena(undefined) }} error={errorContrasena} secreto controlMostrar={{ visible: mostrarContrasena, onToggle: () => setMostrarContrasena(v => !v) }} accionTeclado="enviar" onSubmitEditing={ingresar} testID="contrasena" deshabilitado={enviando} />
         {errorIngreso ? <Aviso tipo="error" titulo="No se pudo iniciar sesión" mensaje={errorIngreso} anuncio="alerta" /> : null}

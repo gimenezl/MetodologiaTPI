@@ -107,6 +107,11 @@ export function Tarjeta({ children }: { children: ReactNode }): ReactElement {
         borderColor: color.neutro200,
         padding: espacio.lg,
         gap: espacio.md,
+        shadowColor: color.neutro800,
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 1,
       }}
     >
       {children}
