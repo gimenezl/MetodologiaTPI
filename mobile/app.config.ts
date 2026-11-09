@@ -22,6 +22,9 @@ const config: ExpoConfig = {
     'expo-router',
     ['expo-secure-store', { configureAndroidBackup: true }],
     'expo-font',
+    'expo-sharing',
+    'expo-splash-screen',
+    'expo-status-bar',
     [
       // Comprobantes de transferencia (EPT-109): sin micrófono; los textos del sistema van en español.
       'expo-image-picker',

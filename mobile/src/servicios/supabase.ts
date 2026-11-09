@@ -58,7 +58,7 @@ export function reiniciarClienteParaPruebas(): void {
 }
 
 export interface FuenteEstadoApp {
-  readonly currentState: AppStateStatus
+  readonly currentState: AppStateStatus | string | null | undefined
   addEventListener(tipo: 'change', escucha: (estado: AppStateStatus) => void): NativeEventSubscription
 }
 
@@ -84,7 +84,7 @@ export function vincularCicloDeVida(
   if (existente) {
     existente.referencias += 1
   } else {
-    const aplicar = (estado: AppStateStatus) => {
+    const aplicar = (estado: AppStateStatus | string | null | undefined) => {
       if (estado === 'active') void cliente.auth.startAutoRefresh()
       else void cliente.auth.stopAutoRefresh()
     }

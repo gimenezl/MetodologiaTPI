@@ -66,7 +66,7 @@ describe('rutas de recuperación de contraseña', () => {
   })
 
   it('el inicio de sesión abre la solicitud y volver regresa', async () => {
-    const app = renderRouter(rutas(), { initialUrl: '/' })
+    const app = await renderRouter(rutas(), { initialUrl: '/' })
     await app
     await fireEvent.press(await screen.findByText('Inicio de sesión (marcador)'))
     expect(await screen.findByText('Solicitud (marcador)')).toBeTruthy()
@@ -77,7 +77,7 @@ describe('rutas de recuperación de contraseña', () => {
 
   it('arranque en frío desde el enlace: la ruta recibe la URL completa y no existe pantalla debajo', async () => {
     mockUrl.actual = ENLACE
-    const app = renderRouter(rutas(), { initialUrl: '/restablecer?code=34e770dd-9ff9-416c-87fa-43b31d7ef225' })
+    const app = await renderRouter(rutas(), { initialUrl: '/restablecer?code=34e770dd-9ff9-416c-87fa-43b31d7ef225' })
     await app
     expect(await screen.findByText(`Restablecer (marcador): ${ENLACE}`)).toBeTruthy()
     expect(app.getPathname()).toBe('/restablecer')
@@ -86,21 +86,21 @@ describe('rutas de recuperación de contraseña', () => {
 
   it('si el sistema no entrega la URL cruda, la ruta reconstruye el retorno desde los parámetros del enrutador', async () => {
     mockUrl.actual = null
-    const app = renderRouter(rutas(), { initialUrl: '/restablecer?code=34e770dd-9ff9-416c-87fa-43b31d7ef225&utm=1' })
+    const app = await renderRouter(rutas(), { initialUrl: '/restablecer?code=34e770dd-9ff9-416c-87fa-43b31d7ef225&utm=1' })
     await app
     expect(await screen.findByText(`Restablecer (marcador): ${ENLACE}`)).toBeTruthy()
   })
 
   it('si el sistema conserva un enlace anterior, manda el de la navegación que montó la pantalla', async () => {
     mockUrl.actual = 'educarparatransformar://restablecer?code=00000000-aaaa-bbbb-cccc-000000000000'
-    const app = renderRouter(rutas(), { initialUrl: '/restablecer?code=34e770dd-9ff9-416c-87fa-43b31d7ef225' })
+    const app = await renderRouter(rutas(), { initialUrl: '/restablecer?code=34e770dd-9ff9-416c-87fa-43b31d7ef225' })
     await app
     expect(await screen.findByText(`Restablecer (marcador): ${ENLACE}`)).toBeTruthy()
   })
 
   it('al terminar limpia el enlace entregado y reemplaza por el inicio (sin poder volver a la recuperación)', async () => {
     mockUrl.actual = ENLACE
-    const app = renderRouter(rutas(), { initialUrl: '/restablecer' })
+    const app = await renderRouter(rutas(), { initialUrl: '/restablecer' })
     await app
     await fireEvent.press(await screen.findByText('terminar'))
     await waitFor(() => expect(app.getPathname()).toBe('/'))
@@ -110,7 +110,7 @@ describe('rutas de recuperación de contraseña', () => {
 
   it('«pedir un enlace nuevo» reemplaza la pantalla por la solicitud', async () => {
     mockUrl.actual = ENLACE
-    const app = renderRouter(rutas(), { initialUrl: '/restablecer' })
+    const app = await renderRouter(rutas(), { initialUrl: '/restablecer' })
     await app
     await fireEvent.press(await screen.findByText('nuevo'))
     expect(await screen.findByText('Solicitud (marcador)')).toBeTruthy()
@@ -118,7 +118,7 @@ describe('rutas de recuperación de contraseña', () => {
   })
 
   it('la app abierta que recibe el enlace pasa a la recuperación', async () => {
-    const app = renderRouter(rutas(), { initialUrl: '/' })
+    const app = await renderRouter(rutas(), { initialUrl: '/' })
     await app
     await screen.findByText('Inicio de sesión (marcador)')
     expect(app.getPathname()).toBe('/')
@@ -128,7 +128,7 @@ describe('rutas de recuperación de contraseña', () => {
   })
 
   it('una ruta desconocida termina en el inicio sin mostrar sus parámetros', async () => {
-    const app = renderRouter(rutas(), { initialUrl: '/desconocida?code=00000000-0000-0000-0000-000000000000' })
+    const app = await renderRouter(rutas(), { initialUrl: '/desconocida?code=00000000-0000-0000-0000-000000000000' })
     await app
     expect(await screen.findByText('Inicio de sesión (marcador)')).toBeTruthy()
     expect(app.getPathname()).toBe('/')
