@@ -5,6 +5,7 @@ import type { ExpoConfig } from 'expo/config'
 const config: ExpoConfig = {
   name: 'Educar para Transformar',
   slug: 'educar-para-transformar',
+  owner: 'gimenezl',
   scheme: 'educarparatransformar',
   version: '0.1.0',
   orientation: 'portrait',
@@ -34,6 +35,7 @@ const config: ExpoConfig = {
   ],
   experiments: { typedRoutes: false },
   extra: {
+    eas: { projectId: 'b1ac0596-9a9a-42e1-acc7-fa8e64f451cb' },
     // Flag booleana no secreta. Sin esta opción explícita, HTTP local se rechaza en runtime.
     eptRecibosNativeQa: process.env.EPT_MOBILE_RECIBOS_NATIVE_QA === '1',
     eptAuthIntegration: process.env.EPT_MOBILE_AUTH_INTEGRATION === '1',
