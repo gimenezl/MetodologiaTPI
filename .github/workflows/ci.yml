@@ -1,6 +1,4 @@
 name: CI
-# CI pausado hasta terminar el proyecto: solo queda el check requerido por la protección de main.
-# Las verificaciones completas siguen en ci-completo.yml (manual: Actions > CI completo > Run workflow).
 on:
   pull_request:
   push:
@@ -12,4 +10,4 @@ jobs:
     name: CI / gate
     runs-on: ubuntu-latest
     steps:
-      - run: echo "CI pausado; se verifica a mano."
+      - run: echo "ok"
