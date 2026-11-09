@@ -62,37 +62,41 @@ async function abrir() {
   await waitFor(() => expect(screen.getByText('Mi información académica')).toBeTruthy())
 }
 
-describe('navegación de la cuenta: flecha «Volver» en toda la aplicación', () => {
-  it('la sección principal es la raíz: no tiene flecha', async () => {
+describe('navegación de la cuenta: barra inferior', () => {
+  it('el inicio es la raíz: no tiene flecha y la barra muestra los cuatro destinos', async () => {
     await abrir()
     expect(screen.queryByTestId('volver-flecha')).toBeNull()
+    for (const id of ['tab-inicio', 'seccion-cuotas', 'tab-historial', 'tab-cuenta']) expect(screen.getByTestId(id)).toBeTruthy()
   })
 
-  it('«Mi cuenta» tiene flecha y vuelve a la sección principal', async () => {
+  it('«Mi cuenta» se abre desde la barra y el inicio vuelve a la sección principal', async () => {
     await abrir()
-    await fireEvent.press(screen.getByText('Mi cuenta'))
+    await fireEvent.press(screen.getByTestId('tab-cuenta'))
     expect(screen.getByText('Cuenta verificada')).toBeTruthy()
-    await fireEvent.press(screen.getByTestId('volver-flecha'))
+    expect(screen.getByTestId('cerrar-sesion')).toBeTruthy()
+    await fireEvent.press(screen.getByTestId('tab-inicio'))
     expect(screen.getByText('Mi información académica')).toBeTruthy()
-    expect(screen.queryByTestId('volver-flecha')).toBeNull()
   })
 
-  it('«Cuotas» tiene flecha y vuelve a la sección principal', async () => {
+  it('«Cuotas» se abre desde la barra y el inicio vuelve a la sección principal', async () => {
     await abrir()
     await fireEvent.press(screen.getByTestId('seccion-cuotas'))
-    await waitFor(() => expect(screen.getByTestId('volver-flecha')).toBeTruthy())
-    await fireEvent.press(screen.getByTestId('volver-flecha'))
+    await waitFor(() => expect(screen.getByText('Tus cuotas')).toBeTruthy())
+    await fireEvent.press(screen.getByTestId('tab-inicio'))
     expect(screen.getByText('Mi información académica')).toBeTruthy()
   })
 
-  it('el gesto de deslizar desde el borde también vuelve desde «Mi cuenta»', async () => {
+  it('«Historial» ofrece facturas, deuda por ítem e inscripciones', async () => {
     await abrir()
-    await fireEvent.press(screen.getByText('Mi cuenta'))
-    const marco = screen.getByTestId('pantalla-con-volver')
-    marco.props.onTouchStart({ nativeEvent: { pageX: 8, pageY: 300 } })
-    const capturado = marco.props.onMoveShouldSetResponderCapture({ nativeEvent: { pageX: 120, pageY: 305 } })
-    expect(capturado).toBe(true)
-    await fireEvent(marco, 'responderRelease', { nativeEvent: { pageX: 120, pageY: 305 } })
-    await waitFor(() => expect(screen.getByText('Mi información académica')).toBeTruthy())
+    await fireEvent.press(screen.getByTestId('tab-historial'))
+    for (const id of ['seccion-periodo', 'seccion-deuda', 'seccion-inscripciones']) expect(screen.getByTestId(id)).toBeTruthy()
+    await fireEvent.press(screen.getByTestId('seccion-deuda'))
+    expect(screen.getByTestId('seccion-deuda').props.accessibilityState.selected).toBe(true)
+  })
+
+  it('las acciones rápidas del inicio llevan a la sección correspondiente', async () => {
+    await abrir()
+    await fireEvent.press(screen.getByTestId('accion-pagar'))
+    await waitFor(() => expect(screen.getByText('Tus cuotas')).toBeTruthy())
   })
 })
